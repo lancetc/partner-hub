@@ -1,0 +1,316 @@
+@import "tailwindcss";
+
+/* Theme is driven by data-theme on <html>; set before paint by the inline script in layout.tsx. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+  Trilogy Care brand palette (supplied October 2026). Core: navy, teal petal, yellow petal.
+  Supporting: orange, red, green. Tints and the dark theme are derived from these.
+  Orange is 3.6:1 on white, so it is used for fills and icons; small warning text uses a
+  deeper shade of the same orange (--warm) to stay readable. Small teal text (--accent) is
+  likewise a shade deeper than the button teal.
+*/
+:root {
+  --brand-navy: #0f2642;
+  --brand-teal: #00828a;
+  --brand-yellow: #fdb813;
+  --brand-orange: #e65a28;
+  --brand-red: #d9381e;
+  --brand-green: #2b6636;
+  /* Derived shades. */
+  --brand-navy-deep: #0f2642;
+  --brand-navy-medium: #3d5068;
+  --brand-navy-alt: #1e3a5c;
+  --brand-teal-bright: #4cc3c9;
+  --brand-gold: #fdb813;
+  --brand-terracotta: #e65a28;
+  --brand-teal-tint: #ddf2f3;
+  --brand-teal-tint-2: #ddf2f3;
+  --brand-blue-tint: #dde7f2;
+  --brand-blue-tint-2: #e8eef6;
+
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #e8eef6;
+  --surface-strong: #dde7f2;
+  --surface-teal: #ddf2f3;
+  --ink: #0f2642;
+  --ink-muted: #3d5068;
+  --action: #00828a;
+  --action-hover: #006d74;
+  --on-action: #ffffff;
+  /* Small teal text: a shade deeper than the brand teal so it reads on tinted panels too. */
+  --accent: #00737a;
+  --warm: #b33d17;
+  --orange: #e65a28;
+  --danger: #d9381e;
+  --success: #2b6636;
+  --gold: #fdb813;
+  --line: rgb(15 38 66 / 0.14);
+  --line-strong: rgb(15 38 66 / 0.28);
+  --focus: #00828a;
+  --overlay: rgb(10 26 46 / 0.55);
+  --hero: #0f2642;
+  --on-hero: #ffffff;
+  color-scheme: light;
+}
+
+/* Dark tokens are new product choices built from the brand navy and teal; they need contrast review. */
+:root[data-theme="dark"] {
+  --bg: #0a1a2e;
+  --surface: #0f2642;
+  --surface-muted: #15304f;
+  --surface-strong: #1c3a5e;
+  --surface-teal: #0b3a44;
+  --ink: #f2f6fa;
+  --ink-muted: #b9c8db;
+  --action: #4cc3c9;
+  --action-hover: #74d3d8;
+  --on-action: #0a1a2e;
+  --accent: #4cc3c9;
+  --warm: #f08a5d;
+  --orange: #f07a4a;
+  --danger: #f07a68;
+  --success: #6fbf7c;
+  --gold: #fdb813;
+  --line: rgb(255 255 255 / 0.12);
+  --line-strong: rgb(255 255 255 / 0.26);
+  --focus: #4cc3c9;
+  --overlay: rgb(0 0 0 / 0.6);
+  --hero: #0f2642;
+  --on-hero: #f2f6fa;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-muted: var(--surface-muted);
+  --color-strong: var(--surface-strong);
+  --color-tealtint: var(--surface-teal);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-on-action: var(--on-action);
+  --color-accent: var(--accent);
+  --color-warm: var(--warm);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-orange: var(--orange);
+  --color-gold: var(--gold);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-focus: var(--focus);
+  --color-hero: var(--hero);
+  --color-on-hero: var(--on-hero);
+
+  --color-teal: var(--brand-teal);
+  --color-teal-bright: var(--brand-teal-bright);
+  --color-navy: var(--brand-navy-deep);
+  --color-navy-medium: var(--brand-navy-medium);
+  --color-navy-alt: var(--brand-navy-alt);
+  --color-terracotta: var(--brand-terracotta);
+
+  --font-sans: var(--font-roboto-flex), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-serif: var(--font-roboto-serif), ui-serif, Georgia, "Times New Roman", serif;
+  --font-mulish: var(--font-mulish-face), var(--font-roboto-flex), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Class names that mirror the public site's font selectors. */
+.font-roboto-flex { font-family: var(--font-sans); }
+.font-roboto-serif { font-family: var(--font-serif); }
+.font-mulish { font-family: var(--font-mulish); }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--brand-teal-tint);
+  color: var(--brand-navy-deep);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Range input styled with brand tokens; native semantics retained. */
+input[type="range"].brand-range {
+  appearance: none;
+  height: 2.75rem;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].brand-range::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--action) 0%,
+    var(--action) var(--fill, 50%),
+    var(--line-strong) var(--fill, 50%)
+  );
+}
+input[type="range"].brand-range::-moz-range-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+input[type="range"].brand-range::-moz-range-progress {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--action);
+}
+input[type="range"].brand-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: -0.625rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 3px solid var(--action);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+}
+input[type="range"].brand-range::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 3px solid var(--action);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-card-in {
+  animation: card-in 260ms ease-out both;
+}
+
+/*
+  Lesson cards as a deck (see withDeck in LessonPlayer). Forward: the card flies off to the left
+  over the next one, which rises from the stack behind. Back: the previous card comes back on top.
+*/
+.deck-card { view-transition-name: deck-card; }
+:root[data-deck]::view-transition-old(root),
+:root[data-deck]::view-transition-new(root) { animation: none; }
+:root[data-deck]::view-transition-group(deck-card) { animation-duration: 380ms; }
+:root[data-deck="forward"]::view-transition-old(deck-card) { z-index: 2; animation: deck-away 380ms cubic-bezier(0.4, 0, 0.6, 1) both; }
+:root[data-deck="forward"]::view-transition-new(deck-card) { animation: deck-rise 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+:root[data-deck="back"]::view-transition-old(deck-card) { animation: deck-sink 380ms ease-in both; }
+:root[data-deck="back"]::view-transition-new(deck-card) { z-index: 2; animation: deck-return 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes deck-away { to { transform: translateX(-118%) rotate(-9deg); } }
+@keyframes deck-rise { from { transform: translateX(14px) scale(0.94); opacity: 0.55; } }
+@keyframes deck-sink { to { transform: translateX(14px) scale(0.94); opacity: 0; } }
+@keyframes deck-return { from { transform: translateX(-118%) rotate(-9deg); } }
+
+/* Audio orb: soft rings pulse outward and bars bounce while narration plays. */
+.audio-orb::before,
+.audio-orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--action);
+  opacity: 0;
+  z-index: -1;
+}
+.audio-orb.is-playing::before { animation: orb-pulse 2s ease-out infinite; }
+.audio-orb.is-playing::after { animation: orb-pulse 2s ease-out 1s infinite; }
+@keyframes orb-pulse {
+  from { transform: scale(1); opacity: 0.35; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+.audio-bar {
+  height: 100%;
+  transform-origin: center;
+  animation: bar-bounce 0.9s ease-in-out infinite;
+}
+@keyframes bar-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Key-word cards animate on */
+.words-in { animation: words-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes words-in {
+  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.marker-pop { animation: marker-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes marker-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+
+/* Partnership triangle explainer */
+.tri-pop { transform-box: fill-box; transform-origin: center; animation: tri-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes tri-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); } }
+.tri-halo { transform-box: fill-box; transform-origin: center; animation: tri-halo 2.4s ease-in-out infinite; }
+@keyframes tri-halo {
+  0%, 100% { transform: scale(0.92); opacity: 0.25; }
+  50% { transform: scale(1.12); opacity: 0.5; }
+}
+.tri-flow { animation: tri-flow 1.2s linear infinite; }
+@keyframes tri-flow { to { stroke-dashoffset: -24; } }
+.tri-dot { opacity: 0; animation: tri-travel 3.6s ease-in-out infinite; }
+@keyframes tri-travel {
+  0% { transform: translate(var(--fx), var(--fy)); opacity: 0; }
+  12% { opacity: 1; }
+  45% { transform: translate(var(--tx), var(--ty)); opacity: 1; }
+  55%, 100% { transform: translate(var(--tx), var(--ty)); opacity: 0; }
+}
+
+/* Illustration patterns on lesson cards drift slowly */
+.pattern-animate > g > * { transform-box: fill-box; transform-origin: center; animation: drift-a 9s ease-in-out infinite; }
+.pattern-animate > g > *:nth-child(3n + 2) { animation-name: drift-b; animation-duration: 11s; }
+.pattern-animate > g > *:nth-child(3n) { animation-name: drift-c; animation-duration: 13s; }
+@keyframes drift-a { 0%, 100% { translate: 0 0; } 50% { translate: 6px -5px; } }
+@keyframes drift-b { 0%, 100% { translate: 0 0; scale: 1; } 50% { translate: -7px 4px; scale: 1.04; } }
+@keyframes drift-c { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 4px 6px; rotate: 4deg; } }
+.icon-bob { animation: icon-bob 3.2s ease-in-out infinite; }
+@keyframes icon-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+/* Person-centred orbit diagram */
+.orbit-flow { animation: orbit-flow 1.4s linear infinite; }
+@keyframes orbit-flow { to { stroke-dashoffset: -16; } }
+.orbit-ring { opacity: 0; animation: orbit-ring 3s ease-out infinite; }
+@keyframes orbit-ring {
+  from { transform: scale(1); opacity: 0.35; }
+  to { transform: scale(1.45); opacity: 0; }
+}
+.orbit-float { animation: orbit-float 4s ease-in-out infinite; }
+@keyframes orbit-float {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -3px; }
+}
+.orbit-node { animation-name: orbit-node; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+@keyframes orbit-node {
+  0%, 22%, 100% { background: #fff; color: #0f2642; transform: scale(1); border-color: #b8e3e6; }
+  6%, 16% { background: #00828a; color: #fff; transform: scale(1.08); border-color: #00828a; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
