@@ -4,6 +4,8 @@ import type { Db } from "./db";
 import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { originalLesson, syncPublishedLessons } from "./lessonRegistry";
+import { recordVersion, versionContent } from "./lessonVersions";
+import { blankLesson } from "@/content/blankLesson";
 
 /*
   Saving lessons from the editor. Save draft keeps the author's work without changing what learners
@@ -48,9 +50,30 @@ function statusOf(r: Row | undefined, slug: string): LessonStatus {
 export function editorLesson(db: Db, slug: string) {
   const r = row(db, slug);
   if (r?.deleted_at) return undefined;
-  const lesson = r ? (JSON.parse(r.draft) as Lesson) : lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
+  const live = lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
+  // A copy, so editing it never changes the live lesson.
+  const lesson = r ? (JSON.parse(r.draft) as Lesson) : live && structuredClone(live);
   if (!lesson) return undefined;
   return { lesson, status: statusOf(r, slug) };
+}
+
+/**
+  Empty draft lessons, one per title, so a path can be planned before its lessons are written.
+  Learners see them as "coming soon" in a path until they're published.
+*/
+export function createPlaceholders(db: Db, actor: User, titles: string[], track: string | undefined, now: Date) {
+  requireAuthor(actor);
+  if (!Array.isArray(titles) || !titles.length) throw new HttpError(400, "Which lessons?");
+  if (titles.length > 100) throw new HttpError(400, "Add up to 100 at a time.");
+  const t = (TRACKS as string[]).includes(track ?? "") ? (track as Lesson["track"]) : "core";
+  return titles.map((raw) => {
+    const title = String(raw ?? "")
+      .trim()
+      .slice(0, 160);
+    if (!title) throw new HttpError(400, "Each lesson needs a title.");
+    const { slug } = createLesson(db, actor, { ...blankLesson(), title, track: t, summary: "Coming soon." }, now);
+    return { slug, title, summary: "Coming soon.", minutes: blankLesson().minutes, track: t, draft: true };
+  });
 }
 
 /** Saved lessons that have never been published, for the admin list. */
@@ -141,7 +164,7 @@ export function nextVersion(current: string | undefined, firstPublish: boolean) 
   return m ? `${m[1]}.${Number(m[2]) + 1}` : "1.1";
 }
 
-export function publishLesson(db: Db, actor: User, slug: string, now: Date) {
+export function publishLesson(db: Db, actor: User, slug: string, now: Date, opts: { notes?: string; kind?: "minor" | "important" } = {}) {
   requireAuthor(actor);
   const r = row(db, slug);
   if (r?.deleted_at) throw new HttpError(404, "Lesson not found.");
@@ -159,6 +182,14 @@ export function publishLesson(db: Db, actor: User, slug: string, now: Date) {
     slug,
   );
   audit(db, { actor: actor.id, event: "lesson.published", entity: `lesson:${slug}`, previous: live?.version ?? null, next: lesson.version, at: now });
+  recordVersion(db, slug, lesson, {
+    notes: opts.notes ?? "",
+    kind: opts.kind === "important" ? "important" : "minor",
+    by: actor.id,
+    at,
+    baseline: live ?? null,
+    baselineAt: r.published_at,
+  });
   syncPublishedLessons(db);
   return { slug, version: lesson.version, status: lessonStatus(db, slug) };
 }
@@ -233,4 +264,11 @@ export function deletedLessons(db: Db) {
     const l = JSON.parse(r.published ?? r.draft) as Lesson;
     return { slug: r.slug, title: l.title, cards: Object.keys(l.nodes).length, deletedAt: r.deleted_at!, published: Boolean(r.published) };
   });
+}
+
+/** Puts an earlier version back as the draft, to check and publish (which makes a new version). */
+export function restoreVersion(db: Db, actor: User, slug: string, version: string, now: Date) {
+  requireAuthor(actor);
+  const content = versionContent(db, slug, version);
+  return saveDraft(db, actor, slug, content, now);
 }

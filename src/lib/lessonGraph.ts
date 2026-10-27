@@ -135,6 +135,43 @@ export function moveBlock(d: Lesson, id: string, dir: -1 | 1): string | null {
   return null;
 }
 
+/**
+  Moves a main-line card to position `to` on the main line, one checked step at a time (the same
+  steps as the arrow buttons). Returns why not if a step isn't allowed; `d` may then be part-moved,
+  so try it on a copy first.
+*/
+export function moveToPosition(d: Lesson, id: string, to: number): string | null {
+  let i = mainLine(d).indexOf(id);
+  if (i < 0) return "Cards inside a branch move with their decision.";
+  while (i !== to) {
+    const why = moveBlock(d, id, to > i ? 1 : -1);
+    if (why) return why;
+    const next = mainLine(d).indexOf(id);
+    if (next === i) return "That card can’t move there.";
+    i = next;
+  }
+  return null;
+}
+
+/**
+  Where a card can be dropped when dragged: each gap on the main line it can reach, named by the
+  card it would sit in front of (`before`, or null for the very end) and the position it ends up at.
+*/
+export function dropTargets(l: Lesson, id: string): { before: string | null; to: number }[] {
+  if (!movable(l, id)) return [];
+  const line = mainLine(l);
+  const from = line.indexOf(id);
+  const out: { before: string | null; to: number }[] = [];
+  for (let gap = 0; gap <= line.length; gap++) {
+    // The gaps either side of the card itself would leave it where it is.
+    if (gap === from || gap === from + 1) continue;
+    const to = gap > from ? gap - 1 : gap;
+    const trial = structuredClone(l);
+    if (moveToPosition(trial, id, to) === null && mainLine(trial).indexOf(id) === to) out.push({ before: line[gap] ?? null, to });
+  }
+  return out;
+}
+
 /** Where a new card goes after the selected one: before whatever comes next on the main line. Never after the summary. */
 export function insertAfterCard(d: Lesson, fresh: Card, afterId: string | undefined) {
   d.nodes[fresh.id] = fresh;

@@ -1,13 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import { MotionPhoto } from "../MotionPhoto";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { toneClasses, useTextTone } from "@/lib/imageTone";
-import { GRADIENTS } from "@/content/gradients";
+import { panelledOnColour, toneClasses, useTextTone } from "@/lib/imageTone";
+import { cardSurface } from "@/content/themes";
 import type { Card, Lesson } from "@/content/lessons";
-import { commitHub, nowIso, useHub, useHydrated, type LessonAttempt } from "@/lib/store";
+import { commentsOn } from "@/lib/cardComments";
+import { nowIso, setHub, useHub, useHydrated, type LessonAttempt } from "@/lib/store";
+import { send as sendOrQueue } from "@/lib/outbox";
 import { cumulative, cx, formatDate, spacedWhen } from "@/lib/format";
 import { Icon } from "../Icon";
 import { Frame, type SaveState } from "./Frame";
@@ -15,11 +18,24 @@ import { api, durationLabel, formatWhen, useApi } from "@/lib/api";
 import { WaitingSurveys } from "../WaitingSurveys";
 import { ListenCard } from "./AudioStage";
 import { VideoBubbles } from "./VideoBubbles";
-import { completionGate } from "@/lib/completionGate";
+import { completionGate, LISTEN_GATE } from "@/lib/completionGate";
 import { CardVisual, PhotoCredit } from "./CardVisual";
+import { WrittenAnswer } from "./WrittenAnswer";
+import { Hotspots } from "./Hotspots";
+import { Resources } from "./Resources";
+import { Checklist } from "./Checklist";
+import { checklistDone, tickedFrom } from "@/lib/checklist";
+import { CardComments } from "./CardComments";
+import { ReportProblem } from "./ReportProblem";
+import { OfflineButton } from "../OfflineButton";
+import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
 import { Quiz } from "./Quiz";
+import { confirmAction } from "@/lib/confirm";
+// Press, pop, burst and other feedback on interactive cards.
+import "./fx.css";
+import { PathCelebration } from "../PathCelebration";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -38,12 +54,21 @@ export function LessonPlayer({
   instanceId,
   preview = false,
   skipHolds = false,
+  notice,
+  startAt,
+  backTo,
 }: {
   lesson: Lesson;
   instanceId?: string;
   preview?: boolean;
   /** On a learning path that allows skipping (testers): never wait for audio, video or activities. */
   skipHolds?: boolean;
+  /** Shown on the start screen, e.g. that the lesson is machine translated. */
+  notice?: React.ReactNode;
+  /** Author previews only: open straight on this card instead of the start screen. */
+  startAt?: string;
+  /** Where closing or finishing leads, e.g. back to the learning path being previewed. */
+  backTo?: { href: string; label: string };
 }) {
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
@@ -52,6 +77,8 @@ export function LessonPlayer({
   const [review, setReview] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [completing, setCompleting] = useState<"idle" | "saving" | "error">("idle");
+  // Completed offline: recorded on this device, waiting to sync.
+  const [completionQueued, setCompletionQueued] = useState(false);
   const [followUps, setFollowUps] = useState<CompletionResult["followUps"]>([]);
   const [choice, setChoice] = useState<string | null>(null);
   const [stayFeedback, setStayFeedback] = useState<string | null>(null);
@@ -61,7 +88,6 @@ export function LessonPlayer({
   const [detailOpen, setDetailOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const seq = useRef(0);
-  const applied = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
 
   const node = attempt ? lesson.nodes[attempt.nodeId] : undefined;
@@ -94,18 +120,32 @@ export function LessonPlayer({
     if (phase !== "intro") headingRef.current?.focus();
   }, [attempt?.nodeId, phase]);
 
-  /** Server write for the prototype store. The UI only claims success after it resolves. */
+  /**
+    Saves progress on this device straight away, then sends it to the server through the outbox
+    (kept on the device while offline). Author previews stay on the device.
+  */
   function persist(a: LessonAttempt) {
     const mine = ++seq.current;
     pending.current = a;
+    // Author previews record nothing, not even on this device, so the author's own progress is untouched.
+    if (preview) {
+      setSaveState("saved");
+      return Promise.resolve();
+    }
+    const saved = { ...a, savedAt: nowIso() };
+    setHub((s) => ({ ...s, lessons: { ...s.lessons, [lesson.slug]: saved } }));
     setSaveState("saving");
-    return commitHub((s) => {
-      if (mine < applied.current) return s;
-      applied.current = mine;
-      return { ...s, lessons: { ...s.lessons, [lesson.slug]: a } };
-    }).then(
-      () => {
-        if (mine === seq.current) setSaveState("saved");
+    return sendOrQueue(
+      "/api/progress",
+      { slug: lesson.slug, attempt: saved, savedAt: saved.savedAt },
+      {
+        method: "PUT",
+        label: `Progress in “${lesson.title}”`,
+        coalesce: `progress:${lesson.slug}`,
+      },
+    ).then(
+      (r) => {
+        if (mine === seq.current) setSaveState(r.queued ? "queued" : "saved");
       },
       (err) => {
         if (mine === seq.current) setSaveState("error");
@@ -127,14 +167,14 @@ export function LessonPlayer({
     setDetailOpen(false);
   }
 
-  function begin(fresh: boolean, asReview = false) {
+  function begin(fresh: boolean, asReview = false, from = lesson.start) {
     const a: LessonAttempt =
       !fresh && stored && stored.version === lesson.version
         ? stored
         : {
             version: lesson.version,
-            nodeId: lesson.start,
-            route: [lesson.start],
+            nodeId: from,
+            route: [from],
             answers: {},
             status: "in_progress",
             startedAt: nowIso(),
@@ -146,8 +186,17 @@ export function LessonPlayer({
     resetCardState();
     // `review` state has not updated yet here, so check the argument directly.
     if (!asReview && a !== stored) persist(a).catch(() => {});
-    if (!asReview && instanceId) api(`/api/follow-ups/${instanceId}`, { body: { action: "start" } }).catch(() => {});
+    if (!asReview && instanceId) sendOrQueue(`/api/follow-ups/${instanceId}`, { action: "start" }, { label: "Follow up started" }).catch(() => {});
   }
+
+  // An author previewing a card from the editor goes straight to that card.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!preview || !startAt || !lesson.nodes[startAt] || started.current) return;
+    started.current = true;
+    begin(true, true, startAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview, startAt]);
 
   function go(next: string, answers?: LessonAttempt["answers"]) {
     if (!attempt) return;
@@ -189,9 +238,9 @@ export function LessonPlayer({
     save(a);
   }
 
+  // Built on the latest attempt, so a card can save several answers in a row.
   function setAnswer(key: string, value: string | number) {
-    if (!attempt) return;
-    setAttempt({ ...attempt, answers: { ...attempt.answers, [key]: value } });
+    setAttempt((a) => (a ? { ...a, answers: { ...a.answers, [key]: value } } : a));
   }
 
   async function complete() {
@@ -213,16 +262,15 @@ export function LessonPlayer({
       const results = Object.entries(attempt.answers)
         .filter(([k]) => k.startsWith("first:"))
         .map(([k, v]) => ({ id: k.slice(6), correct: v === 1 }));
-      const server = instanceId
-        ? await api<{ completedAt: string }>(`/api/follow-ups/${instanceId}`, {
-            body: { action: "complete_lesson", results },
-          }).then((v) => ({
-            completedAt: v.completedAt ?? nowIso(),
-            followUps: [] as CompletionResult["followUps"],
-          }))
-        : await api<CompletionResult>("/api/lessons/complete", {
-            body: { slug: lesson.slug, version: lesson.version },
-          });
+      // Offline, the completion is kept on this device and recorded when the connection returns.
+      const label = `Lesson completed: “${lesson.title}”`;
+      const sent = instanceId
+        ? await sendOrQueue<{ completedAt: string }>(`/api/follow-ups/${instanceId}`, { action: "complete_lesson", results }, { label })
+        : await sendOrQueue<CompletionResult>("/api/lessons/complete", { slug: lesson.slug, version: lesson.version }, { label });
+      const server: Pick<CompletionResult, "completedAt" | "followUps"> = sent.queued
+        ? { completedAt: done.completedAt!, followUps: [] }
+        : { completedAt: (sent.data as { completedAt?: string }).completedAt ?? nowIso(), followUps: (sent.data as Partial<CompletionResult>).followUps ?? [] };
+      setCompletionQueued(sent.queued);
       const confirmed = { ...done, completedAt: server.completedAt };
       await persist(confirmed);
       setFollowUps(server.followUps);
@@ -235,12 +283,13 @@ export function LessonPlayer({
   }
 
   if (!hydrated) {
-    return <Frame title={`Lesson: ${lesson.title}`} beats={lesson.beats} saveState="idle" progress={null} />;
+    return <Frame closeHref={backTo?.href} title={`Lesson: ${lesson.title}`} beats={lesson.beats} saveState="idle" progress={null} />;
   }
 
   if (phase === "intro") {
     return (
       <Frame
+        closeHref={backTo?.href}
         title={`Lesson: ${lesson.title}`}
         beats={lesson.beats}
         saveState="idle"
@@ -256,6 +305,7 @@ export function LessonPlayer({
           />
         }
       >
+        {notice && <div className="mb-3">{notice}</div>}
         {preview && (
           <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
             <strong>Author preview.</strong> Nothing is recorded. This draft isn’t visible to learners until it’s approved.
@@ -270,14 +320,30 @@ export function LessonPlayer({
           onReview={() => begin(true, true)}
         />
         {!preview && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
+        {!preview && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
   }
 
   if (phase === "complete" && attempt) {
     return (
-      <Frame title={`Lesson: ${lesson.title}`} beats={lesson.beats} saveState={saveState} progress={{ beat: lesson.beats.length, done: true }}>
-        <Complete lesson={lesson} attempt={attempt} review={review || preview} preview={preview} headingRef={headingRef} followUps={followUps} />
+      <Frame
+        closeHref={backTo?.href}
+        title={`Lesson: ${lesson.title}`}
+        beats={lesson.beats}
+        saveState={saveState}
+        progress={{ beat: lesson.beats.length, done: true }}
+      >
+        <Complete
+          lesson={lesson}
+          attempt={attempt}
+          review={review || preview}
+          preview={preview}
+          headingRef={headingRef}
+          followUps={followUps}
+          queued={completionQueued}
+          backTo={backTo}
+        />
       </Frame>
     );
   }
@@ -302,8 +368,11 @@ export function LessonPlayer({
   // A gradient behind the card (a full-background photo wins). Its text colour comes with the preset.
   // The dedicated audio card fills the card on a soft gradient (mist unless the author picked another).
   const listen = node.type === "listen";
-  const gradient = !bgPhoto ? (node.background ? GRADIENTS[node.background.gradient] : listen ? GRADIENTS.mist : null) : null;
+  // Its own colour first, then the lesson's theme (see content/themes.ts).
+  const gradient = !bgPhoto ? cardSurface(lesson, node) : null;
   const onColour = bgPhoto ? tone : gradient ? toneClasses(gradient.text) : null;
+  // Where the text sits: the top by default, or the bottom over a full-background photo.
+  const textPosition = node.textPosition ?? (bgPhoto ? "bottom" : "top");
 
   // Card audio lives in the footer so it never pushes the card content down.
   const dock =
@@ -370,7 +439,11 @@ export function LessonPlayer({
         const answers = { ...attempt.answers };
         node.questions.forEach((q) => {
           const key = `first:${node.id}.${q.id}`;
-          if (answers[key] === undefined) answers[key] = answers[`${node.id}.${q.id}`] === q.correct ? 1 : 0;
+          if (answers[key] === undefined) {
+            answers[key] = answers[`${node.id}.${q.id}`] === q.correct ? 1 : 0;
+            // Which option they chose first, so authors can see common wrong answers.
+            answers[`pick:${node.id}.${q.id}`] = answers[`${node.id}.${q.id}`] as string;
+          }
         });
         setAttempt({ ...attempt, answers });
         return;
@@ -395,6 +468,7 @@ export function LessonPlayer({
 
   return (
     <Frame
+      closeHref={backTo?.href}
       title={`Lesson: ${lesson.title}`}
       beats={lesson.beats}
       saveState={review ? "idle" : saveState}
@@ -418,12 +492,34 @@ export function LessonPlayer({
               We couldn’t save your result, so the lesson isn’t marked complete yet. Check your connection and try again.
             </p>
           )}
-          <div id="card-caption" />
-          {locked && (
-            <p role="status" className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-ink-muted">
-              <Icon name="lock" className="size-3.5" /> {gate}
-            </p>
+          {/* How much of the card's audio has played: a line across the top of the footer. */}
+          {narration && narration.playable && (
+            <div
+              role="progressbar"
+              aria-label="Audio played"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(narration.progress * 100)}
+              className="absolute inset-x-0 top-0 h-1 bg-line"
+            >
+              <div
+                className={cx("h-full transition-[width] duration-300 ease-linear", narration.state === "ended" ? "bg-success" : "bg-[var(--action)]")}
+                style={{ width: `${Math.min(100, narration.progress * 100)}%` }}
+              />
+            </div>
           )}
+          <div id="card-caption" />
+          {/* Waiting for audio: the line across the top of the footer shows it, so only screen readers get the words. */}
+          {locked &&
+            (gate === LISTEN_GATE ? (
+              <p role="status" className="sr-only">
+                {gate}
+              </p>
+            ) : (
+              <p role="status" className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-ink-muted">
+                <Icon name="lock" className="size-3.5" /> {gate}
+              </p>
+            ))}
           <div className="flex items-center justify-between gap-2">
             {attempt.route.length > 1 ? (
               <button
@@ -454,8 +550,10 @@ export function LessonPlayer({
               onClick={onPrimary}
               disabled={primary.disabled || locked || completing === "saving"}
               className={cx(
-                "inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45 sm:px-6 sm:text-lg",
+                "fx-press inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45 sm:px-6 sm:text-lg",
                 dock ? "" : "ml-auto flex-1 text-lg sm:flex-none",
+                // The audio has finished and Continue has just unlocked: one pulse to draw the eye.
+                narration?.state === "ended" && !locked && !primary.disabled && "fx-ready",
               )}
             >
               {completing === "saving" ? "Saving your result…" : completing === "error" && primary.completes ? "Try again" : primary.label}
@@ -489,20 +587,36 @@ export function LessonPlayer({
           key={node.id}
           className={cx(
             "animate-card-in flex flex-col gap-4",
-            bgPhoto &&
-              cx("[scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative isolate h-full justify-end overflow-y-auto bg-black p-5 pt-24", tone.text),
+            bgPhoto
+              ? cx(
+                  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative isolate h-full overflow-y-auto bg-black p-5",
+                  textPosition === "top" ? "justify-start pt-16" : textPosition === "center" ? "justify-center" : "justify-end pt-24",
+                  tone.text,
+                )
+              : textPosition !== "top" && "min-h-full",
           )}
         >
           {bgPhoto && (
             <>
-              <Image
-                src={bgPhoto.src}
-                alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
-                fill
-                sizes="30rem"
-                className="-z-10 object-cover"
-                style={{ objectPosition: bgPhoto.position ?? "center" }}
-              />
+              {bgPhoto.animated ? (
+                <MotionPhoto
+                  still={bgPhoto.src}
+                  mp4={bgPhoto.animated.mp4}
+                  alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
+                  className="-z-10"
+                  style={{ objectPosition: bgPhoto.position ?? "center" }}
+                  buttonClassName="left-3 top-3"
+                />
+              ) : (
+                <Image
+                  src={bgPhoto.src}
+                  alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
+                  fill
+                  sizes="30rem"
+                  className="-z-10 object-cover"
+                  style={{ objectPosition: bgPhoto.position ?? "center" }}
+                />
+              )}
               <div aria-hidden className={cx("absolute inset-0 -z-10", tone.fade)} />
               {bgPhoto.credit && <PhotoCredit credit={bgPhoto.credit} className="absolute right-3 top-3 [text-shadow:none]" />}
             </>
@@ -528,11 +642,13 @@ export function LessonPlayer({
           )}
           {/* Talking-head video bubbles, centred at the top of the card. */}
           {node.bubbles && node.bubbles.length > 0 && <VideoBubbles key={node.id} bubbles={node.bubbles} onComplete={() => markDone(node.id)} />}
+          {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
+          {!bgPhoto && textPosition !== "top" && <div aria-hidden className="-my-2 flex-1" />}
           <div>
             <p
               className={cx(
                 "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
-                onColour ? onColour.soft : node.emphasis === "consequence" ? "text-warm" : "text-accent",
+                onColour ? (gradient?.accent ?? onColour.soft) : node.emphasis === "consequence" ? "text-warm" : "text-accent",
               )}
             >
               {node.emphasis === "consequence" && <Icon name="alert" className="mr-1 inline size-4 align-[-3px]" />}
@@ -584,14 +700,8 @@ export function LessonPlayer({
             )}
           </div>
 
-          {/* On a coloured background, choices and controls sit on a white panel so they stay easy to read. */}
-          <div
-            className={cx(
-              onColour &&
-                ["decision", "quiz", "calculator", "poll", "rating", "response"].includes(node.type) &&
-                "rounded-2xl bg-surface p-3 text-ink shadow-sm [text-shadow:none]",
-            )}
-          >
+          {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
+          <div className={cx(onColour && panelledOnColour(node.type) && onColour.panel)}>
             <CardBody
               node={node}
               attempt={attempt}
@@ -607,10 +717,15 @@ export function LessonPlayer({
               quizChecked={quizChecked}
               setQuizChecked={setQuizChecked}
               lessonSlug={lesson.slug}
+              lessonInfo={{ title: lesson.title, outcome: lesson.outcome }}
+              authorPreview={preview}
               countVotes={!preview && !review}
               tinted={Boolean(onColour)}
             />
           </div>
+          <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
+          {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />}
+          {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
         </div>
       )}
     </Frame>
@@ -651,7 +766,17 @@ function primaryAction(
     case "poll":
     case "rating":
     case "wall":
+    case "hotspot":
       return { label: "Continue", kind: "next", disabled: !ctx.answers[node.id] };
+    case "checklist":
+      return { label: "Continue", kind: "next", disabled: !checklistDone(node, tickedFrom(ctx.answers[node.id])) };
+    case "written": {
+      // Checked at least once; with "must meet every criterion", passed (or out of tries, or AI unavailable).
+      const state = ctx.answers[node.id];
+      const tries = Number(ctx.answers[`${node.id}.tries`] ?? 0);
+      const free = state === "passed" || state === "unavailable" || (state === "tried" && (!node.mustPass || tries >= (node.maxAttempts ?? 3)));
+      return { label: "Continue", kind: "next", disabled: !free };
+    }
     case "summary":
       return { label: node.cta, kind: "complete", completes: true };
     case "image":
@@ -672,6 +797,8 @@ function CardBody({
   quizChecked,
   setQuizChecked,
   lessonSlug,
+  lessonInfo,
+  authorPreview,
   countVotes,
   tinted,
 }: {
@@ -685,6 +812,9 @@ function CardBody({
   quizChecked: boolean;
   setQuizChecked: (c: boolean) => void;
   lessonSlug: string;
+  lessonInfo: { title: string; outcome: string };
+  /** An author previewing a draft: AI checks use the card as written. */
+  authorPreview: boolean;
   /** False in previews and reviews: votes are shown but not counted. */
   countVotes: boolean;
   /** The card has a gradient or photo behind it. */
@@ -714,6 +844,39 @@ function CardBody({
           onChoose={(id) => setAnswer(node.id, id)}
         />
       );
+    case "written":
+      return (
+        <WrittenAnswer
+          key={node.id}
+          card={node}
+          slug={lessonSlug}
+          lesson={lessonInfo}
+          preview={authorPreview}
+          answers={attempt.answers}
+          setAnswer={setAnswer}
+        />
+      );
+    case "resources":
+      return <Resources key={node.id} card={node} />;
+    case "checklist":
+      return <Checklist key={node.id} card={node} ticked={tickedFrom(attempt.answers[node.id])} onChange={(t) => setAnswer(node.id, t.join(","))} />;
+    case "hotspot": {
+      const found = String(attempt.answers[`${node.id}.found`] ?? "")
+        .split(",")
+        .filter(Boolean);
+      return (
+        <Hotspots
+          key={node.id}
+          card={node}
+          found={found}
+          onFind={(id) => {
+            const next = [...found, id];
+            setAnswer(`${node.id}.found`, next.join(","));
+            if (next.length >= hotspotsNeeded(node)) setAnswer(node.id, "done");
+          }}
+        />
+      );
+    }
     case "rating":
       return (
         <Rating
@@ -741,8 +904,8 @@ function CardBody({
             <label
               key={o.id}
               className={cx(
-                "flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
-                choice === o.id ? "border-action bg-tealtint" : "border-line hover:border-line-strong",
+                "fx-press flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
+                choice === o.id ? "fx-pop border-action bg-tealtint" : "border-line hover:border-line-strong",
               )}
             >
               <input
@@ -760,9 +923,9 @@ function CardBody({
             <p
               id="stay-feedback"
               role="status"
-              className={cx("mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]", positive ? "bg-tealtint" : "border border-warm/60")}
+              className={cx("fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]", positive ? "bg-tealtint" : "border border-warm/60")}
             >
-              <Icon name={positive ? "check" : "info"} className={cx("mt-0.5 size-5 shrink-0", positive ? "text-accent" : "text-warm")} />
+              <Icon name={positive ? "check" : "info"} className={cx("fx-tick mt-0.5 size-5 shrink-0", positive ? "text-accent" : "text-warm")} />
               <span>
                 {stayFeedback}
                 {!positive && <strong className="mt-1 block font-semibold">Try again.</strong>}
@@ -1111,6 +1274,8 @@ function Complete({
   preview,
   headingRef,
   followUps,
+  queued = false,
+  backTo,
 }: {
   lesson: Lesson;
   attempt: LessonAttempt;
@@ -1118,10 +1283,20 @@ function Complete({
   preview: boolean;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   followUps: CompletionResult["followUps"];
+  /** Finished while offline: recorded on this device, syncing later. */
+  queued?: boolean;
+  backTo?: { href: string; label: string };
 }) {
   const ack = lesson.completion.type === "acknowledge";
   return (
     <div className="animate-card-in flex flex-col gap-5 py-6">
+      {queued && (
+        <p role="status" className="flex items-start gap-2 rounded-2xl bg-gold/15 p-3 text-sm ring-1 ring-gold/60">
+          <Icon name="check" className="mt-0.5 size-4 shrink-0" />
+          You’re offline, so this is saved on your device. It will be recorded as complete as soon as you’re back online.
+        </p>
+      )}
+      {!preview && !review && !queued && <PathCelebration lessonSlug={lesson.slug} />}
       <span className="inline-flex size-16 items-center justify-center rounded-full bg-tealtint text-accent">
         <Icon name="check" className="size-8" />
       </span>
@@ -1178,10 +1353,10 @@ function Complete({
       )}
       <div className="flex flex-col gap-2">
         <Link
-          href="/learning"
+          href={backTo?.href ?? "/learning"}
           className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover"
         >
-          Back to learning
+          {backTo?.label ?? "Back to learning"}
         </Link>
         <Link href="/onboarding" className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted">
           Go to my onboarding
@@ -1335,7 +1510,10 @@ function Poll({
       return;
     }
     try {
-      setResult(await api<PollResult>("/api/polls", { body: { lesson: slug, card: card.id, option: id } }));
+      const r = await sendOrQueue<PollResult>("/api/polls", { lesson: slug, card: card.id, option: id }, { label: `Poll answer: “${card.prompt}”` });
+      // Offline, the vote is kept on this device and counted once back online; results show then.
+      if (r.queued) setError("You’re offline. Your answer is saved and will count when you’re back online.");
+      else setResult(r.data);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1356,15 +1534,17 @@ function Poll({
             onClick={() => choose(o.id)}
             aria-pressed={mine}
             className={cx(
-              "relative min-h-12 overflow-hidden rounded-2xl border-2 px-4 py-3 text-left text-[1.02rem] transition-colors",
-              mine ? "border-action" : "border-line-strong hover:bg-muted",
+              "fx-press relative min-h-12 overflow-hidden rounded-2xl border-2 px-4 py-3 text-left text-[1.02rem] transition-colors",
+              mine ? "fx-pop border-action" : "border-line-strong hover:bg-muted",
             )}
           >
-            {pct !== null && <span aria-hidden className={cx("absolute inset-y-0 left-0", mine ? "bg-action/20" : "bg-muted")} style={{ width: `${pct}%` }} />}
+            {pct !== null && (
+              <span aria-hidden className={cx("fx-grow absolute inset-y-0 left-0", mine ? "bg-action/20" : "bg-muted")} style={{ width: `${pct}%` }} />
+            )}
             <span className="relative flex items-center gap-3">
               <span className="min-w-0 flex-1 font-medium">{o.label}</span>
-              {mine && <Icon name="check" className="size-4 text-accent" />}
-              {pct !== null && <span className="font-mulish font-extrabold">{pct}%</span>}
+              {mine && <Icon name="check" className="fx-tick size-4 text-accent" />}
+              {pct !== null && <span className="fx-rise font-mulish font-extrabold">{pct}%</span>}
             </span>
           </button>
         );
@@ -1432,7 +1612,9 @@ function Rating({
       return;
     }
     try {
-      setResult(await api<RatingResult>("/api/ratings", { body: { lesson: slug, card: card.id, stars: n } }));
+      const r = await sendOrQueue<RatingResult>("/api/ratings", { lesson: slug, card: card.id, stars: n }, { label: `Rating: “${card.prompt}”` });
+      if (r.queued) setError("You’re offline. Your rating is saved and will count when you’re back online.");
+      else setResult(r.data);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1456,10 +1638,17 @@ function Rating({
               aria-label={`${n} ${n === 1 ? "star" : "stars"}${n === 1 && card.lowLabel ? `: ${card.lowLabel}` : ""}${n === 5 && card.highLabel ? `: ${card.highLabel}` : ""}`}
               className="grid size-12 place-items-center rounded-full transition-transform hover:scale-110 active:scale-95"
             >
-              <svg viewBox="0 0 24 24" className="size-10" aria-hidden>
+              <svg
+                // Re-keyed on each rating so the stars spring again, one after another.
+                key={`${n}:${rated ?? 0}`}
+                viewBox="0 0 24 24"
+                className={cx("size-10", Boolean(rated) && n <= (rated ?? 0) && "fx-star")}
+                style={rated && n <= rated ? { animationDelay: `${(n - 1) * 60}ms` } : undefined}
+                aria-hidden
+              >
                 <path
                   d={STAR}
-                  fill={n <= shown ? "#fdb813" : "none"}
+                  fill={n <= shown ? "#ffc72c" : "none"}
                   stroke={n <= shown ? "#D99A00" : "currentColor"}
                   strokeOpacity={n <= shown ? 1 : 0.35}
                   strokeWidth="1.5"
@@ -1493,7 +1682,7 @@ function Rating({
                 <li key={s} className="flex items-center gap-2 text-xs">
                   <span className="w-5 font-semibold tabular-nums">{s}★</span>
                   <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface">
-                    <span className={cx("block h-full rounded-full", s === rated ? "bg-action" : "bg-[#fdb813]")} style={{ width: `${pct}%` }} />
+                    <span className={cx("fx-grow block h-full rounded-full", s === rated ? "bg-action" : "bg-[#ffc72c]")} style={{ width: `${pct}%` }} />
                   </span>
                   <span className="w-8 text-right tabular-nums text-ink-muted">{pct}%</span>
                 </li>
@@ -1591,6 +1780,16 @@ function Wall({
     setBusy(true);
     setError(null);
     try {
+      if (body.action === "post") {
+        // A post can wait for a connection; seeing everyone else's needs one.
+        const r = await sendOrQueue<WallView>("/api/walls", body, { label: `Insight wall post: “${card.prompt}”` });
+        if (r.queued) {
+          setError("You’re offline. Your post is saved and will be shared when you’re back online, and you’ll see everyone else’s then.");
+          return true;
+        }
+        setWall(r.data);
+        return true;
+      }
       setWall(await api<WallView>("/api/walls", { body }));
       return true;
     } catch (e) {
@@ -1732,7 +1931,13 @@ function Wall({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => window.confirm("Hide this post from the wall? It stays on record.") && send({ action: "hide", post: p.id })}
+                      onClick={async () =>
+                        (await confirmAction("It stays on record but nobody sees it on the wall.", {
+                          title: "Hide this post?",
+                          confirmLabel: "Hide",
+                          danger: true,
+                        })) && send({ action: "hide", post: p.id })
+                      }
                       className="inline-flex min-h-9 items-center rounded-full px-2 font-semibold text-ink-muted hover:text-ink"
                     >
                       Hide

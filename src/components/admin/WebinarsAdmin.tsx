@@ -10,6 +10,7 @@ import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { WebinarPlayer } from "../WebinarPlayer";
 import { uploadImage, uploadVideo } from "./LessonEditor";
+import { confirmAction } from "@/lib/confirm";
 
 /* Recorded webinars: add the recording and details, then publish for learners. */
 
@@ -36,7 +37,9 @@ export function WebinarList() {
   return (
     <AdminShell title="Webinars">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <p className="max-w-3xl text-ink-muted">Recorded webinars for partners and coordinators. Published recordings appear on the Webinars page, and you can feature them in email campaigns.</p>
+        <p className="max-w-3xl text-ink-muted">
+          Recorded webinars for partners and coordinators. Published recordings appear on the Webinars page, and you can feature them in email campaigns.
+        </p>
         <Link href="/admin/webinars/new" className={btn.primary}>
           <Icon name="plus" className="size-4" /> Add a webinar
         </Link>
@@ -54,7 +57,7 @@ export function WebinarList() {
         <ul className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.webinars.map((w) => (
             <li key={w.id} className="relative flex flex-col overflow-hidden rounded-3xl border border-line bg-surface hover:border-line-strong">
-              <div className="relative aspect-video bg-[#0f2642]">
+              <div className="relative aspect-video bg-[#102a43]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {w.thumbnail && <img src={w.thumbnail} alt="" className="absolute inset-0 size-full object-cover object-[50%_25%]" />}
                 <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-bold text-white">{w.minutes} min</span>
@@ -117,7 +120,9 @@ export function WebinarEditor({ id }: { id?: string }) {
 function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
   const router = useRouter();
   const [w, setW] = useState<Webinar>(initial);
-  const [link, setLink] = useState(initial.video.provider !== "upload" && initial.video.id ? videoLinkFor({ provider: initial.video.provider, id: initial.video.id }) : "");
+  const [link, setLink] = useState(
+    initial.video.provider !== "upload" && initial.video.id ? videoLinkFor({ provider: initial.video.provider, id: initial.video.id }) : "",
+  );
   const [topics, setTopics] = useState(initial.topics.join(", "));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -141,7 +146,13 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
       setBusy(false);
     }
   }
-  const payload = () => ({ ...w, topics: topics.split(",").map((t) => t.trim()).filter(Boolean) });
+  const payload = () => ({
+    ...w,
+    topics: topics
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
+  });
   const save = async () => {
     if (isNew) {
       const r = await api<{ id: string }>("/api/admin/webinars", { body: payload() });
@@ -161,7 +172,12 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
               <input className={input} value={w.title} onChange={(e) => set({ title: e.target.value })} />
             </Field>
             <Field label="Summary" hint="One or two sentences shown on the Webinars page and in emails." className="sm:col-span-2">
-              <textarea rows={3} className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2" value={w.summary} onChange={(e) => set({ summary: e.target.value })} />
+              <textarea
+                rows={3}
+                className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2"
+                value={w.summary}
+                onChange={(e) => set({ summary: e.target.value })}
+              />
             </Field>
             <Field label="Presenter">
               <input className={input} value={w.presenter} onChange={(e) => set({ presenter: e.target.value })} />
@@ -189,7 +205,13 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
               <legend className="text-sm font-semibold">Who it’s for</legend>
               <div className="mt-1 flex flex-wrap gap-2">
                 {(["partner", "coordinator"] as const).map((g) => (
-                  <label key={g} className={cx("flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4", w.audience.includes(g) ? "border-action bg-tealtint" : "border-line-strong")}>
+                  <label
+                    key={g}
+                    className={cx(
+                      "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4",
+                      w.audience.includes(g) ? "border-action bg-tealtint" : "border-line-strong",
+                    )}
+                  >
                     <input
                       type="checkbox"
                       className="size-4 accent-[var(--action)]"
@@ -250,8 +272,12 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
           <section className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5">
             <h2 className="font-serif text-xl font-semibold">Thumbnail, resources and transcript</h2>
             <div className="flex flex-wrap items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {w.thumbnail ? <img src={w.thumbnail} alt="" className="h-20 w-36 rounded-xl object-cover" /> : <span className="grid h-20 w-36 place-items-center rounded-xl bg-muted text-xs text-ink-muted">No thumbnail</span>}
+              {w.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={w.thumbnail} alt="" className="h-20 w-36 rounded-xl object-cover" />
+              ) : (
+                <span className="grid h-20 w-36 place-items-center rounded-xl bg-muted text-xs text-ink-muted">No thumbnail</span>
+              )}
               <label className={cx(btn.secondary, "cursor-pointer")}>
                 <input
                   type="file"
@@ -270,9 +296,24 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
               <p className="text-sm font-semibold">Resources</p>
               {w.resources.map((r, i) => (
                 <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <input className={input} placeholder="Title" value={r.title} onChange={(e) => set({ resources: w.resources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })} />
-                  <input className={input} placeholder="https://" value={r.url} onChange={(e) => set({ resources: w.resources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })} />
-                  <button type="button" className={btn.quiet} onClick={() => set({ resources: w.resources.filter((_, j) => j !== i) })} aria-label="Remove resource">
+                  <input
+                    className={input}
+                    placeholder="Title"
+                    value={r.title}
+                    onChange={(e) => set({ resources: w.resources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })}
+                  />
+                  <input
+                    className={input}
+                    placeholder="https://"
+                    value={r.url}
+                    onChange={(e) => set({ resources: w.resources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })}
+                  />
+                  <button
+                    type="button"
+                    className={btn.quiet}
+                    onClick={() => set({ resources: w.resources.filter((_, j) => j !== i) })}
+                    aria-label="Remove resource"
+                  >
                     <Icon name="trash" className="size-4" />
                   </button>
                 </div>
@@ -282,7 +323,12 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
               </button>
             </div>
             <Field label="Transcript" hint="Helps people who can’t listen, and makes the recording searchable.">
-              <textarea rows={6} className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-sm" value={w.transcript} onChange={(e) => set({ transcript: e.target.value })} />
+              <textarea
+                rows={6}
+                className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-sm"
+                value={w.transcript}
+                onChange={(e) => set({ transcript: e.target.value })}
+              />
             </Field>
           </section>
         </fieldset>
@@ -309,12 +355,15 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
                   className={btn.secondary}
                   disabled={busy}
                   onClick={() =>
-                    run(async () => {
-                      if (dirty) await save();
-                      const publish = w.status !== "published";
-                      await api(`/api/admin/webinars/${w.id}`, { body: { action: publish ? "publish" : "unpublish" } });
-                      setW((x) => ({ ...x, status: publish ? "published" : "draft" }));
-                    }, w.status === "published" ? "Unpublished." : "Published. It’s on the Webinars page now.")
+                    run(
+                      async () => {
+                        if (dirty) await save();
+                        const publish = w.status !== "published";
+                        await api(`/api/admin/webinars/${w.id}`, { body: { action: publish ? "publish" : "unpublish" } });
+                        setW((x) => ({ ...x, status: publish ? "published" : "draft" }));
+                      },
+                      w.status === "published" ? "Unpublished." : "Published. It’s on the Webinars page now.",
+                    )
                   }
                 >
                   {w.status === "published" ? "Unpublish" : "Publish"}
@@ -325,7 +374,13 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
                   type="button"
                   className={btn.quiet}
                   disabled={busy}
-                  onClick={() => window.confirm("Delete this webinar?") && run(async () => (await api(`/api/admin/webinars/${w.id}`, { method: "DELETE" }), router.push("/admin/webinars")), "Deleted.")}
+                  onClick={async () =>
+                    (await confirmAction("It’s removed from the admin list for good.", {
+                      title: "Delete this webinar?",
+                      confirmLabel: "Delete",
+                      danger: true,
+                    })) && run(async () => (await api(`/api/admin/webinars/${w.id}`, { method: "DELETE" }), router.push("/admin/webinars")), "Deleted.")
+                  }
                 >
                   <Icon name="trash" className="size-4" /> Delete
                 </button>

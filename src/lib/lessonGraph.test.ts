@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lessons, type Card, type Lesson } from "@/content/lessons";
-import { exitOf, insertAfterCard, mainLine, moveBlock, ordered } from "./lessonGraph";
+import { dropTargets, exitOf, insertAfterCard, mainLine, moveBlock, moveToPosition, ordered } from "./lessonGraph";
 
 /* Adding and moving cards in the lesson editor without breaking the paths through a lesson. */
 
@@ -63,5 +63,38 @@ describe("moving cards", () => {
     const l = copy("a-little-extra-time");
     const d = Object.values(l.nodes).find((c) => c.type === "decision" && new Set(c.options.map((o) => o.next)).size > 1)!;
     expect(mainLine(l)).toContain(exitOf(l, d.id));
+  });
+});
+
+describe("dragging cards", () => {
+  it("drops a card straight into a new position, keeping every path whole", () => {
+    const l = copy("legislative-framework");
+    const line = mainLine(l);
+    expect(moveToPosition(l, line[1], 4)).toBeNull();
+    expect(mainLine(l)[4]).toBe(line[1]);
+    expect(walk(l).size).toBe(Object.keys(l.nodes).length);
+    expect(moveToPosition(l, line[1], 0)).toBeNull();
+    expect(mainLine(l)[0]).toBe(line[1]);
+  });
+
+  it("offers only the gaps a card can really reach", () => {
+    const l = copy("a-little-extra-time");
+    const line = mainLine(l);
+    const targets = dropTargets(l, line[1]);
+    expect(targets.length).toBeGreaterThan(2);
+    // Never its own spot, never after the summary.
+    expect(targets.some((t) => t.to === 1)).toBe(false);
+    expect(targets.some((t) => t.before === null && l.nodes[line.at(-1)!].type === "summary")).toBe(false);
+    for (const t of targets) {
+      const trial = structuredClone(l);
+      expect(moveToPosition(trial, line[1], t.to)).toBeNull();
+      expect(walk(trial).size).toBe(Object.keys(trial.nodes).length);
+    }
+    // The summary and cards inside a branch can't be dragged.
+    const withSummary = copy("legislative-framework");
+    const summary = Object.values(withSummary.nodes).find((c) => c.type === "summary")!;
+    expect(dropTargets(withSummary, summary.id)).toEqual([]);
+    const branchCard = ordered(l).find((c) => !line.includes(c.id))!;
+    expect(dropTargets(l, branchCard.id)).toEqual([]);
   });
 });

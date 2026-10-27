@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS learning_path_lessons (
   path_id TEXT NOT NULL REFERENCES learning_paths(id), position INTEGER NOT NULL, lesson_slug TEXT NOT NULL,
   PRIMARY KEY (path_id, position)
 );
+-- Chapters group a path's lessons (topics), like "01 Your Team". A stage is an optional heading over chapters.
+CREATE TABLE IF NOT EXISTS learning_path_chapters (
+  path_id TEXT NOT NULL REFERENCES learning_paths(id), id TEXT NOT NULL, position INTEGER NOT NULL,
+  title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', stage TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (path_id, id)
+);
 CREATE TABLE IF NOT EXISTS learning_path_assignments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   path_id TEXT NOT NULL REFERENCES learning_paths(id), user_id TEXT NOT NULL REFERENCES users(id),
@@ -164,6 +170,56 @@ CREATE TABLE IF NOT EXISTS authored_lessons (
   slug TEXT PRIMARY KEY, draft TEXT NOT NULL, published TEXT,
   created_by TEXT NOT NULL, created_at TEXT NOT NULL,
   updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT
+);
+-- Comments on individual lesson cards (when the author turns them on for that card).
+CREATE TABLE IF NOT EXISTS card_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_slug TEXT NOT NULL, card_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
+  text TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  hidden_at TEXT, hidden_by TEXT, pinned_at TEXT, pinned_by TEXT
+);
+CREATE INDEX IF NOT EXISTS card_comments_card ON card_comments (lesson_slug, card_id);
+-- Lessons translated for people who read the hub in another language. One row per lesson and
+-- language; source_hash ties it to the lesson text it was made from, so edits trigger a new one.
+CREATE TABLE IF NOT EXISTS lesson_translations (
+  slug TEXT NOT NULL, lang TEXT NOT NULL, source_hash TEXT NOT NULL,
+  status TEXT NOT NULL, content TEXT, provider TEXT, error TEXT, updated_at TEXT NOT NULL,
+  PRIMARY KEY (slug, lang)
+);
+-- Saves sent from a device's offline outbox carry a unique key. The first response is kept, so a
+-- resend (after a dropped connection) gets the same answer instead of being recorded twice.
+CREATE TABLE IF NOT EXISTS idempotency (
+  key TEXT NOT NULL, user_id TEXT NOT NULL, status INTEGER NOT NULL, response TEXT NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (key, user_id)
+);
+-- Where each person is up to in each lesson, so progress follows them between devices.
+CREATE TABLE IF NOT EXISTS lesson_progress (
+  user_id TEXT NOT NULL, slug TEXT NOT NULL, attempt TEXT NOT NULL, saved_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, slug)
+);
+-- Every published version of a lesson, kept so changes can be compared and rolled back.
+CREATE TABLE IF NOT EXISTS lesson_versions (
+  slug TEXT NOT NULL, version TEXT NOT NULL, content TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'minor', published_by TEXT NOT NULL, published_at TEXT NOT NULL,
+  PRIMARY KEY (slug, version)
+);
+-- Shared facts (rates, dates, numbers) used in lesson text as {{key}}: change once, every lesson updates.
+CREATE TABLE IF NOT EXISTS facts (
+  key TEXT PRIMARY KEY, label TEXT NOT NULL, value TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
+  source_title TEXT, source_url TEXT, owner TEXT NOT NULL DEFAULT '', check_by TEXT,
+  updated_at TEXT NOT NULL, updated_by TEXT NOT NULL
+);
+-- Learners flagging something on a card that looks wrong or out of date.
+CREATE TABLE IF NOT EXISTS content_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_slug TEXT NOT NULL, card_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
+  text TEXT NOT NULL, created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+  resolved_by TEXT, resolved_at TEXT, resolution TEXT
+);
+-- Which content reminders have gone out, so each is sent once per stage.
+CREATE TABLE IF NOT EXISTS content_reminders (
+  item_key TEXT NOT NULL, stage TEXT NOT NULL, sent_at TEXT NOT NULL,
+  PRIMARY KEY (item_key, stage)
 );
 -- Confidence ratings: one 1-5 star rating per person per rating card. People can change it.
 CREATE TABLE IF NOT EXISTS rating_votes (
@@ -291,8 +347,14 @@ export function migrate(db: Db) {
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
   // Testing paths: people on them can move on before audio or video finishes.
   if (!cols.includes("allow_skip")) db.exec("ALTER TABLE learning_paths ADD COLUMN allow_skip INTEGER NOT NULL DEFAULT 0");
+  // The overview learners see: who it's for, what they'll be able to do (JSON list) and what they get at the end.
+  if (!cols.includes("who_for")) db.exec("ALTER TABLE learning_paths ADD COLUMN who_for TEXT NOT NULL DEFAULT ''");
+  if (!cols.includes("outcomes")) db.exec("ALTER TABLE learning_paths ADD COLUMN outcomes TEXT NOT NULL DEFAULT '[]'");
+  if (!cols.includes("reward")) db.exec("ALTER TABLE learning_paths ADD COLUMN reward TEXT NOT NULL DEFAULT ''");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
+  // The language they read the hub in (Google Translate); null means English.
+  if (!userCols.includes("language")) db.exec("ALTER TABLE users ADD COLUMN language TEXT");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).
@@ -300,6 +362,9 @@ export function migrate(db: Db) {
   const authoredCols = (db.prepare("PRAGMA table_info(authored_lessons)").all() as { name: string }[]).map((c) => c.name);
   // Deleted lessons are hidden everywhere but kept on record, so they can be restored.
   if (!authoredCols.includes("deleted_at")) db.exec("ALTER TABLE authored_lessons ADD COLUMN deleted_at TEXT");
+  const pathLessonCols = (db.prepare("PRAGMA table_info(learning_path_lessons)").all() as { name: string }[]).map((c) => c.name);
+  // Which chapter each lesson sits in; null for paths without chapters.
+  if (!pathLessonCols.includes("chapter_id")) db.exec("ALTER TABLE learning_path_lessons ADD COLUMN chapter_id TEXT");
   if (!settingCols.includes("signoff")) db.exec("ALTER TABLE lesson_settings ADD COLUMN signoff INTEGER NOT NULL DEFAULT 0");
 }
 
@@ -363,6 +428,8 @@ export function seedPaths(db: Db, now = new Date()) {
   seedManagers(db);
   seedSurveys(db, now);
   seedWall(db, now);
+  seedComments(db, now);
+  seedFacts(db, now);
   seedWebinars(db, now);
   for (const p of [seedSequencePath]) {
     const exists = db.prepare("SELECT 1 FROM paths WHERE id = ?").get(p.id);
@@ -505,7 +572,7 @@ function seedLearningPaths(db: Db, now: Date) {
       )
       .run(p.id, p.name, p.description, p.audience, at, at);
     if (!added.changes) continue;
-    p.lessons.forEach((slug, i) => db.prepare("INSERT INTO learning_path_lessons VALUES (?, ?, ?)").run(p.id, i, slug));
+    p.lessons.forEach((slug, i) => db.prepare("INSERT INTO learning_path_lessons (path_id, position, lesson_slug) VALUES (?, ?, ?)").run(p.id, i, slug));
     for (const a of p.assign)
       db.prepare("INSERT INTO learning_path_assignments (path_id, user_id, due_date, assigned_by, assigned_at) VALUES (?, ?, ?, 'jordan', ?)").run(
         p.id,
@@ -581,6 +648,66 @@ function seedWall(db: Db, now: Date) {
   const first = db.prepare("SELECT id FROM wall_posts WHERE user_id = 'jordan' AND card_id = 'share'").get() as { id: number } | undefined;
   if (first) for (const u of ["ash", "riley"]) db.prepare("INSERT OR IGNORE INTO wall_likes VALUES (?, ?)").run(first.id, u);
   db.prepare("INSERT INTO settings (key, value) VALUES ('wall_seed', '1')").run();
+}
+
+/* The facts the demo lessons use as {{key}}. */
+function seedFacts(db: Db, now: Date) {
+  if (db.prepare("SELECT value FROM settings WHERE key = 'facts_seed'").get()) return;
+  const facts = [
+    {
+      key: "aged_care_act_start",
+      label: "Aged Care Act 2024 start date",
+      value: "1 November 2025",
+      notes: "When the new Act and Statement of Rights took effect.",
+      source_title: "About the Aged Care Act (Department of Health)",
+      source_url: "https://www.health.gov.au/our-work/aged-care-act/about",
+      owner: "Quality and Compliance",
+      check_by: "2027-01-31",
+    },
+    {
+      key: "example_rate",
+      label: "Example hourly rate (illustrative)",
+      value: "$80",
+      notes: "Used in worked examples. Not Trilogy pricing. Amounts worked out from it are written into cards, so check those too when it changes.",
+      source_title: null,
+      source_url: null,
+      owner: "Learning and Development",
+      check_by: "2026-11-15",
+    },
+    {
+      key: "emergency_number",
+      label: "Emergency number",
+      value: "000",
+      notes: "Police, fire and ambulance in Australia.",
+      source_title: "Triple Zero",
+      source_url: "https://www.triplezero.gov.au/",
+      owner: "Quality and Compliance",
+      check_by: null,
+    },
+  ];
+  for (const f of facts)
+    db.prepare(
+      "INSERT OR IGNORE INTO facts (key, label, value, notes, source_title, source_url, owner, check_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'seed')",
+    ).run(f.key, f.label, f.value, f.notes, f.source_title, f.source_url, f.owner, f.check_by, now.toISOString());
+  db.prepare("INSERT INTO settings (key, value) VALUES ('facts_seed', '1')").run();
+}
+
+/* A few demo comments on the "Standards at a visit" card, including a pinned tip. */
+function seedComments(db: Db, now: Date) {
+  if (db.prepare("SELECT value FROM settings WHERE key = 'comments_seed'").get()) return;
+  const comments: [string, string, number][] = [
+    ["casey", "In older homes with no bathroom exhaust fan, don’t use bleach-based products. Open a window and use the client’s mild cleaner instead.", 5],
+    ["ash", "I keep a spare pair of gloves in the car. Saves going without when one tears halfway through.", 3],
+    ["riley", "If a client asks you to use their own products, check the label first and let me know if anything looks unsafe.", 1],
+  ];
+  for (const [user, text, daysAgo] of comments) {
+    const at = new Date(now.getTime() - daysAgo * 86400000).toISOString();
+    db.prepare(
+      "INSERT INTO card_comments (lesson_slug, card_id, user_id, text, created_at, updated_at) VALUES ('legislative-framework', 'kit', ?, ?, ?, ?)",
+    ).run(user, text, at, at);
+  }
+  db.prepare("UPDATE card_comments SET pinned_at = ?, pinned_by = 'jordan' WHERE user_id = 'casey' AND card_id = 'kit'").run(now.toISOString());
+  db.prepare("INSERT INTO settings (key, value) VALUES ('comments_seed', '1')").run();
 }
 
 /* Two demo webinar recordings, so the Webinars page and newsletters have something to show. */

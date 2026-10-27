@@ -8,6 +8,7 @@ import { cx } from "@/lib/format";
 import { renderEmail, type Block, type WebinarCard } from "@/lib/emailTemplate";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
+import { confirmAction } from "@/lib/confirm";
 
 /* Email campaigns (EDM): the monthly update and the quarterly newsletter. */
 
@@ -16,7 +17,18 @@ type Group = "partner" | "coordinator";
 type Status = "draft" | "scheduled" | "sending" | "sent" | "cancelled";
 type ListData = {
   plan: { kind: "monthly" | "quarterly"; label: string; due: string; campaignId: string | null; status: Status | null }[];
-  campaigns: { id: string; kind: Kind; kindLabel: string; name: string; subject: string; status: Status; sendAt: string | null; sentAt: string | null; recipients: number; stats: Record<string, number> }[];
+  campaigns: {
+    id: string;
+    kind: Kind;
+    kindLabel: string;
+    name: string;
+    subject: string;
+    status: Status;
+    sendAt: string | null;
+    sentAt: string | null;
+    recipients: number;
+    stats: Record<string, number>;
+  }[];
   unsubscribed: number;
   provider: boolean;
 };
@@ -45,7 +57,16 @@ const STATUS: Record<Status, { label: string; tone: "neutral" | "good" | "warn" 
   sent: { label: "Sent", tone: "good" },
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
-const when = (iso: string) => new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(iso));
+const when = (iso: string) =>
+  new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Australia/Brisbane",
+  }).format(new Date(iso));
 
 function ProviderNote({ on }: { on: boolean }) {
   if (on) return null;
@@ -53,7 +74,8 @@ function ProviderNote({ on }: { on: boolean }) {
     <p className="flex items-start gap-2 rounded-2xl border-2 border-dashed border-gold p-3 text-sm">
       <Icon name="info" className="mt-0.5 size-4 shrink-0" />
       <span>
-        <strong>No email provider is connected,</strong> so sends are recorded as previews and nothing leaves the hub. Set <code>EMAIL_WEBHOOK_URL</code> to send for real.
+        <strong>No email provider is connected,</strong> so sends are recorded as previews and nothing leaves the hub. Set <code>EMAIL_WEBHOOK_URL</code> to
+        send for real.
       </span>
     </p>
   );
@@ -77,8 +99,8 @@ export function CampaignList() {
   return (
     <AdminShell title="Email campaigns">
       <p className="max-w-3xl text-ink-muted">
-        A monthly update and a quarterly newsletter to service partners and coordinators. Each is built from blocks, filled with the latest news, lessons and webinars, and
-        includes an unsubscribe link.
+        A monthly update and a quarterly newsletter to service partners and coordinators. Each is built from blocks, filled with the latest news, lessons and
+        webinars, and includes an unsubscribe link.
       </p>
       {(error || err) && (
         <div className="mt-4">
@@ -154,7 +176,9 @@ export function CampaignList() {
                 ))}
               </ul>
             )}
-            {data.unsubscribed > 0 && <p className="mt-2 text-sm text-ink-muted">{data.unsubscribed} people have unsubscribed from newsletters and are left out automatically.</p>}
+            {data.unsubscribed > 0 && (
+              <p className="mt-2 text-sm text-ink-muted">{data.unsubscribed} people have unsubscribed from newsletters and are left out automatically.</p>
+            )}
           </section>
         </div>
       )}
@@ -242,8 +266,13 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
 
   // The preview uses the same template as the real send, with your name in it.
   const preview = useMemo(() => {
-    const webinars = new Map<string, WebinarCard>(d.catalogue.webinars.map((w) => [w.id, { id: w.id, title: w.title, summary: "", presenter: "", minutes: 0, thumbnail: "/images/presenter-intro.jpg" }]));
-    return renderEmail({ subject, preheader, blocks }, { firstName: "Jordan", baseUrl: typeof window === "undefined" ? "" : window.location.origin, unsubscribeUrl: "#unsubscribe", webinars }).html;
+    const webinars = new Map<string, WebinarCard>(
+      d.catalogue.webinars.map((w) => [w.id, { id: w.id, title: w.title, summary: "", presenter: "", minutes: 0, thumbnail: "/images/presenter-intro.jpg" }]),
+    );
+    return renderEmail(
+      { subject, preheader, blocks },
+      { firstName: "Jordan", baseUrl: typeof window === "undefined" ? "" : window.location.origin, unsubscribeUrl: "#unsubscribe", webinars },
+    ).html;
   }, [subject, preheader, blocks, d.catalogue.webinars]);
 
   async function run(fn: () => Promise<unknown>, ok?: string, after?: () => void) {
@@ -296,7 +325,13 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
               <legend className="text-sm font-semibold">Send to</legend>
               <div className="mt-1 flex flex-wrap gap-2">
                 {(["partner", "coordinator"] as const).map((g) => (
-                  <label key={g} className={cx("flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4", audience.includes(g) ? "border-action bg-tealtint" : "border-line-strong")}>
+                  <label
+                    key={g}
+                    className={cx(
+                      "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4",
+                      audience.includes(g) ? "border-action bg-tealtint" : "border-line-strong",
+                    )}
+                  >
                     <input
                       type="checkbox"
                       className="size-4 accent-[var(--action)]"
@@ -307,7 +342,9 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                   </label>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-ink-muted">{dirty ? "Save to update the count." : `${d.recipients} people, not counting anyone who has unsubscribed.`}</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                {dirty ? "Save to update the count." : `${d.recipients} people, not counting anyone who has unsubscribed.`}
+              </p>
             </fieldset>
           </section>
 
@@ -331,12 +368,19 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                         <button type="button" className={btn.quiet} disabled={i === blocks.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
                           <Icon name="arrow-right" className="size-4 rotate-90" />
                         </button>
-                        <button type="button" className={btn.quiet} onClick={() => change(() => setBlocks(blocks.filter((_, j) => j !== i)))} aria-label="Remove">
+                        <button
+                          type="button"
+                          className={btn.quiet}
+                          onClick={() => change(() => setBlocks(blocks.filter((_, j) => j !== i)))}
+                          aria-label="Remove"
+                        >
                           <Icon name="trash" className="size-4" />
                         </button>
                       </span>
                     </div>
-                    {b.type === "heading" && <input className={input} value={b.text} placeholder="Heading" onChange={(e) => setBlock(i, { text: e.target.value })} />}
+                    {b.type === "heading" && (
+                      <input className={input} value={b.text} placeholder="Heading" onChange={(e) => setBlock(i, { text: e.target.value })} />
+                    )}
                     {b.type === "text" && (
                       <textarea
                         rows={4}
@@ -407,7 +451,13 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Preview</p>
             <div className="flex gap-1" role="group" aria-label="Preview width">
               {(["phone", "desktop"] as const).map((w) => (
-                <button key={w} type="button" aria-pressed={width === w} onClick={() => setWidth(w)} className={cx("min-h-9 rounded-full px-3 text-sm", width === w ? "bg-action text-on-action" : "hover:bg-muted")}>
+                <button
+                  key={w}
+                  type="button"
+                  aria-pressed={width === w}
+                  onClick={() => setWidth(w)}
+                  className={cx("min-h-9 rounded-full px-3 text-sm", width === w ? "bg-action text-on-action" : "hover:bg-muted")}
+                >
                   {w === "phone" ? "Phone" : "Desktop"}
                 </button>
               ))}
@@ -418,7 +468,12 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
               <p className="font-semibold">{subject || "No subject"}</p>
               <p className="truncate text-ink-muted">{preheader}</p>
             </div>
-            <iframe title="Email preview" srcDoc={preview} sandbox="" className={cx("mx-auto block h-[42rem] border-0 bg-[#eef4f9]", width === "phone" ? "w-[375px] max-w-full" : "w-full")} />
+            <iframe
+              title="Email preview"
+              srcDoc={preview}
+              sandbox=""
+              className={cx("mx-auto block h-[42rem] border-0 bg-[#eef4f9]", width === "phone" ? "w-[375px] max-w-full" : "w-full")}
+            />
           </div>
 
           {!locked && (
@@ -449,7 +504,12 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
               </div>
               <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
                 {d.status === "scheduled" ? (
-                  <button type="button" className={btn.secondary} disabled={busy} onClick={() => run(() => api(`/api/admin/campaigns/${d.id}`, { body: { action: "unschedule" } }), "Back to draft.", reload)}>
+                  <button
+                    type="button"
+                    className={btn.secondary}
+                    disabled={busy}
+                    onClick={() => run(() => api(`/api/admin/campaigns/${d.id}`, { body: { action: "unschedule" } }), "Back to draft.", reload)}
+                  >
                     Unschedule
                   </button>
                 ) : (
@@ -480,8 +540,8 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                   type="button"
                   className={cx(btn.primary, "ml-auto")}
                   disabled={busy}
-                  onClick={() => {
-                    if (!window.confirm(`Send “${subject}” to ${d.recipients} people now?`)) return;
+                  onClick={async () => {
+                    if (!(await confirmAction(`“${subject}” goes to ${d.recipients} people now.`, { title: "Send now?", confirmLabel: "Send now" }))) return;
                     run(
                       async () => {
                         if (dirty) await save();
@@ -500,18 +560,28 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                   type="button"
                   className={cx(btn.quiet, "self-start")}
                   disabled={busy}
-                  onClick={() => window.confirm("Delete this draft?") && run(() => api(`/api/admin/campaigns/${d.id}`, { method: "DELETE" }), undefined, () => router.push("/admin/email"))}
+                  onClick={async () =>
+                    (await confirmAction("This draft is deleted for good.", { title: "Delete this draft?", confirmLabel: "Delete", danger: true })) &&
+                    run(
+                      () => api(`/api/admin/campaigns/${d.id}`, { method: "DELETE" }),
+                      undefined,
+                      () => router.push("/admin/email"),
+                    )
+                  }
                 >
                   <Icon name="trash" className="size-4" /> Delete draft
                 </button>
               )}
             </div>
           )}
-          {locked && <p className="text-sm text-ink-muted">This campaign has gone out, so it can’t be changed. Start a new one from the Email campaigns page.</p>}
-          <p className="text-xs text-ink-muted">Every email says who it’s from and has a one-click unsubscribe link. Unsubscribed people are always left out.</p>
+          {locked && (
+            <p className="text-sm text-ink-muted">This campaign has gone out, so it can’t be changed. Start a new one from the Email campaigns page.</p>
+          )}
+          <p className="text-xs text-ink-muted">
+            Every email says who it’s from and has a one-click unsubscribe link. Unsubscribed people are always left out.
+          </p>
         </aside>
       </div>
     </AdminShell>
   );
 }
-

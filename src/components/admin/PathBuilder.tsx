@@ -8,12 +8,25 @@ import { api, durationLabel, useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { AdminShell, Badge, btn, ErrorNote, Field, input, statusText, statusTone, timezones } from "./ui";
+import { confirmAction } from "@/lib/confirm";
 
 type FollowUpSummary = { id: string; version: number; status: string; title: string; stage: FollowUpStage; role: string | null; durationSec: number };
 type Report = {
   scope: string;
   totals: Record<string, number>;
-  stages: { step: number; title: string; scheduled: number; available: number; notified: number; started: number; completed: number; answered: number; correctFirst: number; correctedAfterFeedback: number; assisted: number }[];
+  stages: {
+    step: number;
+    title: string;
+    scheduled: number;
+    available: number;
+    notified: number;
+    started: number;
+    completed: number;
+    answered: number;
+    correctFirst: number;
+    correctedAfterFeedback: number;
+    assisted: number;
+  }[];
   concepts: { concept: string; n: number; correctFirst: number }[];
   timelines: {
     enrolmentId: number;
@@ -23,7 +36,18 @@ type Report = {
     state: string;
     timezone: string;
     anchor: string;
-    steps: { step: number; title: string; variant: string; planned: string | null; released: string | null; completed: string | null; cancelled: string | null; firstAttempt: string | null; afterFeedback: string | null; why: string }[];
+    steps: {
+      step: number;
+      title: string;
+      variant: string;
+      planned: string | null;
+      released: string | null;
+      completed: string | null;
+      cancelled: string | null;
+      firstAttempt: string | null;
+      afterFeedback: string | null;
+      why: string;
+    }[];
   }[];
 };
 type Detail = {
@@ -102,7 +126,8 @@ export function PathBuilder({ id }: { id: string }) {
   }
 
   const save = () => run(() => api(`/api/admin/paths/${id}`, { method: "PUT", body: { config, steps } }).then(() => setDirty(false)), "Draft saved.");
-  const action = (a: string, extra: Record<string, unknown> = {}, ok = "Done.") => run(() => api(`/api/admin/paths/${id}/actions`, { body: { action: a, ...extra } }), ok);
+  const action = (a: string, extra: Record<string, unknown> = {}, ok = "Done.") =>
+    run(() => api(`/api/admin/paths/${id}/actions`, { body: { action: a, ...extra } }), ok);
 
   if (error) {
     return (
@@ -122,7 +147,15 @@ export function PathBuilder({ id }: { id: string }) {
   // Short lessons can be steps too (`lesson:<slug>`), alongside short follow ups.
   const activities: FollowUpSummary[] = [
     ...data.followUps,
-    ...data.lessons.map((l) => ({ id: `lesson:${l.slug}`, version: 0, status: "approved", title: `${l.title} (short lesson)`, stage: "custom" as FollowUpStage, role: null, durationSec: l.minutes * 60 })),
+    ...data.lessons.map((l) => ({
+      id: `lesson:${l.slug}`,
+      version: 0,
+      status: "approved",
+      title: `${l.title} (short lesson)`,
+      stage: "custom" as FollowUpStage,
+      role: null,
+      durationSec: l.minutes * 60,
+    })),
   ];
   const fu = (fid: string) => activities.find((f) => f.id === fid);
   const gapUnit = config.schedule.unit === "calendar" ? "calendar day" : "weekday";
@@ -162,7 +195,12 @@ export function PathBuilder({ id }: { id: string }) {
           </>
         )}
         {me?.canAuthor && !editable && (
-          <button type="button" className={btn.secondary} disabled={busy} onClick={() => action("new_draft", {}, "New draft created from the published version.")}>
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={busy}
+            onClick={() => action("new_draft", {}, "New draft created from the published version.")}
+          >
             Edit as a new draft
           </button>
         )}
@@ -202,7 +240,10 @@ export function PathBuilder({ id }: { id: string }) {
               Activities
             </h2>
             <p className="mt-1 text-sm text-ink-muted">
-              Each wait is the gap before that activity. {config.schedule.mode === "scheduled" ? "In Scheduled mode, gaps follow the previous planned release." : "In After completion mode, gaps start when the previous activity is finished."}
+              Each wait is the gap before that activity.{" "}
+              {config.schedule.mode === "scheduled"
+                ? "In Scheduled mode, gaps follow the previous planned release."
+                : "In After completion mode, gaps start when the previous activity is finished."}
             </p>
             <ol className="mt-4 flex flex-col">
               {steps.map((s, i) => (
@@ -212,7 +253,13 @@ export function PathBuilder({ id }: { id: string }) {
                   step={s}
                   count={steps.length}
                   gapUnit={gapUnit}
-                  anchorText={i === 0 ? `after ${firstAnchor}` : config.schedule.mode === "scheduled" ? "after the previous activity is released" : "after the previous activity is completed"}
+                  anchorText={
+                    i === 0
+                      ? `after ${firstAnchor}`
+                      : config.schedule.mode === "scheduled"
+                        ? "after the previous activity is released"
+                        : "after the previous activity is completed"
+                  }
                   editable={editable}
                   followUp={fu(s.followUpId)}
                   followUps={activities}
@@ -233,7 +280,15 @@ export function PathBuilder({ id }: { id: string }) {
                 onAdd={(fid) => {
                   setSteps((cur) => [
                     ...cur,
-                    { key: `s${Date.now().toString(36)}`, followUpId: fid, variants: {}, gap: 7, message: "", required: false, completionRule: "response_and_feedback" },
+                    {
+                      key: `s${Date.now().toString(36)}`,
+                      followUpId: fid,
+                      variants: {},
+                      gap: 7,
+                      message: "",
+                      required: false,
+                      completionRule: "response_and_feedback",
+                    },
                   ]);
                   setDirty(true);
                 }}
@@ -248,13 +303,17 @@ export function PathBuilder({ id }: { id: string }) {
               busy={busy}
               resumeInfo={resumeInfo}
               onPause={() => action("pause", {}, "Paused. No new releases or messages; released activities stay available.")}
-              onResumePreview={async () => setResumeInfo((await api<{ summary: string[] }>(`/api/admin/paths/${id}/actions`, { body: { action: "resume_preview" } })).summary)}
+              onResumePreview={async () =>
+                setResumeInfo((await api<{ summary: string[] }>(`/api/admin/paths/${id}/actions`, { body: { action: "resume_preview" } })).summary)
+              }
               onResume={() => {
                 setResumeInfo(null);
                 action("resume", {}, "Resumed.");
               }}
               onRebaseline={(reason) => action("rebaseline", { reason }, "Remaining spacing restarted from now. Logged.")}
-              onWithdraw={(reason) => action("withdraw", { version: data.liveVersion, reason }, "Version withdrawn. Unsent work is cancelled; completed evidence is kept.")}
+              onWithdraw={(reason) =>
+                action("withdraw", { version: data.liveVersion, reason }, "Version withdrawn. Unsent work is cancelled; completed evidence is kept.")
+              }
             />
           )}
 
@@ -268,7 +327,8 @@ export function PathBuilder({ id }: { id: string }) {
               <ul className="mt-3 flex flex-col gap-1 text-sm">
                 {data.history.map((h, i) => (
                   <li key={i}>
-                    <span className="text-ink-muted">{new Date(h.at).toLocaleString("en-AU")}</span> · {h.actor} · {h.event.replace(".", " ")} {h.entity.split("@")[1] ? `v${h.entity.split("@")[1]}` : ""}
+                    <span className="text-ink-muted">{new Date(h.at).toLocaleString("en-AU")}</span> · {h.actor} · {h.event.replace(".", " ")}{" "}
+                    {h.entity.split("@")[1] ? `v${h.entity.split("@")[1]}` : ""}
                     {h.reason && <span className="text-ink-muted"> · {h.reason}</span>}
                   </li>
                 ))}
@@ -299,7 +359,10 @@ function Settings({
   updateSchedule: (c: Partial<PathConfig["schedule"]>) => void;
 }) {
   const radio = (name: string, value: string, current: string, label: string, hint: string, on: () => void) => (
-    <label key={value} className={cx("flex min-h-11 cursor-pointer gap-3 rounded-2xl border-2 p-3", current === value ? "border-action bg-tealtint" : "border-line")}>
+    <label
+      key={value}
+      className={cx("flex min-h-11 cursor-pointer gap-3 rounded-2xl border-2 p-3", current === value ? "border-action bg-tealtint" : "border-line")}
+    >
       <input type="radio" name={name} checked={current === value} onChange={on} disabled={!editable} className="mt-1 size-4 accent-[var(--action)]" />
       <span>
         <span className="block font-semibold">{label}</span>
@@ -364,31 +427,59 @@ function Settings({
         <fieldset className="flex flex-col gap-2 sm:col-span-2">
           <legend className="mb-1 text-sm font-semibold">Delivery mode</legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {radio("mode", "scheduled", config.schedule.mode, "Scheduled", "Releases on planned dates even if an earlier activity is unfinished.", () => updateSchedule({ mode: "scheduled" }))}
-            {radio("mode", "after_completion", config.schedule.mode, "After completion", "Each activity waits for the previous one to be finished, then applies its gap.", () =>
-              updateSchedule({ mode: "after_completion" }),
+            {radio("mode", "scheduled", config.schedule.mode, "Scheduled", "Releases on planned dates even if an earlier activity is unfinished.", () =>
+              updateSchedule({ mode: "scheduled" }),
+            )}
+            {radio(
+              "mode",
+              "after_completion",
+              config.schedule.mode,
+              "After completion",
+              "Each activity waits for the previous one to be finished, then applies its gap.",
+              () => updateSchedule({ mode: "after_completion" }),
             )}
           </div>
         </fieldset>
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-semibold">Spacing unit</legend>
           {radio("unit", "calendar", config.schedule.unit, "Calendar days", "Local calendar dates.", () => updateSchedule({ unit: "calendar" }))}
-          {radio("unit", "weekdays", config.schedule.unit, "Weekdays", "Counts Monday to Friday. Public holidays are not excluded yet.", () => updateSchedule({ unit: "weekdays" }))}
+          {radio("unit", "weekdays", config.schedule.unit, "Weekdays", "Counts Monday to Friday. Public holidays are not excluded yet.", () =>
+            updateSchedule({ unit: "weekdays" }),
+          )}
         </fieldset>
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-semibold">Delivery days</legend>
-          {radio("days", "weekdays", config.schedule.deliveryDays, "Weekdays only", "A weekend release moves to Monday. Public holidays are not excluded yet.", () => updateSchedule({ deliveryDays: "weekdays" }))}
-          {radio("days", "every", config.schedule.deliveryDays, "Every day", "Weekend releases stay on the weekend.", () => updateSchedule({ deliveryDays: "every" }))}
+          {radio(
+            "days",
+            "weekdays",
+            config.schedule.deliveryDays,
+            "Weekdays only",
+            "A weekend release moves to Monday. Public holidays are not excluded yet.",
+            () => updateSchedule({ deliveryDays: "weekdays" }),
+          )}
+          {radio("days", "every", config.schedule.deliveryDays, "Every day", "Weekend releases stay on the weekend.", () =>
+            updateSchedule({ deliveryDays: "every" }),
+          )}
         </fieldset>
         <div className="grid grid-cols-3 gap-3 sm:col-span-2">
           <Field label="Local send time">
             <input type="time" className={input} value={config.schedule.sendTime} onChange={(e) => updateSchedule({ sendTime: e.target.value })} />
           </Field>
           <Field label="Window from">
-            <input type="time" className={input} value={config.schedule.window.start} onChange={(e) => updateSchedule({ window: { ...config.schedule.window, start: e.target.value } })} />
+            <input
+              type="time"
+              className={input}
+              value={config.schedule.window.start}
+              onChange={(e) => updateSchedule({ window: { ...config.schedule.window, start: e.target.value } })}
+            />
           </Field>
           <Field label="Window to">
-            <input type="time" className={input} value={config.schedule.window.end} onChange={(e) => updateSchedule({ window: { ...config.schedule.window, end: e.target.value } })} />
+            <input
+              type="time"
+              className={input}
+              value={config.schedule.window.end}
+              onChange={(e) => updateSchedule({ window: { ...config.schedule.window, end: e.target.value } })}
+            />
           </Field>
         </div>
         <Field label="Timezone fallback" hint="Learners’ own timezone is used, then their organisation’s, then this.">
@@ -412,7 +503,8 @@ function Settings({
             className="size-5 accent-[var(--action)]"
           />
           <span>
-            One reminder per activity, {config.reminders.afterWeekdays} weekdays after release, if it’s still unfinished. Messages are capped at one digest per person per day across all paths.
+            One reminder per activity, {config.reminders.afterWeekdays} weekdays after release, if it’s still unfinished. Messages are capped at one digest per
+            person per day across all paths.
           </span>
         </label>
       </fieldset>
@@ -471,7 +563,13 @@ function StepRow({
         <div className="flex flex-wrap items-center gap-2 py-3 text-sm">
           <span className="font-medium">Wait</span>
           <div className="flex items-center rounded-full border border-line-strong">
-            <button type="button" disabled={!editable || step.gap <= 0} onClick={() => onChange({ gap: step.gap - 1 })} aria-label={`Shorten the wait before activity ${index + 1}`} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40">
+            <button
+              type="button"
+              disabled={!editable || step.gap <= 0}
+              onClick={() => onChange({ gap: step.gap - 1 })}
+              aria-label={`Shorten the wait before activity ${index + 1}`}
+              className="inline-flex size-10 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40"
+            >
               <Icon name="minus" className="size-4" />
             </button>
             <input
@@ -484,7 +582,13 @@ function StepRow({
               aria-label={`Wait before activity ${index + 1}, in ${gapUnit}s`}
               className="h-10 w-14 bg-transparent text-center font-semibold"
             />
-            <button type="button" disabled={!editable || step.gap >= 365} onClick={() => onChange({ gap: step.gap + 1 })} aria-label={`Lengthen the wait before activity ${index + 1}`} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40">
+            <button
+              type="button"
+              disabled={!editable || step.gap >= 365}
+              onClick={() => onChange({ gap: step.gap + 1 })}
+              aria-label={`Lengthen the wait before activity ${index + 1}`}
+              className="inline-flex size-10 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40"
+            >
               <Icon name="plus" className="size-4" />
             </button>
           </div>
@@ -507,7 +611,9 @@ function StepRow({
               ⋮⋮
             </span>
           )}
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-navy font-mulish font-bold text-white dark:bg-teal-bright dark:text-navy">{index + 1}</span>
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-navy font-mulish font-bold text-white dark:bg-teal-bright dark:text-navy">
+            {index + 1}
+          </span>
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 font-semibold leading-snug">
               {step.stage && <Badge tone="info">{step.stage}</Badge>}
@@ -515,7 +621,11 @@ function StepRow({
             </p>
             <p className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
               {followUp ? stageLabel[followUp.stage] : ""} · {followUp ? durationLabel(followUp.durationSec) : ""}
-              {followUp && <Badge tone={statusTone(followUp.status)}>{statusText[followUp.status]} v{followUp.version}</Badge>}
+              {followUp && (
+                <Badge tone={statusTone(followUp.status)}>
+                  {statusText[followUp.status]} v{followUp.version}
+                </Badge>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1">
@@ -526,10 +636,22 @@ function StepRow({
             )}
             {editable && (
               <>
-                <button type="button" className={btn.quiet} disabled={index === 0} onClick={() => onMove(index - 1)} aria-label={`Move activity ${index + 1} up`}>
+                <button
+                  type="button"
+                  className={btn.quiet}
+                  disabled={index === 0}
+                  onClick={() => onMove(index - 1)}
+                  aria-label={`Move activity ${index + 1} up`}
+                >
                   ↑
                 </button>
-                <button type="button" className={btn.quiet} disabled={index === count - 1} onClick={() => onMove(index + 1)} aria-label={`Move activity ${index + 1} down`}>
+                <button
+                  type="button"
+                  className={btn.quiet}
+                  disabled={index === count - 1}
+                  onClick={() => onMove(index + 1)}
+                  aria-label={`Move activity ${index + 1} down`}
+                >
                   ↓
                 </button>
                 <button type="button" className={btn.quiet} onClick={onRemove} aria-label={`Remove activity ${index + 1}`}>
@@ -552,11 +674,13 @@ function StepRow({
           </Field>
           <Field label="Activity">
             <select className={input} value={step.followUpId} onChange={(e) => onChange({ followUpId: e.target.value })}>
-              {followUps.filter((f) => !f.role).map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.title} ({statusText[f.status]})
-                </option>
-              ))}
+              {followUps
+                .filter((f) => !f.role)
+                .map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.title} ({statusText[f.status]})
+                  </option>
+                ))}
             </select>
           </Field>
           <Field label="Completion rule">
@@ -567,13 +691,25 @@ function StepRow({
           </Field>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <label className="flex min-h-11 items-center gap-2">
-              <input type="checkbox" checked={step.required} onChange={(e) => onChange({ required: e.target.checked, dueWeekdays: e.target.checked ? (step.dueWeekdays ?? 5) : undefined })} className="size-5 accent-[var(--action)]" />
+              <input
+                type="checkbox"
+                checked={step.required}
+                onChange={(e) => onChange({ required: e.target.checked, dueWeekdays: e.target.checked ? (step.dueWeekdays ?? 5) : undefined })}
+                className="size-5 accent-[var(--action)]"
+              />
               Required assignment
             </label>
             {step.required ? (
               <label className="flex items-center gap-2 text-sm">
                 Due
-                <input type="number" min={1} max={60} value={step.dueWeekdays ?? 5} onChange={(e) => onChange({ dueWeekdays: Math.max(1, Number(e.target.value) || 1) })} className="h-10 w-16 rounded-lg border border-line-strong bg-surface text-center" />
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={step.dueWeekdays ?? 5}
+                  onChange={(e) => onChange({ dueWeekdays: Math.max(1, Number(e.target.value) || 1) })}
+                  className="h-10 w-16 rounded-lg border border-line-strong bg-surface text-center"
+                />
                 weekdays after release
               </label>
             ) : (
@@ -615,12 +751,25 @@ function StepRow({
             </ul>
             {editable && variantChoices.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                <select value={newRole} onChange={(e) => setNewRole(e.target.value)} className="min-h-10 rounded-lg border border-line-strong bg-surface px-2" aria-label="Role for a new variant">
-                  {roles.filter((r) => !step.variants[r]).map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="min-h-10 rounded-lg border border-line-strong bg-surface px-2"
+                  aria-label="Role for a new variant"
+                >
+                  {roles
+                    .filter((r) => !step.variants[r])
+                    .map((r) => (
+                      <option key={r}>{r}</option>
+                    ))}
                 </select>
-                <button type="button" className={btn.quiet} onClick={() => onChange({ variants: { ...step.variants, [newRole]: (variantChoices.find((f) => f.role === newRole) ?? variantChoices[0]).id } })}>
+                <button
+                  type="button"
+                  className={btn.quiet}
+                  onClick={() =>
+                    onChange({ variants: { ...step.variants, [newRole]: (variantChoices.find((f) => f.role === newRole) ?? variantChoices[0]).id } })
+                  }
+                >
                   <Icon name="plus" className="size-4" /> Add variant
                 </button>
               </div>
@@ -632,7 +781,17 @@ function StepRow({
   );
 }
 
-function AddActivity({ followUps, objective, onAdd, onCreated }: { followUps: FollowUpSummary[]; objective: string; onAdd: (id: string) => void; onCreated: () => void }) {
+function AddActivity({
+  followUps,
+  objective,
+  onAdd,
+  onCreated,
+}: {
+  followUps: FollowUpSummary[];
+  objective: string;
+  onAdd: (id: string) => void;
+  onCreated: () => void;
+}) {
   const [pick, setPick] = useState(followUps.find((f) => !f.role)?.id ?? "");
   const [creating, setCreating] = useState(false);
   return (
@@ -640,11 +799,13 @@ function AddActivity({ followUps, objective, onAdd, onCreated }: { followUps: Fo
       <label className="flex min-w-52 flex-1 flex-col gap-1">
         <span className="text-sm font-semibold">Add an existing follow up</span>
         <select value={pick} onChange={(e) => setPick(e.target.value)} className={input}>
-          {followUps.filter((f) => !f.role).map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.title} ({statusText[f.status]})
-            </option>
-          ))}
+          {followUps
+            .filter((f) => !f.role)
+            .map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.title} ({statusText[f.status]})
+              </option>
+            ))}
         </select>
       </label>
       <button type="button" className={btn.secondary} onClick={() => pick && onAdd(pick)}>
@@ -679,12 +840,23 @@ function DatePreview({ pathId, config, steps }: { pathId: string; config: PathCo
   useEffect(() => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      api<Preview>(`/api/admin/paths/${pathId}/preview`, { body: { config, steps, timezone: tz, start, time } }).then(setPreview, (e: Error) => setPreview({ issues: [e.message], steps: [] }));
+      api<Preview>(`/api/admin/paths/${pathId}/preview`, { body: { config, steps, timezone: tz, start, time } }).then(setPreview, (e: Error) =>
+        setPreview({ issues: [e.message], steps: [] }),
+      );
     }, 250);
     return () => clearTimeout(timer.current);
   }, [pathId, config, steps, tz, start, time]);
 
-  const fmt = (iso: string) => new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(iso));
+  const fmt = (iso: string) =>
+    new Intl.DateTimeFormat("en-AU", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: tz,
+    }).format(new Date(iso));
 
   return (
     <section aria-labelledby="preview" className="rounded-3xl bg-muted p-5">
@@ -716,7 +888,9 @@ function DatePreview({ pathId, config, steps }: { pathId: string; config: PathCo
           {preview?.steps.map((s) => (
             <li key={s.index} className="rounded-2xl bg-surface p-3">
               <p className="flex flex-wrap items-center gap-2 font-semibold">
-                <span className="inline-flex size-6 items-center justify-center rounded-full bg-navy text-xs text-white dark:bg-teal-bright dark:text-navy">{s.index + 1}</span>
+                <span className="inline-flex size-6 items-center justify-center rounded-full bg-navy text-xs text-white dark:bg-teal-bright dark:text-navy">
+                  {s.index + 1}
+                </span>
                 {s.at ? fmt(s.at) : "Waiting"}
                 {s.status === "estimated" && <Badge tone="warn">Estimate</Badge>}
               </p>
@@ -728,7 +902,9 @@ function DatePreview({ pathId, config, steps }: { pathId: string; config: PathCo
         </ol>
       )}
       {config.schedule.mode === "after_completion" && (
-        <p className="mt-3 text-sm text-ink-muted">Later dates are estimates that assume each activity is finished promptly on release. Late completion moves them.</p>
+        <p className="mt-3 text-sm text-ink-muted">
+          Later dates are estimates that assume each activity is finished promptly on release. Late completion moves them.
+        </p>
       )}
     </section>
   );
@@ -795,7 +971,13 @@ function Operations({
           type="button"
           className={btn.danger}
           disabled={busy || !reason.trim()}
-          onClick={() => window.confirm("Withdraw this version? Unsent work is cancelled for every enrolment. Completed evidence is kept.") && onWithdraw(reason)}
+          onClick={async () =>
+            (await confirmAction("Unsent work is cancelled for every enrolment. Completed evidence is kept.", {
+              title: "Withdraw this version?",
+              confirmLabel: "Withdraw",
+              danger: true,
+            })) && onWithdraw(reason)
+          }
         >
           Withdraw version
         </button>
@@ -812,8 +994,8 @@ function ReportView({ report }: { report: Report }) {
         Reporting
       </h2>
       <p className="mt-1 text-sm text-ink-muted">
-        Scope: {report.scope}. Measures are kept separate. First attempt accuracy shows counts with sample sizes; answers after feedback are reported separately. No retention score is
-        calculated.
+        Scope: {report.scope}. Measures are kept separate. First attempt accuracy shows counts with sample sizes; answers after feedback are reported
+        separately. No retention score is calculated.
       </p>
       <div className="mt-3 overflow-x-auto rounded-2xl border border-line">
         <table className="w-full min-w-[42rem] text-left text-sm">
@@ -858,7 +1040,10 @@ function ReportView({ report }: { report: Report }) {
             <li key={t.enrolmentId}>
               <details className="rounded-2xl border border-line p-3">
                 <summary className="cursor-pointer">
-                  <span className="font-semibold">{t.learner}</span> <span className="text-sm text-ink-muted">· {t.org} · v{t.version} · {t.state} · {t.timezone}</span>
+                  <span className="font-semibold">{t.learner}</span>{" "}
+                  <span className="text-sm text-ink-muted">
+                    · {t.org} · v{t.version} · {t.state} · {t.timezone}
+                  </span>
                 </summary>
                 <ol className="mt-2 flex flex-col gap-2 text-sm">
                   {t.steps.map((s) => (
@@ -871,7 +1056,9 @@ function ReportView({ report }: { report: Report }) {
                           {s.afterFeedback && ` · after feedback ${s.afterFeedback}`}
                         </span>
                       </p>
-                      <p className="text-ink-muted">{s.released ? `Released ${new Date(s.released).toLocaleString("en-AU", { timeZone: t.timezone })} (${t.timezone})` : s.why}</p>
+                      <p className="text-ink-muted">
+                        {s.released ? `Released ${new Date(s.released).toLocaleString("en-AU", { timeZone: t.timezone })} (${t.timezone})` : s.why}
+                      </p>
                     </li>
                   ))}
                 </ol>

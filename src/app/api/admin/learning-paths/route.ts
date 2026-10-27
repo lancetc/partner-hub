@@ -5,7 +5,7 @@ export async function GET() {
   return handle(({ db, user }) => ({
     paths: listLearningPaths(db, user),
     people: assignableUsers(db, user),
-    catalogue: catalogueInfo(),
+    catalogue: catalogueInfo(db),
   }));
 }
 

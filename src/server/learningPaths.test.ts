@@ -8,6 +8,7 @@ import {
   assignLearningPath,
   assignableUsers,
   createLearningPath,
+  learnerPath,
   learningPathDetail,
   listLearningPaths,
   myLearningPaths,
@@ -57,7 +58,12 @@ describe("learning paths", () => {
   });
 
   it("creates a path with a name and lessons in the chosen order", () => {
-    const { id } = createLearningPath(db, u("jordan"), { name: "Gardening start", lessons: ["noticing-a-change", "our-mission-and-model"], inOrder: false }, now);
+    const { id } = createLearningPath(
+      db,
+      u("jordan"),
+      { name: "Gardening start", lessons: ["noticing-a-change", "our-mission-and-model"], inOrder: false },
+      now,
+    );
     expect(id).toBe("lp-gardening-start");
     const d = learningPathDetail(db, u("jordan"), id);
     expect(d.lessons).toEqual(["noticing-a-change", "our-mission-and-model"]);
@@ -82,7 +88,9 @@ describe("learning paths", () => {
   });
 
   it("keeps a Trilogy path's lessons out of an organisation admin's hands", () => {
-    expect(() => updateLearningPath(db, u("casey"), "lp-partner-onboarding", { name: "Mine now", lessons: ["noticing-a-change"] }, now)).toThrow(/learning author/);
+    expect(() => updateLearningPath(db, u("casey"), "lp-partner-onboarding", { name: "Mine now", lessons: ["noticing-a-change"] }, now)).toThrow(
+      /learning author/,
+    );
     expect(() => updateLearningPath(db, u("sam"), "lp-partner-onboarding", { name: "x", lessons: ["noticing-a-change"] }, now)).toThrow(/access/);
   });
 
@@ -114,5 +122,27 @@ describe("skipping for testers", () => {
     updateLearningPath(db, u("jordan"), id, { name: "Test run", allowSkip: true, lessons: ["a-little-extra-time"] }, now);
     archiveLearningPath(db, u("jordan"), id, now);
     expect(canSkipHolds(db, "ash", "a-little-extra-time")).toBe(false);
+  });
+
+  it("keeps the overview learners see: who it's for, outcomes and what they get", () => {
+    const { id } = createLearningPath(
+      db,
+      u("jordan"),
+      {
+        name: "Overview test",
+        whoFor: "  New coordinators  ",
+        outcomes: ["Know who to call", "", "  Write a case note ", ...Array.from({ length: 10 }, (_, i) => `Extra ${i}`)],
+        reward: "A certificate",
+        lessons: ["a-little-extra-time"],
+      },
+      now,
+    );
+    const d = learningPathDetail(db, u("jordan"), id);
+    expect(d.whoFor).toBe("New coordinators");
+    expect(d.outcomes.slice(0, 2)).toEqual(["Know who to call", "Write a case note"]);
+    expect(d.outcomes).toHaveLength(8);
+    expect(learnerPath(db, u("sam"), id)).toMatchObject({ whoFor: "New coordinators", reward: "A certificate" });
+    updateLearningPath(db, u("jordan"), id, { name: "Overview test", lessons: ["a-little-extra-time"] }, now);
+    expect(learnerPath(db, u("sam"), id)).toMatchObject({ whoFor: "", outcomes: [], reward: "" });
   });
 });

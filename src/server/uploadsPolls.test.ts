@@ -40,6 +40,16 @@ describe("image uploads", () => {
     await expect(saveUpload(db, u("jordan"), fake, { width: 10, height: 10 }, now)).rejects.toThrow(/JPEG, PNG/);
   });
 
+  it("accepts PDFs for Resources cards, by their contents", async () => {
+    const pdf = new File([new TextEncoder().encode("%PDF-1.7\n1 0 obj\n")], "Toolkit.pdf", { type: "application/pdf" });
+    const r = await saveUpload(db, u("jordan"), pdf, { width: 0, height: 0 }, now);
+    expect(r.src).toMatch(/\.pdf$/);
+    expect(r.bytes).toBeGreaterThan(0);
+    expect(readUpload(db, r.src.split("/").pop()!)).toMatchObject({ mime: "application/pdf", name: "Toolkit.pdf" });
+    const fake = new File(["<html>not a pdf</html>"], "x.pdf", { type: "application/pdf" });
+    await expect(saveUpload(db, u("jordan"), fake, { width: 0, height: 0 }, now)).rejects.toThrow(/PDF/);
+  });
+
   it("accepts recorded videos, by their contents", async () => {
     const webm = new File([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4, 5, 6, 7, 8])], "recording.webm", { type: "video/webm" });
     const mp4 = new File([new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d])], "clip.mp4", { type: "video/mp4" });

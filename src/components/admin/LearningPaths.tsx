@@ -3,10 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api, useApi } from "@/lib/api";
-import { cx, formatDate } from "@/lib/format";
+import { api, useApi, type Me } from "@/lib/api";
+import { cx } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
+import { confirmAction } from "@/lib/confirm";
+import { QrShare } from "./QrShare";
+import { LessonPicker, OrderedLessons } from "./PathLessons";
+import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft } from "./PathChapters";
+import { AssignDialog, AssignedList } from "./PathPeople";
 
 /* Learning paths: a named set of lessons, in order, that an administrator assigns to people. */
 
@@ -16,6 +21,8 @@ type LessonInfo = {
   title: string;
   minutes: number;
   track: string | null;
+  /** Still being written: learners see it as coming soon. */
+  draft?: boolean;
 };
 type Person = {
   id: string;
@@ -32,8 +39,10 @@ type PathSummary = {
   inOrder: boolean;
   allowSkip: boolean;
   lessons: LessonInfo[];
+  chapters: { id: string; title: string; stage: string; slugs: string[] }[];
   minutes: number;
   assigned: number;
+  started: number;
   finished: number;
   canEdit: boolean;
 };
@@ -62,23 +71,20 @@ type Detail = {
   audience: string;
   inOrder: boolean;
   allowSkip: boolean;
+  whoFor: string;
+  outcomes: string[];
+  reward: string;
   lessons: string[];
+  chapters: ChapterDraft[];
   canEdit: boolean;
   assignments: Assignment[];
   people: Person[];
   catalogue: LessonInfo[];
 };
 
-const trackLabel: Record<string, string> = {
-  core: "Everyone",
-  partner: "Service partners",
-  coordinator: "Coordinators",
-  briefing: "Policy briefings",
-};
-const personLabel = (p: Person) => `${p.org} · ${p.service_role ?? p.audience}`;
-
 export function LearningPathList() {
   const { data, error } = useApi<ListData>("/api/admin/learning-paths");
+  const me = useApi<Me>("/api/me").data;
   return (
     <AdminShell title="Learning paths">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -102,42 +108,144 @@ export function LearningPathList() {
       ) : (
         <ul className="mt-6 grid gap-4 lg:grid-cols-2">
           {data.paths.map((p) => (
-            <li key={p.id} className="relative flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {p.audience && <Badge tone="info">{p.audience}</Badge>}
-                  {!p.lessons.length && <Badge tone="warn">Planned: no lessons yet</Badge>}
-                  {p.allowSkip && <Badge tone="warn">Testing: skipping allowed</Badge>}
-                </div>
-                <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                  {p.lessons.length} {p.lessons.length === 1 ? "lesson" : "lessons"} · {p.minutes} min
-                  {p.inOrder ? " · in order" : ""}
-                </p>
-                <h2 className="mt-1 font-serif text-xl font-semibold">
-                  <Link href={`/admin/learning-paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
-                    {p.name}
-                  </Link>
-                </h2>
-                {p.description && <p className="mt-1 text-sm text-ink-muted">{p.description}</p>}
-              </div>
-              <ol className="flex flex-wrap items-center gap-1.5 text-sm">
-                {p.lessons.map((l, i) => (
-                  <li key={l.slug} className="flex items-center gap-1.5">
-                    <span className="rounded-full bg-muted px-2.5 py-1">
-                      <span className="font-semibold text-accent">{i + 1}</span> {l.title}
-                    </span>
-                    {i < p.lessons.length - 1 && <Icon name="arrow-right" className="size-3.5 text-ink-muted" />}
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-auto text-sm">
-                <strong>{p.assigned}</strong> {p.assigned === 1 ? "person" : "people"} assigned · <strong>{p.finished}</strong> finished
-              </p>
-            </li>
+            <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} />
           ))}
         </ul>
       )}
     </AdminShell>
+  );
+}
+
+/**
+  One path on the list: what it's for, how far through writing it is, its shape (stages and
+  chapters, or the first few lessons) and how the people on it are going.
+*/
+function PathTile({ path: p, canPreview }: { path: PathSummary; canPreview: boolean }) {
+  const ready = p.lessons.filter((l) => !l.draft).length;
+  const drafts = p.lessons.length - ready;
+  const isReady = new Set(p.lessons.filter((l) => !l.draft).map((l) => l.slug));
+  const pct = (n: number, of: number) => `${of ? (n / of) * 100 : 0}%`;
+  // Chapters under their stage headings, in order; a stage shows once, over its first chapter.
+  const stages: { stage: string; chapters: (PathSummary["chapters"][number] & { number: number })[] }[] = [];
+  p.chapters.forEach((c, i) => {
+    const last = stages[stages.length - 1];
+    if (last && last.stage === c.stage) last.chapters.push({ ...c, number: i + 1 });
+    else stages.push({ stage: c.stage, chapters: [{ ...c, number: i + 1 }] });
+  });
+  const preview = 4;
+  const notStarted = p.assigned - p.started - p.finished;
+
+  return (
+    <li className="relative flex flex-col gap-4 rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          {p.audience && <Badge tone="info">{p.audience}</Badge>}
+          {!p.lessons.length && <Badge tone="warn">Planned: no lessons yet</Badge>}
+          {p.allowSkip && <Badge tone="warn">Testing: skipping allowed</Badge>}
+        </div>
+        <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
+          {p.chapters.length ? `${p.chapters.length} chapters · ` : ""}
+          {p.lessons.length} {p.lessons.length === 1 ? "lesson" : "lessons"} · {p.minutes} min{p.inOrder ? " · in order" : ""}
+        </p>
+        <h2 className="mt-1 font-serif text-xl font-semibold">
+          <Link href={`/admin/learning-paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
+            {p.name}
+          </Link>
+        </h2>
+        {p.description && <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{p.description}</p>}
+      </div>
+
+      {p.lessons.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div
+            className="flex h-2 overflow-hidden rounded-full bg-muted"
+            role="img"
+            aria-label={`${ready} of ${p.lessons.length} lessons ready, ${drafts} in draft`}
+          >
+            <div className="h-full bg-action" style={{ width: pct(ready, p.lessons.length) }} />
+            <div className="h-full bg-gold/60" style={{ width: pct(drafts, p.lessons.length) }} />
+          </div>
+          <p className="flex flex-wrap gap-x-3 text-xs text-ink-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-action" aria-hidden /> <strong className="text-ink">{ready}</strong> ready for learners
+            </span>
+            {drafts > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-gold/60" aria-hidden /> <strong className="text-ink">{drafts}</strong> still in draft
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {stages.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {stages.map((st, si) => (
+            <div key={si}>
+              {st.stage && <p className="mb-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">{st.stage}</p>}
+              <ol className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                {st.chapters.map((c) => {
+                  const done = c.slugs.filter((x) => isReady.has(x)).length;
+                  return (
+                    <li key={c.id} className="flex items-baseline gap-2 text-sm">
+                      <span className="font-serif font-semibold text-accent tabular-nums">{String(c.number).padStart(2, "0")}</span>
+                      <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                      <span
+                        className={cx(
+                          "shrink-0 text-xs tabular-nums",
+                          c.slugs.length && done === c.slugs.length ? "font-semibold text-success" : "text-ink-muted",
+                        )}
+                        title={`${done} of ${c.slugs.length} ready`}
+                      >
+                        {done}/{c.slugs.length}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ))}
+        </div>
+      ) : (
+        p.lessons.length > 0 && (
+          <ol className="flex flex-col gap-1 text-sm">
+            {p.lessons.slice(0, preview).map((l, i) => (
+              <li key={l.slug} className="flex items-baseline gap-2">
+                <span className="font-serif font-semibold text-accent tabular-nums">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{l.title}</span>
+                {l.draft && <span className="shrink-0 text-xs text-ink-muted">Draft</span>}
+              </li>
+            ))}
+            {p.lessons.length > preview && <li className="pl-5 text-xs text-ink-muted">and {p.lessons.length - preview} more</li>}
+          </ol>
+        )
+      )}
+
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+        {p.assigned ? (
+          <div className="flex min-w-48 flex-1 flex-col gap-1">
+            <div
+              className="flex h-1.5 overflow-hidden rounded-full bg-muted"
+              role="img"
+              aria-label={`${p.finished} finished, ${p.started} in progress, ${notStarted} not started`}
+            >
+              <div className="h-full bg-success" style={{ width: pct(p.finished, p.assigned) }} />
+              <div className="h-full bg-action/50" style={{ width: pct(p.started, p.assigned) }} />
+            </div>
+            <p className="text-xs text-ink-muted">
+              <strong className="text-ink">{p.assigned}</strong> assigned · {p.started} in progress · {p.finished} finished
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-muted">Not assigned to anyone yet</p>
+        )}
+        {canPreview && p.lessons.length > 0 && (
+          <Link href={`/paths/${encodeURIComponent(p.id)}?preview=1`} className={cx(btn.quiet, "relative z-10")}>
+            <Icon name="play" className="size-4" /> Preview
+          </Link>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -165,13 +273,32 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   const [audience, setAudience] = useState(detail?.audience ?? "");
   const [inOrder, setInOrder] = useState(detail?.inOrder ?? true);
   const [allowSkip, setAllowSkip] = useState(detail?.allowSkip ?? false);
-  const [picked, setPicked] = useState<string[]>(detail?.lessons ?? []);
+  const [whoFor, setWhoFor] = useState(detail?.whoFor ?? "");
+  // One outcome per line while editing.
+  const [outcomes, setOutcomes] = useState((detail?.outcomes ?? []).join("\n"));
+  const [reward, setReward] = useState(detail?.reward ?? "");
+  const [flat, setPicked] = useState<string[]>(detail?.lessons ?? []);
+  // Chapters (with optional stages); null for a path that's a plain list of lessons.
+  const [chapters, setChapters] = useState<ChapterDraft[] | null>(detail?.chapters?.length ? detail.chapters : null);
+  const [addTo, setAddTo] = useState(-1);
+  const [importing, setImporting] = useState(false);
+  // Draft lessons created here, so they show before the catalogue reloads.
+  const [created, setCreated] = useState<LessonInfo[]>([]);
+  const me = useApi<Me>("/api/me").data;
+  const picked = chapters ? chapters.flatMap((c) => c.lessons) : flat;
+  const allLessons = [...catalogue, ...created.filter((c) => !catalogue.some((l) => l.slug === c.slug))];
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const info = (slug: string) => catalogue.find((l) => l.slug === slug);
+  const info = (slug: string) => allLessons.find((l) => l.slug === slug);
+  async function createDrafts(titles: string[], track = "core") {
+    const r = await api<{ lessons: LessonInfo[] }>("/api/admin/lessons/placeholders", { body: { titles, track } });
+    setCreated((c) => [...c, ...r.lessons]);
+    return r.lessons;
+  }
+  const setChaptered = (next: ChapterDraft[] | null) => change(() => setChapters(next));
   const minutes = picked.reduce((n, s) => n + (info(s)?.minutes ?? 0), 0);
   const canEdit = isNew || Boolean(detail?.canEdit);
   const change = (fn: () => void) => {
@@ -179,20 +306,26 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
     setDirty(true);
     setNotice(null);
   };
-  const move = (i: number, by: number) =>
-    change(() =>
-      setPicked((p) => {
-        const n = [...p];
-        [n[i], n[i + by]] = [n[i + by], n[i]];
-        return n;
-      }),
-    );
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      const payload = { name, description, audience, inOrder, allowSkip, lessons: picked };
+      const payload = {
+        name,
+        description,
+        audience,
+        inOrder,
+        allowSkip,
+        whoFor,
+        outcomes: outcomes
+          .split("\n")
+          .map((o) => o.replace(/^\s*[-•*]\s*/, "").trim())
+          .filter(Boolean),
+        reward,
+        lessons: picked,
+        ...(chapters ? { chapters } : {}),
+      };
       if (isNew) {
         const r = await api<{ id: string }>("/api/admin/learning-paths", {
           body: payload,
@@ -215,7 +348,13 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   }
 
   async function archive() {
-    if (!window.confirm(`Archive “${name}”? It disappears for the people assigned to it. Their lesson completions are kept.`)) return;
+    if (
+      !(await confirmAction("It disappears for the people assigned to it. Their lesson completions are kept.", {
+        title: `Archive “${name}”?`,
+        confirmLabel: "Archive",
+      }))
+    )
+      return;
     setBusy(true);
     try {
       await api(`/api/admin/learning-paths/${id}`, { method: "DELETE" });
@@ -242,17 +381,37 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   maxLength={120}
                 />
               </Field>
-              <Field label="Who it’s for" hint="For example: Care Coordinators, or All staff and partners.">
+              <Field label="Audience label" hint="A short tag on the path, for example: Care Coordinators, or All staff and partners.">
                 <input className={input} value={audience} onChange={(e) => change(() => setAudience(e.target.value))} maxLength={120} />
               </Field>
-              <Field label="What it covers (optional)">
+              <Field label="What it covers" hint="Two or three sentences at the top of the path page. Say what it's about and why it matters.">
                 <textarea
-                  rows={2}
+                  rows={3}
                   className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
                   value={description}
                   onChange={(e) => change(() => setDescription(e.target.value))}
                   maxLength={500}
                 />
+              </Field>
+              <Field label="Who it’s for" hint="A sentence for the learner, for example: New care coordinators in their first month with Trilogy Care.">
+                <textarea
+                  rows={2}
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                  value={whoFor}
+                  onChange={(e) => change(() => setWhoFor(e.target.value))}
+                  maxLength={300}
+                />
+              </Field>
+              <Field label="What you’ll be able to do" hint="One outcome per line, up to 8. Start each with a verb: Know…, Run…, Recognise…">
+                <textarea
+                  rows={5}
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                  value={outcomes}
+                  onChange={(e) => change(() => setOutcomes(e.target.value))}
+                />
+              </Field>
+              <Field label="What you get at the end" hint="For example: A certificate of completion you can download and keep.">
+                <input className={input} value={reward} onChange={(e) => change(() => setReward(e.target.value))} maxLength={300} />
               </Field>
               <label className="flex min-h-11 items-start gap-3">
                 <input
@@ -285,67 +444,128 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
           </section>
 
           {canEdit && (
-            <LessonChecklist
-              catalogue={catalogue}
+            <LessonPicker
+              catalogue={allLessons}
               picked={picked}
-              onToggle={(slug, on) => change(() => setPicked(on ? [...picked, slug] : picked.filter((s) => s !== slug)))}
+              toolbar={
+                chapters && chapters.length > 0 ? (
+                  <label className="flex flex-col gap-1 text-sm font-semibold">
+                    Add to
+                    <select
+                      className={cx(input, "w-auto max-w-[14rem] font-normal")}
+                      value={addTo < 0 || addTo >= chapters.length ? chapters.length - 1 : addTo}
+                      onChange={(e) => setAddTo(Number(e.target.value))}
+                    >
+                      {chapters.map((c, i) => (
+                        <option key={c.id} value={i}>
+                          {String(i + 1).padStart(2, "0")} · {c.title || "Untitled chapter"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null
+              }
+              onToggle={(slug, on) => {
+                if (!chapters) return change(() => setPicked(on ? [...flat, slug] : flat.filter((s) => s !== slug)));
+                const target = addTo < 0 || addTo >= chapters.length ? chapters.length - 1 : addTo;
+                setChaptered(
+                  chapters.map((c, i) => ({
+                    ...c,
+                    lessons: on ? (i === target ? [...c.lessons, slug] : c.lessons) : c.lessons.filter((s) => s !== slug),
+                  })),
+                );
+              }}
             />
           )}
 
           <section className="rounded-3xl border border-line bg-surface p-5">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="font-serif text-xl font-semibold">{canEdit ? "2. Put them in order" : "Lessons"}</h2>
+              <h2 className="font-serif text-xl font-semibold">{canEdit ? (chapters ? "2. Chapters and topics" : "2. Put them in order") : "Lessons"}</h2>
               <span className="text-sm text-ink-muted">
+                {chapters ? `${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}
                 {picked.length} {picked.length === 1 ? "lesson" : "lessons"} · about {minutes} minutes
               </span>
             </div>
-            {!picked.length ? (
+            {canEdit && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {!chapters && (
+                  <button
+                    type="button"
+                    className={btn.secondary}
+                    onClick={() => setChaptered([{ id: newChapterId(), title: "", description: "", stage: "", lessons: flat }])}
+                  >
+                    <Icon name="list" className="size-4" /> Organise into chapters
+                  </button>
+                )}
+                <button type="button" className={btn.secondary} onClick={() => setImporting(true)}>
+                  <Icon name="doc" className="size-4" /> Import an outline
+                </button>
+                {chapters && (
+                  <button
+                    type="button"
+                    className={btn.quiet}
+                    onClick={async () => {
+                      if (
+                        await confirmAction("The lessons stay in the path, in the same order, as one list.", {
+                          title: "Remove the chapters?",
+                          confirmLabel: "Remove chapters",
+                        })
+                      ) {
+                        setPicked(picked);
+                        setChaptered(null);
+                      }
+                    }}
+                  >
+                    Remove chapters
+                  </button>
+                )}
+              </div>
+            )}
+            {importing && (
+              <OutlineImport
+                catalogue={allLessons}
+                canCreate={Boolean(me?.canAuthor)}
+                replacing={picked.length > 0}
+                createDrafts={createDrafts}
+                onClose={() => setImporting(false)}
+                onApply={(next) => {
+                  setImporting(false);
+                  setChaptered(next);
+                  setNotice(null);
+                }}
+              />
+            )}
+            {chapters ? (
+              <ChapterBuilder
+                chapters={chapters}
+                onChange={setChaptered}
+                info={info}
+                catalogue={allLessons}
+                canEdit={canEdit}
+                canCreate={Boolean(me?.canAuthor)}
+                createDrafts={(titles) => createDrafts(titles)}
+              />
+            ) : !picked.length ? (
               <p className="rounded-2xl border border-dashed border-line-strong p-4 text-center text-ink-muted">
-                Tick lessons above and they appear here in order.
+                Add lessons above and they appear here. Drag them into order.
               </p>
             ) : (
-              <ol className="flex flex-col gap-2">
-                {picked.map((slug, i) => {
-                  const l = info(slug);
-                  return (
-                    <li key={slug} className="flex items-center gap-3 rounded-2xl bg-muted p-3">
-                      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-action font-mulish text-sm font-extrabold text-on-action">
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-semibold leading-snug">{l?.title ?? slug}</span>
-                        <span className="text-sm text-ink-muted">
-                          {l?.minutes} min · {trackLabel[l?.track ?? ""] ?? ""}
-                        </span>
-                      </span>
-                      {canEdit && (
-                        <span className="flex shrink-0 gap-0.5">
-                          <button type="button" className={btn.quiet} disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${l?.title} earlier`}>
-                            <Icon name="arrow-left" className="size-4 rotate-90" />
-                          </button>
-                          <button
-                            type="button"
-                            className={btn.quiet}
-                            disabled={i === picked.length - 1}
-                            onClick={() => move(i, 1)}
-                            aria-label={`Move ${l?.title} later`}
-                          >
-                            <Icon name="arrow-right" className="size-4 rotate-90" />
-                          </button>
-                          <button
-                            type="button"
-                            className={btn.quiet}
-                            onClick={() => change(() => setPicked(picked.filter((s) => s !== slug)))}
-                            aria-label={`Remove ${l?.title}`}
-                          >
-                            <Icon name="close" className="size-4" />
-                          </button>
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
+              <OrderedLessons
+                slugs={picked}
+                info={info}
+                canEdit={canEdit}
+                onReorder={(from, to) =>
+                  change(() =>
+                    setPicked((p) => {
+                      const n = [...p];
+                      const [moved] = n.splice(from, 1);
+                      n.splice(to, 0, moved);
+                      return n;
+                    }),
+                  )
+                }
+                onRemove={(slug) => change(() => setPicked(picked.filter((s) => s !== slug)))}
+              />
             )}
           </section>
 
@@ -365,6 +585,16 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   Archive
                 </button>
               )}
+            </div>
+          )}
+          {!isNew && id && (
+            <div className="flex flex-wrap gap-2">
+              {me?.canAuthor && (
+                <Link href={`/paths/${encodeURIComponent(id)}?preview=1`} className={btn.secondary} title={dirty ? "Shows the last saved version" : undefined}>
+                  <Icon name="play" className="size-4" /> Preview path
+                </Link>
+              )}
+              <QrShare kind="path" id={id} assigned={detail?.assignments.length ?? 0} className={btn.secondary} />
             </div>
           )}
           {!canEdit && (
@@ -396,8 +626,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
 }
 
 function People({ detail, onChange }: { detail: Detail; onChange: () => void }) {
-  const [choosing, setChoosing] = useState<string[]>([]);
-  const [due, setDue] = useState("");
+  const [assigning, setAssigning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const assignedIds = new Set(detail.assignments.map((a) => a.userId));
@@ -408,11 +637,11 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
     setError(null);
     try {
       await api(`/api/admin/learning-paths/${detail.id}/assignments`, { body });
-      setChoosing([]);
-      setDue("");
       onChange();
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -421,53 +650,37 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
   return (
     <div className="flex flex-col gap-4 lg:sticky lg:top-24">
       <section className="rounded-3xl border border-line bg-surface p-5">
-        <h2 className="font-serif text-xl font-semibold">Assigned</h2>
-        {!detail.assignments.length ? (
-          <p className="mt-2 text-sm text-ink-muted">Nobody yet.</p>
-        ) : (
-          <ul className="mt-3 flex flex-col divide-y divide-line">
-            {detail.assignments.map((a) => {
-              const next = a.steps.find((s) => s.slug === a.nextSlug);
-              return (
-                <li key={a.userId} className="py-3">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{a.name}</p>
-                      <p className="text-xs text-ink-muted">{a.org}</p>
-                    </div>
-                    {a.done ? (
-                      <Badge tone="good">Finished</Badge>
-                    ) : (
-                      a.dueDate && <Badge tone={a.dueDate < new Date().toISOString().slice(0, 10) ? "bad" : "neutral"}>Due {formatDate(a.dueDate)}</Badge>
-                    )}
-                    <button
-                      type="button"
-                      className={btn.quiet}
-                      disabled={busy}
-                      onClick={() => send({ action: "remove", userId: a.userId })}
-                      aria-label={`Remove ${a.name}`}
-                    >
-                      <Icon name="close" className="size-4" />
-                    </button>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${a.completed} of ${a.total} lessons done`}>
-                      <div
-                        className="h-full rounded-full bg-action"
-                        style={{
-                          width: `${a.total ? (a.completed / a.total) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs text-ink-muted">
-                      {a.completed}/{a.total}
-                    </span>
-                  </div>
-                  {next && <p className="mt-1 text-xs text-ink-muted">Next: {next.title}</p>}
-                </li>
-              );
-            })}
-          </ul>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="font-serif text-xl font-semibold">Assigned</h2>
+          <span className="text-sm text-ink-muted">{detail.assignments.length}</span>
+        </div>
+        <AssignedList
+          assigned={detail.assignments.map((a) => ({
+            userId: a.userId,
+            name: a.name,
+            org: a.org,
+            dueDate: a.dueDate,
+            completed: a.completed,
+            total: a.total,
+            done: a.done,
+            nextTitle: a.steps.find((s) => s.slug === a.nextSlug)?.title ?? null,
+          }))}
+          busy={busy}
+          onRemove={async (a) => {
+            if (
+              await confirmAction(`${a.name} will no longer see this path. The lessons they’ve finished stay finished.`, {
+                title: `Remove ${a.name}?`,
+                confirmLabel: "Remove",
+                danger: true,
+              })
+            )
+              await send({ action: "remove", userId: a.userId });
+          }}
+        />
+        {error && !assigning && (
+          <div className="mt-3">
+            <ErrorNote text={error} />
+          </div>
         )}
       </section>
 
@@ -477,122 +690,29 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
           <p className="mt-2 text-sm text-ink-muted">Everyone you can assign already has this path.</p>
         ) : (
           <>
-            <ul className="mt-3 flex flex-col gap-1">
-              {available.map((p) => (
-                <li key={p.id}>
-                  <label
-                    className={cx("flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 hover:bg-muted", choosing.includes(p.id) && "bg-tealtint")}
-                  >
-                    <input
-                      type="checkbox"
-                      className="size-5 accent-[var(--action)]"
-                      checked={choosing.includes(p.id)}
-                      onChange={(e) => setChoosing(e.target.checked ? [...choosing, p.id] : choosing.filter((x) => x !== p.id))}
-                    />
-                    <span>
-                      <span className="block font-medium">{p.name}</span>
-                      <span className="text-xs text-ink-muted">{personLabel(p)}</span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <Field label="Due date (optional)" className="mt-3">
-              <input type="date" className={input} value={due} onChange={(e) => setDue(e.target.value)} />
-            </Field>
-            <button
-              type="button"
-              className={cx(btn.primary, "mt-3 w-full")}
-              disabled={busy || !choosing.length}
-              onClick={() =>
-                send({
-                  action: "assign",
-                  userIds: choosing,
-                  dueDate: due || null,
-                })
-              }
-            >
-              Assign {choosing.length ? `${choosing.length} ${choosing.length === 1 ? "person" : "people"}` : ""}
+            <p className="mt-1 text-sm text-ink-muted">
+              {available.length} {available.length === 1 ? "person" : "people"} can be assigned. Search, filter by organisation or role, or select everyone who
+              matches.
+            </p>
+            <button type="button" className={cx(btn.primary, "mt-3 w-full")} onClick={() => setAssigning(true)}>
+              <Icon name="plus" className="size-4" /> Assign people
             </button>
           </>
         )}
-        {error && (
-          <div className="mt-3">
-            <ErrorNote text={error} />
-          </div>
-        )}
       </section>
+      {assigning && (
+        <AssignDialog
+          people={available}
+          busy={busy}
+          error={error}
+          onClose={() => setAssigning(false)}
+          onAssign={async (ids, due) => {
+            if (await send({ action: "assign", userIds: ids, dueDate: due })) setAssigning(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /** Every lesson that can go in a path, with a checkbox. Ticking adds it to the end of the order. */
-function LessonChecklist({ catalogue, picked, onToggle }: { catalogue: LessonInfo[]; picked: string[]; onToggle: (slug: string, on: boolean) => void }) {
-  const [query, setQuery] = useState("");
-  const [track, setTrack] = useState<string>("all");
-  const tracks = [...new Set(catalogue.map((l) => l.track).filter((t): t is string => Boolean(t)))];
-  const q = query.trim().toLowerCase();
-  const shown = catalogue.filter((l) => (track === "all" || l.track === track) && (!q || `${l.title} ${l.summary ?? ""}`.toLowerCase().includes(q)));
-  return (
-    <section className="rounded-3xl border border-line bg-surface p-5">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-serif text-xl font-semibold">1. Choose lessons</h2>
-        <span className="text-sm text-ink-muted">
-          {picked.length} of {catalogue.length} ticked
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          className={cx(input, "max-w-xs")}
-          placeholder="Search lessons"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search lessons"
-        />
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by audience">
-          {["all", ...tracks].map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={track === t}
-              onClick={() => setTrack(t)}
-              className={cx(
-                "min-h-9 rounded-full border px-3 text-sm",
-                track === t ? "border-action bg-tealtint font-semibold" : "border-line-strong hover:bg-muted",
-              )}
-            >
-              {t === "all" ? "All" : (trackLabel[t] ?? t)}
-            </button>
-          ))}
-        </div>
-      </div>
-      <ul className="mt-3 flex flex-col divide-y divide-line rounded-2xl border border-line">
-        {shown.map((l) => {
-          const on = picked.includes(l.slug);
-          return (
-            <li key={l.slug}>
-              <label className={cx("flex cursor-pointer items-start gap-3 px-3 py-3 hover:bg-muted", on && "bg-tealtint/60")}>
-                <input
-                  type="checkbox"
-                  className="mt-0.5 size-5 shrink-0 accent-[var(--action)]"
-                  checked={on}
-                  onChange={(e) => onToggle(l.slug, e.target.checked)}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold leading-snug">{l.title}</span>
-                  {l.summary && <span className="block text-sm text-ink-muted">{l.summary}</span>}
-                </span>
-                <span className="shrink-0 text-right text-xs text-ink-muted">
-                  <span className="block font-semibold text-ink">{l.minutes} min</span>
-                  {trackLabel[l.track ?? ""] ?? ""}
-                </span>
-              </label>
-            </li>
-          );
-        })}
-        {!shown.length && <li className="p-4 text-center text-sm text-ink-muted">No lessons match.</li>}
-      </ul>
-    </section>
-  );
-}

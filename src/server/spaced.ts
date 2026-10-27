@@ -33,6 +33,13 @@ function describe(db: Db, slug: string, step: PinnedStep, stage: string) {
 }
 
 export function spacedOverview(db: Db) {
+  // When each lesson was last edited in the editor (content-file lessons never edited have none).
+  const edited = new Map(
+    (db.prepare("SELECT slug, updated_at FROM authored_lessons WHERE deleted_at IS NULL").all() as { slug: string; updated_at: string }[]).map((r) => [
+      r.slug,
+      r.updated_at,
+    ]),
+  );
   // New lessons saved in the editor but not yet published come first.
   const unpublished = unpublishedLessons(db).map((l) => ({
     slug: l.slug,
@@ -40,6 +47,8 @@ export function spacedOverview(db: Db) {
     track: l.track,
     minutes: l.minutes,
     cards: Object.keys(l.nodes).length,
+    visual: l.visual,
+    updatedAt: edited.get(l.slug) ?? null,
     status: "unpublished" as const,
     spaced: false,
     signoff: false,
@@ -74,6 +83,8 @@ export function spacedOverview(db: Db) {
         track: l.track,
         minutes: l.minutes,
         cards: Object.keys(l.nodes).length,
+        visual: l.visual,
+        updatedAt: edited.get(l.slug) ?? null,
         status: lessonStatus(db, l.slug).state,
         spaced: Boolean(setting?.spaced),
         signoff: Boolean(setting?.signoff),

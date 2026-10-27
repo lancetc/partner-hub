@@ -1,5 +1,6 @@
 import "server-only";
 import { runDueCampaigns } from "./campaigns";
+import { runContentReminders } from "./contentReminders";
 import { localDate, nextPermittedSlot, reminderAt, type ScheduleConfig } from "@/lib/schedule";
 import { tx, type Db } from "./db";
 import { activityInfo, pathVersion, scheduleFor, type EnrolmentRow, type InstanceRow } from "./learning";
@@ -196,6 +197,8 @@ export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"em
   const { dispatched, outcomes } = await dispatch(db, now, adapters);
   // Newsletters scheduled for now or earlier go out too.
   await runDueCampaigns(db, now, adapters?.email);
+  // Content due for checking: remind learning authors.
+  await runContentReminders(db, now, adapters?.email);
   db.prepare("INSERT INTO worker_runs (started_at, clock, released, digests, dispatched, note) VALUES (?, ?, ?, ?, ?, ?)").run(
     new Date().toISOString(),
     iso(now),

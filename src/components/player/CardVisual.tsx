@@ -108,10 +108,10 @@ export function CardVisual({ visual, className, onComplete }: { visual: Visual; 
         <circle cx="330" cy="60" r="90" fill={t.a} opacity="0.35" />
         <circle cx="60" cy="260" r="70" fill={t.b} opacity="0.3" />
         <circle cx="200" cy="120" r="52" fill="#F2D3BD" />
-        <circle cx="182" cy="122" r="4.5" fill="#0f2642" />
-        <circle cx="218" cy="122" r="4.5" fill="#0f2642" />
-        <path d="M184 142 q16 12 32 0" fill="none" stroke="#0f2642" strokeWidth="4" strokeLinecap="round" />
-        <path d="M148 112c0-34 24-56 54-56s52 20 52 54c-8-14-26-24-52-24s-42 8-54 26z" fill={t.c === "#FFFFFF" ? "#0f2642" : t.c} />
+        <circle cx="182" cy="122" r="4.5" fill="#102a43" />
+        <circle cx="218" cy="122" r="4.5" fill="#102a43" />
+        <path d="M184 142 q16 12 32 0" fill="none" stroke="#102a43" strokeWidth="4" strokeLinecap="round" />
+        <path d="M148 112c0-34 24-56 54-56s52 20 52 54c-8-14-26-24-52-24s-42 8-54 26z" fill={t.c === "#FFFFFF" ? "#102a43" : t.c} />
         <path d="M100 300c6-70 46-110 100-110s94 40 100 110z" fill={t.a} />
       </svg>
       {visual.synthetic && (
@@ -140,7 +140,7 @@ function Triangle({ visual, className }: { visual: Extract<Visual, { kind: "tria
     ? nodes.filter((n) => n !== target).map((n) => ({ from: n, to: target }))
     : nodes.map((n, i) => ({ from: n, to: nodes[(i + 1) % nodes.length] }));
   return (
-    <div role="img" aria-label={visual.alt} className={cx("flex flex-col overflow-hidden rounded-3xl bg-[#e8eef6] text-[#0f2642]", className)}>
+    <div role="img" aria-label={visual.alt} className={cx("flex flex-col overflow-hidden rounded-3xl bg-[#e8eef6] text-[#102a43]", className)}>
       <svg viewBox="0 0 400 250" className="min-h-0 w-full flex-1" aria-hidden>
         <polygon points={nodes.map((n) => `${n.x},${n.y}`).join(" ")} fill="#FFFFFF" fillOpacity="0.6" stroke="none" />
         <polygon
@@ -156,7 +156,7 @@ function Triangle({ visual, className }: { visual: Extract<Visual, { kind: "tria
           <circle
             key={i}
             r="5"
-            fill="#00828a"
+            fill="#0e7c7b"
             className="tri-dot"
             style={
               {
@@ -175,9 +175,9 @@ function Triangle({ visual, className }: { visual: Extract<Visual, { kind: "tria
           return (
             <g key={n.id} opacity={on ? 1 : 0.6} className="tri-pop" style={{ animationDelay: `${i * 0.18}s` }}>
               {on && <circle cx={n.x} cy={n.y} r={r + 9} fill="#4cc3c9" className="tri-halo" style={{ animationDelay: `${i * 0.4}s` }} />}
-              <circle cx={n.x} cy={n.y} r={r} fill={on ? "#00828a" : "#FFFFFF"} stroke={on ? "#FFFFFF" : "#3d5068"} strokeWidth="3" />
+              <circle cx={n.x} cy={n.y} r={r} fill={on ? "#0e7c7b" : "#FFFFFF"} stroke={on ? "#FFFFFF" : "#3d5068"} strokeWidth="3" />
               <foreignObject x={n.x - 14} y={n.y - 14} width="28" height="28">
-                <Icon name={n.icon} className={cx("size-7", on ? "text-white" : "text-[#0f2642]")} />
+                <Icon name={n.icon} className={cx("size-7", on ? "text-white" : "text-[#102a43]")} />
               </foreignObject>
               <text
                 x={n.x}
@@ -185,7 +185,7 @@ function Triangle({ visual, className }: { visual: Extract<Visual, { kind: "tria
                 textAnchor="middle"
                 fontSize={on ? 17 : 15}
                 fontWeight={on ? 700 : 500}
-                fill="#0f2642"
+                fill="#102a43"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {n.label}
@@ -199,7 +199,7 @@ function Triangle({ visual, className }: { visual: Extract<Visual, { kind: "tria
           {visual.labels.map((l, i) => (
             <li
               key={l}
-              className="animate-card-in rounded-full bg-[#00828a] px-3 py-1 font-mulish text-xs font-bold text-white"
+              className="animate-card-in rounded-full bg-[#0e7c7b] px-3 py-1 font-mulish text-xs font-bold text-white"
               style={{ animationDelay: `${600 + i * 1500}ms` }}
             >
               {l}
@@ -223,7 +223,7 @@ function Orbit({ visual, className }: { visual: Extract<Visual, { kind: "orbit" 
   });
   const cycle = n * 1.6;
   return (
-    <div role="img" aria-label={visual.alt} className={cx("relative overflow-hidden rounded-3xl bg-[#e8eef6] text-[#0f2642]", className)}>
+    <div role="img" aria-label={visual.alt} className={cx("relative overflow-hidden rounded-3xl bg-[#e8eef6] text-[#102a43]", className)}>
       <div aria-hidden className="absolute inset-[8%] rounded-full bg-[#ddf2f3]" />
       <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 size-full">
         {points.map((p, i) => (
@@ -233,7 +233,7 @@ function Orbit({ visual, className }: { visual: Extract<Visual, { kind: "orbit" 
             y1={p.y}
             x2={50}
             y2={50}
-            stroke="#00828a"
+            stroke="#0e7c7b"
             strokeOpacity="0.55"
             strokeWidth="1.5"
             strokeDasharray="3 5"
@@ -245,9 +245,9 @@ function Orbit({ visual, className }: { visual: Extract<Visual, { kind: "orbit" 
 
       {/* The person */}
       <div aria-hidden className="absolute left-1/2 top-1/2 flex h-[40%] aspect-square -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-        <span className="orbit-ring absolute inset-0 rounded-full bg-[#00828a]" />
-        <span className="orbit-ring absolute inset-0 rounded-full bg-[#00828a] [animation-delay:1.5s]" />
-        <div className="relative flex size-full flex-col items-center justify-center rounded-full bg-[#00828a] text-white shadow-[0_0_0_4px_#fff]">
+        <span className="orbit-ring absolute inset-0 rounded-full bg-[#0e7c7b]" />
+        <span className="orbit-ring absolute inset-0 rounded-full bg-[#0e7c7b] [animation-delay:1.5s]" />
+        <div className="relative flex size-full flex-col items-center justify-center rounded-full bg-[#0e7c7b] text-white shadow-[0_0_0_4px_#fff]">
           <Icon name="user" className="size-[22%]" />
           <span className="mt-0.5 text-center font-serif text-[0.8rem] font-semibold leading-none min-[400px]:text-[0.95rem] sm:text-lg">{visual.centre}</span>
           {visual.centreNote && (
@@ -405,7 +405,7 @@ function PortraitVideo({
           type="button"
           onClick={play}
           aria-label={state === "ended" ? `Play again: ${video.title}` : `Play video: ${video.title}`}
-          className="absolute left-1/2 top-[62%] inline-flex size-[4.5rem] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#0f2642] shadow-lg transition-transform hover:scale-105 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-white"
+          className="absolute left-1/2 top-[62%] inline-flex size-[4.5rem] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#102a43] shadow-lg transition-transform hover:scale-105 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           {state === "ended" ? (
             <Icon name="refresh" className="size-7" />
@@ -480,7 +480,7 @@ function YouTubeFrame({ id, title, onComplete }: { id: string; title: string; on
   );
 }
 
-/** "Photo: name / Pexels", linking to the photo on Pexels. */
+/** "Photo: name / Pexels" (or "GIF: name / GIPHY"), linking to where it came from. */
 export function PhotoCredit({ credit, className }: { credit: { name: string; url: string; source: string; page?: string }; className?: string }) {
   return (
     <a
@@ -493,7 +493,7 @@ export function PhotoCredit({ credit, className }: { credit: { name: string; url
         className,
       )}
     >
-      Photo: {credit.name} / {credit.source}
+      {credit.source === "GIPHY" ? "GIF" : "Photo"}: {credit.name} / {credit.source}
     </a>
   );
 }

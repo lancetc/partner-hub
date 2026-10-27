@@ -3,15 +3,28 @@ import { getDb } from "@/server/db";
 import { readUpload } from "@/server/uploads";
 
 /**
-  Serves an uploaded card image or video. File names are random, so they're safe to cache for good.
-  Videos answer byte-range requests, which browsers need to stream and seek.
+  Serves an uploaded card image, video or PDF. File names are random, so they're safe to cache for good.
+  Videos answer byte-range requests, which browsers need to stream and seek. PDFs open in the
+  browser under their original name, sandboxed so nothing in them can run as the site.
 */
 export async function GET(req: Request, ctx: RouteContext<"/api/uploads/[name]">) {
   await connection();
   const { name } = await ctx.params;
   const file = readUpload(getDb(), name);
   if (!file) return new Response("Not found", { status: 404 });
-  const headers = { "content-type": file.mime, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff", "accept-ranges": "bytes" };
+  const pdf = file.mime === "application/pdf";
+  const headers: Record<string, string> = {
+    "content-type": file.mime,
+    "cache-control": "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+    "accept-ranges": "bytes",
+    ...(pdf
+      ? {
+          "content-disposition": `inline; filename="${file.name.replace(/[^\w .()-]/g, "") || "document.pdf"}"`,
+          "content-security-policy": "sandbox",
+        }
+      : {}),
+  };
   const size = file.body.length;
   const range = req.headers.get("range")?.match(/^bytes=(\d*)-(\d*)$/);
   if (range && (range[1] || range[2])) {

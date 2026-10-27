@@ -18,6 +18,8 @@ export type User = {
   timezone: string | null;
   /** Who confirms this person's practice after spaced learning. */
   manager_id?: string | null;
+  /** The language they read the hub in, through Google Translate. Null is English. */
+  language?: string | null;
 };
 
 export const SESSION_COOKIE = "tc-demo-user";

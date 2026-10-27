@@ -18,9 +18,12 @@ class FakeEmail implements NotificationAdapter {
   name = "fake";
   configured = true;
   sent: OutboundMessage[] = [];
+  /** Content-review reminders to authors, kept apart from learners' messages (tested in contentReview.test.ts). */
+  reminders: OutboundMessage[] = [];
   constructor(private result: SendResult = { status: "accepted", providerRef: "fake-1" }) {}
   async send(msg: OutboundMessage) {
-    this.sent.push(msg);
+    if (msg.idempotencyKey.startsWith("content-reminder:")) this.reminders.push(msg);
+    else this.sent.push(msg);
     return this.result;
   }
 }

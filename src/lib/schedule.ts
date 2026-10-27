@@ -43,7 +43,11 @@ function formatter(tz: string) {
 }
 
 export function localParts(instant: Date, tz: string) {
-  const p = Object.fromEntries(formatter(tz).formatToParts(instant).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(
+    formatter(tz)
+      .formatToParts(instant)
+      .map((x) => [x.type, x.value]),
+  );
   return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, min: +p.minute };
 }
 

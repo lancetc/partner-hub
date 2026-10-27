@@ -115,7 +115,7 @@ export function VideoRecorder({ onSave, onCancel }: { onSave: (clip: Blob) => Pr
   const showLive = stage === "live" || stage === "countdown" || stage === "recording" || stage === "starting";
   return (
     <div className="flex flex-col items-center gap-4 rounded-2xl border border-line bg-muted/50 p-4">
-      <div className="relative size-56 overflow-hidden rounded-full bg-[#0f2642] shadow-lg ring-4 ring-surface">
+      <div className="relative size-56 overflow-hidden rounded-full bg-[#102a43] shadow-lg ring-4 ring-surface">
         {/* Mirrored, like looking in a mirror; the recording itself isn't flipped. */}
         <video ref={live} muted playsInline className={cx("size-full -scale-x-100 object-cover", !showLive && "hidden")} />
         {stage === "review" && clip && <video src={clip.url} controls playsInline className="size-full object-cover" />}

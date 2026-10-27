@@ -12,15 +12,7 @@ export function totalFor(minutes: number, rate: number) {
   return Math.round((minutes / 60) * rate);
 }
 
-export function Calculator({
-  calc,
-  value,
-  onChange,
-}: {
-  calc: Calc;
-  value: number;
-  onChange: (minutes: number) => void;
-}) {
+export function Calculator({ calc, value, onChange }: { calc: Calc; value: number; onChange: (minutes: number) => void }) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
   const clamp = (n: number) => Math.min(calc.max, Math.max(calc.min, n));
@@ -43,7 +35,8 @@ export function Calculator({
           for a {value} minute visit
           {value !== calc.initial && (
             <>
-              {" "}· {value > calc.initial ? "+" : "−"}
+              {" "}
+              · {value > calc.initial ? "+" : "−"}
               {formatMoney(Math.abs(total - base))} on the planned visit
             </>
           )}

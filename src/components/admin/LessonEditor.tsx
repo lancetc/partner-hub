@@ -4,19 +4,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Card, CardVisual as Visual, Lesson, Tone } from "@/content/lessons";
+import { commentsOn } from "@/lib/cardComments";
+import { QrShare } from "./QrShare";
+import { cardSurface, THEMES, themeIds, type ThemeId } from "@/content/themes";
 import type { VisualVariant } from "@/content/stories";
 import { api, useApi } from "@/lib/api";
+import { factsUsed, tokenFor, volatileIn } from "@/lib/facts";
+import { extractText } from "@/lib/lessonText";
 import { cx } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
 import { CardVisual } from "../player/CardVisual";
 import { VideoBubbles } from "../player/VideoBubbles";
+import { WrittenFeedback, type WrittenResult } from "../player/WrittenAnswer";
+import { fileSize, RESOURCE_KINDS } from "../player/Resources";
 import { VideoRecorder } from "./VideoRecorder";
-import { toneClasses, useTextTone } from "@/lib/imageTone";
+import { panelledOnColour, toneClasses, useTextTone } from "@/lib/imageTone";
 import { parseVideoLink, videoLinkFor } from "@/lib/videoLinks";
 import { GRADIENTS, gradientIds } from "@/content/gradients";
-import { insertAfterCard, isLinear, mainLine, moveBlock, nextOf, ordered } from "@/lib/lessonGraph";
+import { dropTargets, insertAfterCard, isLinear, mainLine, movable, moveBlock, moveToPosition, nextOf, ordered } from "@/lib/lessonGraph";
+import { confirmAction } from "@/lib/confirm";
 
 /*
   Lesson authoring. Cards are edited in place on a canvas (like 7taps); details, media, spaced
@@ -40,15 +48,19 @@ const TRACKS: { id: Lesson["track"]; label: string }[] = [
 ];
 
 const CARD_TYPES: { type: Card["type"]; label: string; icon: IconName; hint: string }[] = [
-  { type: "image", label: "Explain", icon: "doc", hint: "A heading, short text and a picture" },
-  { type: "presenter", label: "Presenter", icon: "play", hint: "A video introduction" },
-  { type: "decision", label: "Decision", icon: "route", hint: "A choice that branches to consequences" },
-  { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with feedback" },
-  { type: "poll", label: "Poll", icon: "list", hint: "A vote with no right answer; learners see the results" },
+  { type: "checklist", label: "Checklist", icon: "checklist", hint: "A list learners tick off, with an optional note under each item" },
   { type: "rating", label: "Confidence", icon: "star", hint: "A 1 to 5 star rating; learners see the average after rating" },
+  { type: "hotspot", label: "Hotspot", icon: "target", hint: "A picture with spots to tap that reveal a note" },
   { type: "wall", label: "Insight wall", icon: "people", hint: "Learners share an idea, then see what others posted" },
+  { type: "poll", label: "Poll", icon: "list", hint: "A vote with no right answer; learners see the results" },
+  { type: "presenter", label: "Presenter", icon: "play", hint: "A video introduction" },
+  { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with feedback" },
   { type: "response", label: "Reflect", icon: "chat", hint: "A written answer with a model response" },
+  { type: "resources", label: "Resources", icon: "folder", hint: "A list of PDFs, websites and toolkits; never holds up the lesson" },
+  { type: "decision", label: "Role Play", icon: "route", hint: "A scenario with choices that branch to consequences" },
   { type: "summary", label: "Summary", icon: "spark", hint: "Recap, action and official resources" },
+  { type: "image", label: "Text", icon: "doc", hint: "A heading, short text and a picture" },
+  { type: "written", label: "Written answer", icon: "pen", hint: "Learners answer in their own words; AI checks it against your criteria" },
 ];
 // Older card types that existing lessons use but new cards don't need.
 const LEGACY_TYPES: typeof CARD_TYPES = [
@@ -72,7 +84,13 @@ const LIBRARY = [
   { src: "/images/tcp.png", width: 1200, height: 628 },
   { src: "/images/team.jpeg", width: 640, height: 456 },
 ];
-type Photo = { src: string; width: number; height: number; credit?: { name: string; url: string; source: "Pexels"; page?: string } };
+type Photo = {
+  src: string;
+  width: number;
+  height: number;
+  credit?: { name: string; url: string; source: "Pexels" | "GIPHY"; page?: string };
+  animated?: { mp4: string };
+};
 
 /** Uploads an image for a card. The browser measures it; the server checks and stores it. */
 export async function uploadImage(file: File): Promise<Photo> {
@@ -93,6 +111,16 @@ export async function uploadImage(file: File): Promise<Photo> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
   return { src: data.src, width: data.width, height: data.height };
+}
+
+/** Uploads a PDF for a Resources card. The server checks it really is a PDF. */
+export async function uploadPdf(file: File): Promise<{ src: string; name: string; bytes: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/admin/uploads", { method: "POST", body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
+  return { src: data.src, name: data.name, bytes: data.bytes };
 }
 
 /** Uploads a recorded or chosen video, with a poster frame so the circle isn't blank before play. */
@@ -323,6 +351,132 @@ function PexelsPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string)
   );
 }
 
+type GiphyHit = { id: string; width: number; height: number; alt: string; thumb: string; still: string; credit: NonNullable<Photo["credit"]> };
+type GiphyPage = { configured: boolean; gifs: GiphyHit[]; page: number; total: number | null; more: boolean };
+
+/**
+  Search GIPHY for a card GIF (G rated only). GIFs aren't copied into the library: the card
+  plays GIPHY's MP4 over its still frame, and credits whoever made it.
+*/
+function GiphyPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) => void; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  // What's trending to start with; searches and "More GIFs" replace it.
+  const trending = useApi<GiphyPage>("/api/admin/giphy");
+  const [searchResults, setResults] = useState<GiphyPage | null>(null);
+  const results = searchResults ?? trending.data;
+  const [searched, setSearched] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Thumbnails move only for people who haven't asked for reduced motion.
+  const [still] = useState(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  async function load(q: string, page: number) {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await api<GiphyPage>(`/api/admin/giphy?${new URLSearchParams({ q, page: String(page) })}`);
+      const prev = results;
+      setResults(page > 1 && prev ? { ...r, gifs: [...prev.gifs, ...r.gifs.filter((g) => !prev.gifs.some((x) => x.id === g.id))] } : r);
+      setSearched(q);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function pick(g: GiphyHit) {
+    setPicking(g.id);
+    setError(null);
+    try {
+      const r = await api<Photo & { alt: string }>("/api/admin/giphy", { body: { id: g.id } });
+      onPicked({ src: r.src, width: r.width, height: r.height, credit: r.credit, animated: r.animated }, r.alt);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPicking(null);
+    }
+  }
+
+  if (results && !results.configured)
+    return (
+      <p className="rounded-xl border-2 border-dashed border-gold p-3 text-sm">
+        <strong>GIPHY isn’t connected.</strong> Add <code>GIPHY_API_KEY</code> to <code>.env.local</code> and restart the server.
+      </p>
+    );
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-line-strong p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">GIFs from GIPHY</p>
+        <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void load(query, 1);
+        }}
+      >
+        <input
+          type="search"
+          className={cx(input, "min-w-40 flex-1")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search, e.g. thank you, high five"
+          aria-label="Search GIPHY"
+        />
+        <button type="submit" className={btn.primary} disabled={loading}>
+          <Icon name="search" className="size-4" /> Search
+        </button>
+      </form>
+      <p className="text-xs text-ink-muted" role="status">
+        {(loading || (!results && !trending.error)) && !results?.gifs.length
+          ? "Loading GIFs…"
+          : searched
+            ? `${results?.total?.toLocaleString("en-AU") ?? 0} GIFs for “${searched}”. Only G-rated GIFs are shown.`
+            : "Trending on GIPHY. Search for something specific. Only G-rated GIFs are shown."}
+      </p>
+      {(error ?? trending.error) && <ErrorNote text={(error ?? trending.error)!} />}
+      <ul className="grid max-h-[26rem] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
+        {results?.gifs.map((g) => (
+          <li key={g.id}>
+            <button
+              type="button"
+              onClick={() => pick(g)}
+              disabled={picking !== null}
+              className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted disabled:cursor-wait"
+              aria-label={`Use GIF${g.alt ? `: ${g.alt}` : ""}, by ${g.credit.name}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={still ? g.still : g.thumb} alt="" loading="lazy" className="size-full object-cover transition-transform group-hover:scale-105" />
+              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-left text-[0.65rem] font-semibold text-white">
+                {g.credit.name}
+              </span>
+              {picking === g.id && <span className="absolute inset-0 grid place-items-center bg-black/45 text-xs font-semibold text-white">Adding…</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {results?.more && (
+        <button type="button" className={cx(btn.secondary, "self-center")} disabled={loading} onClick={() => load(searched, results.page + 1)}>
+          {loading ? "Loading…" : "More GIFs"}
+        </button>
+      )}
+      <p className="text-[0.7rem] font-semibold text-ink-muted">
+        Powered by{" "}
+        <a href="https://giphy.com" target="_blank" rel="noreferrer" className="underline">
+          GIPHY
+        </a>
+        <span className="font-normal">. The creator is credited on the card. GIFs play silently, and learners can pause them.</span>
+      </p>
+    </div>
+  );
+}
+
 const TONES: Tone[] = ["teal", "navy", "warm", "gold", "sky"];
 const VARIANTS: VisualVariant[] = ["petals", "rings", "grid", "wave", "dots", "arc"];
 
@@ -335,15 +489,20 @@ export type LessonStatus = { state: "unpublished" | "live" | "changes"; version:
 
 const savedTime = (iso: string) => new Date(iso).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
 
-export function LessonEditor({ initial, isNew, status: initialStatus }: { initial: Lesson; isNew: boolean; status?: LessonStatus }) {
+export function LessonEditor({ initial, isNew, status: initialStatus, card }: { initial: Lesson; isNew: boolean; status?: LessonStatus; card?: string }) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson>(() => structuredClone(initial));
   const [status, setStatus] = useState<LessonStatus | null>(initialStatus ?? null);
   const [busy, setBusy] = useState<"save" | "publish" | "discard" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Goes with the next publish: what changed, and whether people who already did it should be told.
+  const [changeNote, setChangeNote] = useState("");
+  const [important, setImportant] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
   const [step, setStep] = useState<StepId>("cards");
-  const [selected, setSelected] = useState(initial.start);
+  const [selected, setSelected] = useState(card && initial.nodes[card] ? card : initial.start);
   const [dirty, setDirty] = useState(false);
   const update = (fn: (l: Lesson) => void) => {
     setLesson((prev) => {
@@ -384,10 +543,19 @@ export function LessonEditor({ initial, isNew, status: initialStatus }: { initia
     setBusy("publish");
     setSaveError(null);
     try {
-      const r = await api<{ version: string; status: LessonStatus }>(`/api/admin/lessons/${initial.slug}/content`, { body: { action: "publish" } });
+      const r = await api<{ version: string; status: LessonStatus }>(`/api/admin/lessons/${initial.slug}/content`, {
+        body: { action: "publish", notes: changeNote, kind: important ? "important" : "minor" },
+      });
       setLesson((l) => ({ ...l, version: r.version }));
       setStatus(r.status);
-      setNotice(`Published version ${r.version}. Learners see it from their next visit; anyone who already finished keeps their completion.`);
+      setNotice(
+        important
+          ? `Published version ${r.version} as an important change. People who did an earlier version see what’s changed next time they open it.`
+          : `Published version ${r.version}. Learners see it from their next visit; anyone who already finished keeps their completion.`,
+      );
+      setChangeNote("");
+      setImportant(false);
+      setHistoryKey((k) => k + 1);
     } catch (e) {
       setSaveError((e as Error).message);
     } finally {
@@ -397,8 +565,15 @@ export function LessonEditor({ initial, isNew, status: initialStatus }: { initia
 
   async function discard() {
     const never = status?.state === "unpublished";
-    if (!window.confirm(never ? "Delete this lesson? It has never been published." : "Discard your saved changes and go back to the published version?"))
-      return;
+    const ok = await confirmAction(
+      never
+        ? "It has never been published, so learners haven’t seen it."
+        : "Your saved changes are thrown away and the lesson goes back to the published version.",
+      never
+        ? { title: "Delete this lesson?", confirmLabel: "Delete", danger: true }
+        : { title: "Discard your changes?", confirmLabel: "Discard changes", danger: true },
+    );
+    if (!ok) return;
     setBusy("discard");
     setSaveError(null);
     try {
@@ -466,15 +641,16 @@ export function LessonEditor({ initial, isNew, status: initialStatus }: { initia
           </Badge>
         )}
         {!isNew && (
-          <Link
-            href={status?.state === "live" && !dirty ? `/learning/${initial.slug}` : `/learning/${initial.slug}?preview=1`}
+          <button
+            type="button"
             className={btn.secondary}
-            target="_blank"
+            onClick={() => setPreviewing(true)}
             title={dirty ? "Shows your last saved draft. Save first to preview your latest changes." : undefined}
           >
             <Icon name="play" className="size-4" /> Preview
-          </Link>
+          </button>
         )}
+        {!isNew && status?.state !== "unpublished" && <QrShare kind="lesson" id={initial.slug} />}
         <button type="button" className={btn.secondary} onClick={save} disabled={busy !== null || (!dirty && !isNew)}>
           {busy === "save" ? "Saving…" : dirty || isNew ? "Save draft" : "Saved"}
         </button>
@@ -553,7 +729,23 @@ export function LessonEditor({ initial, isNew, status: initialStatus }: { initia
         {step === "brief" && <Brief lesson={lesson} update={update} isNew={isNew} />}
         {step === "media" && <Media lesson={lesson} update={update} isNew={isNew} />}
         {step === "spaced" && <Spaced lesson={lesson} isNew={isNew} />}
-        {step === "review" && <Review lesson={lesson} checks={checks} />}
+        {previewing && <PreviewDialog slug={initial.slug} cardId={selected} dirty={dirty} onClose={() => setPreviewing(false)} />}
+        {step === "review" && (
+          <Review
+            lesson={lesson}
+            checks={checks}
+            slug={initial.slug}
+            isNew={isNew}
+            changeNote={changeNote}
+            setChangeNote={setChangeNote}
+            important={important}
+            setImportant={setImportant}
+            onPublish={publish}
+            publishing={busy === "publish"}
+            canPublish={!isNew && (dirty || status?.state !== "live")}
+            historyKey={historyKey}
+          />
+        )}
       </div>
     </AdminShell>
   );
@@ -582,6 +774,66 @@ function ClaudeButton({ children }: { children: React.ReactNode }) {
 }
 
 /* 1. Brief */
+
+/* Sample cards for the theme previews: a content card, a question and the recap. */
+const THEME_SAMPLES: { type: Card["type"]; label: string; lines: number }[] = [
+  { type: "image", label: "Story", lines: 3 },
+  { type: "quiz", label: "Check", lines: 2 },
+  { type: "decision", label: "Role play", lines: 2 },
+  { type: "summary", label: "Recap", lines: 3 },
+];
+
+/** Lesson theme: how cards look when they don't have their own colour or photo. */
+function ThemePicker({ value, onChange }: { value: ThemeId; onChange: (t: ThemeId) => void }) {
+  return (
+    <fieldset className="sm:col-span-2">
+      <legend className="font-semibold">Card theme</legend>
+      <p className="text-sm text-ink-muted">How cards look unless you give one its own colour or photo.</p>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {themeIds.map((id) => {
+          const t = THEMES[id];
+          const on = value === id;
+          return (
+            <label
+              key={id}
+              className={cx(
+                "flex cursor-pointer flex-col gap-2 rounded-2xl border-2 p-3 transition-colors",
+                on ? "border-action bg-tealtint/50" : "border-line hover:border-line-strong",
+              )}
+            >
+              <input type="radio" name="lesson-theme" className="sr-only" checked={on} onChange={() => onChange(id)} />
+              <span className="flex gap-1.5" aria-hidden>
+                {THEME_SAMPLES.map((sample) => {
+                  const sf = t.surface({ type: sample.type } as Card);
+                  const tc = sf ? toneClasses(sf.text) : null;
+                  return (
+                    <span
+                      key={sample.type}
+                      className={cx("flex h-20 flex-1 flex-col gap-1 rounded-lg p-1.5 ring-1 ring-line", sf ? tc!.text : "bg-surface")}
+                      style={sf ? { backgroundImage: sf.css } : undefined}
+                    >
+                      <span className={cx("font-mulish text-[0.5rem] font-extrabold uppercase tracking-wider", sf?.accent ?? (tc ? tc.soft : "text-accent"))}>
+                        {sample.label}
+                      </span>
+                      {Array.from({ length: sample.lines }, (_, i) => (
+                        <span key={i} className={cx("h-1 rounded-full bg-current opacity-40", i === sample.lines - 1 ? "w-2/3" : "w-full")} />
+                      ))}
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="flex items-center gap-1.5 font-semibold">
+                {on && <Icon name="check" className="size-4 text-accent" />}
+                {t.label}
+              </span>
+              <span className="text-xs text-ink-muted">{t.description}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; isNew: boolean }) {
   const [sources, setSources] = useState<string[]>(isNew ? [] : ["Aged Care Act 2024 — Statement of Rights", "Trilogy Care service partner agreement"]);
@@ -656,6 +908,7 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
               <span className="text-ink-muted">— learners can’t continue or swipe on until each card’s audio has played to the end</span>
             </span>
           </label>
+          <ThemePicker value={l.theme ?? "classic"} onChange={(t) => update((d) => void (d.theme = t === "classic" ? undefined : t))} />
         </div>
       </Panel>
 
@@ -706,27 +959,61 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
   Anything more advanced (feedback, branching, scripts, calculator maths) lives in the card settings drawer.
 */
 
-const PALETTE: { type: Card["type"]; label: string; icon: IconName }[] = [
-  { type: "image", label: "Content", icon: "doc" },
-  { type: "quiz", label: "Quiz", icon: "check" },
-  { type: "decision", label: "Decision", icon: "route" },
-  { type: "poll", label: "Poll", icon: "list" },
-  { type: "rating", label: "Rating", icon: "star" },
-  { type: "wall", label: "Wall", icon: "people" },
-  { type: "listen", label: "Audio", icon: "volume" },
-  { type: "presenter", label: "Video", icon: "play" },
-  { type: "calculator", label: "Calculator", icon: "sliders" },
-  { type: "response", label: "Reflect", icon: "chat" },
-  { type: "summary", label: "Summary", icon: "spark" },
+const PALETTE: { type: Card["type"]; label: string; icon: IconName; hint: string }[] = [
+  {
+    type: "written",
+    label: "Answer",
+    icon: "pen",
+    hint: "Learners write an answer in their own words, and AI checks it against criteria you set. Good for practising what to say.",
+  },
+  { type: "listen", label: "Audio", icon: "volume", hint: "A card just for listening, with its own play button and a transcript to read along." },
+  { type: "calculator", label: "Calculator", icon: "sliders", hint: "A slider that shows how a number changes, such as how a longer visit changes the cost." },
+  {
+    type: "checklist",
+    label: "Checklist",
+    icon: "checklist",
+    hint: "A list learners tick off. Add a note under any item, and choose whether every item must be ticked to continue.",
+  },
+  {
+    type: "hotspot",
+    label: "Hotspot",
+    icon: "target",
+    hint: "A picture with spots to tap that reveal short notes. Learners explore the markers, or have to find the spots.",
+  },
+  { type: "poll", label: "Poll", icon: "list", hint: "A question with no right answer. After voting, learners see how everyone else answered." },
+  { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with one right answer and feedback for each choice. Use it to check understanding." },
+  { type: "rating", label: "Rating", icon: "star", hint: "A 1 to 5 star confidence check. Learners see the group’s average after they rate." },
+  { type: "response", label: "Reflect", icon: "chat", hint: "Learners write a short response, then see an example answer and can ask AI for feedback." },
+  {
+    type: "resources",
+    label: "Resources",
+    icon: "folder",
+    hint: "A tidy drawer of PDFs, websites and toolkits for further reading. Never holds up the lesson.",
+  },
+  {
+    type: "decision",
+    label: "Role Play",
+    icon: "route",
+    hint: "A scenario with choices. Each choice can lead to its own consequence, so learners see what happens.",
+  },
+  { type: "summary", label: "Summary", icon: "spark", hint: "The closing card: key points to remember, one action to take to work, and official sources." },
+  {
+    type: "image",
+    label: "Text",
+    icon: "doc",
+    hint: "A heading and short text, with an optional picture, animation or video bubbles. The everyday teaching card.",
+  },
+  { type: "presenter", label: "Video", icon: "play", hint: "A video from YouTube or Synthesia, or an upload. Vertical videos fill the whole card." },
+  { type: "wall", label: "Wall", icon: "people", hint: "An insight wall: learners share an idea, then see what others posted once they’ve posted their own." },
 ];
 
-/** Card types learners interact with, shown in teal; content cards are navy and the summary gold. */
-const INTERACTIVE: Card["type"][] = ["quiz", "decision", "poll", "rating", "wall", "calculator", "response"];
+/** Card types learners interact with, shown in teal; text and media cards are navy and the summary gold. */
+const INTERACTIVE: Card["type"][] = ["quiz", "decision", "poll", "rating", "wall", "calculator", "response", "written", "hotspot", "checklist"];
 
 /** A tab on the card's top edge naming its type, so it's clear what kind of card you're editing. */
 function TypeTag({ card: c }: { card: Card }) {
   const p = PALETTE.find((x) => x.type === c.type) ?? { label: typeInfo(c.type).label, icon: typeInfo(c.type).icon };
-  const tone = c.type === "summary" ? "bg-gold text-[#0a1a2e]" : INTERACTIVE.includes(c.type) ? "bg-action text-on-action" : "bg-[#0f2642] text-white";
+  const tone = c.type === "summary" ? "bg-gold text-[#0a1a2e]" : INTERACTIVE.includes(c.type) ? "bg-action text-on-action" : "bg-[#102a43] text-white";
   return (
     <span
       className={cx(
@@ -742,8 +1029,24 @@ function TypeTag({ card: c }: { card: Card }) {
           · <Icon name="lock" className="size-3" /> Required
         </span>
       )}
+      {c.check?.by && checkDays(c.check.by) <= 30 && (
+        <span className="inline-flex items-center gap-0.5 font-semibold normal-case tracking-normal opacity-90">
+          · <Icon name="clock" className="size-3" /> {checkDays(c.check.by) < 0 ? "Check overdue" : "Check due"}
+        </span>
+      )}
+      {!commentsOn(c) && (
+        <span className="inline-flex items-center gap-0.5 font-semibold normal-case tracking-normal opacity-90">
+          · <Icon name="chat" className="size-3" /> Comments off
+        </span>
+      )}
     </span>
   );
+}
+
+/** Days until a check date (negative once it's passed). */
+function checkDays(date: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
 }
 
 function freshCard(type: Card["type"], id: string, beat: number): Card {
@@ -807,6 +1110,56 @@ function freshCard(type: Card["type"], id: string, beat: number): Card {
       return { ...base, type, label: "Insight wall", heading: "Share your idea", prompt: "", placeholder: "", next: "" };
     case "response":
       return { ...base, type, prompt: "", modelResponse: "", visibility: "Only you can see this.", next: "" };
+    case "checklist":
+      return {
+        ...base,
+        type,
+        label: "Checklist",
+        heading: "Before you go",
+        prompt: "",
+        items: [
+          { id: "i1", text: "" },
+          { id: "i2", text: "" },
+          { id: "i3", text: "" },
+        ],
+        next: "",
+      };
+    case "resources":
+      return {
+        ...base,
+        type,
+        label: "Further reading",
+        heading: "Want to go further?",
+        body: "Optional resources if you’d like more detail.",
+        items: [{ id: "r1", kind: "link", title: "", url: "" }],
+        next: "",
+      };
+    case "hotspot":
+      return {
+        ...base,
+        type,
+        label: "Explore",
+        heading: "Take a closer look",
+        prompt: "Tap each marker to find out more.",
+        image: null,
+        mode: "explore",
+        spots: [],
+        next: "",
+      };
+    case "written":
+      return {
+        ...base,
+        type,
+        label: "Your turn",
+        heading: "Put it in your own words",
+        prompt: "",
+        criteria: [
+          { id: "c1", text: "" },
+          { id: "c2", text: "" },
+        ],
+        minWords: 10,
+        next: "",
+      };
     case "presenter":
       return {
         ...base,
@@ -889,9 +1242,16 @@ function Cards({
     focus(id);
   }
 
-  function remove() {
+  async function remove() {
     if (cards.length <= 1) return;
-    if (!window.confirm(`Delete “${card.heading || typeInfo(card.type).label}”?`)) return;
+    if (
+      !(await confirmAction("The card is removed from this lesson. Save or publish to keep the change.", {
+        title: `Delete “${card.heading || typeInfo(card.type).label}”?`,
+        confirmLabel: "Delete card",
+        danger: true,
+      }))
+    )
+      return;
     const i = cards.findIndex((c) => c.id === card.id);
     const neighbour = cards[i + 1] ?? cards[i - 1];
     update((d) => {
@@ -944,24 +1304,187 @@ function Cards({
     focus(card.id);
   }
 
+  /*
+    Card type descriptions on hover or keyboard focus: to the left of the menu when it's a column at
+    the side of the page, otherwise below the button.
+  */
+  const [tip, setTip] = useState<{ type: Card["type"]; side: "left" | "below"; x: number; y: number } | null>(null);
+  function showTip(type: Card["type"], el: HTMLElement) {
+    const r = el.getBoundingClientRect();
+    if (r.left > 300) setTip({ type, side: "left", x: window.innerWidth - r.left + 10, y: r.top + r.height / 2 });
+    else setTip({ type, side: "below", x: Math.max(8, Math.min(r.left, window.innerWidth - 264)), y: r.bottom + 8 });
+  }
+
   // Try each move on a copy to know whether the buttons work, and why not.
   const why = (dir: -1 | 1) => (card ? moveBlock(structuredClone(l), card.id, dir) : "No card selected.");
   const leftWhy = why(-1);
   const rightWhy = why(1);
 
+  /*
+    Drag to reorder: pick a card up by its grip, and a "Move here" bar marks the nearest gap it can
+    go to (the same moves the arrows allow). Let go to drop it there; Escape cancels.
+  */
+  const strip = useRef<HTMLOListElement>(null);
+  const [drag, setDrag] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    slots: { before: string | null; to: number }[];
+    slot: number | null;
+    /** Where the bar sits, in the strip's scrolled coordinates. */
+    barX: number;
+  } | null>(null);
+  const [landed, setLanded] = useState<string | null>(null);
+  // A press on a card that may turn into a drag once the pointer moves a few pixels.
+  const pressed = useRef<{ id: string; x: number; y: number; pointer: number } | null>(null);
+
+  /** Starts carrying a card (from its label's grip, or by dragging the card itself). */
+  function pickUp(id: string, e: React.PointerEvent<HTMLElement>) {
+    const slots = dropTargets(l, id);
+    if (!slots.length) return false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setSelected(id);
+    setDrag({ id, x: e.clientX, y: e.clientY, slots, slot: null, barX: 0 });
+    return true;
+  }
+
+  /** The x position of each gap, in the strip's scrolled coordinates. */
+  function slotX(slot: { before: string | null }) {
+    const ol = strip.current!;
+    const box = ol.getBoundingClientRect();
+    const at = (el: Element | null | undefined, side: "left" | "right") =>
+      el ? (side === "left" ? el.getBoundingClientRect().left - 10 : el.getBoundingClientRect().right + 10) - box.left + ol.scrollLeft : 0;
+    if (slot.before) return at(document.getElementById(`card-${slot.before}`), "left");
+    // The end: after the last card (before "Add a card").
+    const items = [...ol.querySelectorAll(":scope > li[id^='card-']")];
+    return at(items.at(-1), "right");
+  }
+
+  function dragTo(clientX: number, clientY: number) {
+    setDrag((d) => {
+      if (!d || !strip.current) return d;
+      const ol = strip.current;
+      const box = ol.getBoundingClientRect();
+      // Near the strip's edges, scroll it so far-away gaps can be reached.
+      if (clientX < box.left + 60) ol.scrollLeft -= 18;
+      else if (clientX > box.right - 60) ol.scrollLeft += 18;
+      const x = clientX - box.left + ol.scrollLeft;
+      let best: number | null = null;
+      let bestX = 0;
+      d.slots.forEach((s, i) => {
+        const sx = slotX(s);
+        if (best === null || Math.abs(sx - x) < Math.abs(bestX - x)) {
+          best = i;
+          bestX = sx;
+        }
+      });
+      // Only offer a gap when the pointer is reasonably close to it.
+      const near = best !== null && Math.abs(bestX - x) < 220;
+      return { ...d, x: clientX, y: clientY, slot: near ? best : null, barX: bestX };
+    });
+  }
+
+  function drop() {
+    const d = drag;
+    setDrag(null);
+    if (!d || d.slot === null) return;
+    const target = d.slots[d.slot];
+    update((draft) => void moveToPosition(draft, d.id, target.to));
+    setSelected(d.id);
+    setLanded(d.id);
+    window.setTimeout(() => setLanded((x) => (x === d.id ? null : x)), 900);
+    focus(d.id);
+  }
+
+  useEffect(() => {
+    if (!drag) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setDrag(null);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [drag]);
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="min-w-0 flex-1 rounded-3xl bg-muted p-4 sm:p-6">
-        <ol className="flex snap-x gap-5 overflow-x-auto pb-3 pt-1" aria-label="Cards">
+        <ol ref={strip} className={cx("relative flex gap-5 overflow-x-auto pb-3 pt-1", drag ? "cursor-grabbing select-none" : "snap-x")} aria-label="Cards">
+          {drag && drag.slot !== null && (
+            // Where the card will land.
+            <li aria-hidden className="pointer-events-none absolute bottom-16 top-7 z-30 w-0" style={{ left: drag.barX }}>
+              <span className="absolute inset-y-0 -left-[3px] w-1.5 animate-pulse rounded-full bg-action shadow-[0_0_0_4px_rgb(0_130_138/0.2)]" />
+              <span className="absolute -top-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-action px-2.5 py-0.5 text-xs font-bold text-on-action shadow">
+                Move here
+              </span>
+            </li>
+          )}
           {cards.map((c, i) => {
             const on = c.id === card?.id;
+            const canDrag = !drag && movable(l, c.id) && cards.length > 1;
             return (
-              <li key={c.id} id={`card-${c.id}`} className="flex shrink-0 snap-center flex-col items-center gap-3">
-                <p className="max-w-[17rem] truncate font-mulish text-xs font-bold text-ink-muted">
-                  {i + 1} · {l.beats[c.beat] ?? "Step"}
-                  {c.emphasis === "consequence" && " · after a choice"}
+              <li
+                key={c.id}
+                id={`card-${c.id}`}
+                className={cx(
+                  "flex w-[17rem] shrink-0 snap-center flex-col items-center gap-3 transition-opacity",
+                  drag?.id === c.id && "opacity-35",
+                  landed === c.id && "animate-card-in",
+                )}
+              >
+                <p className="flex max-w-[17rem] font-mulish text-xs font-bold text-ink-muted">
+                  <button
+                    type="button"
+                    aria-label={`Drag “${c.heading || typeInfo(c.type).label}” to a new place`}
+                    title={
+                      canDrag || drag
+                        ? "Drag to move this card"
+                        : c.type === "summary"
+                          ? "The summary stays at the end"
+                          : "Cards inside a branch move with their decision"
+                    }
+                    disabled={!canDrag && drag?.id !== c.id}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      pickUp(c.id, e);
+                    }}
+                    onPointerMove={(e) => drag?.id === c.id && dragTo(e.clientX, e.clientY)}
+                    onPointerUp={() => drag?.id === c.id && drop()}
+                    onPointerCancel={() => setDrag(null)}
+                    className="group flex min-h-7 min-w-0 cursor-grab touch-none items-center gap-1 rounded-lg pl-0.5 pr-2 hover:bg-surface hover:text-ink active:cursor-grabbing disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-ink-muted"
+                  >
+                    <Icon name="grip" className="size-4 shrink-0 group-disabled:opacity-25" />
+                    <span className="truncate">
+                      {i + 1} · {l.beats[c.beat] ?? "Step"}
+                      {c.emphasis === "consequence" && " · after a choice"}
+                    </span>
+                  </button>
                 </p>
-                <div className="relative">
+                <div
+                  className="relative"
+                  // Drag the card itself: press anywhere that isn't text being edited or a control, and move.
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || drag || !movable(l, c.id)) return;
+                    if ((e.target as HTMLElement).closest("[contenteditable], input, textarea, select, button, a, label")) return;
+                    pressed.current = { id: c.id, x: e.clientX, y: e.clientY, pointer: e.pointerId };
+                  }}
+                  onPointerMove={(e) => {
+                    const p = pressed.current;
+                    if (drag?.id === c.id) return dragTo(e.clientX, e.clientY);
+                    if (!p || p.id !== c.id || p.pointer !== e.pointerId) return;
+                    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 8) return;
+                    pressed.current = null;
+                    if (pickUp(c.id, e)) dragTo(e.clientX, e.clientY);
+                  }}
+                  onPointerUp={() => {
+                    pressed.current = null;
+                    if (drag?.id === c.id) drop();
+                  }}
+                  onPointerCancel={() => {
+                    pressed.current = null;
+                    if (drag?.id === c.id) setDrag(null);
+                  }}
+                  // The browser's own image dragging would take over the pointer and cancel the move.
+                  onDragStart={(e) => (e.target as HTMLElement).tagName === "IMG" && e.preventDefault()}
+                >
                   <TypeTag card={c} />
                   <CanvasCard
                     lesson={l}
@@ -974,16 +1497,37 @@ function Cards({
                     onDropImage={(file) => dropImage(c.id, file)}
                   />
                 </div>
-                <div className={cx("flex gap-1.5", !on && "invisible")} role="toolbar" aria-label="Card actions">
+                {/* Kept to the card's width (wrapping if needed) so it never pushes the cards apart. */}
+                <div className={cx("flex w-full flex-wrap items-center justify-center gap-1.5", !on && "invisible")} role="toolbar" aria-label="Card actions">
                   <ToolButton icon="sliders" label="Card settings" onClick={() => setInspecting(true)} />
                   <ToolButton icon="arrow-left" label="Move earlier" onClick={() => move(-1)} disabled={on ? leftWhy : "Select the card"} />
                   <ToolButton icon="arrow-right" label="Move later" onClick={() => move(1)} disabled={on ? rightWhy : "Select the card"} />
                   <ToolButton
                     icon="lock"
-                    label={card?.requireComplete ? "Required completion is on" : "Make this card required"}
+                    label={card?.requireComplete ? "Required completion is on: turn off" : "Make this card required"}
                     pressed={Boolean(card?.requireComplete)}
+                    // Greyed out (with the reason on hover) where it would make no difference; always available to turn off.
+                    disabled={on && !card?.requireComplete && card ? requiredWhyNot(card, l.holdForAudio) : null}
                     onClick={() => update((d) => void (d.nodes[card.id].requireComplete = !d.nodes[card.id].requireComplete))}
                   />
+                  <ToolButton
+                    icon="chat"
+                    label={card && commentsOn(card) ? "Comments are on: turn off" : "Turn on comments for this card"}
+                    pressed={Boolean(card && commentsOn(card))}
+                    onClick={() =>
+                      update((d) => {
+                        if (commentsOn(d.nodes[card.id])) d.nodes[card.id].comments = false;
+                        else delete d.nodes[card.id].comments;
+                      })
+                    }
+                  />
+                  {c.type === "image" && (
+                    <TextPositionToggle
+                      value={c.textPosition ?? (c.visual.kind === "illustration" && c.visual.layout === "background" && c.visual.photo ? "bottom" : "top")}
+                      onChange={(p) => update((d) => void (d.nodes[c.id].textPosition = p))}
+                      className="bg-surface text-ink shadow-sm ring-1 ring-line"
+                    />
+                  )}
                   <ToolButton icon="copy" label="Duplicate" onClick={duplicate} />
                   <ToolButton icon="trash" label="Delete" onClick={remove} disabled={cards.length <= 1 ? "A lesson needs at least one card." : null} />
                 </div>
@@ -1002,6 +1546,20 @@ function Cards({
             </button>
           </li>
         </ol>
+        {drag && (
+          // The card being carried, following the pointer.
+          <div
+            aria-hidden
+            className="pointer-events-none fixed z-50 w-44 -translate-x-1/2 -translate-y-6 rotate-3 rounded-2xl bg-surface p-3 shadow-2xl ring-2 ring-action"
+            style={{ left: drag.x, top: drag.y }}
+          >
+            <p className="flex items-center gap-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+              <Icon name={typeInfo(l.nodes[drag.id].type).icon} className="size-3" /> {typeInfo(l.nodes[drag.id].type).label}
+            </p>
+            <p className="mt-1 line-clamp-2 font-serif text-sm font-semibold">{l.nodes[drag.id].heading || "Untitled card"}</p>
+            <p className="mt-1 text-[0.7rem] text-ink-muted">{drag.slot === null ? "Drag to a gap between cards" : "Let go to drop it here"}</p>
+          </div>
+        )}
         <p className="mt-1 text-sm text-ink-muted" role="status">
           {dropNote ?? "Click any text on a card to change it. Use the pill on a card to change its picture or animation, or drop an image file onto a card."}
         </p>
@@ -1014,12 +1572,29 @@ function Cards({
               key={p.type}
               type="button"
               onClick={() => add(p.type)}
+              aria-describedby={tip?.type === p.type ? "card-type-tip" : undefined}
+              onMouseEnter={(e) => showTip(p.type, e.currentTarget)}
+              onFocus={(e) => showTip(p.type, e.currentTarget)}
+              onMouseLeave={() => setTip(null)}
+              onBlur={() => setTip(null)}
               className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-muted lg:w-full"
             >
               <Icon name={p.icon} className="size-4 text-ink-muted" /> {p.label}
             </button>
           ))}
         </div>
+        {tip && (
+          // Floats above the page, so the menu's scrolling doesn't cut it off.
+          <div
+            id="card-type-tip"
+            role="tooltip"
+            className="pointer-events-none fixed z-50 w-64 rounded-2xl bg-[#102a43] px-3.5 py-2.5 text-sm text-white shadow-xl"
+            style={tip.side === "left" ? { top: tip.y, right: tip.x, transform: "translateY(-50%)" } : { top: tip.y, left: tip.x }}
+          >
+            <p className="font-semibold">{PALETTE.find((p) => p.type === tip.type)?.label}</p>
+            <p className="mt-0.5 text-white/85">{PALETTE.find((p) => p.type === tip.type)?.hint}</p>
+          </div>
+        )}
       </aside>
 
       {inspecting && card && (
@@ -1116,6 +1691,44 @@ function Editable({
   );
 }
 
+/** Top, centre or bottom: where a content card's text sits. Three small buttons in the selected card's toolbar. */
+function TextPositionToggle({
+  value,
+  onChange,
+  className,
+}: {
+  value: "top" | "center" | "bottom";
+  onChange: (p: "top" | "center" | "bottom") => void;
+  className?: string;
+}) {
+  const options = [
+    { id: "top", label: "Text at the top", y: 5 },
+    { id: "center", label: "Text in the centre", y: 10 },
+    { id: "bottom", label: "Text at the bottom", y: 15 },
+  ] as const;
+  return (
+    <div role="group" aria-label="Text position" className={cx("inline-flex rounded-full p-0.5", className)}>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={value === o.id}
+          title={o.label}
+          aria-label={o.label}
+          onClick={() => onChange(o.id)}
+          className={cx("grid size-8 place-items-center rounded-full", value === o.id ? "bg-action text-on-action" : "opacity-70 hover:opacity-100")}
+        >
+          {/* A box with the text lines at the top, middle or bottom. */}
+          <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+            <rect x="2.5" y="2" width="15" height="16" rx="2.5" opacity="0.45" />
+            <path d={`M6 ${o.y - 1.5}h8M6 ${o.y + 1.5}h5`} />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function CanvasCard({
   lesson: l,
   card: c,
@@ -1145,9 +1758,12 @@ function CanvasCard({
   const tone = useTextTone(background?.src, toneChoice);
   const tc = toneClasses(tone);
   // A gradient behind the card, unless a full-background photo covers it.
-  const gradient = !background ? (c.background ? GRADIENTS[c.background.gradient] : c.type === "listen" ? GRADIENTS.mist : null) : null;
+  // Its own colour first, then the lesson's theme (see content/themes.ts).
+  const gradient = !background ? cardSurface(l, c) : null;
   const surf = background ? tc : gradient ? toneClasses(gradient.text) : null;
   const ph = surf ? surf.placeholder : undefined;
+  // Where the text sits (content cards): the top by default, or the bottom over a full-background photo.
+  const position = c.textPosition ?? (background ? "bottom" : "top");
   const [dragging, setDragging] = useState(false);
   const pill = v.kind === "presenter" ? "Change video" : v.kind === "illustration" ? (v.photo ? "Change image" : "Change picture") : "Edit animation";
   const script = scriptOf(c);
@@ -1207,7 +1823,7 @@ function CanvasCard({
             }
             title={`Text colour: ${toneChoice === "auto" ? `Auto (${tone === "dark" ? "dark" : "light"} text for this photo)` : toneChoice === "light" ? "Light text" : "Dark text"}. Click to change.`}
             aria-label={`Text colour: ${toneChoice}. Change`}
-            className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-1 rounded-full bg-white px-2.5 text-xs font-bold text-[#0f2642] shadow-md hover:bg-white/90"
+            className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-1 rounded-full bg-white px-2.5 text-xs font-bold text-[#102a43] shadow-md hover:bg-white/90"
           >
             <span
               className={cx(
@@ -1229,7 +1845,7 @@ function CanvasCard({
       ) : (
         <>
           {background ? (
-            <div className="flex-1" />
+            position !== "top" && <div className="flex-1" />
           ) : v.kind !== "none" ? (
             <div className="relative h-[42%] shrink-0">
               {/* The picture or animation runs to the card's edges; the card's corners round it. */}
@@ -1251,7 +1867,8 @@ function CanvasCard({
           <div
             className={cx(
               "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative flex min-h-0 flex-col gap-2 overflow-y-auto px-4 pb-3 pt-3",
-              background ? "max-h-[70%]" : "flex-1",
+              background ? (position === "center" ? "max-h-[85%]" : "max-h-[70%]") : "flex-1",
+              background && position === "top" && "pt-14",
             )}
           >
             {c.bubbles && c.bubbles.length > 0 && (
@@ -1260,19 +1877,21 @@ function CanvasCard({
                 <button
                   type="button"
                   onClick={onPick}
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2.5 py-0.5 text-[0.7rem] font-semibold text-[#0f2642] shadow"
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2.5 py-0.5 text-[0.7rem] font-semibold text-[#102a43] shadow"
                 >
                   Edit
                 </button>
               </div>
             )}
+            {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
+            {!background && position !== "top" && <div aria-hidden className="-my-1 flex-1" />}
             <Editable
               value={c.label}
               onChange={(t) => set((x) => void (x.label = t))}
               placeholder="Label"
               className={cx(
                 "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em]",
-                surf ? surf.soft : c.emphasis === "consequence" ? "text-warm" : "text-accent",
+                surf ? (gradient?.accent ?? surf.soft) : c.emphasis === "consequence" ? "text-warm" : "text-accent",
               )}
               placeholderClass={ph}
             />
@@ -1305,7 +1924,15 @@ function CanvasCard({
                 ))}
               </ul>
             )}
-            <InlineBody card={c} lesson={l} set={set} onSettings={onSettings} />
+            {/* As in the player: over a gradient or photo, questions and choices sit on a frosted panel so they stay readable. */}
+            {surf && panelledOnColour(c.type) ? (
+              <div className={cx(surf.panel, "p-2.5")}>
+                <InlineBody card={c} lesson={l} set={set} onSettings={onSettings} />
+              </div>
+            ) : (
+              <InlineBody card={c} lesson={l} set={set} onSettings={onSettings} onColour={Boolean(surf)} />
+            )}
+            {!background && position === "center" && <div aria-hidden className="-my-1 flex-1" />}
             <div className="mt-auto flex items-center gap-2 pt-2">
               <button
                 type="button"
@@ -1341,7 +1968,7 @@ function MediaPill({ label, onClick, className }: { label: string; onClick: () =
       type="button"
       onClick={onClick}
       className={cx(
-        "absolute left-1/2 z-10 inline-flex min-h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-white px-4 text-xs font-semibold text-[#0f2642] shadow-md hover:bg-white/90",
+        "absolute left-1/2 z-10 inline-flex min-h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-white px-4 text-xs font-semibold text-[#102a43] shadow-md hover:bg-white/90",
         className,
       )}
     >
@@ -1351,7 +1978,20 @@ function MediaPill({ label, onClick, className }: { label: string; onClick: () =
 }
 
 /** The interactive part of a card, edited in place: quiz answers, decision choices, summary points. */
-function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesson: Lesson; set: (fn: (x: Card) => void) => void; onSettings: () => void }) {
+function InlineBody({
+  card: c,
+  lesson: l,
+  set,
+  onSettings,
+  onColour = false,
+}: {
+  card: Card;
+  lesson: Lesson;
+  set: (fn: (x: Card) => void) => void;
+  onSettings: () => void;
+  /** The card has a gradient or photo behind it and this body isn’t on a frosted panel: use the card's text colour. */
+  onColour?: boolean;
+}) {
   if (c.type === "quiz")
     return (
       <div className="flex flex-col gap-3">
@@ -1417,7 +2057,7 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
           className="font-semibold leading-snug"
           multiline
         />
-        <div className="rounded-xl border border-dashed border-line-strong p-2 text-xs text-ink-muted">
+        <div className={cx("rounded-xl border border-dashed p-2 text-xs", onColour ? "border-current/50 opacity-85" : "border-line-strong text-ink-muted")}>
           <Editable
             value={c.placeholder ?? ""}
             onChange={(t) => set((x) => x.type === "wall" && void (x.placeholder = t))}
@@ -1454,7 +2094,7 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
           className="font-semibold leading-snug"
           multiline
         />
-        <div className="flex justify-center gap-1 py-1 text-[#fdb813]" aria-hidden>
+        <div className="flex justify-center gap-1 py-1 text-[#ffc72c]" aria-hidden>
           {[1, 2, 3, 4, 5].map((n) => (
             <Icon key={n} name="star" className="size-8" />
           ))}
@@ -1557,9 +2197,34 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
                 ★
               </button>
             </div>
-            <button type="button" onClick={onSettings} className="mt-0.5 text-[0.7rem] text-ink-muted hover:text-accent">
-              {o.stay ? "Shows feedback, then try again" : `Goes to: ${(o.next && l.nodes[o.next]?.heading) || "choose a card"}`}
-            </button>
+            <select
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-1.5 py-1 text-[0.7rem] text-ink-muted hover:border-line-strong"
+              value={o.stay ? "__stay" : (o.next ?? "")}
+              onChange={(e) =>
+                set((x) => {
+                  if (x.type !== "decision") return;
+                  const opt = x.options[oi];
+                  if (e.target.value === "__stay") {
+                    opt.stay = true;
+                    opt.next = undefined;
+                  } else {
+                    opt.stay = false;
+                    opt.next = e.target.value;
+                  }
+                })
+              }
+              aria-label={`Where choice ${oi + 1} goes`}
+            >
+              {!o.stay && !o.next && <option value="">Goes to: choose a card…</option>}
+              <option value="__stay">Shows feedback, then try again</option>
+              {Object.values(l.nodes)
+                .filter((n) => n.id !== c.id)
+                .map((n) => (
+                  <option key={n.id} value={n.id}>
+                    Goes to: {n.heading || n.label || n.id}
+                  </option>
+                ))}
+            </select>
           </div>
         ))}
         <button
@@ -1584,7 +2249,7 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
         </ul>
         <button
           type="button"
-          className="self-start text-xs font-semibold text-accent hover:underline"
+          className={cx("self-start text-xs font-semibold hover:underline", onColour ? "underline" : "text-accent")}
           onClick={() => set((x) => x.type === "summary" && void (x.points = [...(x.points ?? []), ""]))}
         >
           + Point
@@ -1634,6 +2299,221 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
     );
   }
 
+  if (c.type === "checklist")
+    return (
+      <div className="flex flex-col gap-1.5 text-sm">
+        <Editable
+          value={c.prompt}
+          onChange={(t) => set((x) => x.type === "checklist" && void (x.prompt = t))}
+          placeholder="What the list is for, e.g. “Before I leave, I…”"
+          className="font-semibold"
+          multiline
+        />
+        {c.items.map((item, i) => (
+          <div key={item.id} className="flex items-start gap-2 rounded-xl border border-line-strong px-2.5 py-1.5">
+            <span aria-hidden className="mt-0.5 size-4 shrink-0 rounded border-2 border-line-strong" />
+            <Editable
+              value={item.text}
+              onChange={(t) => set((x) => x.type === "checklist" && void (x.items[i].text = t))}
+              placeholder={`Item ${i + 1}`}
+              className="min-w-0 flex-1"
+              multiline
+            />
+            {item.note && (
+              <span title="Has a note" className="text-ink-muted">
+                <Icon name="info" className="size-3.5" />
+              </span>
+            )}
+            {c.items.length > 1 && (
+              <button
+                type="button"
+                aria-label={`Remove item ${i + 1}`}
+                onClick={() => set((x) => x.type === "checklist" && void x.items.splice(i, 1))}
+                className="shrink-0 text-ink-muted hover:text-ink"
+              >
+                <Icon name="close" className="size-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
+        {c.items.length < 10 && (
+          <button
+            type="button"
+            className="self-start text-xs font-semibold text-accent hover:underline"
+            onClick={() =>
+              set((x) => {
+                if (x.type !== "checklist") return;
+                let n = x.items.length + 1;
+                while (x.items.some((it) => it.id === `i${n}`)) n++;
+                x.items.push({ id: `i${n}`, text: "" });
+              })
+            }
+          >
+            + Item
+          </button>
+        )}
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--action)]"
+            checked={Boolean(c.requireAll)}
+            onChange={(e) => set((x) => x.type === "checklist" && void (x.requireAll = e.target.checked || undefined))}
+          />
+          Tick every item to continue
+        </label>
+        <button type="button" onClick={onSettings} className="self-start text-xs font-semibold text-accent hover:underline">
+          Add notes under items
+        </button>
+      </div>
+    );
+
+  if (c.type === "resources") {
+    const items = c.items.filter((i) => i.title.trim());
+    return (
+      <div className="flex flex-col gap-1.5 text-sm">
+        {items.length ? (
+          <ul className="flex flex-col gap-1.5">
+            {items.map((i) => (
+              <li key={i.id}>
+                <button
+                  type="button"
+                  onClick={onSettings}
+                  className="flex w-full items-start gap-2 rounded-xl border border-line bg-surface p-2 text-left text-ink shadow-sm hover:border-line-strong"
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-tealtint text-accent">
+                    <Icon name={RESOURCE_KINDS[i.kind].icon} className="size-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold leading-snug">{i.title}</span>
+                    <span className="block text-[0.7rem] text-ink-muted">{[RESOURCE_KINDS[i.kind].label, fileSize(i.bytes)].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <button type="button" onClick={onSettings} className={cx("self-start text-xs font-semibold hover:underline", onColour ? "underline" : "text-accent")}>
+          {items.length ? "Edit resources" : "+ Add PDFs, websites or toolkits"}
+        </button>
+      </div>
+    );
+  }
+
+  if (c.type === "hotspot")
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <Editable
+          value={c.prompt}
+          onChange={(t) => set((x) => x.type === "hotspot" && void (x.prompt = t))}
+          placeholder="Tell learners what to look for"
+          className="font-semibold"
+          multiline
+        />
+        {c.image ? (
+          <button
+            type="button"
+            onClick={onSettings}
+            className="relative w-full overflow-hidden rounded-xl"
+            style={{ aspectRatio: `${c.image.width} / ${c.image.height}` }}
+            aria-label="Edit hotspots"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={c.image.src} alt="" className="absolute inset-0 size-full object-cover" />
+            {c.spots.map((s, i) => (
+              <span
+                key={s.id}
+                aria-hidden
+                className={cx(
+                  "absolute grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[0.6rem] font-bold shadow ring-2 ring-white",
+                  c.mode === "find" ? "bg-gold text-[#0a1a2e]" : "bg-action text-on-action",
+                )}
+                style={{ left: `${s.x}%`, top: `${s.y}%` }}
+              >
+                {i + 1}
+              </span>
+            ))}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSettings}
+            className="grid aspect-[4/3] w-full place-items-center rounded-xl border-2 border-dashed border-line-strong text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
+          >
+            <span className="flex flex-col items-center gap-1">
+              <Icon name="image" className="size-5" /> Choose a picture
+            </span>
+          </button>
+        )}
+        <button type="button" onClick={onSettings} className="self-start text-xs font-semibold text-accent hover:underline">
+          {c.spots.length
+            ? `${c.spots.length} ${c.spots.length === 1 ? "spot" : "spots"} · ${c.mode === "find" ? "find mode" : "explore mode"} · Edit`
+            : "Add spots"}
+        </button>
+      </div>
+    );
+
+  if (c.type === "written")
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <Editable
+          value={c.prompt}
+          onChange={(t) => set((x) => x.type === "written" && void (x.prompt = t))}
+          placeholder="Ask a question they answer in writing"
+          className="font-semibold"
+          multiline
+        />
+        <div className="rounded-xl border border-dashed border-line-strong p-2 text-xs text-ink-muted">Learner writes here, then checks it with AI</div>
+        <div className="rounded-xl bg-muted p-2 text-ink">
+          <p className="flex items-center gap-1 text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">
+            <Icon name="spark" className="size-3" /> A good answer covers
+          </p>
+          <ol className="mt-1 flex flex-col gap-1">
+            {c.criteria.map((cr, i) => (
+              <li key={cr.id} className="flex items-start gap-1.5">
+                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-action text-[0.6rem] font-bold text-on-action">{i + 1}</span>
+                <Editable
+                  value={cr.text}
+                  onChange={(t) => set((x) => x.type === "written" && void (x.criteria[i].text = t))}
+                  placeholder="Something a good answer includes"
+                  className="min-w-0 flex-1 text-xs"
+                  multiline
+                />
+                {c.criteria.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Remove criterion ${i + 1}`}
+                    onClick={() => set((x) => x.type === "written" && void x.criteria.splice(i, 1))}
+                    className="shrink-0 text-ink-muted hover:text-ink"
+                  >
+                    <Icon name="close" className="size-3" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+          {c.criteria.length < 6 && (
+            <button
+              type="button"
+              className="mt-1 text-xs font-semibold text-accent hover:underline"
+              onClick={() =>
+                set((x) => {
+                  if (x.type !== "written") return;
+                  let n = x.criteria.length + 1;
+                  while (x.criteria.some((cr) => cr.id === `c${n}`)) n++;
+                  x.criteria.push({ id: `c${n}`, text: "" });
+                })
+              }
+            >
+              + Criterion
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={onSettings} className="self-start text-xs font-semibold text-accent hover:underline">
+          {c.mustPass ? "Must cover all to continue · " : ""}AI notes and Try it
+        </button>
+      </div>
+    );
+
   if (c.type === "response")
     return (
       <div className="flex flex-col gap-2 text-sm">
@@ -1660,14 +2540,14 @@ function InlineBody({ card: c, lesson: l, set, onSettings }: { card: Card; lesso
   if (c.type === "listen")
     return (
       <div className="flex flex-col items-center gap-2 text-center">
-        <span className="grid size-14 place-items-center rounded-full bg-[#0f2642] text-white shadow-md" aria-hidden>
+        <span className="grid size-14 place-items-center rounded-full bg-[#102a43] text-white shadow-md" aria-hidden>
           <Icon name="volume" className="size-6" />
         </span>
         <div className="w-full rounded-xl bg-white/80 p-2.5 text-left text-sm text-ink">
           <p className="text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">What the voice says</p>
           <Editable value={c.script} onChange={(t) => set((x) => x.type === "listen" && void (x.script = t))} placeholder="Write the audio script" multiline />
         </div>
-        <span className="rounded-xl bg-[#0f2642] px-4 py-2 text-xs font-semibold text-white" aria-hidden>
+        <span className="rounded-xl bg-[#102a43] px-4 py-2 text-xs font-semibold text-white" aria-hidden>
           ▶ Play audio
         </span>
         <p className="text-xs opacity-75">Plays when the learner presses Play, with live captions.</p>
@@ -1746,7 +2626,7 @@ function BubbleField({ card: c, set }: { card: Card; set: (fn: (x: Card) => void
         <ul className="flex flex-wrap gap-4">
           {bubbles.map((b, i) => (
             <li key={b.src} className="flex w-36 flex-col items-center gap-2">
-              <video src={b.src} poster={b.poster} preload="metadata" controls playsInline className="size-28 rounded-full bg-[#0f2642] object-cover" />
+              <video src={b.src} poster={b.poster} preload="metadata" controls playsInline className="size-28 rounded-full bg-[#102a43] object-cover" />
               <input
                 className={cx(input, "min-h-9 text-sm")}
                 placeholder="Name (optional)"
@@ -1854,6 +2734,21 @@ function BackgroundField({ card: c, set }: { card: Card; set: (fn: (x: Card) => 
   );
 }
 
+/**
+  Why "Required completion" would make no difference on this card, or null when it would.
+  Mirrors completionGate: answer cards and (by default) audio already hold learners.
+*/
+function requiredWhyNot(c: Card, holdForAudio: boolean | undefined) {
+  const v = c.visual;
+  if ((c.type === "presenter" && v.kind === "presenter" && v.video) || c.bubbles?.length || c.type === "response" || c.type === "calculator") return null;
+  if (["quiz", "decision", "poll", "rating", "wall", "written", "hotspot"].includes(c.type))
+    return "Learners already have to answer this card before moving on";
+  if (c.type === "checklist") return "Use “Tick every item to continue” on the card instead";
+  if (c.type === "listen" || c.type === "audio" || c.narration)
+    return holdForAudio !== false ? "This lesson already holds learners until the audio finishes (Details tab)" : null;
+  return "Nothing to finish on this card: add narration or a video first";
+}
+
 /** What "Required completion" asks of the learner on this kind of card. */
 function requiredHint(c: Card) {
   const v = c.visual;
@@ -1863,9 +2758,155 @@ function requiredHint(c: Card) {
       : "Continue and swiping unlock once the video has played to the end.";
   if (c.type === "response") return "Continue and swiping unlock once they’ve written an answer.";
   if (c.type === "calculator") return "Continue and swiping unlock once they’ve tried the calculator.";
-  if (["quiz", "decision", "poll", "rating", "wall"].includes(c.type)) return "Learners already have to answer this card before moving on.";
+  if (["quiz", "decision", "poll", "rating", "wall", "written", "hotspot"].includes(c.type))
+    return "Learners already have to answer this card before moving on.";
   if (c.type === "listen" || c.type === "audio" || c.narration) return "Continue and swiping unlock once the audio has played to the end.";
   return "This card has no audio, video or activity to finish. Add narration or a video for this to apply.";
+}
+
+/**
+  "Check by": for content that can go out of date (a rate, a date, a rule). Suggested automatically
+  when the card mentions a dollar amount, date, percentage or law.
+*/
+function CheckFields({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
+  const found = volatileIn(extractText({ nodes: { [c.id]: c } } as unknown as Lesson).join(" "));
+  const check = c.check;
+  if (!check)
+    return (
+      <div
+        className={cx("flex flex-wrap items-center gap-3 rounded-2xl border p-3 sm:col-span-2", found.length ? "border-gold bg-gold/10" : "border-line-strong")}
+      >
+        <Icon name="clock" className="size-5 shrink-0 text-accent" />
+        <span className="min-w-0 flex-1 text-sm">
+          <span className="font-semibold">Check date</span>
+          <span className="block text-ink-muted">
+            {found.length
+              ? `This card mentions ${found.join(", ")}. Add a date to check it by, or use a shared fact, so it doesn’t go out of date.`
+              : "For content that can go out of date: you’ll be reminded before it’s due."}
+          </span>
+        </span>
+        <button
+          type="button"
+          className={btn.secondary}
+          onClick={() =>
+            set((x) => {
+              const by = new Date(Date.now() + 182 * 86_400_000).toISOString().slice(0, 10);
+              x.check = { by };
+            })
+          }
+        >
+          Add a check date
+        </button>
+      </div>
+    );
+  const days = checkDays(check.by);
+  const upd = (fn: (k: NonNullable<Card["check"]>) => void) => set((x) => x.check && void fn(x.check));
+  return (
+    <fieldset className="grid gap-3 rounded-2xl border border-line-strong p-3 sm:col-span-2 sm:grid-cols-2">
+      <legend className="flex items-center gap-1.5 px-1 font-semibold">
+        <Icon name="clock" className="size-4" /> Check date
+        <span className={cx("ml-1 rounded-full px-2 text-xs", days < 0 ? "bg-danger/15 text-danger" : days <= 30 ? "bg-gold/25" : "bg-muted text-ink-muted")}>
+          {days < 0 ? `${-days} days overdue` : days === 0 ? "Due today" : `Due in ${days} days`}
+        </span>
+      </legend>
+      <Field label="Check by">
+        <input type="date" className={input} value={check.by} onChange={(e) => upd((k) => void (k.by = e.target.value))} />
+      </Field>
+      <Field label="What to check" hint="E.g. “Confirm the hourly rate with Finance”.">
+        <input className={input} value={check.note ?? ""} onChange={(e) => upd((k) => void (k.note = e.target.value || undefined))} />
+      </Field>
+      <Field label="Source to check against" hint="Optional title.">
+        <input
+          className={input}
+          value={check.source?.title ?? ""}
+          onChange={(e) => upd((k) => void (k.source = { title: e.target.value, url: k.source?.url ?? "" }))}
+        />
+      </Field>
+      <Field label="Source link">
+        <input
+          className={input}
+          placeholder="https://"
+          value={check.source?.url ?? ""}
+          onChange={(e) => upd((k) => void (k.source = { title: k.source?.title ?? "", url: e.target.value.trim() }))}
+        />
+      </Field>
+      <div className="flex flex-wrap gap-2 sm:col-span-2">
+        <button
+          type="button"
+          className={btn.secondary}
+          onClick={() => upd((k) => void (k.by = new Date(Date.now() + 182 * 86_400_000).toISOString().slice(0, 10)))}
+        >
+          Checked: next check in 6 months
+        </button>
+        <button type="button" className={btn.quiet} onClick={() => set((x) => void delete x.check)}>
+          Remove check date
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+type FactRow = { key: string; label: string; value: string };
+
+/** Facts this card uses (with their current values), and a quick way to put another one in. */
+function FactsHelper({ card: c }: { card: Card }) {
+  const facts = useApi<{ facts: FactRow[] }>("/api/admin/facts").data?.facts ?? [];
+  const used = factsUsed(c);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-line-strong p-3 text-sm sm:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-semibold">Shared facts</span>
+        <button type="button" className="font-semibold text-accent hover:underline" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? "Close" : "Insert a fact"}
+        </button>
+      </div>
+      {used.length ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {used.map((k) => {
+            const f = facts.find((x) => x.key === k);
+            return (
+              <li key={k} className={cx("rounded-full px-2.5 py-0.5 text-xs", f ? "bg-tealtint" : "bg-danger/10 text-danger")}>
+                {f ? `${f.label}: ${f.value}` : `${tokenFor(k)} isn’t in the facts library`}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-ink-muted">Put a rate, date or number in as a shared fact and it stays current everywhere it’s used.</p>
+      )}
+      {open && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs text-ink-muted">
+            Copy a fact’s code and paste it into the card’s text. Learners see its value.{" "}
+            <Link href="/admin/facts" className="underline" target="_blank">
+              Manage facts
+            </Link>
+          </p>
+          <ul className="flex flex-col divide-y divide-line">
+            {facts.map((f) => (
+              <li key={f.key} className="flex flex-wrap items-center gap-2 py-1.5">
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{f.label}</span> <span className="text-ink-muted">· {f.value}</span>
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full border border-line-strong px-2.5 py-0.5 font-mono text-xs hover:bg-muted"
+                  onClick={async () => {
+                    await navigator.clipboard?.writeText(tokenFor(f.key)).catch(() => {});
+                    setCopied(f.key);
+                  }}
+                >
+                  {copied === f.key ? "Copied" : tokenFor(f.key)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card: Card; update: Update; isNew: boolean }) {
@@ -1873,6 +2914,8 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
   const t = typeInfo(c.type);
   const others = Object.values(l.nodes).filter((n) => n.id !== c.id);
   const script = scriptOf(c);
+  // Required completion makes no difference here (already off): say why instead.
+  const noEffect = !c.requireComplete && requiredWhyNot(c, l.holdForAudio);
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const listen = () => {
@@ -1899,18 +2942,38 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex items-start gap-3 rounded-2xl border border-line-strong p-3 sm:col-span-2">
+        <CheckFields card={c} set={set} />
+        <FactsHelper card={c} />
+        <label className={cx("flex items-start gap-3 rounded-2xl border border-line-strong p-3 sm:col-span-2", noEffect && "opacity-60")}>
           <input
             type="checkbox"
             className="mt-0.5 size-5 accent-[var(--action)]"
             checked={Boolean(c.requireComplete)}
+            disabled={Boolean(noEffect)}
             onChange={(e) => set((x) => void (x.requireComplete = e.target.checked))}
           />
           <span>
             <span className="flex items-center gap-1.5 font-semibold">
               <Icon name="lock" className="size-4" /> Required completion
             </span>
-            <span className="block text-sm text-ink-muted">{requiredHint(c)}</span>
+            <span className="block text-sm text-ink-muted">{noEffect ? `Not needed. ${noEffect}.` : requiredHint(c)}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 rounded-2xl border border-line-strong p-3 sm:col-span-2">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-5 accent-[var(--action)]"
+            checked={commentsOn(c)}
+            onChange={(e) => set((x) => (e.target.checked ? void delete x.comments : void (x.comments = false)))}
+          />
+          <span>
+            <span className="flex items-center gap-1.5 font-semibold">
+              <Icon name="chat" className="size-4" /> Comments
+            </span>
+            <span className="block text-sm text-ink-muted">
+              Learners can read and add comments on this card: local tips, things to watch for, questions. You and organisation admins can pin a useful comment
+              or hide one.
+            </span>
           </span>
         </label>
         <Field label="Step">
@@ -1936,6 +2999,10 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         {c.type === "quiz" && <QuizFields card={c} set={set} />}
         {c.type === "summary" && <SummaryFields card={c} set={set} />}
         {c.type === "calculator" && <CalculatorFields card={c} set={set} />}
+        {c.type === "written" && <WrittenFields lesson={l} card={c} set={set} />}
+        {c.type === "hotspot" && <HotspotFields card={c} set={set} />}
+        {c.type === "resources" && <ResourcesFields card={c} set={set} />}
+        {c.type === "checklist" && <ChecklistFields card={c} set={set} />}
         {c.type === "response" && (
           <>
             <Field label="Prompt" className="sm:col-span-2">
@@ -2198,6 +3265,626 @@ function QuizFields({ card: c, set }: { card: Extract<Card, { type: "quiz" }>; s
   );
 }
 
+type ChecklistCard = Extract<Card, { type: "checklist" }>;
+
+/** Checklist settings: each item, its optional note, and whether every item must be ticked. */
+function ChecklistFields({ card: c, set }: { card: ChecklistCard; set: (fn: (c: Card) => void) => void }) {
+  const upd = (fn: (x: ChecklistCard) => void) => set((x) => x.type === "checklist" && void fn(x));
+  return (
+    <>
+      <Field label="What the list is for" hint="Shown above the items, e.g. “Before I leave, I…”." className="sm:col-span-2">
+        <input className={input} value={c.prompt} onChange={(e) => upd((x) => void (x.prompt = e.target.value))} />
+      </Field>
+      <div className="flex flex-col gap-3 sm:col-span-2">
+        <p className="text-sm font-semibold">Items</p>
+        {c.items.map((item, i) => (
+          <div key={item.id} className="grid gap-2 rounded-2xl border border-line p-3 sm:grid-cols-2">
+            <Field label={`Item ${i + 1}`}>
+              <input className={input} value={item.text} onChange={(e) => upd((x) => void (x.items[i].text = e.target.value))} />
+            </Field>
+            <Field label="Note" hint="Optional. Shows under the item once it’s ticked.">
+              <input
+                className={input}
+                value={item.note ?? ""}
+                onChange={(e) =>
+                  upd((x) => {
+                    if (e.target.value) x.items[i].note = e.target.value;
+                    else delete x.items[i].note;
+                  })
+                }
+              />
+            </Field>
+            <div className="flex gap-1 sm:col-span-2">
+              <button type="button" className={btn.quiet} disabled={i === 0} onClick={() => upd((x) => void x.items.splice(i - 1, 0, ...x.items.splice(i, 1)))}>
+                Move up
+              </button>
+              <button
+                type="button"
+                className={btn.quiet}
+                disabled={i === c.items.length - 1}
+                onClick={() => upd((x) => void x.items.splice(i + 1, 0, ...x.items.splice(i, 1)))}
+              >
+                Move down
+              </button>
+              <button
+                type="button"
+                className={cx(btn.quiet, "ml-auto text-danger")}
+                disabled={c.items.length <= 1}
+                onClick={() => upd((x) => void x.items.splice(i, 1))}
+              >
+                <Icon name="trash" className="size-4" /> Remove
+              </button>
+            </div>
+          </div>
+        ))}
+        {c.items.length < 10 && (
+          <button
+            type="button"
+            className={cx(btn.secondary, "self-start")}
+            onClick={() =>
+              upd((x) => {
+                let n = x.items.length + 1;
+                while (x.items.some((it) => it.id === `i${n}`)) n++;
+                x.items.push({ id: `i${n}`, text: "" });
+              })
+            }
+          >
+            <Icon name="plus" className="size-4" /> Add an item
+          </button>
+        )}
+      </div>
+      <label className="flex items-start gap-3 sm:col-span-2">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-5 accent-[var(--action)]"
+          checked={Boolean(c.requireAll)}
+          onChange={(e) => upd((x) => (e.target.checked ? void (x.requireAll = true) : void delete x.requireAll))}
+        />
+        <span>
+          <span className="font-semibold">Tick every item to continue</span>
+          <span className="block text-sm text-ink-muted">Otherwise it’s a reference list: learners can tick items but don’t have to.</span>
+        </span>
+      </label>
+    </>
+  );
+}
+
+type ResourcesCard = Extract<Card, { type: "resources" }>;
+
+/** Resources card settings: the drawer's name and each PDF, website or toolkit in it. */
+function ResourcesFields({ card: c, set }: { card: ResourcesCard; set: (fn: (c: Card) => void) => void }) {
+  const upd = (fn: (x: ResourcesCard) => void) => set((x) => x.type === "resources" && void fn(x));
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const add = () =>
+    upd((x) => {
+      let n = x.items.length + 1;
+      while (x.items.some((i) => i.id === `r${n}`)) n++;
+      x.items.push({ id: `r${n}`, kind: "link", title: "", url: "" });
+    });
+  const shift = (i: number, by: -1 | 1) => upd((x) => void x.items.splice(i + by, 0, ...x.items.splice(i, 1)));
+  return (
+    <>
+      <div className="flex flex-col gap-3 sm:col-span-2">
+        <p className="text-sm font-semibold">Files and links</p>
+        {error && <ErrorNote text={error} />}
+        {c.items.map((item, i) => {
+          const uploaded = item.url.startsWith("/api/uploads/");
+          return (
+            <div key={item.id} className="grid gap-3 rounded-2xl border border-line p-3 sm:grid-cols-[9rem_1fr]">
+              <Field label="Type">
+                <select className={input} value={item.kind} onChange={(e) => upd((x) => void (x.items[i].kind = e.target.value as typeof item.kind))}>
+                  {Object.entries(RESOURCE_KINDS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Title">
+                <input className={input} value={item.title} onChange={(e) => upd((x) => void (x.items[i].title = e.target.value))} />
+              </Field>
+              <Field label={item.kind === "pdf" ? "PDF" : "Web address"} className="sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {uploaded ? (
+                    <span className="flex min-h-11 flex-1 items-center gap-2 rounded-xl bg-muted px-3 text-sm">
+                      <Icon name="file" className="size-4 shrink-0 text-accent" /> Uploaded PDF{item.bytes ? ` · ${fileSize(item.bytes)}` : ""}
+                      <a href={item.url} target="_blank" rel="noreferrer" className="ml-auto font-semibold text-accent hover:underline">
+                        Open
+                      </a>
+                    </span>
+                  ) : (
+                    <input
+                      className={cx(input, "min-w-48 flex-1")}
+                      value={item.url}
+                      placeholder="https://"
+                      onChange={(e) => upd((x) => void (x.items[i].url = e.target.value.trim()))}
+                    />
+                  )}
+                  {item.kind === "pdf" && (
+                    <label className={cx(btn.secondary, "cursor-pointer", busy === item.id && "cursor-wait opacity-60")}>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="sr-only"
+                        disabled={busy !== null}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!file) return;
+                          setBusy(item.id);
+                          setError(null);
+                          try {
+                            const r = await uploadPdf(file);
+                            upd((x) => {
+                              x.items[i].url = r.src;
+                              x.items[i].bytes = r.bytes;
+                              if (!x.items[i].title.trim()) x.items[i].title = file.name.replace(/\.pdf$/i, "");
+                            });
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setBusy(null);
+                          }
+                        }}
+                      />
+                      <Icon name="upload" className="size-4" /> {busy === item.id ? "Uploading…" : uploaded ? "Replace PDF" : "Upload a PDF"}
+                    </label>
+                  )}
+                  {uploaded && (
+                    <button
+                      type="button"
+                      className={btn.quiet}
+                      onClick={() =>
+                        upd((x) => {
+                          x.items[i].url = "";
+                          delete x.items[i].bytes;
+                        })
+                      }
+                    >
+                      Use a link instead
+                    </button>
+                  )}
+                </div>
+              </Field>
+              <Field label="Published by" hint="Optional.">
+                <input className={input} value={item.source ?? ""} onChange={(e) => upd((x) => void (x.items[i].source = e.target.value))} />
+              </Field>
+              <Field label="Short note" hint="Optional. Shown when a learner opens the details.">
+                <input className={input} value={item.description ?? ""} onChange={(e) => upd((x) => void (x.items[i].description = e.target.value))} />
+              </Field>
+              <div className="flex flex-wrap gap-1 sm:col-span-2">
+                <button type="button" className={btn.quiet} disabled={i === 0} onClick={() => shift(i, -1)}>
+                  Move up
+                </button>
+                <button type="button" className={btn.quiet} disabled={i === c.items.length - 1} onClick={() => shift(i, 1)}>
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  className={cx(btn.quiet, "ml-auto text-danger")}
+                  disabled={c.items.length <= 1}
+                  onClick={() => upd((x) => void x.items.splice(i, 1))}
+                >
+                  <Icon name="trash" className="size-4" /> Remove
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {c.items.length < 12 && (
+          <button type="button" className={cx(btn.secondary, "self-start")} onClick={add}>
+            <Icon name="plus" className="size-4" /> Add a resource
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+type HotspotCard = Extract<Card, { type: "hotspot" }>;
+
+/** Hotspot card settings: the picture, the spots on it, and how learners find them. */
+function HotspotFields({ card: c, set }: { card: HotspotCard; set: (fn: (c: Card) => void) => void }) {
+  const upd = (fn: (x: HotspotCard) => void) => set((x) => x.type === "hotspot" && void fn(x));
+  const [picking, setPicking] = useState(!c.image);
+  const [pexels, setPexels] = useState(false);
+  const [selected, setSelected] = useState<string | null>(c.spots[0]?.id ?? null);
+  const library = useLibrary();
+  const box = useRef<HTMLDivElement>(null);
+  // The spot being dragged; the picture follows the pointer (captured by the spot's button).
+  const drag = useRef<{ id: string } | null>(null);
+  const spot = c.spots.find((s) => s.id === selected);
+  const index = c.spots.findIndex((s) => s.id === selected);
+
+  const choose = (p: Photo, alt = "") => {
+    upd((x) => {
+      x.image = { src: p.src, width: p.width, height: p.height, alt: x.image?.alt || alt, ...(p.credit ? { credit: p.credit } : {}) };
+    });
+    setPicking(false);
+    setPexels(false);
+  };
+  /** Where a pointer is on the picture, as percentages. */
+  const at = (e: { clientX: number; clientY: number }) => {
+    const r = box.current!.getBoundingClientRect();
+    const clamp = (n: number) => Math.round(Math.max(1, Math.min(99, n)) * 10) / 10;
+    return { x: clamp(((e.clientX - r.left) / r.width) * 100), y: clamp(((e.clientY - r.top) / r.height) * 100) };
+  };
+  const addAt = (p: { x: number; y: number }) => {
+    let n = c.spots.length + 1;
+    while (c.spots.some((s) => s.id === `s${n}`)) n++;
+    const id = `s${n}`;
+    upd((x) => void x.spots.push({ id, ...p, r: 7, label: "", text: "" }));
+    setSelected(id);
+  };
+
+  return (
+    <>
+      <Field label="Instruction" hint="What learners should do, e.g. “Find the three hazards in this kitchen”." className="sm:col-span-2">
+        <input className={input} value={c.prompt} onChange={(e) => upd((x) => void (x.prompt = e.target.value))} />
+      </Field>
+
+      <fieldset className="flex flex-col gap-2 sm:col-span-2">
+        <legend className="text-sm font-semibold">How it works</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(
+            [
+              ["explore", "Explore", "Each spot has a marker. Learners tap them to reveal a note."],
+              ["find", "Find", "No markers. Learners tap where they think it is. A hint appears after three misses."],
+            ] as const
+          ).map(([mode, label, hint]) => (
+            <label
+              key={mode}
+              className={cx("flex cursor-pointer gap-3 rounded-2xl border-2 p-3", c.mode === mode ? "border-action bg-tealtint" : "border-line-strong")}
+            >
+              <input
+                type="radio"
+                name={`${c.id}-mode`}
+                className="mt-1 accent-[var(--action)]"
+                checked={c.mode === mode}
+                onChange={() => upd((x) => void (x.mode = mode))}
+              />
+              <span>
+                <span className="font-semibold">{label}</span>
+                <span className="block text-sm text-ink-muted">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold">Picture</p>
+          {c.image && (
+            <button type="button" className={btn.quiet} onClick={() => setPicking((p) => !p)}>
+              <Icon name="image" className="size-4" /> {picking ? "Keep this picture" : "Change picture"}
+            </button>
+          )}
+        </div>
+        {picking && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-line p-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-expanded={pexels}
+                onClick={() => setPexels((o) => !o)}
+                className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
+              >
+                <Icon name="search" className="size-4" /> Find on Pexels
+              </button>
+              <UploadTile className="w-auto [&_label]:flex-row [&_label]:px-3" onUploaded={(p) => (choose(p), library.reload())}>
+                Upload an image
+              </UploadTile>
+            </div>
+            {pexels && <PexelsPicker onClose={() => setPexels(false)} onPicked={(p, alt) => (choose(p, alt), library.reload())} />}
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {library.photos.map((p) => (
+                <button
+                  key={p.src}
+                  type="button"
+                  onClick={() => choose(p)}
+                  className={cx("aspect-[4/3] overflow-hidden rounded-xl border-2", c.image?.src === p.src ? "border-action" : "border-transparent")}
+                  aria-label={`Use ${p.src.split("/").pop()}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.src} alt="" className="size-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {c.image && (
+          <>
+            <p className="text-sm text-ink-muted">Click the picture to add a spot. Drag a spot to move it.</p>
+            <div
+              ref={box}
+              className="relative w-full cursor-crosshair touch-none select-none overflow-hidden rounded-2xl bg-muted"
+              style={{ aspectRatio: `${c.image.width} / ${c.image.height}` }}
+              onPointerDown={(e) => {
+                if ((e.target as HTMLElement).closest("[data-spot]")) return;
+                if (c.spots.length < 12) addAt(at(e));
+              }}
+              onPointerMove={(e) => {
+                const d = drag.current;
+                if (!d) return;
+                const p = at(e);
+                upd((x) => {
+                  const s = x.spots.find((s) => s.id === d.id);
+                  if (s) Object.assign(s, p);
+                });
+              }}
+              onPointerUp={() => (drag.current = null)}
+              onPointerLeave={() => (drag.current = null)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={c.image.src} alt="" className="pointer-events-none absolute inset-0 size-full object-cover" draggable={false} />
+              {c.spots.map((s, i) => (
+                <span
+                  key={s.id}
+                  data-spot
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${s.x}%`, top: `${s.y}%`, width: `${2 * s.r}%`, aspectRatio: "1" }}
+                >
+                  {/* The tap area learners get. */}
+                  <span
+                    aria-hidden
+                    className={cx(
+                      "absolute inset-0 rounded-full border-2 border-dashed",
+                      selected === s.id ? "border-white bg-white/25" : "border-white/70 bg-white/10",
+                    )}
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Spot ${i + 1}${s.label ? `: ${s.label}` : ""}. Drag to move`}
+                    aria-pressed={selected === s.id}
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture?.(e.pointerId);
+                      drag.current = { id: s.id };
+                      setSelected(s.id);
+                    }}
+                    onPointerUp={() => (drag.current = null)}
+                    className={cx(
+                      "absolute left-1/2 top-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 cursor-grab place-items-center rounded-full font-mulish text-sm font-extrabold shadow-lg ring-2 ring-white active:cursor-grabbing",
+                      selected === s.id ? "bg-gold text-[#0a1a2e]" : "bg-action text-on-action",
+                    )}
+                  >
+                    {i + 1}
+                  </button>
+                </span>
+              ))}
+            </div>
+            <Field label="Picture description" hint="For people who can’t see the picture. Don’t give away where the spots are.">
+              <input className={input} value={c.image.alt} onChange={(e) => upd((x) => x.image && void (x.image.alt = e.target.value))} />
+            </Field>
+          </>
+        )}
+      </div>
+
+      {c.spots.length > 0 && (
+        <div className="flex flex-col gap-3 sm:col-span-2">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Spots">
+            {c.spots.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-pressed={selected === s.id}
+                onClick={() => setSelected(s.id)}
+                className={cx(
+                  "min-h-9 rounded-full border px-3 text-sm",
+                  selected === s.id ? "border-action bg-tealtint font-semibold" : "border-line-strong hover:bg-muted",
+                  !s.label.trim() && "italic text-ink-muted",
+                )}
+              >
+                {i + 1}. {s.label.trim() || "No label yet"}
+              </button>
+            ))}
+          </div>
+          {spot && (
+            <div className="grid gap-3 rounded-2xl border border-line p-3 sm:grid-cols-2">
+              <Field label={`Spot ${index + 1}: label`} hint="Shown as the note’s title, e.g. “Trip hazard”.">
+                <input className={input} value={spot.label} onChange={(e) => upd((x) => void (x.spots[index].label = e.target.value))} />
+              </Field>
+              <Field label="Tap area size" hint="Bigger is easier to find.">
+                <input
+                  type="range"
+                  min={4}
+                  max={18}
+                  value={spot.r}
+                  onChange={(e) => upd((x) => void (x.spots[index].r = Number(e.target.value)))}
+                  className="w-full accent-[var(--action)]"
+                />
+              </Field>
+              <Field label="What it reveals" hint="A sentence or two." className="sm:col-span-2">
+                <textarea rows={2} className={textarea} value={spot.text} onChange={(e) => upd((x) => void (x.spots[index].text = e.target.value))} />
+              </Field>
+              <button
+                type="button"
+                className={cx(btn.quiet, "justify-self-start text-danger")}
+                onClick={() => {
+                  upd((x) => void x.spots.splice(index, 1));
+                  setSelected(c.spots[index + 1]?.id ?? c.spots[index - 1]?.id ?? null);
+                }}
+              >
+                <Icon name="trash" className="size-4" /> Remove this spot
+              </button>
+            </div>
+          )}
+          <Field label="To continue, learners find" className="sm:col-span-2">
+            <select
+              className={input}
+              value={c.required && c.required < c.spots.length ? c.required : ""}
+              onChange={(e) => upd((x) => void (e.target.value ? (x.required = Number(e.target.value)) : delete x.required))}
+            >
+              <option value="">All {c.spots.length} spots</option>
+              {Array.from({ length: c.spots.length - 1 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  At least {n}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Settings for a written answer card: what the AI is told, the pass rule, and a place to try it out. */
+function WrittenFields({ lesson: l, card: c, set }: { lesson: Lesson; card: Extract<Card, { type: "written" }>; set: (fn: (c: Card) => void) => void }) {
+  const upd = (fn: (x: Extract<Card, { type: "written" }>) => void) => set((x) => x.type === "written" && void fn(x));
+  return (
+    <>
+      <Field label="Question" className="sm:col-span-2">
+        <textarea rows={2} className={textarea} value={c.prompt} onChange={(e) => upd((x) => void (x.prompt = e.target.value))} />
+      </Field>
+      <Field label="Hint inside the answer box" hint="Optional." className="sm:col-span-2">
+        <input className={input} value={c.placeholder ?? ""} onChange={(e) => upd((x) => void (x.placeholder = e.target.value))} />
+      </Field>
+      <fieldset className="flex flex-col gap-2 sm:col-span-2">
+        <legend className="text-sm font-semibold">What a good answer covers</legend>
+        <p className="text-sm text-ink-muted">
+          The AI marks each one as covered, partly covered or not yet, and learners see that list. Write them as you’d explain them to a learner.
+        </p>
+        {c.criteria.map((cr, i) => (
+          <div key={cr.id} className="flex items-start gap-2">
+            <span className="mt-2.5 grid size-6 shrink-0 place-items-center rounded-full bg-action text-xs font-bold text-on-action">{i + 1}</span>
+            <textarea
+              rows={2}
+              className={textarea}
+              value={cr.text}
+              placeholder="For example: Says they’d check with the care coordinator before agreeing"
+              onChange={(e) => upd((x) => void (x.criteria[i].text = e.target.value))}
+            />
+            <button
+              type="button"
+              className={cx(btn.quiet, "mt-1.5")}
+              aria-label={`Remove criterion ${i + 1}`}
+              disabled={c.criteria.length <= 1}
+              onClick={() => upd((x) => void x.criteria.splice(i, 1))}
+            >
+              <Icon name="trash" className="size-4" />
+            </button>
+          </div>
+        ))}
+        {c.criteria.length < 6 && (
+          <button
+            type="button"
+            className={cx(btn.secondary, "self-start")}
+            onClick={() =>
+              upd((x) => {
+                let n = x.criteria.length + 1;
+                while (x.criteria.some((cr) => cr.id === `c${n}`)) n++;
+                x.criteria.push({ id: `c${n}`, text: "" });
+              })
+            }
+          >
+            <Icon name="plus" className="size-4" /> Add a criterion
+          </button>
+        )}
+      </fieldset>
+      <Field
+        label="Notes for the AI"
+        hint="Private. Context and how to judge: what to accept, what doesn’t matter, words learners might use. Learners never see this."
+        className="sm:col-span-2"
+      >
+        <textarea
+          rows={3}
+          className={textarea}
+          value={c.guidance ?? ""}
+          placeholder="For example: Accept “coordinator”, “care partner” or “Trilogy” as the person to check with. Don’t mark down spelling."
+          onChange={(e) => upd((x) => void (x.guidance = e.target.value))}
+        />
+      </Field>
+      <Field label="Example of a strong answer" hint="Optional. Helps the AI judge answers." className="sm:col-span-2">
+        <textarea rows={3} className={textarea} value={c.example ?? ""} onChange={(e) => upd((x) => void (x.example = e.target.value))} />
+      </Field>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          className="size-5 accent-[var(--action)]"
+          checked={Boolean(c.showExample)}
+          disabled={!c.example?.trim()}
+          onChange={(e) => upd((x) => void (x.showExample = e.target.checked))}
+        />
+        Show the example to learners after they get feedback
+      </label>
+      <Field label="Shortest answer" hint="In words.">
+        <input
+          type="number"
+          min={1}
+          max={200}
+          className={input}
+          value={c.minWords ?? 10}
+          onChange={(e) => upd((x) => void (x.minWords = Math.max(1, Math.min(200, Number(e.target.value) || 1))))}
+        />
+      </Field>
+      <div />
+      <label className="flex items-start gap-3 sm:col-span-2">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-5 accent-[var(--action)]"
+          checked={Boolean(c.mustPass)}
+          onChange={(e) => upd((x) => void (x.mustPass = e.target.checked))}
+        />
+        <span>
+          <span className="font-semibold">Must cover every criterion to continue</span>
+          <span className="block text-sm text-ink-muted">Otherwise checking once is enough. If AI feedback isn’t available, learners can always carry on.</span>
+        </span>
+      </label>
+      {c.mustPass && (
+        <Field label="Tries before they can move on anyway" hint="So nobody gets stuck.">
+          <input
+            type="number"
+            min={1}
+            max={10}
+            className={input}
+            value={c.maxAttempts ?? 3}
+            onChange={(e) => upd((x) => void (x.maxAttempts = Math.max(1, Math.min(10, Number(e.target.value) || 1))))}
+          />
+        </Field>
+      )}
+      <WrittenTryIt lesson={l} card={c} />
+    </>
+  );
+}
+
+/** Try a sample answer against the card as it is now, saved or not, and see what learners would get. */
+function WrittenTryIt({ lesson: l, card: c }: { lesson: Lesson; card: Extract<Card, { type: "written" }> }) {
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<WrittenResult | null>(null);
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await api<WrittenResult>("/api/admin/written-test", { body: { lessonTitle: l.title, outcome: l.outcome, card: c, answer } }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-line-strong p-3 sm:col-span-2">
+      <p className="flex items-center gap-1.5 font-semibold">
+        <Icon name="spark" className="size-4 text-accent" /> Try it
+      </p>
+      <p className="text-sm text-ink-muted">
+        Write an answer a learner might give and see the feedback they’d get. Try a weak one too, to check the criteria catch it.
+      </p>
+      <textarea rows={3} className={textarea} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="A sample answer" />
+      <button type="button" className={cx(btn.primary, "self-start")} onClick={run} disabled={busy || !answer.trim()}>
+        {busy ? "Checking…" : "Check this answer"}
+      </button>
+      {error && <ErrorNote text={error} />}
+      {result?.unavailable && <p className="rounded-xl bg-orange/10 p-3 text-sm">{result.message}</p>}
+      {result && !result.unavailable && <WrittenFeedback result={result} criteria={c.criteria} />}
+    </div>
+  );
+}
+
 function SummaryFields({ card: c, set }: { card: Extract<Card, { type: "summary" }>; set: (fn: (c: Card) => void) => void }) {
   return (
     <>
@@ -2333,11 +4020,18 @@ function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
   const v = c.visual;
   const library = useLibrary();
   const [pexels, setPexels] = useState(false);
-  // Library photos have no credit; Pexels ones bring theirs (and a description for the alt text if there's none).
+  const [giphy, setGiphy] = useState(false);
+  // Library photos have no credit; Pexels photos and GIPHY GIFs bring theirs (and a description for the alt text if there's none).
   const applyPhoto = (p: Photo, suggestedAlt = "") =>
     set((x) => {
       const alt = ("alt" in x.visual ? x.visual.alt : "") || suggestedAlt;
-      const photo = { src: p.src, width: p.width, height: p.height, ...(p.credit ? { credit: p.credit } : {}) };
+      const photo = {
+        src: p.src,
+        width: p.width,
+        height: p.height,
+        ...(p.credit ? { credit: p.credit } : {}),
+        ...(p.animated ? { animated: p.animated } : {}),
+      };
       if (x.visual.kind === "illustration") {
         x.visual.photo = { ...photo, ...(x.visual.photo?.position ? { position: x.visual.photo.position } : {}) };
         if (!x.visual.alt) x.visual.alt = suggestedAlt;
@@ -2383,10 +4077,18 @@ function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
           <button
             type="button"
             aria-expanded={pexels}
-            onClick={() => setPexels((o) => !o)}
+            onClick={() => (setPexels((o) => !o), setGiphy(false))}
             className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
           >
             <Icon name="search" className="size-4" /> Find on Pexels
+          </button>
+          <button
+            type="button"
+            aria-expanded={giphy}
+            onClick={() => (setGiphy((o) => !o), setPexels(false))}
+            className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
+          >
+            <Icon name="spark" className="size-4" /> Find a GIF
           </button>
           <UploadTile
             className="w-auto [&_label]:flex-row [&_label]:px-3"
@@ -2409,13 +4111,22 @@ function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
           }}
         />
       )}
+      {giphy && (
+        <GiphyPicker
+          onClose={() => setGiphy(false)}
+          onPicked={(p, alt) => {
+            applyPhoto(p, alt);
+            setGiphy(false);
+          }}
+        />
+      )}
       {v.kind === "illustration" && v.photo?.credit && (
         <p className="text-xs text-ink-muted">
-          Photo by{" "}
+          {v.photo.animated ? "GIF" : "Photo"} by{" "}
           <a href={v.photo.credit.page ?? v.photo.credit.url} target="_blank" rel="noreferrer" className="underline">
             {v.photo.credit.name}
           </a>{" "}
-          on Pexels. The credit shows on the card.
+          on {v.photo.credit.source}. The credit shows on the card.
         </p>
       )}
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Visual type">
@@ -2976,7 +4687,45 @@ function runChecks(l: Lesson): Check[] {
       ok: !broken.length && !deadEnds.length,
       detail: [...broken, ...deadEnds.map((c) => `${c.heading || c.id} has no next card`)].join("; ") || undefined,
     },
-    { label: "Learners check their understanding", ok: cards.some((c) => c.type === "quiz" || c.type === "decision") },
+    { label: "Learners check their understanding", ok: cards.some((c) => c.type === "quiz" || c.type === "decision" || c.type === "written") },
+    ...(cards.some((c) => c.type === "checklist")
+      ? [
+          {
+            label: "Checklists have items",
+            ok: cards.every((c) => c.type !== "checklist" || (c.items.length > 0 && c.items.every((i) => i.text.trim()))),
+            detail: "Each checklist needs at least one item, and no empty items",
+          },
+        ]
+      : []),
+    ...(cards.some((c) => c.type === "resources")
+      ? [
+          {
+            label: "Resources have a title and a working link",
+            ok: cards.every(
+              (c) => c.type !== "resources" || (c.items.length > 0 && c.items.every((i) => i.title.trim() && /^(https:\/\/|\/api\/uploads\/)/.test(i.url))),
+            ),
+            detail: "Each resource needs a title, and a web address starting https:// or an uploaded PDF",
+          },
+        ]
+      : []),
+    ...(cards.some((c) => c.type === "hotspot")
+      ? [
+          {
+            label: "Hotspot cards are set up",
+            ok: cards.every((c) => c.type !== "hotspot" || (c.image && c.spots.length > 0 && c.spots.every((s) => s.label.trim() && s.text.trim()))),
+            detail: "Each hotspot card needs a picture and at least one spot, and every spot needs a label and a note",
+          },
+        ]
+      : []),
+    ...(cards.some((c) => c.type === "written")
+      ? [
+          {
+            label: "Written answers have criteria",
+            ok: cards.every((c) => c.type !== "written" || (c.prompt.trim() && c.criteria.some((cr) => cr.text.trim()))),
+            detail: "Each written answer card needs a question and at least one criterion",
+          },
+        ]
+      : []),
     { label: "Ends with a summary and an action", ok: cards.some((c) => c.type === "summary" && c.action) },
     {
       label: "Pictures have alt text",
@@ -2993,7 +4742,213 @@ function runChecks(l: Lesson): Check[] {
   ];
 }
 
-function Review({ lesson: l, checks }: { lesson: Lesson; checks: Check[] }) {
+/*
+  Preview in a phone-sized window over the editor, so closing it returns to exactly where you were.
+  Plays the last saved draft in author preview (nothing is recorded), from the selected card or the start.
+*/
+function PreviewDialog({ slug, cardId, dirty, onClose }: { slug: string; cardId: string; dirty: boolean; onClose: () => void }) {
+  const [fromStart, setFromStart] = useState(false);
+  const [run, setRun] = useState(0);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeBtn.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // The player's own close button (inside the frame) asks to close the window.
+    const onMessage = (e: MessageEvent) => e.origin === window.location.origin && e.data?.type === "tc-preview-close" && onClose();
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("message", onMessage);
+    const scroll = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("message", onMessage);
+      document.body.style.overflow = scroll;
+    };
+  }, [onClose]);
+  const src = `/learning/${encodeURIComponent(slug)}?preview=1&embed=1${fromStart ? "" : `&card=${encodeURIComponent(cardId)}`}`;
+  const choice = (on: boolean) =>
+    cx("min-h-9 rounded-full px-3 text-sm font-semibold", on ? "bg-surface text-ink shadow-sm" : "text-white/80 hover:text-white");
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Lesson preview"
+      className="fixed inset-0 z-[60] flex flex-col items-center gap-3 bg-[rgb(10_26_46/0.75)] p-3 sm:p-5"
+      onClick={onClose}
+    >
+      <div className="flex w-full max-w-[26rem] flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="inline-flex rounded-full bg-white/15 p-1" role="group" aria-label="Start from">
+          <button type="button" aria-pressed={!fromStart} className={choice(!fromStart)} onClick={() => setFromStart(false)}>
+            This card
+          </button>
+          <button type="button" aria-pressed={fromStart} className={choice(fromStart)} onClick={() => setFromStart(true)}>
+            From the start
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRun((r) => r + 1)}
+          aria-label="Restart the preview"
+          title="Restart"
+          className="grid size-10 place-items-center rounded-full text-white hover:bg-white/15"
+        >
+          <Icon name="refresh" className="size-4" />
+        </button>
+        <button
+          ref={closeBtn}
+          type="button"
+          onClick={onClose}
+          className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-semibold text-ink hover:bg-muted"
+        >
+          <Icon name="close" className="size-4" /> Close preview
+        </button>
+      </div>
+      {dirty && (
+        <p className="w-full max-w-[26rem] rounded-xl bg-gold/90 px-3 py-1.5 text-center text-sm text-[#0a1a2e]" onClick={(e) => e.stopPropagation()}>
+          Showing your last saved draft. Save to include your latest changes.
+        </p>
+      )}
+      <iframe
+        key={`${src}#${run}`}
+        src={src}
+        title="Lesson preview"
+        className="w-full max-w-[26rem] flex-1 rounded-[2rem] border-0 bg-surface shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+type Version = {
+  version: string;
+  notes: string;
+  kind: "minor" | "important";
+  by: string;
+  at: string | null;
+  latest: boolean;
+  changes: { lesson: string[]; cards: { id: string; title: string; change: "added" | "removed" | "changed"; parts: string[] }[] };
+};
+
+/** Every published version: who, when, the note, and what changed card by card. Any earlier version can be restored as the draft. */
+function VersionHistory({ slug }: { slug: string }) {
+  const data = useApi<{ versions: Version[] }>(`/api/admin/lessons/${slug}/versions`);
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const versions = data.data?.versions ?? [];
+
+  async function restore(v: Version) {
+    const ok = await confirmAction(`Version ${v.version} becomes your draft. Check it, then publish to make it live as a new version.`, {
+      title: `Restore version ${v.version}?`,
+      confirmLabel: "Restore as draft",
+    });
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/admin/lessons/${slug}/content`, { body: { action: "restore_version", version: v.version } });
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="Version history">
+      {error && <ErrorNote text={error} />}
+      {!data.data ? (
+        <p className="text-sm text-ink-muted">Loading…</p>
+      ) : !versions.length ? (
+        <p className="text-sm text-ink-muted">History starts with the next publish. Each version is kept with what changed.</p>
+      ) : (
+        <ol className="flex flex-col divide-y divide-line">
+          {versions.map((v) => {
+            const n = v.changes.cards.length + v.changes.lesson.length;
+            return (
+              <li key={v.version} className="py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">Version {v.version}</span>
+                  {v.latest && <Badge tone="good">Live</Badge>}
+                  {v.kind === "important" && <Badge tone="warn">Important</Badge>}
+                </div>
+                <p className="text-xs text-ink-muted">
+                  {v.at
+                    ? `${new Date(v.at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · ${v.by}`
+                    : "Before history began"}
+                </p>
+                {v.notes && <p className="mt-1 text-sm">{v.notes}</p>}
+                <div className="mt-1 flex flex-wrap gap-3 text-xs font-semibold">
+                  {n > 0 && (
+                    <button
+                      type="button"
+                      className="text-accent hover:underline"
+                      onClick={() => setOpen(open === v.version ? null : v.version)}
+                      aria-expanded={open === v.version}
+                    >
+                      {open === v.version ? "Hide changes" : `What changed (${n})`}
+                    </button>
+                  )}
+                  {!v.latest && (
+                    <button type="button" className="text-ink-muted hover:text-ink hover:underline" disabled={busy} onClick={() => restore(v)}>
+                      Restore
+                    </button>
+                  )}
+                </div>
+                {open === v.version && (
+                  <ul className="mt-2 flex flex-col gap-1 rounded-xl bg-muted p-2.5 text-xs">
+                    {v.changes.lesson.length > 0 && <li>Lesson: {v.changes.lesson.join(", ")} changed</li>}
+                    {v.changes.cards.map((c) => (
+                      <li key={c.id}>
+                        <span
+                          className={cx(
+                            "mr-1.5 rounded px-1.5 font-bold uppercase",
+                            c.change === "added" ? "bg-success/15 text-success" : c.change === "removed" ? "bg-danger/10 text-danger" : "bg-gold/25",
+                          )}
+                        >
+                          {c.change}
+                        </span>
+                        {c.title}
+                        {c.parts.length > 0 && <span className="text-ink-muted"> · {c.parts.join(", ")}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
+function Review({
+  checks,
+  slug,
+  isNew,
+  changeNote,
+  setChangeNote,
+  important,
+  setImportant,
+  onPublish,
+  publishing,
+  canPublish,
+  historyKey,
+}: {
+  lesson: Lesson;
+  checks: Check[];
+  slug: string;
+  isNew: boolean;
+  changeNote: string;
+  setChangeNote: (s: string) => void;
+  important: boolean;
+  setImportant: (on: boolean) => void;
+  onPublish: () => void;
+  publishing: boolean;
+  canPublish: boolean;
+  historyKey: number;
+}) {
   const passed = checks.filter((c) => c.ok).length;
   const flow = [
     { label: "Draft", who: "You", done: true },
@@ -3043,14 +4998,30 @@ function Review({ lesson: l, checks }: { lesson: Lesson; checks: Check[] }) {
               </li>
             ))}
           </ol>
-          <Field label="What changed in this version" className="mt-3">
-            <textarea rows={3} className={textarea} placeholder={`Version ${l.version}: …`} />
+          <Field label="What changed in this version" hint="Kept in the version history. For an important change, learners see it too." className="mt-3">
+            <textarea
+              rows={3}
+              className={textarea}
+              value={changeNote}
+              onChange={(e) => setChangeNote(e.target.value)}
+              placeholder="For example: Updated the example rate and the worked amounts."
+            />
           </Field>
-          <button type="button" className={cx(btn.primary, "mt-3 w-full")} disabled title="Demo editor: not connected yet">
-            Send for review
+          <label className="mt-2 flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={important} onChange={(e) => setImportant(e.target.checked)} />
+            <span>
+              <span className="font-semibold">Important change</span>
+              <span className="block text-ink-muted">People who did an earlier version see this note next time they open the lesson.</span>
+            </span>
+          </label>
+          <button type="button" className={cx(btn.primary, "mt-3 w-full")} onClick={onPublish} disabled={!canPublish || publishing}>
+            {publishing ? "Publishing…" : "Publish"}
           </button>
-          <p className="mt-2 text-xs text-ink-muted">Learners who already finished keep their completion. Published changes start a new version.</p>
+          <p className="mt-2 text-xs text-ink-muted">
+            {isNew ? "Save the lesson first." : "Learners who already finished keep their completion. Publishing starts a new version."}
+          </p>
         </Panel>
+        {!isNew && <VersionHistory key={historyKey} slug={slug} />}
       </div>
     </div>
   );

@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ThemeToggle } from "../ThemeToggle";
 import { setAutoplay, useAutoplay } from "@/lib/audioPrefs";
 
-export type SaveState = "idle" | "saving" | "saved" | "error";
+/**
+  Set when the player runs inside the lesson editor's preview window: the close button then
+  closes that window instead of leaving for the Learning page.
+*/
+export const EmbeddedClose = createContext<(() => void) | null>(null);
+
+/** `queued`: saved on this device, waiting for a connection to sync. */
+export type SaveState = "idle" | "saving" | "saved" | "queued" | "error";
 
 export function Frame({
   title,
@@ -36,10 +43,17 @@ export function Frame({
     Shows the card as the top of a deck: up to two cards peek out behind it, and it can be
     swiped left for the next card or right to go back. `id` changes with each card.
   */
-  deck?: { id: string; behind: number; onNext?: () => void; onBack?: () => void; /** A gradient (or other fill) behind the whole card. */ surface?: { style: React.CSSProperties; className: string } };
+  deck?: {
+    id: string;
+    behind: number;
+    onNext?: () => void;
+    onBack?: () => void;
+    /** A gradient (or other fill) behind the whole card. */ surface?: { style: React.CSSProperties; className: string };
+  };
   footer?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  const embeddedClose = useContext(EmbeddedClose);
   return (
     <div className="fixed inset-0 z-50 flex justify-center bg-strong sm:items-center sm:p-6">
       <section
@@ -47,9 +61,24 @@ export function Frame({
         className="flex h-dvh w-full max-w-[30rem] flex-col overflow-hidden bg-surface sm:h-[min(56rem,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl"
       >
         <header className="flex items-center gap-2 border-b border-line px-3 py-2">
-          <Link href={closeHref} aria-label="Close and return to Learning" className="inline-flex size-11 items-center justify-center rounded-full hover:bg-muted">
-            <Icon name="close" />
-          </Link>
+          {embeddedClose ? (
+            <button
+              type="button"
+              onClick={embeddedClose}
+              aria-label="Close the preview"
+              className="inline-flex size-11 items-center justify-center rounded-full hover:bg-muted"
+            >
+              <Icon name="close" />
+            </button>
+          ) : (
+            <Link
+              href={closeHref}
+              aria-label="Close and return to Learning"
+              className="inline-flex size-11 items-center justify-center rounded-full hover:bg-muted"
+            >
+              <Icon name="close" />
+            </Link>
+          )}
           <Image src="/brand/trilogy-logo.svg" alt="Trilogy Care" width={1789} height={576} className="h-8 w-auto dark:hidden" />
           <Image src="/brand/trilogy-logo-dark.svg" alt="Trilogy Care" width={1789} height={576} className="hidden h-8 w-auto dark:block" />
           <span className="ml-auto" />
@@ -70,10 +99,7 @@ export function Frame({
                     </span>
                     <span
                       aria-hidden
-                      className={cx(
-                        "block h-1.5 rounded-full",
-                        state === "done" ? "bg-action" : state === "current" ? "bg-action/60" : "bg-strong",
-                      )}
+                      className={cx("block h-1.5 rounded-full", state === "done" ? "bg-action" : state === "current" ? "bg-action/60" : "bg-strong")}
                     />
                   </li>
                 );
@@ -118,6 +144,10 @@ export function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry?: 
     <span className="inline-flex items-center gap-1.5 px-2 font-mulish text-xs font-semibold text-ink-muted" role="status">
       {state === "saving" ? (
         "Saving…"
+      ) : state === "queued" ? (
+        <>
+          <Icon name="check" className="size-4 text-gold" /> Saved on this device · will sync
+        </>
       ) : (
         <>
           <Icon name="check" className="size-4 text-accent" /> Saved
@@ -162,7 +192,7 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
   const dragging = drag.id === deck.id && drag.dragging;
   const behind = Math.max(0, Math.min(2, deck.behind));
 
-  const resist = (mx: number) => (mx < 0 && !deck.onNext) || (mx > 0 && !deck.onBack) ? mx * 0.2 : mx;
+  const resist = (mx: number) => ((mx < 0 && !deck.onNext) || (mx > 0 && !deck.onBack) ? mx * 0.2 : mx);
 
   return (
     <div className="relative min-h-0 flex-1 bg-strong/60 py-3 pl-3 pr-7">

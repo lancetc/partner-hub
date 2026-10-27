@@ -4,7 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } fro
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon";
 import { cx } from "@/lib/format";
-import { autoplayEnabled } from "@/lib/audioPrefs";
+import { autoplayEnabled, setFollowWords, useFollowWords } from "@/lib/audioPrefs";
+import { wordAround, wordAt, type WordTiming } from "@/lib/wordTimings";
+import { SpokenText, type Span } from "./SpokenText";
 
 /*
   Card audio. Plays a recorded voice file when the card has one (`audioSrc`); otherwise the
@@ -24,7 +26,13 @@ export type NarrationNow = {
   key: string;
   state: "idle" | "loading" | "playing" | "paused" | "ended";
   caption: string | null;
+  /** The whole script, the sentence being read and the word being said (when following along is on). */
+  text: string;
+  sentence: Span | null;
+  word: Span | null;
   progress: number;
+  /** Seconds of audio left at the current speed (an estimate for the browser voice). */
+  remaining: number;
   playable: boolean;
   toggle: () => void;
 };
@@ -123,6 +131,16 @@ export function Narration({
   controls?: boolean;
 }) {
   const parts = useMemo(() => sentences(text), [text]);
+  // Where each sentence sits in the script.
+  const spans = useMemo(() => {
+    let at = 0;
+    return parts.map((p) => {
+      const i = text.indexOf(p, at);
+      const from = i < 0 ? at : i;
+      at = from + p.length;
+      return { from, to: from + p.length };
+    });
+  }, [parts, text]);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "paused" | "ended">("idle");
   const [index, setIndex] = useState(0);
   const [rate, setRate] = useState(1);
@@ -140,6 +158,41 @@ export function Narration({
   const usesFile = Boolean(src);
   const ready = Boolean(audioSrc) || !ttsKey || live !== null;
   const playable = speech && (usesFile || speechSupported);
+
+  // Following along word by word: the live voice comes with word timings; the browser voice reports each word.
+  const follow = useFollowWords();
+  const [words, setWords] = useState<WordTiming[] | null>(null);
+  const [word, setWord] = useState<Span | null>(null);
+  const timingsSrc = follow && !audioSrc && src ? `${src}&timings=1` : null;
+  useEffect(() => {
+    if (!timingsSrc) return;
+    let live = true;
+    fetch(timingsSrc)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { words?: WordTiming[] | null } | null) => live && setWords(d?.words ?? null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [timingsSrc]);
+  // While the recording plays, check every frame which word it's on.
+  useEffect(() => {
+    if (!usesFile || !words || state !== "playing") return;
+    let frame = 0;
+    let last = -1;
+    const tick = () => {
+      const el = audio.current;
+      const w = el ? wordAt(words, el.currentTime) : null;
+      if (w && w.from !== last) {
+        last = w.from;
+        setWord({ from: w.from, to: w.to });
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [usesFile, words, state]);
+  const shownWord = follow && (state === "playing" || state === "paused") ? word : null;
 
   useEffect(() => {
     const cancel = run;
@@ -183,6 +236,10 @@ export function Narration({
       if (voice) u.voice = voice;
       u.lang = voice?.lang ?? "en-AU";
       u.rate = r;
+      u.onboundary = (e) => {
+        if (e.name && e.name !== "word") return;
+        setWord(wordAround(text, (spans[n]?.from ?? 0) + e.charIndex));
+      };
       u.onend = () => speak(n + 1);
       synth.speak(u);
     };
@@ -246,19 +303,38 @@ export function Narration({
     let run = 0;
     return parts.map((p) => (run += p.length) / total);
   }, [parts]);
-  const fileIndex = Math.max(0, ends.findIndex((e) => progress <= e));
-  const caption = state === "playing" ? parts[usesFile ? fileIndex : index] : null;
+  const fileIndex = Math.max(
+    0,
+    ends.findIndex((e) => progress <= e),
+  );
+  // The sentence being read: the one with the current word in it when following along, otherwise by time or position.
+  const wordSentence = shownWord ? spans.findIndex((sp) => shownWord.from >= sp.from && shownWord.from < sp.to) : -1;
+  const at = wordSentence >= 0 ? wordSentence : usesFile ? fileIndex : index;
+  const caption = state === "playing" ? parts[at] : null;
   // The slot is rendered alongside this component; it exists by the time a caption is shown.
   const slot = caption && captionTarget && typeof document !== "undefined" ? document.getElementById(captionTarget) : null;
 
   // Share the live state with the card's audio stage, if it has one.
-  const shared = state === "playing" ? parts[usesFile ? fileIndex : index] : state === "paused" ? (parts[usesFile ? fileIndex : index] ?? null) : null;
+  const shared = state === "playing" || state === "paused" ? (parts[at] ?? null) : null;
+  const sharedSpan = shared ? (spans[at] ?? null) : null;
   const overall = usesFile ? progress : state === "ended" ? 1 : parts.length ? index / parts.length : 0;
   useEffect(() => {
     if (!ttsKey) return;
-    publish({ key: ttsKey, state, caption: shared, progress: overall, playable, toggle: () => (state === "playing" ? pause() : play()) });
+    const remaining = Math.max(0, Math.ceil((length * (1 - overall)) / rate));
+    publish({
+      key: ttsKey,
+      state,
+      caption: shared,
+      text,
+      sentence: sharedSpan,
+      word: shownWord,
+      progress: overall,
+      remaining,
+      playable,
+      toggle: () => (state === "playing" ? pause() : play()),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ttsKey, state, shared, overall, playable]);
+  }, [ttsKey, state, shared, overall, playable, length, rate, shownWord?.from, text]);
   useEffect(() => () => void (now?.key === ttsKey && publish(null)), [ttsKey]);
   const name = label.toLowerCase();
 
@@ -342,8 +418,10 @@ export function Narration({
         slot &&
         createPortal(
           <p aria-live="polite" className="mb-2 text-center text-sm italic leading-snug text-ink-muted">
-            <span className="sr-only">Caption: </span>
-            {caption}
+            <span className="sr-only">Caption: {caption}</span>
+            <span aria-hidden>
+              <SpokenText text={text} range={spans[at]} word={shownWord} />
+            </span>
           </p>,
           slot,
         )}
@@ -359,7 +437,10 @@ export function Narration({
             <>
               {caption && (
                 <p aria-live="polite" className="text-center text-sm italic leading-snug text-ink-muted">
-                  {caption}
+                  <span className="sr-only">{caption}</span>
+                  <span aria-hidden>
+                    <SpokenText text={text} range={spans[at]} word={shownWord} />
+                  </span>
                 </p>
               )}
               <div className="flex items-center gap-2">
@@ -374,7 +455,10 @@ export function Narration({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-tight">{label}</p>
                   <div className="mt-1 h-1 overflow-hidden rounded-full bg-line-strong" aria-hidden>
-                    <div className="h-full rounded-full bg-action transition-[width] duration-500 ease-linear" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+                    <div
+                      className="h-full rounded-full bg-action transition-[width] duration-500 ease-linear"
+                      style={{ width: `${Math.min(100, progress * 100)}%` }}
+                    />
                   </div>
                   <span className="mt-0.5 block font-mulish text-[0.7rem] tabular-nums text-ink-muted">
                     {fmt(elapsed)} / {fmt(length)}
@@ -391,6 +475,12 @@ export function Narration({
               </div>
             </>
           )}
+          {playable && (
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="size-4 accent-[var(--action)]" checked={follow} onChange={(e) => setFollowWords(e.target.checked)} />
+              Highlight each word as it’s spoken
+            </label>
+          )}
           {speech && !usesFile && !speechSupported && <p className="text-sm text-ink-muted">Audio isn’t available in this browser.</p>}
           <details open={!playable} className="group">
             <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-accent">
@@ -398,7 +488,9 @@ export function Narration({
               {durationSec && !playable ? <span className="font-normal text-ink-muted">· about {durationSec} seconds</span> : null}
               <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
             </summary>
-            <p className="mt-1 max-h-44 overflow-y-auto pr-1 text-[0.95rem] leading-relaxed">{text}</p>
+            <p data-follow-scroll className="mt-1 max-h-44 overflow-y-auto pr-1 text-[0.95rem] leading-relaxed">
+              <SpokenText text={text} word={shownWord} scroll />
+            </p>
           </details>
         </div>
       )}

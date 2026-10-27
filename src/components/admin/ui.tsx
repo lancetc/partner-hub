@@ -9,8 +9,10 @@ import { Icon } from "../Icon";
 export const btn = {
   primary:
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45",
-  secondary: "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted disabled:opacity-45",
-  quiet: "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ink-muted hover:bg-muted hover:text-ink disabled:opacity-40",
+  secondary:
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted disabled:opacity-45",
+  quiet:
+    "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ink-muted hover:bg-muted hover:text-ink disabled:opacity-40",
   danger: "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-danger/60 px-4 font-medium hover:bg-danger/10",
 };
 
@@ -44,7 +46,13 @@ export function Badge({ children, tone = "neutral" }: { children: React.ReactNod
 }
 
 export const statusTone = (s: string) =>
-  s === "published" || s === "approved" || s === "accepted" || s === "delivered" ? "good" : s === "in_review" || s === "queued" || s === "sending" ? "warn" : s === "withdrawn" || s === "failed" || s === "unknown" ? "bad" : "neutral";
+  s === "published" || s === "approved" || s === "accepted" || s === "delivered"
+    ? "good"
+    : s === "in_review" || s === "queued" || s === "sending"
+      ? "warn"
+      : s === "withdrawn" || s === "failed" || s === "unknown"
+        ? "bad"
+        : "neutral";
 
 export const statusText: Record<string, string> = {
   draft: "Draft",
@@ -66,6 +74,9 @@ export const statusText: Record<string, string> = {
 const tabs: { href: string; label: string; authorOnly?: boolean }[] = [
   { href: "/admin/lessons", label: "Lessons" },
   { href: "/admin/learning-paths", label: "Learning paths" },
+  { href: "/admin/completions", label: "Completions" },
+  { href: "/admin/content-review", label: "Content review", authorOnly: true },
+  { href: "/admin/facts", label: "Facts", authorOnly: true },
   { href: "/admin/webinars", label: "Webinars", authorOnly: true },
   { href: "/admin/email", label: "Email campaigns", authorOnly: true },
   { href: "/admin/surveys", label: "Surveys" },
@@ -79,7 +90,9 @@ export function AdminShell({ title, children, back }: { title: string; children:
   const pathname = usePathname();
   const me = useApi<Me>("/api/me").data;
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+    // Admin stays in English even when someone reads the hub in another language: translating text
+    // while it's being edited would corrupt it.
+    <div translate="no" className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       <div className="flex flex-wrap items-center gap-3">
         <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Administration</p>
         {me && (
@@ -96,19 +109,24 @@ export function AdminShell({ title, children, back }: { title: string; children:
       <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
       {!back && (
         <nav aria-label="Administration" className="mt-4 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]">
-          {tabs.filter((t) => !t.authorOnly || me?.canAuthor).map((t) => {
-            const active = pathname.startsWith(t.href);
-            return (
-              <Link
-                key={t.href}
-                href={t.href}
-                aria-current={active ? "page" : undefined}
-                className={cx("-mb-px inline-flex min-h-11 shrink-0 items-center border-b-2 px-4 font-medium", active ? "border-action text-ink" : "border-transparent text-ink-muted hover:text-ink")}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
+          {tabs
+            .filter((t) => !t.authorOnly || me?.canAuthor)
+            .map((t) => {
+              const active = pathname.startsWith(t.href);
+              return (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cx(
+                    "-mb-px inline-flex min-h-11 shrink-0 items-center border-b-2 px-4 font-medium",
+                    active ? "border-action text-ink" : "border-transparent text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {t.label}
+                </Link>
+              );
+            })}
         </nav>
       )}
       <div className="mt-6">{children}</div>
@@ -125,4 +143,12 @@ export function ErrorNote({ text }: { text: string }) {
   );
 }
 
-export const timezones = ["Australia/Brisbane", "Australia/Sydney", "Australia/Melbourne", "Australia/Hobart", "Australia/Adelaide", "Australia/Darwin", "Australia/Perth"];
+export const timezones = [
+  "Australia/Brisbane",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Australia/Hobart",
+  "Australia/Adelaide",
+  "Australia/Darwin",
+  "Australia/Perth",
+];

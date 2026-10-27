@@ -110,7 +110,11 @@ export function FollowUpPlayer({ id }: { id: string }) {
             : `Available ${view.plannedRelease ? formatWhen(view.plannedRelease, view.timezone) : "soon"}.`;
     return (
       <Frame title="Follow up" beats={[]} saveState="idle" progress={null}>
-        <Message icon={view.status === "withdrawn" ? "info" : "clock"} heading={view.status === "withdrawn" ? "No longer needed" : "Not available yet"} text={text} />
+        <Message
+          icon={view.status === "withdrawn" ? "info" : "clock"}
+          heading={view.status === "withdrawn" ? "No longer needed" : "Not available yet"}
+          text={text}
+        />
       </Frame>
     );
   }
@@ -155,16 +159,7 @@ export function FollowUpPlayer({ id }: { id: string }) {
   const isLast = current === beats.length - 1;
   // Explanation audio plays from the footer dock so it doesn't push the card down.
   const explainAudio = content.explain && current === 1 ? content.explain.script : undefined;
-  const primaryLabel =
-    current === 0
-      ? !answered || retrying
-        ? "Check your answer"
-        : "Continue"
-      : isLast
-        ? revisit
-          ? null
-          : "Finish"
-        : "Continue";
+  const primaryLabel = current === 0 ? (!answered || retrying ? "Check your answer" : "Continue") : isLast ? (revisit ? null : "Finish") : "Continue";
 
   return (
     <Frame
@@ -176,59 +171,70 @@ export function FollowUpPlayer({ id }: { id: string }) {
       review={revisit}
       footer={
         finished ? undefined : (
-        <div className="flex flex-col gap-2">
-          {actionError && save === "error" && (
-            <p role="alert" className="flex items-start gap-2 rounded-2xl border border-danger/60 px-3 py-2 text-sm">
-              <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" />
-              {actionError.startsWith("Request failed") || actionError === "Failed to fetch"
-                ? "We couldn’t save that, so nothing has been marked done. Check your connection and try again."
-                : actionError}
-            </p>
-          )}
-          <div id="fu-caption" />
-          <div className="flex items-center gap-3">
-            {current > 0 && (
-              <button type="button" onClick={() => setCard(current - 1)} className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted">
-                <Icon name="arrow-left" className="size-4" /> Back
-              </button>
+          <div className="flex flex-col gap-2">
+            {actionError && save === "error" && (
+              <p role="alert" className="flex items-start gap-2 rounded-2xl border border-danger/60 px-3 py-2 text-sm">
+                <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" />
+                {actionError.startsWith("Request failed") || actionError === "Failed to fetch"
+                  ? "We couldn’t save that, so nothing has been marked done. Check your connection and try again."
+                  : actionError}
+              </p>
             )}
-            {current === 0 && answered && !retrying && !revisit && latestCorrect === false && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRetrying(true);
-                  setChoice(null);
-                }}
-                className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted"
-              >
-                Try again
-              </button>
-            )}
-            {explainAudio && (
-              <span className="flex flex-1 justify-center">
-                <Narration key="explain" text={explainAudio} label="Explanation" audioSrc={content.explain?.audioSrc} captionTarget="fu-caption" ttsKey={`followup:${content.id}:${content.version}`} />
-              </span>
-            )}
-            {primaryLabel ? (
-              <button
-                type="button"
-                onClick={onPrimary}
-                disabled={save === "saving" || (current === 0 && (!answered || retrying) && !choice)}
-                className={cx(
-                  "inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45 sm:px-6 sm:text-lg",
-                  explainAudio ? "" : "ml-auto flex-1 text-lg sm:flex-none",
-                )}
-              >
-                {save === "saving" && isLast ? "Saving…" : primaryLabel}
-                {!isLast && <Icon name="arrow-right" className="size-5" />}
-              </button>
-            ) : (
-              <Link href="/learning" className="ml-auto inline-flex min-h-12 items-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
-                Back to learning
-              </Link>
-            )}
+            <div id="fu-caption" />
+            <div className="flex items-center gap-3">
+              {current > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCard(current - 1)}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted"
+                >
+                  <Icon name="arrow-left" className="size-4" /> Back
+                </button>
+              )}
+              {current === 0 && answered && !retrying && !revisit && latestCorrect === false && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRetrying(true);
+                    setChoice(null);
+                  }}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted"
+                >
+                  Try again
+                </button>
+              )}
+              {explainAudio && (
+                <span className="flex flex-1 justify-center">
+                  <Narration
+                    key="explain"
+                    text={explainAudio}
+                    label="Explanation"
+                    audioSrc={content.explain?.audioSrc}
+                    captionTarget="fu-caption"
+                    ttsKey={`followup:${content.id}:${content.version}`}
+                  />
+                </span>
+              )}
+              {primaryLabel ? (
+                <button
+                  type="button"
+                  onClick={onPrimary}
+                  disabled={save === "saving" || (current === 0 && (!answered || retrying) && !choice)}
+                  className={cx(
+                    "inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45 sm:px-6 sm:text-lg",
+                    explainAudio ? "" : "ml-auto flex-1 text-lg sm:flex-none",
+                  )}
+                >
+                  {save === "saving" && isLast ? "Saving…" : primaryLabel}
+                  {!isLast && <Icon name="arrow-right" className="size-5" />}
+                </button>
+              ) : (
+                <Link href="/learning" className="ml-auto inline-flex min-h-12 items-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
+                  Back to learning
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
         )
       }
     >
@@ -240,7 +246,9 @@ export function FollowUpPlayer({ id }: { id: string }) {
           <h2 ref={headingRef} tabIndex={-1} className="font-serif text-[2rem] font-semibold leading-tight outline-none">
             Follow up done
           </h2>
-          <p className="text-lg">Saved. {a && !a.initialCorrect ? "You worked through the feedback, which is exactly what practice is for." : "Nicely applied."}</p>
+          <p className="text-lg">
+            Saved. {a && !a.initialCorrect ? "You worked through the feedback, which is exactly what practice is for." : "Nicely applied."}
+          </p>
           <NextUp view={view} />
           <Link href="/learning" className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
             Back to learning
@@ -281,9 +289,7 @@ export function FollowUpPlayer({ id }: { id: string }) {
                   );
                 })}
               </fieldset>
-              {showFeedback && latestPick && (
-                <Feedback option={options.find((o) => o.id === latestPick)!} best={options.find((o) => o.correct)!} />
-              )}
+              {showFeedback && latestPick && <Feedback option={options.find((o) => o.id === latestPick)!} best={options.find((o) => o.correct)!} />}
               {showFeedback && a && a.corrected && (
                 <p className="text-sm text-ink-muted">Your first answer is kept as you gave it. Answers after feedback are recorded separately.</p>
               )}
@@ -304,7 +310,10 @@ export function FollowUpPlayer({ id }: { id: string }) {
                 <p className="text-lg font-semibold leading-snug">{content.takeaway.action}</p>
               </div>
               {content.takeaway.reference && (
-                <Link href={content.takeaway.reference.url} className="flex min-h-14 items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-muted">
+                <Link
+                  href={content.takeaway.reference.url}
+                  className="flex min-h-14 items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-muted"
+                >
                   <Icon name="doc" className="size-5 shrink-0 text-accent" />
                   <span className="flex-1">
                     <span className="block font-semibold">{content.takeaway.reference.title}</span>
@@ -313,7 +322,9 @@ export function FollowUpPlayer({ id }: { id: string }) {
                 </Link>
               )}
               <NextUp view={view} />
-              {content.draftWording && <p className="text-sm text-ink-muted">Draft operational wording for the prototype. The real process needs approval from its Trilogy owner.</p>}
+              {content.draftWording && (
+                <p className="text-sm text-ink-muted">Draft operational wording for the prototype. The real process needs approval from its Trilogy owner.</p>
+              )}
             </>
           )}
         </div>
@@ -340,18 +351,15 @@ function Feedback({ option, best }: { option: FollowUpContent["question"]["optio
       <div className="text-[0.98rem]">
         <p className="font-semibold">{option.correct ? "That’s the better choice." : "Here’s what would happen."}</p>
         <p className="mt-1">{option.feedback}</p>
-        {!option.correct && (
-          <p className="mt-2 text-ink-muted">
-            Have another go, or continue to see the explanation. A better choice: “{best.label}”.
-          </p>
-        )}
+        {!option.correct && <p className="mt-2 text-ink-muted">Have another go, or continue to see the explanation. A better choice: “{best.label}”.</p>}
       </div>
     </div>
   );
 }
 
 function NextUp({ view }: { view: { next: View["next"]; timezone: string } }) {
-  if (!view.next) return <p className="rounded-2xl border border-line p-4">This was the last follow up in this path. The original lesson stays available any time.</p>;
+  if (!view.next)
+    return <p className="rounded-2xl border border-line p-4">This was the last follow up in this path. The original lesson stays available any time.</p>;
   return (
     <p className="flex gap-3 rounded-2xl border border-line p-4">
       <Icon name="clock" className="mt-0.5 size-5 shrink-0 text-accent" />

@@ -2,6 +2,7 @@
 
 import type { QuizQuestion } from "@/content/lessons";
 import { Icon } from "../Icon";
+import { Burst } from "./Burst";
 import { cx } from "@/lib/format";
 
 export function Quiz({
@@ -28,7 +29,9 @@ export function Quiz({
         return (
           <fieldset key={q.id} className="flex flex-col gap-2">
             <legend className="mb-2 font-semibold leading-snug">
-              <span className="text-ink-muted">Question {qi + 1} of {questions.length}. </span>
+              <span className="text-ink-muted">
+                Question {qi + 1} of {questions.length}.{" "}
+              </span>
               {q.prompt}
             </legend>
             {q.options.map((o) => {
@@ -37,9 +40,11 @@ export function Quiz({
                 <label
                   key={o.id}
                   className={cx(
-                    "flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-2 transition-colors",
+                    "fx-press relative flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-2 transition-colors",
                     selected ? "border-action bg-tealtint" : "border-line hover:border-line-strong",
                     checked && "cursor-default",
+                    // Chosen: a springy pop. Checked: a glow and burst if right, a small shake if not.
+                    selected && (checked ? (right ? "fx-correct" : "fx-shake") : "fx-pop"),
                   )}
                 >
                   <input
@@ -55,18 +60,16 @@ export function Quiz({
                     className="size-5 shrink-0 accent-[var(--action)]"
                   />
                   <span>{o.label}</span>
+                  {checked && selected && right && <Burst />}
                 </label>
               );
             })}
             {checked && picked && (
               <p
                 role="status"
-                className={cx(
-                  "mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]",
-                  right ? "bg-tealtint" : "border border-danger/60 bg-surface",
-                )}
+                className={cx("fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]", right ? "bg-tealtint" : "border border-danger/60 bg-surface")}
               >
-                <Icon name={right ? "check" : "alert"} className={cx("mt-0.5 size-5 shrink-0", right ? "text-accent" : "text-danger")} />
+                <Icon name={right ? "check" : "alert"} className={cx("fx-tick mt-0.5 size-5 shrink-0", right ? "text-accent" : "text-danger")} />
                 <span>
                   <strong>{right ? "Correct. " : "Not yet. "}</strong>
                   {right ? q.feedback.correct.replace(/^(Right|Yes|Exactly)\.\s*/, "") : q.feedback.incorrect.replace(/^Not quite\.\s*/, "")}

@@ -22,8 +22,8 @@ export type RenderContext = { firstName: string; baseUrl: string; unsubscribeUrl
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const personal = (s: string, ctx: RenderContext) => s.replace(/\{\{\s*first_name\s*\}\}/g, ctx.firstName);
 const abs = (url: string, base: string) => (/^https?:\/\//.test(url) ? url : `${base}${url.startsWith("/") ? "" : "/"}${url}`);
-const NAVY = "#0f2642";
-const TEAL = "#00828a";
+const NAVY = "#102a43";
+const TEAL = "#0e7c7b";
 const FONT = "font-family:Arial,Helvetica,sans-serif;";
 
 function card(img: string | null, eyebrow: string, title: string, body: string, href: string, cta: string) {
@@ -45,7 +45,9 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
   for (const b of c.blocks) {
     switch (b.type) {
       case "heading":
-        rows.push(`<tr><td style="padding:20px 24px 4px;${FONT}font-size:24px;line-height:1.25;font-weight:bold;color:${NAVY}">${esc(personal(b.text, ctx))}</td></tr>`);
+        rows.push(
+          `<tr><td style="padding:20px 24px 4px;${FONT}font-size:24px;line-height:1.25;font-weight:bold;color:${NAVY}">${esc(personal(b.text, ctx))}</td></tr>`,
+        );
         text.push(personal(b.text, ctx).toUpperCase(), "");
         break;
       case "text":
@@ -69,7 +71,9 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
         const l = lessons.find((x) => x.slug === b.slug);
         if (!l) break;
         const href = `${ctx.baseUrl}/learning/${l.slug}`;
-        rows.push(card(l.visual.photo ? abs(l.visual.photo.src, ctx.baseUrl) : null, `Lesson · ${l.minutes} min`, l.title, l.summary, href, "Start the lesson"));
+        rows.push(
+          card(l.visual.photo ? abs(l.visual.photo.src, ctx.baseUrl) : null, `Lesson · ${l.minutes} min`, l.title, l.summary, href, "Start the lesson"),
+        );
         text.push(`${l.title} (${l.minutes} min lesson)\n${l.summary}\n${href}`, "");
         break;
       }
@@ -77,7 +81,16 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
         const w = ctx.webinars.get(b.webinarId);
         if (!w) break;
         const href = `${ctx.baseUrl}/webinars/${w.id}`;
-        rows.push(card(w.thumbnail ? abs(w.thumbnail, ctx.baseUrl) : null, `Webinar · ${w.minutes} min${w.presenter ? ` · ${w.presenter}` : ""}`, w.title, w.summary, href, "Watch the recording"));
+        rows.push(
+          card(
+            w.thumbnail ? abs(w.thumbnail, ctx.baseUrl) : null,
+            `Webinar · ${w.minutes} min${w.presenter ? ` · ${w.presenter}` : ""}`,
+            w.title,
+            w.summary,
+            href,
+            "Watch the recording",
+          ),
+        );
         text.push(`${w.title} (webinar recording)\n${w.summary}\n${href}`, "");
         break;
       }
@@ -88,7 +101,9 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
         text.push(`${b.label}: ${abs(b.url, ctx.baseUrl)}`, "");
         break;
       case "image":
-        rows.push(`<tr><td style="padding:8px 24px"><img src="${esc(abs(b.src, ctx.baseUrl))}" width="550" alt="${esc(b.alt)}" style="display:block;width:100%;max-width:550px;height:auto;border:0;border-radius:14px"></td></tr>`);
+        rows.push(
+          `<tr><td style="padding:8px 24px"><img src="${esc(abs(b.src, ctx.baseUrl))}" width="550" alt="${esc(b.alt)}" style="display:block;width:100%;max-width:550px;height:auto;border:0;border-radius:14px"></td></tr>`,
+        );
         break;
       case "divider":
         rows.push(`<tr><td style="padding:12px 24px"><div style="border-top:1px solid #dfe7ef;font-size:0;line-height:0">&nbsp;</div></td></tr>`);

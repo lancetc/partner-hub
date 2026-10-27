@@ -8,15 +8,7 @@ import { useSyncExternalStore } from "react";
   learning and onboarding rules must then be enforced on the server (PRD section 14).
 */
 
-export type DocStatus =
-  | "not_started"
-  | "draft"
-  | "received"
-  | "in_review"
-  | "action_required"
-  | "verified"
-  | "expired"
-  | "not_required";
+export type DocStatus = "not_started" | "draft" | "received" | "in_review" | "action_required" | "verified" | "expired" | "not_required";
 
 export type TaskEvent = { at: string; status: DocStatus; note?: string; actor: string };
 
@@ -41,6 +33,8 @@ export type LessonAttempt = {
   completedAt?: string;
   /** Earlier routes kept for audit when a learner returns to an earlier choice. */
   previousRoutes: string[][];
+  /** When this copy was saved, so the newest copy wins between devices. */
+  savedAt?: string;
 };
 
 export type OnboardingState = {

@@ -1,5 +1,6 @@
 import type { IconName, VisualVariant } from "./stories";
 import type { GradientId } from "./gradients";
+import type { ThemeId } from "./themes";
 
 /*
   Portable lesson format: stable node ids, typed card payloads and explicit transitions
@@ -23,8 +24,10 @@ export type CardVisual =
         width: number;
         height: number;
         position?: string;
-        /** Stock photos keep their photographer's credit (Pexels asks for one). */
-        credit?: { name: string; url: string; source: "Pexels"; page?: string };
+        /** Stock photos and GIFs keep their maker's credit (Pexels and GIPHY ask for one). */
+        credit?: { name: string; url: string; source: "Pexels" | "GIPHY"; page?: string };
+        /** A GIF from GIPHY: `src` is its still frame, played as a muted MP4 loop that can be paused. */
+        animated?: { mp4: string };
       };
       /** A photo sits at the top of the card (default) or fills the whole card behind the text. */
       layout?: "top" | "background";
@@ -80,8 +83,20 @@ type Base = {
   keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: IconName }[]; tip?: string };
   /** Consequence styling for cards that show the result of a poorer choice. */
   emphasis?: "consequence" | "recovery";
+  /** Learners can read and add comments on this card (tips, local know-how, questions). On unless set to false. */
+  comments?: boolean;
+  /**
+    Content that can go out of date (a rate, a date, a rule): when to check it, what to check, and
+    where. Shows in Admin > Content review, and authors are reminded before it's due.
+  */
+  check?: { by: string; note?: string; source?: { title: string; url: string } };
   /** A gradient behind the whole card. A full-background photo takes precedence. */
   background?: { gradient: GradientId };
+  /**
+    Where the text sits on the card. Defaults to the top, or the bottom over a full-background photo.
+    Offered on content cards.
+  */
+  textPosition?: "top" | "center" | "bottom";
   /** Learners can't continue or swipe on until the card's audio, video or activity is finished. */
   requireComplete?: boolean;
   /** One or two talking-head clips (often recorded on a webcam), shown as circles at the top of the card. */
@@ -141,6 +156,82 @@ export type Card =
     `anonymous` hides names; otherwise posts show a first name and role.
   */
   | (Base & { type: "wall"; prompt: string; placeholder?: string; anonymous?: boolean; next?: string })
+  /**
+    A checklist learners tick off: a routine to remember, or steps to confirm. Each item can have a
+    short note that shows once it's ticked. With `requireAll`, every item must be ticked to continue.
+  */
+  | (Base & {
+      type: "checklist";
+      prompt: string;
+      items: { id: string; text: string; note?: string }[];
+      requireAll?: boolean;
+      next?: string;
+    })
+  /**
+    A tidy drawer of further reading: PDFs, websites and toolkits. It starts closed so it doesn't
+    interrupt the lesson; learners open it if they want, and can always continue.
+  */
+  | (Base & {
+      type: "resources";
+      /** No longer shown (from when resources sat in a drawer); kept so older lessons still load. */
+      drawerLabel?: string;
+      items: {
+        id: string;
+        kind: "pdf" | "link" | "toolkit" | "video";
+        title: string;
+        url: string;
+        /** Who publishes it, e.g. "Aged Care Quality and Safety Commission". */
+        source?: string;
+        description?: string;
+        /** Uploaded PDFs: the file size, shown next to the title. */
+        bytes?: number;
+      }[];
+      next?: string;
+    })
+  /**
+    A picture with spots to tap. `explore` shows a marker on each spot; `find` hides them so the
+    learner has to find each one (with a hint after a few misses). Each spot reveals a short note.
+  */
+  | (Base & {
+      type: "hotspot";
+      prompt: string;
+      image: {
+        src: string;
+        width: number;
+        height: number;
+        alt: string;
+        credit?: { name: string; url: string; source: "Pexels" | "GIPHY"; page?: string };
+      } | null;
+      mode: "explore" | "find";
+      /** Positions are percentages of the picture's width and height; `r` is the tap area's radius as a percentage of its width. */
+      spots: { id: string; x: number; y: number; r: number; label: string; text: string }[];
+      /** How many spots learners need to find before they can continue. Defaults to all of them. */
+      required?: number;
+      next?: string;
+    })
+  /**
+    A written answer checked by AI. Learners answer a question in their own words; Claude checks it
+    against the author's criteria and gives feedback on each one. Answers aren't stored.
+  */
+  | (Base & {
+      type: "written";
+      prompt: string;
+      /** Hint inside the answer box. */
+      placeholder?: string;
+      /** What a good answer covers. Each is marked met, partly met or not yet. */
+      criteria: { id: string; text: string }[];
+      /** Private notes for the AI: context, what to accept, what to ignore. Learners never see these. */
+      guidance?: string;
+      /** A strong answer. Guides the AI; shown to learners after feedback when `showExample` is on. */
+      example?: string;
+      showExample?: boolean;
+      /** Shortest answer accepted, in words (default 10). */
+      minWords?: number;
+      /** Learners must meet every criterion to continue. After `maxAttempts` tries (default 3) they can move on anyway. */
+      mustPass?: boolean;
+      maxAttempts?: number;
+      next?: string;
+    })
   /** A question with no right answer. Learners vote, then see how everyone else answered. */
   | (Base & { type: "poll"; prompt: string; options: { id: string; label: string }[]; next?: string })
   /**
@@ -183,11 +274,14 @@ export type Lesson = {
   completionMessage?: string;
   /** Hold learners on a card until its audio has played to the end. On unless set to false. */
   holdForAudio?: boolean;
+  /** The look of cards without their own background (see content/themes.ts). Classic white when not set. */
+  theme?: ThemeId;
 };
 
 const extraTime: Lesson = {
   slug: "a-little-extra-time",
   version: "1.0-demo",
+  theme: "rhythmNavy",
   title: "A little extra time",
   summary: "What a longer visit means for cost, and what to check before you agree.",
   outcome: "Check the confirmation process before agreeing to extend a visit.",
@@ -240,7 +334,8 @@ const extraTime: Lesson = {
       beat: 1,
       label: "The visit",
       heading: "A planned 60 minute visit",
-      body: "Mara has a 60 minute cleaning visit each week. In this example, the rate is $80 an hour, so the visit costs $80.",
+      body: "Mara has a 60 minute cleaning visit each week. In this example, the rate is {{example_rate}} an hour, so the visit costs {{example_rate}}.",
+      check: { by: "2026-10-01", note: "Confirm the example rate still looks realistic, and that the worked amounts on later cards still add up." },
       visual: {
         kind: "illustration",
         variant: "wave",
@@ -394,6 +489,29 @@ const extraTime: Lesson = {
       visual: { kind: "words", words: ["Time", "Cost", "Confirm first"], tone: "navy", alt: "Key words: time, cost, confirm first" },
       script:
         "Here's the practical bit. When a client asks for extra time, the kind response is to say you'd like to help, then check. At our example rate, thirty minutes adds forty dollars. That might be fine, but the client should know before it happens, and the change needs to be confirmed through the coordinator so it's recorded properly. If you've already stayed, it's not too late. Contact the coordinator the same day and explain what happened.",
+      next: "practise",
+    },
+    practise: {
+      id: "practise",
+      type: "written",
+      beat: 5,
+      label: "Your turn",
+      heading: "Practise what you’d say",
+      body: "Write it as you’d say it to the client. The AI checks it against what a good answer covers.",
+      visual: { kind: "none" },
+      prompt: "A client asks you to stay an extra 30 minutes to finish the windows. What would you say to them?",
+      placeholder: "Write what you’d say, in your own words.",
+      criteria: [
+        { id: "c1", text: "Stays friendly and shows you’re happy to help" },
+        { id: "c2", text: "Explains that a longer visit costs more from their budget" },
+        { id: "c3", text: "Says you’ll check with their care coordinator before staying longer" },
+      ],
+      guidance:
+        "The partner shouldn't agree to the extra time on the spot. Accept 'coordinator', 'care partner', 'Trilogy' or 'the office' as who they check with. Mentioning cost in plain words ('it'll cost a bit more') is enough; no exact figure is needed. Don't mark down spelling or grammar.",
+      example:
+        "I'd be glad to help with the windows. Staying longer adds to the cost of the visit, so let me quickly check with your care coordinator first, and we can book the extra time properly.",
+      showExample: true,
+      minWords: 12,
       next: "check",
     },
     check: {
@@ -441,6 +559,7 @@ const extraTime: Lesson = {
 const noticingChange: Lesson = {
   slug: "noticing-a-change",
   version: "1.0-demo",
+  theme: "rhythmNavy",
   title: "Noticing a change",
   summary: "Practise listening, checking and escalating when a client’s needs seem to change.",
   outcome: "Recognise a possible change in needs and follow the escalation process.",
@@ -579,6 +698,7 @@ const noticingChange: Lesson = {
 const briefing: Lesson = {
   slug: "extra-time-briefing",
   version: "1.0-demo",
+  theme: "rhythmNavy",
   title: "Briefing: confirming extra visit time",
   summary: "What changed, who it affects and what to do, in five short cards.",
   outcome: "Know what to do from 3 November when a client asks for extra time.",
@@ -663,6 +783,7 @@ const briefing: Lesson = {
 const missionAndModel: Lesson = {
   slug: "our-mission-and-model",
   version: "1.1",
+  theme: "rhythmNavy",
   title: "Our Mission and Model",
   summary: "How the partnership between you and Trilogy Care works, and how to make it clear to your clients.",
   outcome: "Explain to a client who Trilogy Care is and how you work together.",
@@ -903,6 +1024,7 @@ const missionAndModel: Lesson = {
 const legislativeFramework: Lesson = {
   slug: "legislative-framework",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "Legislative Framework",
   summary: "The main parts of Australia’s aged care framework, and how they shape everyday care decisions.",
   outcome: "Recognise what each part of the framework does, and when to check the current requirements.",
@@ -980,13 +1102,18 @@ const legislativeFramework: Lesson = {
       beat: 1,
       label: "The Aged Care Act",
       heading: "Aged Care Act 2024",
-      body: "Older people’s rights are at the centre. In effect from 1 November 2025.",
+      body: "Older people’s rights are at the centre. In effect from {{aged_care_act_start}}.",
+      check: {
+        by: "2026-11-09",
+        note: "Confirm the start date and whether any transition arrangements have changed.",
+        source: { title: "About the Aged Care Act (Department of Health)", url: "https://www.health.gov.au/our-work/aged-care-act/about" },
+      },
       keyPoints: {
         title: "Key facts",
         style: "tiles",
         items: [
           { text: "The main law for government-funded aged care", icon: "doc" },
-          { text: "Began on 1 November 2025", icon: "clock" },
+          { text: "Began on {{aged_care_act_start}}", icon: "clock" },
           { text: "Follows the Royal Commission’s call for reform", icon: "route" },
           { text: "Rights shape how care is planned and delivered", icon: "heart" },
         ],
@@ -1147,7 +1274,7 @@ const legislativeFramework: Lesson = {
         style: "tiles",
         items: [
           { text: "Seven standards across the system", icon: "book" },
-          { text: "Applied from 1 November 2025", icon: "clock" },
+          { text: "Applied from {{aged_care_act_start}}", icon: "clock" },
           { text: "What applies depends on the provider’s registration and services", icon: "doc" },
           { text: "Requirements for quality and safe care", icon: "shield" },
         ],
@@ -1160,6 +1287,81 @@ const legislativeFramework: Lesson = {
       },
       script:
         "The strengthened Quality Standards describe requirements for quality and safe care. They applied from the first of November 2025. There are seven standards across the system. The standards and outcomes that apply depend on the provider’s registration and services. Your role-specific training will explain what that means for your work.",
+      next: "kit",
+    },
+    kit: {
+      id: "kit",
+      type: "hotspot",
+      beat: 6,
+      label: "In practice",
+      heading: "What the Standards look like at a visit",
+      body: "Safe, respectful care shows up in small, everyday things.",
+      visual: { kind: "none" },
+      prompt: "Tap each marker to see how this partner keeps the visit safe.",
+      image: {
+        src: "/images/cleaner.jpg",
+        width: 1000,
+        height: 667,
+        alt: "A smiling cleaner in a blue shirt and yellow gloves holds a mop and a basket of spray bottles and cloths",
+      },
+      mode: "explore",
+      spots: [
+        {
+          id: "gloves",
+          x: 29,
+          y: 82,
+          r: 7,
+          label: "Gloves on",
+          text: "Gloves protect you and the client from germs and harsh products. Change them between the bathroom and kitchen.",
+        },
+        {
+          id: "products",
+          x: 71,
+          y: 71,
+          r: 8,
+          label: "Labelled products",
+          text: "Keep products in their original labelled bottles, never mix them, and store them out of reach when you're done.",
+        },
+        {
+          id: "mop",
+          x: 27,
+          y: 26,
+          r: 9,
+          label: "Wet floors",
+          text: "Falls are one of the biggest risks for older people. Tell the client where it's wet and dry walkways before you leave.",
+        },
+        {
+          id: "cloths",
+          x: 73,
+          y: 92,
+          r: 7,
+          label: "Separate cloths",
+          text: "Use separate cloths for the bathroom and kitchen so germs don't spread around the home.",
+        },
+      ],
+      next: "leaving",
+    },
+    leaving: {
+      id: "leaving",
+      type: "checklist",
+      beat: 6,
+      label: "Checklist",
+      heading: "Before you leave a visit",
+      body: "A quick routine that keeps the client safe after you’ve gone. Tick each one as you picture yourself doing it.",
+      visual: { kind: "none" },
+      background: { gradient: "mist" },
+      prompt: "Before I leave, I…",
+      items: [
+        { id: "floors", text: "Dry or point out any wet floors", note: "Falls are a leading cause of harm for older people. A quick word saves a nasty slip." },
+        { id: "products", text: "Put cleaning products away, out of reach", note: "Keep them in their labelled bottles and never mix them." },
+        { id: "doors", text: "Check doors, windows and appliances are as the client likes them" },
+        {
+          id: "changes",
+          text: "Ask if anything has changed, and pass on anything that worries me",
+          note: "Tell the care coordinator the same day. Call {{emergency_number}} if someone is in immediate danger.",
+        },
+      ],
+      requireAll: true,
       next: "choice",
     },
     choice: {
@@ -1277,6 +1479,57 @@ const legislativeFramework: Lesson = {
           },
         },
       ],
+      next: "toolkit",
+    },
+    toolkit: {
+      id: "toolkit",
+      type: "resources",
+      beat: 10,
+      label: "Toolkit",
+      heading: "Keep these handy",
+      body: "The official sources behind this lesson, for when you need to check something. Open them now or come back later.",
+      visual: { kind: "none" },
+      items: [
+        {
+          id: "act",
+          kind: "link",
+          title: "About the Aged Care Act",
+          url: "https://www.health.gov.au/our-work/aged-care-act/about",
+          source: "Department of Health, Disability and Ageing",
+          description: "What the new Act covers and why it puts older people’s rights first.",
+        },
+        {
+          id: "rights",
+          kind: "link",
+          title: "Statement of Rights",
+          url: "https://www.agedcarequality.gov.au/workers/statement-rights",
+          source: "Aged Care Quality and Safety Commission",
+          description: "The rights every older person receiving care has, in plain language.",
+        },
+        {
+          id: "standards",
+          kind: "toolkit",
+          title: "Strengthened Aged Care Quality Standards",
+          url: "https://www.agedcarequality.gov.au/providers/quality-standards/strengthened-aged-care-quality-standards",
+          source: "Aged Care Quality and Safety Commission",
+          description: "The seven standards and guidance on what good care looks like.",
+        },
+        {
+          id: "code",
+          kind: "link",
+          title: "Code of Conduct for Aged Care",
+          url: "https://www.agedcarequality.gov.au/for-providers/code-conduct",
+          source: "Aged Care Quality and Safety Commission",
+        },
+        {
+          id: "rules",
+          kind: "link",
+          title: "Aged Care Rules 2025",
+          url: "https://www.legislation.gov.au/F2025L01173/latest/text",
+          source: "Federal Register of Legislation",
+          description: "The detailed legal requirements made under the Act.",
+        },
+      ],
       next: "recap",
     },
     recap: {
@@ -1343,6 +1596,7 @@ const lfOwner = "Quality and practice (draft)";
 const lfRecall: Lesson = {
   slug: "lf-recall",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "Legislative Framework: quick recall",
   summary: "Two quick questions to bring back the five parts of the framework.",
   outcome: "Recall what the Rights and the Code each do.",
@@ -1443,6 +1697,7 @@ const lfRecall: Lesson = {
 const lfApply: Lesson = {
   slug: "lf-apply",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "Legislative Framework: a privacy request",
   summary: "A realistic situation that tests privacy and a person’s voice in their own care.",
   outcome: "Check a person’s wishes and the arrangements that apply before sharing information.",
@@ -1590,6 +1845,7 @@ const refreshDone = {
 const lfRefresh: Lesson = {
   slug: "lf-refresh",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "Legislative Framework: refresher",
   summary: "One quick decision to keep the framework fresh.",
   outcome: "Give the person a voice in everyday service decisions.",
@@ -1610,6 +1866,7 @@ const lfRefresh: Lesson = {
 const lfRefreshSupport: Lesson = {
   slug: "lf-refresh-support",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "Legislative Framework: refresher with practice",
   summary: "A short reminder of the framework, some practice and one decision.",
   outcome: "Recognise what each part does and give the person a voice in everyday decisions.",
@@ -1692,6 +1949,7 @@ const etRule: { text: string; icon: IconName }[] = [
 const etRecall: Lesson = {
   slug: "et-recall",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "A little extra time: quick recall",
   summary: "Two quick questions on what to do when a client asks you to stay longer.",
   outcome: "Check with the coordinator before agreeing to extra time.",
@@ -1795,6 +2053,7 @@ function etApplyLesson(role: "default" | "gardening"): Lesson {
   return {
     slug: garden ? "et-apply-gardening" : "et-apply",
     version: "1.0",
+    theme: "rhythmNavy",
     title: garden ? "A little extra time: a different job" : "A little extra time: a different request",
     summary: garden
       ? "The visit length stays the same, but the client asks for a different job."
@@ -2008,6 +2267,7 @@ const etRefreshDone: Card = {
 const etRefresh: Lesson = {
   slug: "et-refresh",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "A little extra time: refresher",
   summary: "One quick decision to keep the habit of checking first.",
   outcome: "Check before agreeing to any change, whoever asks.",
@@ -2025,6 +2285,7 @@ const etRefresh: Lesson = {
 const etRefreshSupport: Lesson = {
   slug: "et-refresh-support",
   version: "1.0",
+  theme: "rhythmNavy",
   title: "A little extra time: refresher with practice",
   summary: "A short reminder of the steps, some practice and one decision.",
   outcome: "Check before agreeing to any change, and explain what it means for the client.",

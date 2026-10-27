@@ -1,5 +1,8 @@
 import type { Card } from "@/content/lessons";
 
+/** The hold shown while a card's audio is still playing. */
+export const LISTEN_GATE = "Listen to the end to continue";
+
 /*
   "Required completion": what a learner still has to do on a card before Continue (or a swipe)
   moves them on. Returns the hint to show, or null when they're free to go.
@@ -38,11 +41,11 @@ export function completionGate(
       return "Write your answer to continue";
     if (node.type === "calculator" && ctx.answers[node.id] === undefined) return "Try the calculator to continue";
   }
-  // Cards you answer (quiz, decision, poll, rating, wall) already hold you until you answer; with
+  // Cards you answer (quiz, decision, poll, rating, wall, written, hotspot) already hold you until you answer; with
   // audio on hold, they also wait for their question to be read out.
-  const answerCard = ["quiz", "decision", "poll", "rating", "wall"].includes(node.type);
+  const answerCard = ["quiz", "decision", "poll", "rating", "wall", "written", "hotspot"].includes(node.type);
   if (!(ctx.holdForAudio !== false || (node.requireComplete && !answerCard))) return null;
   // If the audio can't play at all, don't trap anyone.
-  if (ctx.speaks && ctx.narration?.playable !== false && ctx.narration?.state !== "ended") return "Listen to the end to continue";
+  if (ctx.speaks && ctx.narration?.playable !== false && ctx.narration?.state !== "ended") return LISTEN_GATE;
   return null;
 }

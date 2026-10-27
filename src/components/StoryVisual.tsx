@@ -1,6 +1,7 @@
 import type { IconName, VisualVariant } from "@/content/stories";
 import type { Tone } from "@/content/lessons";
 import Image from "next/image";
+import { MotionPhoto } from "./MotionPhoto";
 import { Icon } from "./Icon";
 import { cx } from "@/lib/format";
 
@@ -10,11 +11,11 @@ import { cx } from "@/lib/format";
 */
 
 const tones: Record<Tone, { bg: string; a: string; b: string; c: string; icon: string }> = {
-  teal: { bg: "#00828a", a: "#4cc3c9", b: "#ddf2f3", c: "#0f2642", icon: "#FFFFFF" },
-  navy: { bg: "#0f2642", a: "#4cc3c9", b: "#fdb813", c: "#d9381e", icon: "#FFFFFF" },
-  warm: { bg: "#c4471b", a: "#fdb813", b: "#F7D9C9", c: "#0f2642", icon: "#FFFFFF" },
-  gold: { bg: "#fdb813", a: "#FFFFFF", b: "#c4471b", c: "#0f2642", icon: "#0f2642" },
-  sky: { bg: "#dde7f2", a: "#3d5068", b: "#4cc3c9", c: "#FFFFFF", icon: "#0f2642" },
+  teal: { bg: "#0e7c7b", a: "#4cc3c9", b: "#ddf2f3", c: "#102a43", icon: "#FFFFFF" },
+  navy: { bg: "#102a43", a: "#4cc3c9", b: "#ffc72c", c: "#d32f2f", icon: "#FFFFFF" },
+  warm: { bg: "#c4471b", a: "#ffc72c", b: "#F7D9C9", c: "#102a43", icon: "#FFFFFF" },
+  gold: { bg: "#ffc72c", a: "#FFFFFF", b: "#c4471b", c: "#102a43", icon: "#102a43" },
+  sky: { bg: "#dde7f2", a: "#3d5068", b: "#4cc3c9", c: "#FFFFFF", icon: "#102a43" },
 };
 
 function Pattern({ variant, t }: { variant: VisualVariant; t: (typeof tones)[Tone] }) {
@@ -64,14 +65,7 @@ function Pattern({ variant, t }: { variant: VisualVariant; t: (typeof tones)[Ton
       return (
         <g>
           {Array.from({ length: 60 }, (_, i) => (
-            <circle
-              key={i}
-              cx={20 + (i % 12) * 34}
-              cy={22 + Math.floor(i / 12) * 48}
-              r={4 + ((i * 5) % 7)}
-              fill={[t.a, t.b, t.c][i % 3]}
-              opacity="0.55"
-            />
+            <circle key={i} cx={20 + (i % 12) * 34} cy={22 + Math.floor(i / 12) * 48} r={4 + ((i * 5) % 7)} fill={[t.a, t.b, t.c][i % 3]} opacity="0.55" />
           ))}
         </g>
       );
@@ -104,7 +98,7 @@ export function StoryVisual({
   className?: string;
   iconSize?: string;
   /** `position` is a CSS object-position that keeps the subject in frame when cropped. */
-  photo?: { src: string; width: number; height: number; position?: string };
+  photo?: { src: string; width: number; height: number; position?: string; animated?: { mp4: string } };
   priority?: boolean;
   /** Gently animates the pattern and icon (used on lesson cards, not news tiles). */
   animated?: boolean;
@@ -112,7 +106,19 @@ export function StoryVisual({
   if (photo) {
     return (
       <div className={cx("relative overflow-hidden bg-muted", className)}>
-        <Image src={photo.src} alt={alt} fill priority={priority} sizes="(min-width: 1024px) 50vw, 100vw" className="object-cover" style={{ objectPosition: photo.position ?? "center 75%" }} />
+        {photo.animated ? (
+          <MotionPhoto still={photo.src} mp4={photo.animated.mp4} alt={alt} style={{ objectPosition: photo.position ?? "center" }} />
+        ) : (
+          <Image
+            src={photo.src}
+            alt={alt}
+            fill
+            priority={priority}
+            sizes="(min-width: 1024px) 50vw, 100vw"
+            className="object-cover"
+            style={{ objectPosition: photo.position ?? "center 75%" }}
+          />
+        )}
       </div>
     );
   }

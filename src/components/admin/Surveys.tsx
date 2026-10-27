@@ -9,11 +9,21 @@ import { cx, formatDate } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { SurveyForm } from "../SurveyForm";
+import { confirmAction } from "@/lib/confirm";
 
 /* Surveys: build them, choose where they're asked, read the results. */
 
 type Place = { type: "path" | "lesson"; id: string; title: string };
-type SurveyRow = { id: string; name: string; description: string; anonymous: boolean; required: boolean; questions: number; usedOn: Place[]; responses: number };
+type SurveyRow = {
+  id: string;
+  name: string;
+  description: string;
+  anonymous: boolean;
+  required: boolean;
+  questions: number;
+  usedOn: Place[];
+  responses: number;
+};
 type Attachable = Place & { current: { surveyId: string; surveyName: string } | null };
 type Detail = {
   id: string;
@@ -32,7 +42,15 @@ type QuestionResult = SurveyQuestion & {
   counts: { label: string; count: number }[];
   comments?: { text: string; at: string; org: string; name: string | null }[];
 };
-type Results = { id: string; name: string; anonymous: boolean; total: number; skipped: number; places: { key: string; title: string; type: string; count: number }[]; questions: QuestionResult[] };
+type Results = {
+  id: string;
+  name: string;
+  anonymous: boolean;
+  total: number;
+  skipped: number;
+  places: { key: string; title: string; type: string; count: number }[];
+  questions: QuestionResult[];
+};
 
 export function SurveyList() {
   const me = useApi<Me>("/api/me").data;
@@ -56,8 +74,8 @@ export function SurveyList() {
     <AdminShell title="Surveys">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          Ask people what they thought when they finish a learning path, or a single lesson. Surveys appear straight after the completion screen, and anything skipped
-          waits on their Learning page.
+          Ask people what they thought when they finish a learning path, or a single lesson. Surveys appear straight after the completion screen, and anything
+          skipped waits on their Learning page.
         </p>
         {me?.canAuthor && (
           <div className="flex flex-wrap gap-2">
@@ -145,7 +163,10 @@ function SurveyWorkspace({ detail, reload }: { detail: Detail; reload: () => voi
             type="button"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={cx("-mb-px inline-flex min-h-11 items-center border-b-2 px-4 font-medium", tab === t.id ? "border-action text-ink" : "border-transparent text-ink-muted hover:text-ink")}
+            className={cx(
+              "-mb-px inline-flex min-h-11 items-center border-b-2 px-4 font-medium",
+              tab === t.id ? "border-action text-ink" : "border-transparent text-ink-muted hover:text-ink",
+            )}
           >
             {t.label}
             {t.id === "where" && <span className="ml-2 rounded-full bg-muted px-2 text-xs">{detail.links.length}</span>}
@@ -177,7 +198,8 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
     setDirty(true);
     setNotice(null);
   };
-  const setQ = (i: number, patch: Partial<SurveyQuestion>) => change(() => setQuestions((qs) => qs.map((q, j) => (j === i ? ({ ...q, ...patch } as SurveyQuestion) : q))));
+  const setQ = (i: number, patch: Partial<SurveyQuestion>) =>
+    change(() => setQuestions((qs) => qs.map((q, j) => (j === i ? ({ ...q, ...patch } as SurveyQuestion) : q))));
   const move = (i: number, by: number) =>
     change(() =>
       setQuestions((qs) => {
@@ -190,7 +212,10 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
     let n = questions.length + 1;
     while (questions.some((x) => x.id === `q${n}`)) n++;
     const id = `q${n}`;
-    const q: SurveyQuestion = type === "choice" ? { id, type, prompt: "", required: false, options: ["", ""] } : ({ id, type, prompt: "", required: type !== "text" } as SurveyQuestion);
+    const q: SurveyQuestion =
+      type === "choice"
+        ? { id, type, prompt: "", required: false, options: ["", ""] }
+        : ({ id, type, prompt: "", required: type !== "text" } as SurveyQuestion);
     change(() => setQuestions((qs) => [...qs, q]));
   };
 
@@ -211,7 +236,8 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
   }
 
   async function archive() {
-    if (!window.confirm(`Archive “${name}”? It stops being asked everywhere. Answers already given are kept.`)) return;
+    if (!(await confirmAction("It stops being asked everywhere. Answers already given are kept.", { title: `Archive “${name}”?`, confirmLabel: "Archive" })))
+      return;
     setBusy(true);
     try {
       await api(`/api/admin/surveys/${detail.id}`, { method: "DELETE" });
@@ -235,14 +261,24 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex items-start gap-3 rounded-2xl border border-line-strong p-3">
-                <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={anonymous} onChange={(e) => change(() => setAnonymous(e.target.checked))} />
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-5 accent-[var(--action)]"
+                  checked={anonymous}
+                  onChange={(e) => change(() => setAnonymous(e.target.checked))}
+                />
                 <span>
                   <span className="font-semibold">Anonymous</span>
                   <span className="block text-sm text-ink-muted">Answers are stored without names. People are told before they answer.</span>
                 </span>
               </label>
               <label className="flex items-start gap-3 rounded-2xl border border-line-strong p-3">
-                <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={required} onChange={(e) => change(() => setRequired(e.target.checked))} />
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-5 accent-[var(--action)]"
+                  checked={required}
+                  onChange={(e) => change(() => setRequired(e.target.checked))}
+                />
                 <span>
                   <span className="font-semibold">Required</span>
                   <span className="block text-sm text-ink-muted">No “Not now” button. Unanswered surveys stay on their Learning page.</span>
@@ -259,21 +295,40 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
                 return (
                   <li key={q.id} className="flex flex-col gap-2 rounded-2xl border border-line p-3">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-action font-mulish text-xs font-extrabold text-on-action">{i + 1}</span>
+                      <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-action font-mulish text-xs font-extrabold text-on-action">
+                        {i + 1}
+                      </span>
                       <span className="text-sm font-semibold text-ink-muted">{t?.label}</span>
                       <span className="ml-auto flex gap-0.5">
                         <button type="button" className={btn.quiet} disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move question up">
                           <Icon name="arrow-left" className="size-4 rotate-90" />
                         </button>
-                        <button type="button" className={btn.quiet} disabled={i === questions.length - 1} onClick={() => move(i, 1)} aria-label="Move question down">
+                        <button
+                          type="button"
+                          className={btn.quiet}
+                          disabled={i === questions.length - 1}
+                          onClick={() => move(i, 1)}
+                          aria-label="Move question down"
+                        >
                           <Icon name="arrow-right" className="size-4 rotate-90" />
                         </button>
-                        <button type="button" className={btn.quiet} onClick={() => change(() => setQuestions(questions.filter((_, j) => j !== i)))} aria-label="Delete question">
+                        <button
+                          type="button"
+                          className={btn.quiet}
+                          onClick={() => change(() => setQuestions(questions.filter((_, j) => j !== i)))}
+                          aria-label="Delete question"
+                        >
                           <Icon name="close" className="size-4" />
                         </button>
                       </span>
                     </div>
-                    <input className={input} value={q.prompt} placeholder="Question wording" onChange={(e) => setQ(i, { prompt: e.target.value })} aria-label={`Question ${i + 1} wording`} />
+                    <input
+                      className={input}
+                      value={q.prompt}
+                      placeholder="Question wording"
+                      onChange={(e) => setQ(i, { prompt: e.target.value })}
+                      aria-label={`Question ${i + 1} wording`}
+                    />
                     {q.type === "choice" && (
                       <div className="flex flex-col gap-1.5 pl-2">
                         {q.options.map((o, j) => (
@@ -286,7 +341,13 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
                               onChange={(e) => setQ(i, { options: q.options.map((x, k) => (k === j ? e.target.value : x)) })}
                               aria-label={`Option ${j + 1}`}
                             />
-                            <button type="button" className={btn.quiet} disabled={q.options.length <= 2} onClick={() => setQ(i, { options: q.options.filter((_, k) => k !== j) })} aria-label="Remove option">
+                            <button
+                              type="button"
+                              className={btn.quiet}
+                              disabled={q.options.length <= 2}
+                              onClick={() => setQ(i, { options: q.options.filter((_, k) => k !== j) })}
+                              aria-label="Remove option"
+                            >
                               <Icon name="minus" className="size-4" />
                             </button>
                           </div>
@@ -297,7 +358,12 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
                       </div>
                     )}
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="size-4 accent-[var(--action)]" checked={q.required} onChange={(e) => setQ(i, { required: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-[var(--action)]"
+                        checked={q.required}
+                        onChange={(e) => setQ(i, { required: e.target.checked })}
+                      />
                       Must be answered
                     </label>
                   </li>
@@ -341,7 +407,13 @@ function QuestionsTab({ detail, onName, reload }: { detail: Detail; onName: (n: 
 
       <aside className="lg:sticky lg:top-24 lg:self-start">
         <p className="mb-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">What learners see</p>
-        <SurveyForm key={JSON.stringify(questions)} survey={{ id: "preview", name, description, anonymous, required, questions }} context="You finished Welcome to Trilogy Care" onSkip={() => {}} preview />
+        <SurveyForm
+          key={JSON.stringify(questions)}
+          survey={{ id: "preview", name, description, anonymous, required, questions }}
+          context="You finished Welcome to Trilogy Care"
+          onSkip={() => {}}
+          preview
+        />
       </aside>
     </div>
   );
@@ -396,7 +468,13 @@ function WhereTab({ detail, reload }: { detail: Detail; reload: () => void }) {
             return (
               <li key={k}>
                 <label className={cx("flex cursor-pointer items-center gap-3 px-3 py-3 hover:bg-muted", on && "bg-tealtint/60")}>
-                  <input type="checkbox" disabled={!detail.canEdit} className="size-5 shrink-0 accent-[var(--action)]" checked={on} onChange={(e) => toggle(k, e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    disabled={!detail.canEdit}
+                    className="size-5 shrink-0 accent-[var(--action)]"
+                    checked={on}
+                    onChange={(e) => toggle(k, e.target.checked)}
+                  />
                   <span className="min-w-0 flex-1 font-medium">{a.title}</span>
                   {other && <span className="shrink-0 text-xs text-ink-muted">Now asks “{other.surveyName}”</span>}
                 </label>

@@ -57,8 +57,35 @@ export function useTextTone(src: string | undefined, choice: "auto" | TextTone =
   return cache.get(src) ?? (measured?.src === src ? measured.tone : "light");
 }
 
+// Frosted glass: the background shows through, blurred, while dark text stays readable on it.
+const GLASS =
+  "rounded-2xl border border-white/45 p-3 text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_8px_32px_rgb(0_0_0/0.18)] backdrop-blur-[36px] backdrop-saturate-[1.8] [text-shadow:none] dark:border-white/15";
+/** Over a light background: clear glass. */
+export const ON_COLOUR_PANEL = `${GLASS} bg-white/35 backdrop-brightness-[1.12] dark:bg-surface/40`;
+/** Over a dark background: frosted a little more so hint text stays readable. */
+const ON_DARK_PANEL = `${GLASS} bg-white/55 backdrop-brightness-[1.3] dark:bg-surface/55`;
+
 /** Classes for text over a full-background photo. */
 export const toneClasses = (tone: TextTone) =>
   tone === "dark"
-    ? { text: "text-[#0a1a2e]", soft: "text-[#0a1a2e]/75", fade: "bg-gradient-to-t from-white/95 via-white/70 to-white/5", placeholder: "empty:before:text-[#0a1a2e]/45" }
-    : { text: "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", soft: "text-white", fade: "bg-gradient-to-t from-black/85 via-black/50 to-black/10", placeholder: "empty:before:text-white/60" };
+    ? {
+        text: "text-[#0a1a2e]",
+        soft: "text-[#0a1a2e]/75",
+        fade: "bg-gradient-to-t from-white/95 via-white/70 to-white/5",
+        placeholder: "empty:before:text-[#0a1a2e]/45",
+        panel: ON_COLOUR_PANEL,
+      }
+    : {
+        text: "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]",
+        soft: "text-white",
+        fade: "bg-gradient-to-t from-black/85 via-black/50 to-black/10",
+        placeholder: "empty:before:text-white/60",
+        panel: ON_DARK_PANEL,
+      };
+
+/**
+  Card types whose questions and choices sit on a frosted panel when the card has a gradient or
+  full-background photo, so their dark text stays readable. Used by the player and the editor.
+*/
+export const PANELLED_ON_COLOUR = ["decision", "quiz", "calculator", "poll", "rating", "response", "written", "hotspot", "checklist"] as const;
+export const panelledOnColour = (type: string) => (PANELLED_ON_COLOUR as readonly string[]).includes(type);

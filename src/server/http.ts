@@ -1,22 +1,41 @@
 import "server-only";
 import { connection } from "next/server";
+import { headers } from "next/headers";
 import { getDb, type Db } from "./db";
 import { currentUser, HttpError, type User } from "./auth";
 import { now } from "./clock";
+import { storedResponse, storeResponse, validKey } from "./idempotency";
 
 export type Ctx = { db: Db; user: User; now: Date };
 
-/** Wraps a route handler: resolves the database, signed-in user and clock, and maps errors. */
+/**
+  Wraps a route handler: resolves the database, signed-in user and clock, and maps errors.
+  Saves sent with an Idempotency-Key (from the offline outbox) run once; a resend gets the first answer.
+*/
 export async function handle(fn: (ctx: Ctx) => unknown) {
   // Every API response depends on the signed-in person and the clock, so never prerender it.
   await connection();
+  let replay: { db: Db; key: string; userId: string; now: Date } | null = null;
   try {
     const db = getDb();
     const user = await currentUser(db);
-    const result = await fn({ db, user, now: now(db) });
-    return result instanceof Response ? result : Response.json(result ?? { ok: true });
+    const at = now(db);
+    const key = (await headers()).get("idempotency-key");
+    if (validKey(key)) {
+      const stored = storedResponse(db, key, user.id);
+      if (stored) return Response.json(stored.body, { status: stored.status, headers: { "idempotent-replay": "true" } });
+      replay = { db, key, userId: user.id, now: at };
+    }
+    const result = await fn({ db, user, now: at });
+    if (result instanceof Response) return result;
+    if (replay) storeResponse(replay.db, replay.key, replay.userId, 200, result, replay.now);
+    return Response.json(result ?? { ok: true });
   } catch (e) {
-    if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
+    if (e instanceof HttpError) {
+      // A refusal is an answer too: a resend gets the same one. Server faults aren't kept, so they can be retried.
+      if (replay && e.status < 500) storeResponse(replay.db, replay.key, replay.userId, e.status, { error: e.message }, replay.now);
+      return Response.json({ error: e.message }, { status: e.status });
+    }
     console.error(e);
     return Response.json({ error: "Something went wrong on the server." }, { status: 500 });
   }

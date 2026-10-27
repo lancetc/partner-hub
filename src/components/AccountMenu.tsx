@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { resetHub, setHub, useHub } from "@/lib/store";
 import { api, useApi, type Me } from "@/lib/api";
+import { LANGUAGES } from "@/lib/languages";
+import { pendingFor } from "@/lib/outbox";
+import { clearOfflineData } from "@/lib/offlineLessons";
+import { confirmAction } from "@/lib/confirm";
 
 export function AccountMenu() {
   const [open, setOpen] = useState(false);
@@ -26,7 +30,13 @@ export function AccountMenu() {
   }, [open]);
 
   const item = "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-muted";
-  const initials = me ? me.user.name.split(" ").map((p) => p[0]).join("").slice(0, 2) : "··";
+  const initials = me
+    ? me.user.name
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+    : "··";
 
   return (
     <div ref={wrap} className="relative">
@@ -41,12 +51,25 @@ export function AccountMenu() {
         {initials}
       </button>
       {open && (
-        <div id="account-menu" className="absolute right-0 top-14 max-h-[calc(100dvh-5rem)] w-80 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl">
+        <div
+          id="account-menu"
+          className="absolute right-0 top-14 max-h-[calc(100dvh-5rem)] w-80 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl"
+        >
           <div className="px-3 py-2">
-            <p className="font-semibold">{me?.user.name ?? "Loading…"}</p>
+            <p className="font-semibold" translate="no">
+              {me?.user.name ?? "Loading…"}
+            </p>
             <p className="text-sm text-ink-muted">{me ? `${me.demoUsers.find((u) => u.id === me.user.id)?.label} · demo account` : ""}</p>
           </div>
           <hr className="my-1 border-line" />
+          <Link href="/settings" className={item} onClick={() => setOpen(false)}>
+            <Icon name="user" /> Profile and settings
+            {me && me.user.language !== "en" && (
+              <span className="ml-auto text-sm text-ink-muted" translate="no">
+                {LANGUAGES.find((l) => l.code === me.user.language)?.native}
+              </span>
+            )}
+          </Link>
           <Link href="/saved" className={item} onClick={() => setOpen(false)}>
             <Icon name="bookmark" /> Saved items {savedCount > 0 && <span className="ml-auto text-sm text-ink-muted">{savedCount}</span>}
           </Link>
@@ -66,7 +89,22 @@ export function AccountMenu() {
               <select
                 value={me.user.id}
                 onChange={async (e) => {
-                  await api("/api/demo/session", { body: { userId: e.target.value } });
+                  const next = e.target.value;
+                  // Shared device: saves waiting to sync stay with this person (they send next time they sign in),
+                  // and nothing kept for offline use is shown to the next person.
+                  const waiting = (await pendingFor(me.user.id)).length;
+                  if (
+                    waiting &&
+                    !(await confirmAction(
+                      `${waiting} ${waiting === 1 ? "save hasn’t" : "saves haven’t"} synced yet. They’ll send next time ${me.user.name.split(" ")[0]} signs in on this device.`,
+                      { title: "Switch account?", confirmLabel: "Switch anyway" },
+                    ))
+                  ) {
+                    e.target.value = me.user.id;
+                    return;
+                  }
+                  await clearOfflineData().catch(() => {});
+                  await api("/api/demo/session", { body: { userId: next } });
                   window.location.reload();
                 }}
                 className="min-h-11 rounded-lg border border-line-strong bg-surface px-2 text-[0.95rem]"
@@ -91,8 +129,14 @@ export function AccountMenu() {
           <button
             type="button"
             className={item}
-            onClick={() => {
-              if (window.confirm("Reset demo progress, saved items and onboarding stored in this browser? Server records are kept.")) {
+            onClick={async () => {
+              if (
+                await confirmAction("Demo progress, saved items and onboarding stored in this browser are cleared. Server records are kept.", {
+                  title: "Reset browser demo data?",
+                  confirmLabel: "Reset",
+                  danger: true,
+                })
+              ) {
                 resetHub();
                 setOpen(false);
               }

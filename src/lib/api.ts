@@ -4,12 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 
 /** JSON request to the hub's API. Throws with the server's message on failure. */
 export async function api<T>(url: string, init?: { method?: string; body?: unknown }): Promise<T> {
-  const res = await fetch(url, {
-    method: init?.method ?? (init?.body ? "POST" : "GET"),
-    headers: init?.body ? { "content-type": "application/json" } : undefined,
-    body: init?.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: init?.method ?? (init?.body ? "POST" : "GET"),
+      headers: init?.body ? { "content-type": "application/json" } : undefined,
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+    });
+  } catch {
+    // No connection. (Saves that can wait use the outbox in lib/outbox.ts instead.)
+    throw new Error("You’re offline. This needs an internet connection, so try again when you’re back online.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
   return data as T;
@@ -67,7 +73,7 @@ export type FollowUpListItem = {
 };
 
 export type Me = {
-  user: { id: string; name: string; role: "learner" | "org_admin" | "author"; audience: string; serviceRole: string | null };
+  user: { id: string; name: string; role: "learner" | "org_admin" | "author"; audience: string; serviceRole: string | null; language: string };
   org: { name: string };
   canAuthor: boolean;
   canReport: boolean;
@@ -75,8 +81,11 @@ export type Me = {
   demoClockOffsetDays: number;
 };
 
-export const durationLabel = (sec: number) => (sec < 60 ? `About ${Math.round(sec / 5) * 5} seconds` : `About ${Math.round(sec / 60)} minute${Math.round(sec / 60) === 1 ? "" : "s"}`);
+export const durationLabel = (sec: number) =>
+  sec < 60 ? `About ${Math.round(sec / 5) * 5} seconds` : `About ${Math.round(sec / 60)} minute${Math.round(sec / 60) === 1 ? "" : "s"}`;
 
 export function formatWhen(iso: string, tz: string) {
-  return new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(iso));
+  return new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: tz }).format(
+    new Date(iso),
+  );
 }

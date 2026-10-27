@@ -95,16 +95,26 @@ export function VideoBubbles({ bubbles, onComplete, size = "player" }: { bubbles
                   const pct = v.duration ? v.currentTime / v.duration : 0;
                   setProgress((p) => p.map((x, j) => (j === i ? pct : x)));
                 }}
-                className="size-full rounded-full bg-[#0f2642] object-cover"
+                className="size-full rounded-full bg-[#102a43] object-cover"
               />
               {/* Progress ring. */}
               <svg aria-hidden viewBox={`0 0 ${dim} ${dim}`} className="pointer-events-none absolute inset-0 -rotate-90">
                 <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="rgb(255 255 255 / 0.55)" strokeWidth="4" />
-                <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="#fdb813" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - (progress[i] ?? 0))} />
+                <circle
+                  cx={dim / 2}
+                  cy={dim / 2}
+                  r={r}
+                  fill="none"
+                  stroke="#ffc72c"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={c}
+                  strokeDashoffset={c * (1 - (progress[i] ?? 0))}
+                />
               </svg>
               {!isPlaying && (
                 <span aria-hidden className="absolute inset-0 grid place-items-center rounded-full bg-black/25">
-                  <span className="grid size-11 place-items-center rounded-full bg-white/95 text-[#0f2642] shadow-md">
+                  <span className="grid size-11 place-items-center rounded-full bg-white/95 text-[#102a43] shadow-md">
                     <Icon name={ended[i] ? "refresh" : "play"} className={cx("size-5", !ended[i] && "ml-0.5")} />
                   </span>
                 </span>

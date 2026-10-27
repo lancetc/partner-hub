@@ -34,4 +34,8 @@ export function parseVideoLink(raw: string): VideoLink | null {
 
 /** The link to show back to the author for a stored video. */
 export const videoLinkFor = (v: { provider: "synthesia" | "youtube"; id: string; orientation?: string }) =>
-  v.provider === "youtube" ? (v.orientation === "portrait" ? `https://www.youtube.com/shorts/${v.id}` : `https://www.youtube.com/watch?v=${v.id}`) : `https://share.synthesia.io/${v.id}`;
+  v.provider === "youtube"
+    ? v.orientation === "portrait"
+      ? `https://www.youtube.com/shorts/${v.id}`
+      : `https://www.youtube.com/watch?v=${v.id}`
+    : `https://share.synthesia.io/${v.id}`;

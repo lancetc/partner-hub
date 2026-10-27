@@ -1,0 +1,137 @@
+/* The learning path certificate (components/Certificate.tsx). Fixed brand colours: it's a document, not themed UI. */
+
+.certificate {
+  aspect-ratio: 297 / 210;
+  background: #ffffff;
+  color: #102a43;
+  border-radius: 1.25rem;
+  box-shadow: 0 10px 40px rgb(16 42 67 / 0.12);
+  padding: clamp(0.75rem, 2.2vw, 1.5rem);
+}
+.certificate-inner {
+  height: 100%;
+  border: 2px solid #284d79;
+  outline: 6px solid #ddf2f3;
+  outline-offset: -12px;
+  border-radius: 0.9rem;
+  padding: clamp(1rem, 4vw, 3rem) clamp(1rem, 5vw, 4rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  gap: clamp(0.2rem, 0.8vw, 0.6rem);
+}
+.certificate-logo {
+  height: clamp(1.75rem, 4vw, 2.75rem);
+  width: auto;
+  margin-bottom: clamp(0.25rem, 1.5vw, 1rem);
+}
+.certificate-kicker {
+  font-family: var(--font-mulish-face), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #284d79;
+  font-size: clamp(0.65rem, 1.3vw, 0.95rem);
+}
+.certificate-lead {
+  color: #3d5068;
+  font-size: clamp(0.75rem, 1.5vw, 1.05rem);
+}
+.certificate-name {
+  font-family: var(--font-roboto-serif), Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(1.5rem, 5vw, 3.25rem);
+  line-height: 1.1;
+  border-bottom: 2px solid #ffc72c;
+  padding: 0 1.5rem 0.25rem;
+}
+.certificate-path {
+  font-family: var(--font-roboto-serif), Georgia, serif;
+  font-weight: 600;
+  color: #284d79;
+  font-size: clamp(1.1rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+.certificate-meta {
+  color: #3d5068;
+  font-size: clamp(0.7rem, 1.3vw, 0.95rem);
+}
+.certificate-outcomes {
+  margin-top: clamp(0.25rem, 1.2vw, 0.9rem);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 1.5rem;
+  text-align: left;
+  max-width: 44rem;
+  color: #3d5068;
+  font-size: clamp(0.6rem, 1.1vw, 0.85rem);
+}
+.certificate-outcomes li {
+  padding-left: 1.1em;
+  position: relative;
+}
+.certificate-outcomes li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #0e7c7b;
+  font-weight: 700;
+}
+.certificate-foot {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: clamp(0.5rem, 1.5vw, 1rem);
+  color: #3d5068;
+  font-size: clamp(0.55rem, 1vw, 0.75rem);
+}
+
+@media (max-width: 640px) {
+  .certificate-outcomes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Print only the certificate, filling one landscape A4 page. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #certificate,
+  #certificate * {
+    visibility: visible;
+  }
+  #certificate {
+    position: fixed;
+    inset: 0;
+    width: 297mm;
+    height: 210mm;
+    aspect-ratio: auto;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 10mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #certificate .certificate-inner {
+    padding: 14mm 22mm;
+  }
+  #certificate .certificate-name {
+    font-size: 40pt;
+  }
+  #certificate .certificate-path {
+    font-size: 24pt;
+  }
+  #certificate .certificate-outcomes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    font-size: 10pt;
+  }
+}

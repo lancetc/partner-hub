@@ -1,0 +1,198 @@
+/*
+  Feedback on interactive cards: a press-in on tap, a springy pop when something is chosen, a glow
+  and confetti burst for a right answer, a small shake for a wrong one, ticks that spring in, and
+  result bars that grow. Only with motion allowed; otherwise the colour changes alone carry it.
+*/
+@keyframes fx-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes fx-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgb(43 102 54 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgb(43 102 54 / 0);
+  }
+}
+@keyframes fx-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes fx-tick {
+  0% {
+    transform: scale(0) rotate(-25deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.25) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes fx-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes fx-star {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35) rotate(-12deg);
+  }
+  70% {
+    transform: scale(0.95) rotate(4deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes fx-burst {
+  0% {
+    transform: rotate(var(--a)) translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateY(var(--d)) scale(0.3);
+    opacity: 0;
+  }
+}
+@keyframes fx-ready {
+  0% {
+    box-shadow: 0 0 0 0 rgb(14 124 123 / 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgb(14 124 123 / 0);
+  }
+}
+@keyframes fx-rise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fx-press {
+    transition:
+      transform 120ms ease,
+      background-color 150ms,
+      border-color 150ms;
+  }
+  .fx-press:active {
+    transform: scale(0.97);
+  }
+  .fx-pop {
+    animation: fx-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .fx-correct {
+    animation:
+      fx-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      fx-glow 900ms ease-out;
+  }
+  .fx-shake {
+    animation: fx-shake 420ms ease-in-out;
+  }
+  .fx-tick {
+    animation: fx-tick 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .fx-grow {
+    transform-origin: left;
+    animation: fx-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .fx-star {
+    animation: fx-star 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .fx-ready {
+    animation: fx-ready 900ms ease-out;
+  }
+  .fx-rise {
+    animation: fx-rise 320ms ease-out both;
+  }
+  .fx-burst > span {
+    animation: fx-burst 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-burst {
+    display: none;
+  }
+}
+
+/*
+  Learning path complete: confetti bursts from the top of the screen and rains down. Each piece has
+  its own sideways drift (--dx), spin (--r) and timing, set inline. Hidden when motion is reduced.
+*/
+@keyframes confetti-rain {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  12% {
+    transform: translate3d(calc(var(--dx) * 0.55), var(--burst), 0) rotate(calc(var(--r) * 0.3));
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--dx), 110vh, 0) rotate(var(--r));
+    opacity: 0.6;
+  }
+}
+@keyframes confetti-sway {
+  0%,
+  100% {
+    margin-left: 0;
+  }
+  50% {
+    margin-left: var(--sway);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .confetti-piece {
+    animation: confetti-rain var(--t) cubic-bezier(0.2, 0.6, 0.4, 1) var(--d) both;
+  }
+  .confetti-piece > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    animation: confetti-sway calc(var(--t) / 3) ease-in-out var(--d) infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-layer {
+    display: none;
+  }
+}

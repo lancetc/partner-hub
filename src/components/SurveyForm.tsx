@@ -1,5 +1,6 @@
 "use client";
 
+import { send as sendOrQueue } from "@/lib/outbox";
 import { useState } from "react";
 import { AGREE, RATING_LABELS, type SurveyQuestion } from "@/content/surveys";
 import { cx } from "@/lib/format";
@@ -72,7 +73,14 @@ export function SurveyForm({
                         answers[q.id] === n ? "border-action bg-action text-on-action" : "border-line-strong hover:bg-muted",
                       )}
                     >
-                      <input type="radio" name={`${survey.id}-${q.id}`} value={n} className="sr-only" checked={answers[q.id] === n} onChange={() => set(q.id, n)} />
+                      <input
+                        type="radio"
+                        name={`${survey.id}-${q.id}`}
+                        value={n}
+                        className="sr-only"
+                        checked={answers[q.id] === n}
+                        onChange={() => set(q.id, n)}
+                      />
                       {n}
                     </label>
                   ))}
@@ -93,7 +101,13 @@ export function SurveyForm({
                       answers[q.id] === o ? "border-action bg-tealtint font-semibold" : "border-line-strong hover:bg-muted",
                     )}
                   >
-                    <input type="radio" name={`${survey.id}-${q.id}`} className="size-5 accent-[var(--action)]" checked={answers[q.id] === o} onChange={() => set(q.id, o)} />
+                    <input
+                      type="radio"
+                      name={`${survey.id}-${q.id}`}
+                      className="size-5 accent-[var(--action)]"
+                      checked={answers[q.id] === o}
+                      onChange={() => set(q.id, o)}
+                    />
                     {o || "Option"}
                   </label>
                 ))}
@@ -124,7 +138,12 @@ export function SurveyForm({
           {busy ? "Sending…" : "Send answers"}
         </button>
         {!survey.required && onSkip && (
-          <button type="button" disabled={busy} onClick={onSkip} className="inline-flex min-h-11 items-center rounded-full px-4 font-medium text-ink-muted hover:bg-muted hover:text-ink">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onSkip}
+            className="inline-flex min-h-11 items-center rounded-full px-4 font-medium text-ink-muted hover:bg-muted hover:text-ink"
+          >
             Not now
           </button>
         )}
@@ -148,13 +167,12 @@ export function PendingSurvey({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/surveys", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, surveyId: item.survey.id, target: { type: item.target.type, id: item.target.id }, answers }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Your answers couldn’t be sent.");
+      // Offline, the answers are kept on this device and sent when the connection returns.
+      await sendOrQueue(
+        "/api/surveys",
+        { action, surveyId: item.survey.id, target: { type: item.target.type, id: item.target.id }, answers },
+        { label: `Survey about ${item.target.title}` },
+      );
       onDone(action === "submit" ? "submitted" : "skipped");
     } catch (e) {
       setError((e as Error).message);

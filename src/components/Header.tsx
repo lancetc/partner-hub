@@ -27,7 +27,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
+        <Link href="/" translate="no" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
           <span aria-hidden className="h-6 w-px bg-line-strong" />
           <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">Partner Hub</span>
