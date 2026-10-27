@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { MotionPhoto } from "../MotionPhoto";
+import { CardFigure } from "./CardFigure";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -661,7 +662,9 @@ export function LessonPlayer({
             >
               {node.heading}
             </h2>
+            {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.body && <p className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")}>{node.body}</p>}
+            {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.keyPoints && <KeyPoints points={node.keyPoints} />}
             {node.source && (
               <a

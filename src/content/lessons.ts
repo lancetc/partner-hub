@@ -79,6 +79,22 @@ type Base = {
   audioSrc?: string;
   /** Official source for the card's content, shown as a link under the text. */
   source?: { title: string; url: string };
+  /**
+    A picture that's part of the content, inside the text: under the body (default) or above it.
+    Shown whole, uncropped, unless `fit` is "fill" (a wide, cropped frame). Separate from `visual`.
+  */
+  figure?: {
+    src: string;
+    width: number;
+    height: number;
+    alt: string;
+    caption?: string;
+    credit?: { name: string; url: string; source: "Pexels" | "GIPHY"; page?: string };
+    /** A GIF from GIPHY: `src` is its still frame. */
+    animated?: { mp4: string };
+    placement?: "below" | "above";
+    fit?: "whole" | "fill";
+  };
   /** Short on-screen points: `chips` for an overview list, `tiles` for a few key ideas with icons. */
   keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: IconName }[]; tip?: string };
   /** Consequence styling for cards that show the result of a poorer choice. */

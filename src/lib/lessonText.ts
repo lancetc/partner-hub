@@ -26,6 +26,7 @@ const TEXT_KEYS = new Set([
   "highLabel",
   "completionMessage",
   "alt",
+  "caption",
   "centre",
   "centreNote",
   "placeholder",

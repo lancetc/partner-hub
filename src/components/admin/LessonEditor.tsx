@@ -1902,6 +1902,7 @@ function CanvasCard({
               className="font-serif text-[1.35rem] font-semibold leading-tight"
               placeholderClass={ph}
             />
+            {c.figure && c.figure.placement === "above" && <CanvasFigure figure={c.figure} onEdit={onSettings} />}
             {(c.body || c.type === "image" || c.type === "audio" || c.type === "listen") && (
               <Editable
                 value={c.body}
@@ -1912,6 +1913,7 @@ function CanvasCard({
                 placeholderClass={ph}
               />
             )}
+            {c.figure && c.figure.placement !== "above" && <CanvasFigure figure={c.figure} onEdit={onSettings} />}
             {c.keyPoints && (
               <ul className={cx("gap-1.5", c.keyPoints.style === "tiles" ? "grid grid-cols-2" : "flex flex-wrap")}>
                 {c.keyPoints.items.map((k, i) => (
@@ -3071,6 +3073,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
           <ClaudeButton>Write narration from the text</ClaudeButton>
           <audio ref={audio} onEnded={() => setPlaying(false)} className="hidden" />
         </div>
+        {(c.type === "image" || c.type === "audio") && <FigureField card={c} set={set} />}
         <KeyPointsField card={c} set={set} />
         <Field label="Official source" hint="Shown as a link under the card text." className="sm:col-span-2">
           <div className="grid gap-2 sm:grid-cols-2">
@@ -3913,6 +3916,176 @@ function SummaryFields({ card: c, set }: { card: Extract<Card, { type: "summary"
         </button>
       </div>
     </>
+  );
+}
+
+type Figure = NonNullable<Card["figure"]>;
+
+/** The in-text picture on a canvas card: a small preview that opens the card's settings. */
+function CanvasFigure({ figure: f, onEdit }: { figure: Figure; onEdit?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="group relative block w-full overflow-hidden rounded-xl bg-muted"
+      style={{ aspectRatio: f.fit === "fill" ? "16 / 9" : `${f.width} / ${f.height}`, maxHeight: f.fit === "fill" ? undefined : "9rem" }}
+      aria-label={`Picture in the text${f.alt ? `: ${f.alt}` : ""}. Edit in the card settings.`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={f.src} alt="" className={cx("size-full", f.fit === "fill" ? "object-cover" : "object-contain")} />
+      {!f.alt && <span className="absolute left-1.5 top-1.5 rounded-full bg-orange px-2 py-0.5 text-[0.65rem] font-bold text-[#102a43]">Needs alt</span>}
+      {f.animated && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[0.65rem] font-bold text-white">GIF</span>}
+    </button>
+  );
+}
+
+/**
+  A picture inside the card's text, as content (a diagram, a form, a screenshot, a photo to talk
+  about). Separate from the card visual at the top or behind the card.
+*/
+function FigureField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
+  const f = c.figure;
+  const library = useLibrary();
+  const [source, setSource] = useState<"library" | "pexels" | "giphy" | null>(null);
+  const upd = (fn: (x: Figure) => void) => set((x) => void (x.figure && fn(x.figure)));
+  const choose = (p: Photo, suggestedAlt = "") => {
+    set((x) => {
+      x.figure = {
+        src: p.src,
+        width: p.width,
+        height: p.height,
+        // A new picture needs its own description: the old one would describe the wrong image.
+        alt: x.figure?.src === p.src ? x.figure.alt : suggestedAlt,
+        ...(x.figure?.caption ? { caption: x.figure.caption } : {}),
+        ...(p.credit ? { credit: p.credit } : {}),
+        ...(p.animated ? { animated: p.animated } : {}),
+        ...(x.figure?.placement ? { placement: x.figure.placement } : {}),
+        ...(x.figure?.fit ? { fit: x.figure.fit } : {}),
+      };
+    });
+    setSource(null);
+  };
+  const toggle = (k: NonNullable<typeof source>) => setSource((o) => (o === k ? null : k));
+  const sourceButton =
+    "flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink";
+
+  return (
+    <div className="flex flex-col gap-3 sm:col-span-2">
+      <div>
+        <p className="text-sm font-semibold">Picture in the text</p>
+        <p className="text-sm text-ink-muted">
+          An image that’s part of the content, such as a diagram, a form or a screenshot. It sits with the text, not behind it.
+        </p>
+      </div>
+      {f && (
+        <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
+          <div
+            className="relative overflow-hidden rounded-xl bg-muted"
+            style={{ aspectRatio: f.fit === "fill" ? "16 / 9" : `${f.width} / ${f.height}`, maxHeight: "12rem" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={f.src} alt="" className={cx("size-full", f.fit === "fill" ? "object-cover" : "object-contain")} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Field label="Alt text" hint="What the picture shows, for people using a screen reader.">
+              <input className={input} value={f.alt} onChange={(e) => upd((x) => void (x.alt = e.target.value))} />
+            </Field>
+            <Field label="Caption (optional)" hint="Shown under the picture.">
+              <input className={input} value={f.caption ?? ""} onChange={(e) => upd((x) => void (x.caption = e.target.value || undefined))} />
+            </Field>
+          </div>
+        </div>
+      )}
+      {f && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {(
+            [
+              [
+                "Where",
+                "placement",
+                [
+                  ["below", "Under the text"],
+                  ["above", "Above the text"],
+                ],
+              ],
+              [
+                "Size",
+                "fit",
+                [
+                  ["whole", "Show the whole picture"],
+                  ["fill", "Wide, cropped"],
+                ],
+              ],
+            ] as const
+          ).map(([label, key, options]) => (
+            <div key={key} className="flex flex-wrap items-center gap-1.5" role="group" aria-label={label}>
+              <span className="text-sm text-ink-muted">{label}</span>
+              {options.map(([value, text], i) => {
+                const on = (f[key] ?? options[0][0]) === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => upd((x) => void ((x as Record<string, unknown>)[key] = i === 0 ? undefined : value))}
+                    className={cx(
+                      "min-h-9 rounded-full border px-3 text-sm",
+                      on ? "border-action bg-tealtint font-semibold" : "border-line-strong hover:bg-muted",
+                    )}
+                  >
+                    {text}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          <button type="button" className={cx(btn.quiet, "text-danger")} onClick={() => set((x) => void delete x.figure)}>
+            <Icon name="trash" className="size-4" /> Remove picture
+          </button>
+        </div>
+      )}
+      {f?.credit && (
+        <p className="text-xs text-ink-muted">
+          {f.animated ? "GIF" : "Photo"} by{" "}
+          <a href={f.credit.page ?? f.credit.url} target="_blank" rel="noreferrer" className="underline">
+            {f.credit.name}
+          </a>{" "}
+          on {f.credit.source}. The credit shows on the picture.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <UploadTile className="w-auto [&_label]:flex-row [&_label]:px-3" onUploaded={(p) => (choose(p), library.reload())}>
+          {f ? "Upload a different image" : "Upload an image"}
+        </UploadTile>
+        <button type="button" aria-expanded={source === "library"} onClick={() => toggle("library")} className={sourceButton}>
+          <Icon name="image" className="size-4" /> Image library
+        </button>
+        <button type="button" aria-expanded={source === "pexels"} onClick={() => toggle("pexels")} className={sourceButton}>
+          <Icon name="search" className="size-4" /> Find on Pexels
+        </button>
+        <button type="button" aria-expanded={source === "giphy"} onClick={() => toggle("giphy")} className={sourceButton}>
+          <Icon name="spark" className="size-4" /> Find a GIF
+        </button>
+      </div>
+      {source === "library" && (
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+          {library.photos.map((p) => (
+            <button
+              key={p.src}
+              type="button"
+              onClick={() => choose(p)}
+              className={cx("aspect-[4/3] overflow-hidden rounded-xl border-2", f?.src === p.src ? "border-action" : "border-transparent")}
+              aria-label={`Use ${p.src.split("/").pop()}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.src} alt="" className="size-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+      {source === "pexels" && <PexelsPicker onClose={() => setSource(null)} onPicked={(p, alt) => (choose(p, alt), library.reload())} />}
+      {source === "giphy" && <GiphyPicker onClose={() => setSource(null)} onPicked={(p, alt) => choose(p, alt)} />}
+    </div>
   );
 }
 

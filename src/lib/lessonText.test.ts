@@ -41,4 +41,22 @@ describe("lesson text", () => {
     // The original is untouched.
     expect(lf.title).not.toMatch(/^\[vi\]/);
   });
+
+  it("translates a picture's alt text and caption, but not its address", () => {
+    const base = lessons[0];
+    const first = Object.keys(base.nodes)[0];
+    const withFigure = {
+      ...base,
+      nodes: {
+        ...base.nodes,
+        [first]: {
+          ...base.nodes[first],
+          figure: { src: "/api/uploads/form.png", width: 800, height: 600, alt: "The incident form", caption: "Page one of the form" },
+        },
+      },
+    };
+    const text = extractText(withFigure);
+    expect(text).toEqual(expect.arrayContaining(["The incident form", "Page one of the form"]));
+    expect(text).not.toContain("/api/uploads/form.png");
+  });
 });
