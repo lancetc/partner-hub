@@ -45,8 +45,13 @@ export type OnboardingState = {
   tasks: Record<string, TaskState>;
 };
 
+/** A lesson card a learner has bookmarked to come back to. Names are kept so the list shows without loading the lesson. */
+export type CardBookmark = { lesson: string; lessonTitle: string; card: string; label: string; heading: string; savedAt: string };
+
 export type HubState = {
   saved: string[];
+  /** Bookmarked lesson cards, newest first. Optional: older saved states don't have it. */
+  bookmarks?: CardBookmark[];
   lessons: Record<string, LessonAttempt>;
   onboarding: OnboardingState;
   demo: { flakyNetwork: boolean };
@@ -177,6 +182,21 @@ export function toggleSaved(id: string) {
     saved: s.saved.includes(id) ? s.saved.filter((x) => x !== id) : [id, ...s.saved],
   }));
 }
+
+const sameCard = (a: { lesson: string; card: string }, b: { lesson: string; card: string }) => a.lesson === b.lesson && a.card === b.card;
+
+/** Bookmarks a lesson card, or removes the bookmark if it's already there. Returns true when it's now saved. */
+export function toggleCardBookmark(b: Omit<CardBookmark, "savedAt">) {
+  let added = false;
+  setHub((s) => {
+    const list = s.bookmarks ?? [];
+    added = !list.some((x) => sameCard(x, b));
+    return { ...s, bookmarks: added ? [{ ...b, savedAt: new Date().toISOString() }, ...list] : list.filter((x) => !sameCard(x, b)) };
+  });
+  return added;
+}
+
+export const useCardBookmarked = (lesson: string, card: string) => useHub((s) => (s.bookmarks ?? []).some((x) => sameCard(x, { lesson, card })));
 
 export function resetHub() {
   state = initialState;

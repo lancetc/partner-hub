@@ -4,7 +4,7 @@ import type { CardVisual as Visual } from "@/content/lessons";
 import { StoryVisual, toneColours } from "../StoryVisual";
 import { Icon, type IconName } from "../Icon";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 
 /**
@@ -57,6 +57,21 @@ export function CardVisual({ visual, className, onComplete }: { visual: Visual; 
         className={className}
         onComplete={onComplete}
       />
+    );
+  }
+
+  if (visual.video?.provider === "elevenlabs") {
+    // An AI presenter whose video hasn't been made yet: the presenter's photo, and the script is read aloud.
+    return (
+      <div className={cx("relative overflow-hidden rounded-3xl bg-muted", className ?? "aspect-[9/16]")}>
+        {visual.video.poster && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={visual.video.poster} alt={visual.alt} className="absolute inset-0 size-full object-cover object-[center_15%]" />
+        )}
+        <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
+          AI presenter · {visual.name}
+        </span>
+      </div>
     );
   }
 
@@ -349,6 +364,44 @@ function Words({
   );
 }
 
+type Captions = { spoken: string; words: { from: number; to: number; start: number; end: number }[] };
+
+/** Short caption lines: a new line at the end of a sentence or clause, or after about seven words. */
+function captionLines(c: Captions) {
+  const lines: { words: { text: string; start: number; end: number }[]; start: number; end: number }[] = [];
+  let line: { text: string; start: number; end: number }[] = [];
+  c.words.forEach((w, i) => {
+    const text = c.spoken.slice(w.from, w.to);
+    line.push({ text, start: w.start, end: w.end });
+    const last = i === c.words.length - 1;
+    if (last || line.length >= 7 || /[.!?;:,]["”’)]?$/.test(text)) {
+      lines.push({ words: line, start: line[0].start, end: c.words[i + 1]?.start ?? w.end + 1 });
+      line = [];
+    }
+  });
+  return lines;
+}
+
+/** The caption for this moment of the video, with the word being spoken picked out. */
+function CaptionLine({ captions, time }: { captions: Captions; time: number }) {
+  const lines = useMemo(() => captionLines(captions), [captions]);
+  const line = lines.find((l) => time >= l.start && time < l.end) ?? (time < (lines[0]?.start ?? 0) ? null : lines[lines.length - 1]);
+  if (!line) return null;
+  return (
+    // Sits above the video's own controls. Screen readers get the transcript elsewhere, so this is visual only.
+    <p aria-hidden className="pointer-events-none absolute inset-x-3 bottom-16 text-center">
+      <span className="inline rounded-lg bg-black/60 box-decoration-clone px-2 py-0.5 text-lg font-semibold leading-relaxed text-white/80 backdrop-blur-sm">
+        {line.words.map((w, i) => (
+          <span key={i} className={cx("transition-colors", time >= w.start && time < w.end + 0.15 ? "text-[#ffc72c]" : time >= w.start ? "text-white" : "")}>
+            {w.text}
+            {i < line.words.length - 1 ? " " : ""}
+          </span>
+        ))}
+      </span>
+    </p>
+  );
+}
+
 /**
   A vertical presenter video that fills the card, like a phone story: poster, one big play button,
   then the browser's own controls once it's playing. Nothing loads until the learner presses play.
@@ -360,7 +413,7 @@ function PortraitVideo({
   className,
   onComplete,
 }: {
-  video: { title: string; src: string; poster?: string };
+  video: { title: string; src: string; poster?: string; captions?: Captions };
   synthetic: boolean;
   name: string;
   className?: string;
@@ -368,6 +421,19 @@ function PortraitVideo({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
+  const [time, setTime] = useState(0);
+  const [showCaptions, setShowCaptions] = useState(true);
+  // Smooth captions: follow the video every frame while it plays (timeupdate only fires a few times a second).
+  useEffect(() => {
+    if (state !== "playing" || !video.captions) return;
+    let raf = 0;
+    const tick = () => {
+      setTime(ref.current?.currentTime ?? 0);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [state, video.captions]);
   const play = () => {
     const v = ref.current;
     if (!v) return;
@@ -399,6 +465,20 @@ function PortraitVideo({
         <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/40 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
           AI presenter
         </span>
+      )}
+      {video.captions && state !== "idle" && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowCaptions((s) => !s)}
+            aria-pressed={showCaptions}
+            aria-label={showCaptions ? "Hide captions" : "Show captions"}
+            className="absolute right-3 top-3 rounded-md bg-black/45 px-2 py-0.5 font-mulish text-xs font-extrabold text-white backdrop-blur-sm hover:bg-black/60"
+          >
+            CC
+          </button>
+          {showCaptions && <CaptionLine captions={video.captions} time={time} />}
+        </>
       )}
       {showButton && (
         <button

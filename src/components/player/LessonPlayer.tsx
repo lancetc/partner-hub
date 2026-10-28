@@ -3,6 +3,10 @@
 import Image from "next/image";
 import { MotionPhoto } from "../MotionPhoto";
 import { CardFigure } from "./CardFigure";
+import { CardDocument } from "./CardDocument";
+import { CardBookmark } from "./CardBookmark";
+import { ReviewButton, useReview } from "./ReviewPanel";
+import { ordered } from "@/lib/lessonGraph";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -58,6 +62,7 @@ export function LessonPlayer({
   notice,
   startAt,
   backTo,
+  reviewToken,
 }: {
   lesson: Lesson;
   instanceId?: string;
@@ -66,10 +71,12 @@ export function LessonPlayer({
   skipHolds?: boolean;
   /** Shown on the start screen, e.g. that the lesson is machine translated. */
   notice?: React.ReactNode;
-  /** Author previews only: open straight on this card instead of the start screen. */
+  /** Open straight on this card instead of the start screen: an author's preview, or a learner's bookmark (as a review). */
   startAt?: string;
   /** Where closing or finishing leads, e.g. back to the learning path being previewed. */
   backTo?: { href: string; label: string };
+  /** Opened from a review link (with `preview`): every card gets a Comments button for review comments. */
+  reviewToken?: string;
 }) {
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
@@ -88,6 +95,7 @@ export function LessonPlayer({
   const [quizChecked, setQuizChecked] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const reviewing = useReview(reviewToken);
   const seq = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
 
@@ -190,10 +198,11 @@ export function LessonPlayer({
     if (!asReview && instanceId) sendOrQueue(`/api/follow-ups/${instanceId}`, { action: "start" }, { label: "Follow up started" }).catch(() => {});
   }
 
-  // An author previewing a card from the editor goes straight to that card.
+  // An author previewing a card from the editor, or a learner opening a bookmarked card, goes straight to it
+  // (as a review, so their progress is left alone).
   const started = useRef(false);
   useEffect(() => {
-    if (!preview || !startAt || !lesson.nodes[startAt] || started.current) return;
+    if (!startAt || !lesson.nodes[startAt] || started.current) return;
     started.current = true;
     begin(true, true, startAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,7 +318,16 @@ export function LessonPlayer({
         {notice && <div className="mb-3">{notice}</div>}
         {preview && (
           <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
-            <strong>Author preview.</strong> Nothing is recorded. This draft isn’t visible to learners until it’s approved.
+            {reviewToken ? (
+              <>
+                <strong>You’re reviewing this lesson.</strong> Work through it as a learner would, and press <strong>Comment</strong> at the top of any card to
+                leave feedback for the author. Nothing you answer is recorded.
+              </>
+            ) : (
+              <>
+                <strong>Author preview.</strong> Nothing is recorded. This draft isn’t visible to learners until it’s approved.
+              </>
+            )}
           </p>
         )}
         <Intro
@@ -340,6 +358,7 @@ export function LessonPlayer({
           attempt={attempt}
           review={review || preview}
           preview={preview}
+          reviewLink={Boolean(reviewToken)}
           headingRef={headingRef}
           followUps={followUps}
           queued={completionQueued}
@@ -382,7 +401,8 @@ export function LessonPlayer({
           text: node.transcript,
           label: "Introduction",
           durationSec: node.durationSec,
-          speech: !(node.visual.kind === "presenter" && node.visual.video),
+          // The video speaks for itself; an AI presenter still waiting for its video has the script read instead.
+          speech: !(node.visual.kind === "presenter" && node.visual.video && !(node.visual.video.provider === "elevenlabs" && !node.visual.video.src)),
         }
       : node.type === "audio" || node.type === "listen"
         ? { text: node.script, label: node.type === "listen" ? "Audio" : "Explanation" }
@@ -473,6 +493,13 @@ export function LessonPlayer({
       title={`Lesson: ${lesson.title}`}
       beats={lesson.beats}
       saveState={review ? "idle" : saveState}
+      headerAction={
+        reviewToken ? (
+          <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} />
+        ) : preview ? undefined : (
+          <CardBookmark lesson={lesson.slug} lessonTitle={lesson.title} card={node.id} label={node.label} heading={node.heading} />
+        )
+      }
       onRetry={() => pending.current && save(pending.current)}
       progress={{ beat: node.beat, done: false }}
       review={review}
@@ -665,6 +692,16 @@ export function LessonPlayer({
             {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.body && <p className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")}>{node.body}</p>}
             {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
+            {node.pdf && (
+              <CardDocument
+                pdf={node.pdf}
+                onColour={Boolean(onColour)}
+                className="mt-4"
+                status={attempt.answers[`pdf:${node.id}`] === "end" ? "end" : attempt.answers[`pdf:${node.id}`] ? "opened" : undefined}
+                onOpened={() => attempt.answers[`pdf:${node.id}`] || setAnswer(`pdf:${node.id}`, "opened")}
+                onFinished={() => setAnswer(`pdf:${node.id}`, "end")}
+              />
+            )}
             {node.keyPoints && <KeyPoints points={node.keyPoints} />}
             {node.source && (
               <a
@@ -726,8 +763,13 @@ export function LessonPlayer({
               tinted={Boolean(onColour)}
             />
           </div>
-          <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
-          {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />}
+          {/* Reviewers comment through the Comment button instead. */}
+          {!reviewToken && (
+            <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
+          )}
+          {!reviewToken && commentsOn(node) && (
+            <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />
+          )}
           {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
         </div>
       )}
@@ -1275,6 +1317,7 @@ function Complete({
   attempt,
   review,
   preview,
+  reviewLink = false,
   headingRef,
   followUps,
   queued = false,
@@ -1284,6 +1327,8 @@ function Complete({
   attempt: LessonAttempt;
   review: boolean;
   preview: boolean;
+  /** Reached the end from a review link. */
+  reviewLink?: boolean;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   followUps: CompletionResult["followUps"];
   /** Finished while offline: recorded on this device, syncing later. */
@@ -1305,22 +1350,26 @@ function Complete({
       </span>
       <div>
         <h2 ref={headingRef} tabIndex={-1} className="font-serif text-[2rem] font-semibold leading-tight outline-none">
-          {preview
-            ? "Preview finished"
-            : review
-              ? "Review finished"
-              : lesson.track === "reinforcement"
-                ? "Follow up done"
-                : ack
-                  ? "Briefing acknowledged"
-                  : "Lesson complete"}
+          {reviewLink
+            ? "End of the lesson"
+            : preview
+              ? "Preview finished"
+              : review
+                ? "Review finished"
+                : lesson.track === "reinforcement"
+                  ? "Follow up done"
+                  : ack
+                    ? "Briefing acknowledged"
+                    : "Lesson complete"}
         </h2>
         <p className="mt-3 text-lg">
-          {preview
-            ? "Nothing was recorded. Approve the variations when you’re happy with them."
-            : review
-              ? "Your original completion record is unchanged."
-              : "Your result is saved. You can come back to this lesson at any time."}
+          {reviewLink
+            ? "Thanks for reviewing. Your comments go straight to the author. To add more, go back to any card and press Comment."
+            : preview
+              ? "Nothing was recorded. Approve the variations when you’re happy with them."
+              : review
+                ? "Your original completion record is unchanged."
+                : "Your result is saved. You can come back to this lesson at any time."}
         </p>
         {lesson.completionMessage && <p className="mt-4 font-serif text-2xl font-semibold leading-snug text-accent">{lesson.completionMessage}</p>}
       </div>

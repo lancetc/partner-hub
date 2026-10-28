@@ -4,6 +4,8 @@ import { userById } from "./auth";
 import { recordLessonCompletion } from "./learning";
 import {
   archiveLearningPath,
+  deletedLearningPaths,
+  restoreLearningPath,
   canSkipHolds,
   assignLearningPath,
   assignableUsers,
@@ -144,5 +146,20 @@ describe("skipping for testers", () => {
     expect(learnerPath(db, u("sam"), id)).toMatchObject({ whoFor: "New coordinators", reward: "A certificate" });
     updateLearningPath(db, u("jordan"), id, { name: "Overview test", lessons: ["a-little-extra-time"] }, now);
     expect(learnerPath(db, u("sam"), id)).toMatchObject({ whoFor: "", outcomes: [], reward: "" });
+  });
+});
+
+describe("deleting learning paths", () => {
+  it("hides a deleted path from the list and learners, and restores it with its assignments", () => {
+    const id = "lp-partner-onboarding";
+    expect(myLearningPaths(db, u("sam")).some((p) => p.id === id)).toBe(true);
+    archiveLearningPath(db, u("jordan"), id, now);
+    expect(myLearningPaths(db, u("sam")).some((p) => p.id === id)).toBe(false);
+    expect(deletedLearningPaths(db, u("jordan"))).toEqual([expect.objectContaining({ id, assigned: 2, lessons: 4, canEdit: true })]);
+    expect(() => restoreLearningPath(db, u("sam"), id, now)).toThrow();
+    restoreLearningPath(db, u("jordan"), id, now);
+    expect(myLearningPaths(db, u("sam")).some((p) => p.id === id)).toBe(true);
+    expect(deletedLearningPaths(db, u("jordan"))).toEqual([]);
+    expect(() => restoreLearningPath(db, u("jordan"), id, now)).toThrow(/deleted list/);
   });
 });

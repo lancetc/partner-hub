@@ -1,10 +1,10 @@
 import { handle } from "@/server/http";
 import { HttpError } from "@/server/auth";
-import { listUploads, saveUpload } from "@/server/uploads";
+import { deletedUploads, hiddenBuiltIns, listUploads, saveUpload } from "@/server/uploads";
 
-/** Images authors have uploaded, newest first. */
+/** Images authors have uploaded, newest first, with deleted ones and the built-in pictures hidden from the library. */
 export async function GET() {
-  return handle(({ db, user }) => ({ uploads: listUploads(db, user) }));
+  return handle(({ db, user }) => ({ uploads: listUploads(db, user), deleted: deletedUploads(db, user), hiddenBuiltIns: hiddenBuiltIns(db) }));
 }
 
 /** Upload a card image: multipart form with `file`, `width` and `height` (measured in the browser). */

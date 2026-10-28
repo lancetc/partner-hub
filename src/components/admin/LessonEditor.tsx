@@ -11,7 +11,7 @@ import type { VisualVariant } from "@/content/stories";
 import { api, useApi } from "@/lib/api";
 import { factsUsed, tokenFor, volatileIn } from "@/lib/facts";
 import { extractText } from "@/lib/lessonText";
-import { cx } from "@/lib/format";
+import { cx, formatBytes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
@@ -25,6 +25,10 @@ import { parseVideoLink, videoLinkFor } from "@/lib/videoLinks";
 import { GRADIENTS, gradientIds } from "@/content/gradients";
 import { dropTargets, insertAfterCard, isLinear, mainLine, movable, moveBlock, moveToPosition, nextOf, ordered } from "@/lib/lessonGraph";
 import { confirmAction } from "@/lib/confirm";
+import { ReviewComments, type EditorReview } from "./ReviewComments";
+import { openCounts } from "../ReviewThreads";
+import { ImageGenerator } from "./ImageGenerator";
+import { AvatarField, MakePresenterCard } from "./AvatarField";
 
 /*
   Lesson authoring. Cards are edited in place on a canvas (like 7taps); details, media, spaced
@@ -36,6 +40,7 @@ const STEPS = [
   { id: "brief", label: "Details", hint: "Who it’s for and what changes", icon: "doc" },
   { id: "media", label: "Media and voice", hint: "Poster, images and narration", icon: "camera" },
   { id: "spaced", label: "Spaced learning", hint: "Follow ups written by Claude", icon: "route" },
+  { id: "comments", label: "Comments", hint: "Feedback from reviewers", icon: "chat" },
   { id: "review", label: "Review and publish", hint: "Checks and sign off", icon: "check" },
 ] as const satisfies readonly { id: string; label: string; hint: string; icon: IconName }[];
 type StepId = (typeof STEPS)[number]["id"];
@@ -162,10 +167,16 @@ export async function uploadVideo(clip: Blob, name = "recording.webm"): Promise<
   }
 }
 
-/** Uploaded images first, then the built-in library. */
+/** Uploaded images first, then the built-in library, leaving out any an author has deleted. */
 function useLibrary() {
-  const up = useApi<{ uploads: (Photo & { name: string })[] }>("/api/admin/uploads");
-  return { photos: [...(up.data?.uploads ?? []), ...LIBRARY] as Photo[], reload: up.reload };
+  const up = useApi<{ uploads: (Photo & { name: string })[]; deleted: (Photo & { name: string })[]; hiddenBuiltIns: string[] }>("/api/admin/uploads");
+  const hidden = up.data?.hiddenBuiltIns ?? [];
+  return {
+    photos: [...(up.data?.uploads ?? []), ...LIBRARY.filter((p) => !hidden.includes(p.src))] as Photo[],
+    /** Deleted uploads and hidden built-in pictures, to bring back. */
+    deleted: [...(up.data?.deleted ?? []), ...LIBRARY.filter((p) => hidden.includes(p.src))] as Photo[],
+    reload: up.reload,
+  };
 }
 
 function UploadTile({ onUploaded, className, children }: { onUploaded: (p: Photo) => void; className?: string; children?: React.ReactNode }) {
@@ -513,6 +524,11 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
     setDirty(true);
   };
   const checks = useMemo(() => runChecks(lesson), [lesson]);
+  // Review comments, for the Comments tab and the counts on each card.
+  const reviewApi = useApi<EditorReview>(isNew ? null : `/api/admin/lessons/${encodeURIComponent(initial.slug)}/review`);
+  const commentCounts = useMemo(() => openCounts(reviewApi.data?.comments ?? []), [reviewApi.data]);
+  const openComments = Object.values(commentCounts).reduce((a, b) => a + b, 0);
+  const [commentsFor, setCommentsFor] = useState<string | null>(null);
 
   /** Save draft: learners keep seeing the published version. A new lesson gets its address on first save. */
   async function save() {
@@ -699,7 +715,13 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             <button
               key={s.id}
               type="button"
-              onClick={() => setStep(s.id)}
+              onClick={() => {
+                setStep(s.id);
+                if (s.id === "comments") {
+                  setCommentsFor(null);
+                  reviewApi.reload();
+                }
+              }}
               aria-current={active ? "page" : undefined}
               className={cx(
                 "-mb-px inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-4 font-medium",
@@ -709,6 +731,11 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
               <Icon name={s.icon} className="size-4" />
               {s.label}
               {warn && <span className="size-2 rounded-full bg-orange" aria-label="has items to fix" />}
+              {s.id === "comments" && openComments > 0 && (
+                <span className="rounded-full bg-gold px-1.5 text-xs font-bold text-[#102a43]" aria-label={`${openComments} open`}>
+                  {openComments}
+                </span>
+              )}
             </button>
           );
         })}
@@ -725,10 +752,40 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             </button>
           </div>
         )}
-        {step === "cards" && !showDraft && <Cards key={round} lesson={lesson} update={update} selected={selected} setSelected={setSelected} isNew={isNew} />}
+        {step === "cards" && !showDraft && (
+          <Cards
+            key={round}
+            lesson={lesson}
+            update={update}
+            selected={selected}
+            setSelected={setSelected}
+            isNew={isNew}
+            commentCounts={commentCounts}
+            onComments={(id) => {
+              setCommentsFor(id);
+              setStep("comments");
+            }}
+          />
+        )}
         {step === "brief" && <Brief lesson={lesson} update={update} isNew={isNew} />}
         {step === "media" && <Media lesson={lesson} update={update} isNew={isNew} />}
         {step === "spaced" && <Spaced lesson={lesson} isNew={isNew} />}
+        {step === "comments" && !isNew && (
+          <ReviewComments
+            slug={initial.slug}
+            lesson={lesson}
+            data={reviewApi.data}
+            setData={reviewApi.setData}
+            focusCard={commentsFor}
+            setFocusCard={setCommentsFor}
+            onShowCard={(id) => {
+              setSelected(id);
+              setStep("cards");
+              requestAnimationFrame(() => document.getElementById(`card-${id}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }));
+            }}
+          />
+        )}
+        {step === "comments" && isNew && <p className="text-ink-muted">Save the lesson first, then share it for review.</p>}
         {previewing && <PreviewDialog slug={initial.slug} cardId={selected} dirty={dirty} onClose={() => setPreviewing(false)} />}
         {step === "review" && (
           <Review
@@ -1208,12 +1265,17 @@ function Cards({
   selected,
   setSelected,
   isNew,
+  commentCounts,
+  onComments,
 }: {
   lesson: Lesson;
   update: Update;
   selected: string;
   setSelected: (id: string) => void;
   isNew: boolean;
+  /** Open review comments per card. */
+  commentCounts: Record<string, number>;
+  onComments: (id: string) => void;
 }) {
   const cards = ordered(l);
   const card = l.nodes[selected] ?? cards[0];
@@ -1457,6 +1519,17 @@ function Cards({
                       {c.emphasis === "consequence" && " · after a choice"}
                     </span>
                   </button>
+                  {commentCounts[c.id] > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onComments(c.id)}
+                      className="ml-1 inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-gold px-2 text-[#102a43] hover:brightness-95"
+                      aria-label={`${commentCounts[c.id]} open review ${commentCounts[c.id] === 1 ? "comment" : "comments"} on this card`}
+                    >
+                      <Icon name="chat" className="size-3.5" />
+                      {commentCounts[c.id]}
+                    </button>
+                  )}
                 </p>
                 <div
                   className="relative"
@@ -1602,7 +1675,7 @@ function Cards({
           <CardForm key={card.id} lesson={l} card={card} update={update} isNew={isNew} />
         </Drawer>
       )}
-      {picking && l.nodes[picking] && <MediaDialog card={l.nodes[picking]} update={update} onClose={() => setPicking(null)} />}
+      {picking && l.nodes[picking] && <MediaDialog card={l.nodes[picking]} lesson={l.slug} update={update} onClose={() => setPicking(null)} />}
     </div>
   );
 }
@@ -1914,6 +1987,18 @@ function CanvasCard({
               />
             )}
             {c.figure && c.figure.placement !== "above" && <CanvasFigure figure={c.figure} onEdit={onSettings} />}
+            {c.pdf && (
+              <button
+                type="button"
+                onClick={onSettings}
+                className="flex items-center gap-2 rounded-xl border border-line bg-surface p-2 text-left text-xs text-ink"
+                aria-label={`Document: ${c.pdf.title}. Edit in the card settings.`}
+              >
+                <Icon name="file" className="size-5 shrink-0 text-accent" />
+                <span className="min-w-0 flex-1 truncate font-semibold">{c.pdf.title || "Untitled document"}</span>
+                {c.pdf.required && <span className="shrink-0 rounded-full bg-gold/40 px-1.5 py-0.5 text-[0.6rem] font-bold">Required</span>}
+              </button>
+            )}
             {c.keyPoints && (
               <ul className={cx("gap-1.5", c.keyPoints.style === "tiles" ? "grid grid-cols-2" : "flex flex-wrap")}>
                 {c.keyPoints.items.map((k, i) => (
@@ -2590,11 +2675,17 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
 }
 
 /** Picture, animation or video for the top of a card, with a live preview. */
-function MediaDialog({ card: c, update, onClose }: { card: Card; update: Update; onClose: () => void }) {
+function MediaDialog({ card: c, lesson, update, onClose }: { card: Card; lesson: string; update: Update; onClose: () => void }) {
   const set = (fn: (x: Card) => void) => update((d) => fn(d.nodes[c.id]));
   const portrait = c.visual.kind === "presenter" && c.visual.video?.orientation === "portrait";
   return (
     <Drawer title="Picture, background and video" onClose={onClose}>
+      {c.type === "image" && c.narration?.trim() && (
+        <>
+          <MakePresenterCard card={c} set={set} />
+          <hr className="my-5 border-line" />
+        </>
+      )}
       <BackgroundField card={c} set={set} />
       <hr className="my-5 border-line" />
       <BubbleField card={c} set={set} />
@@ -2604,7 +2695,15 @@ function MediaDialog({ card: c, update, onClose }: { card: Card; update: Update;
           <CardVisual visual={c.visual} className={cx("w-full overflow-hidden rounded-2xl", portrait ? "aspect-[9/16]" : "aspect-[16/10]")} />
         </div>
       )}
-      <VisualField card={c} set={set} />
+      <VisualField card={c} set={set} lesson={lesson} />
+      {(c.type === "image" || c.type === "audio") && (
+        <>
+          <hr className="my-5 border-line" />
+          <FigureField card={c} set={set} />
+          <hr className="my-5 border-line" />
+          <DocumentField card={c} set={set} />
+        </>
+      )}
     </Drawer>
   );
 }
@@ -3074,6 +3173,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
           <audio ref={audio} onEnded={() => setPlaying(false)} className="hidden" />
         </div>
         {(c.type === "image" || c.type === "audio") && <FigureField card={c} set={set} />}
+        {(c.type === "image" || c.type === "audio") && <DocumentField card={c} set={set} />}
         <KeyPointsField card={c} set={set} />
         <Field label="Official source" hint="Shown as a link under the card text." className="sm:col-span-2">
           <div className="grid gap-2 sm:grid-cols-2">
@@ -3093,7 +3193,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         </Field>
       </div>
       <hr className="my-5 border-line" />
-      <VisualField card={c} set={set} />
+      <VisualField card={c} set={set} lesson={l.slug} />
     </Panel>
   );
 }
@@ -4013,6 +4113,7 @@ function FigureField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
                 "fit",
                 [
                   ["whole", "Show the whole picture"],
+                  ["full", "Edge to edge"],
                   ["fill", "Wide, cropped"],
                 ],
               ],
@@ -4089,6 +4190,110 @@ function FigureField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
   );
 }
 
+/**
+  A PDF inside the card's text (a form, a policy, a fact sheet). Learners read it inside the lesson;
+  Required reading keeps Continue locked until they've opened it, or reached its last page.
+*/
+function DocumentField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
+  const d = c.pdf;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const upd = (fn: (x: NonNullable<Card["pdf"]>) => void) => set((x) => void (x.pdf && fn(x.pdf)));
+  const options = (label: string, key: "placement" | "required", list: readonly (readonly [string | undefined, string])[]) => (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={label}>
+      <span className="text-sm text-ink-muted">{label}</span>
+      {list.map(([value, text]) => {
+        const on = (d?.[key] ?? undefined) === value || (!d?.[key] && value === list[0][0]);
+        return (
+          <button
+            key={text}
+            type="button"
+            aria-pressed={on}
+            onClick={() => upd((x) => void ((x as Record<string, unknown>)[key] = value === list[0][0] ? undefined : value))}
+            className={cx("min-h-9 rounded-full border px-3 text-sm", on ? "border-action bg-tealtint font-semibold" : "border-line-strong hover:bg-muted")}
+          >
+            {text}
+          </button>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-3 sm:col-span-2">
+      <div>
+        <p className="text-sm font-semibold">Document in the text</p>
+        <p className="text-sm text-ink-muted">
+          A PDF learners read inside the lesson, such as a form, a policy or a fact sheet. It shows as a tile with its first page. For a list of files to keep,
+          use a Resources card.
+        </p>
+      </div>
+      {d && (
+        <>
+          <Field label="Title" hint="What learners see on the tile.">
+            <input className={input} value={d.title} onChange={(e) => upd((x) => void (x.title = e.target.value))} />
+          </Field>
+          <div className="flex flex-col gap-2">
+            {options("Where", "placement", [
+              [undefined, "Under the text"],
+              ["above", "Above the text"],
+            ])}
+            {options("Required reading", "required", [
+              [undefined, "Not required"],
+              ["open", "Must open it"],
+              ["end", "Must read to the last page"],
+            ])}
+          </div>
+          <p className="text-xs text-ink-muted">
+            {d.bytes ? `${formatBytes(d.bytes)} · ` : ""}
+            <a href={d.src} target="_blank" rel="noreferrer" className="underline">
+              Open the PDF
+            </a>
+          </p>
+        </>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <label className={cx(btn.secondary, "cursor-pointer", busy && "cursor-wait opacity-60")}>
+          <input
+            type="file"
+            accept="application/pdf"
+            className="sr-only"
+            disabled={busy}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              setBusy(true);
+              setError(null);
+              try {
+                const r = await uploadPdf(file);
+                set((x) => {
+                  x.pdf = {
+                    ...(x.pdf ?? {}),
+                    src: r.src,
+                    bytes: r.bytes,
+                    title: x.pdf?.title || file.name.replace(/\.pdf$/i, "").replace(/[-_]+/g, " "),
+                  };
+                });
+              } catch (err) {
+                setError((err as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+          <Icon name="upload" className="size-4" /> {busy ? "Uploading…" : d ? "Replace the PDF" : "Upload a PDF"}
+        </label>
+        {d && (
+          <button type="button" className={cx(btn.quiet, "text-danger")} onClick={() => set((x) => void delete x.pdf)}>
+            <Icon name="trash" className="size-4" /> Remove document
+          </button>
+        )}
+      </div>
+      {error && <ErrorNote text={error} />}
+    </div>
+  );
+}
+
 function KeyPointsField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
   const kp = c.keyPoints;
   return (
@@ -4134,7 +4339,7 @@ function KeyPointsField({ card: c, set }: { card: Card; set: (fn: (c: Card) => v
 
 /** Paste a YouTube or Synthesia link. Says whether it was recognised, so a link never silently fails. */
 function VideoLinkField({ video, set }: { video: Extract<Visual, { kind: "presenter" }>["video"]; set: (fn: (c: Card) => void) => void }) {
-  const [text, setText] = useState(video ? videoLinkFor(video) : "");
+  const [text, setText] = useState(video && video.provider !== "elevenlabs" ? videoLinkFor({ ...video, provider: video.provider }) : "");
   const parsed = parseVideoLink(text);
   const status = !text.trim()
     ? null
@@ -4189,7 +4394,7 @@ const VISUAL_KINDS: { kind: Visual["kind"]; label: string }[] = [
   { kind: "orbit", label: "People around the client" },
 ];
 
-function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
+function VisualField({ card: c, set, lesson }: { card: Card; set: (fn: (c: Card) => void) => void; lesson: string }) {
   const v = c.visual;
   const library = useLibrary();
   const [pexels, setPexels] = useState(false);
@@ -4351,6 +4556,32 @@ function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
       )}
       {v.kind === "illustration" && v.photo && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Where the image goes">
+          {/* Text and audio cards can also carry it inside the text, under the heading. */}
+          {(c.type === "image" || c.type === "audio") && (
+            <button
+              type="button"
+              aria-pressed={false}
+              onClick={() =>
+                set((x) => {
+                  if (x.visual.kind !== "illustration" || !x.visual.photo) return;
+                  const p = x.visual.photo;
+                  x.figure = {
+                    src: p.src,
+                    width: p.width,
+                    height: p.height,
+                    alt: x.visual.alt,
+                    placement: "above",
+                    ...(p.credit ? { credit: p.credit } : {}),
+                    ...(p.animated ? { animated: p.animated } : {}),
+                  };
+                  x.visual = { kind: "none" };
+                })
+              }
+              className="order-last min-h-9 rounded-full border border-line-strong px-3 text-sm hover:bg-muted"
+            >
+              In the text, under the heading
+            </button>
+          )}
           {(
             [
               ["top", "Top of the card"],
@@ -4488,8 +4719,25 @@ function VisualField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void
           />
         </Field>
       )}
-      {v.kind === "presenter" && (
+      {v.kind === "presenter" && v.video?.provider === "elevenlabs" && <AvatarField key={c.id} card={c} lesson={lesson} photos={library.photos} set={set} />}
+      {v.kind === "presenter" && v.video?.provider !== "elevenlabs" && (
         <>
+          {/* Synthesia is being replaced: a video card can switch to an AI presenter. */}
+          {(c.type === "presenter" || c.narration?.trim()) && (
+            <button
+              type="button"
+              className={cx(btn.secondary, "self-start")}
+              onClick={() =>
+                set((x) => {
+                  if (x.visual.kind !== "presenter") return;
+                  x.visual.synthetic = true;
+                  x.visual.video = { provider: "elevenlabs", id: "", title: "Presenter introduction", orientation: "portrait" };
+                })
+              }
+            >
+              <Icon name="user" className="size-4" /> Use an AI presenter instead
+            </button>
+          )}
           <VideoLinkField key={c.id} video={v.video} set={set} />
           <Field label="Shape">
             <select
@@ -4688,10 +4936,75 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
 function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; isNew: boolean }) {
   const cards = ordered(l);
   const library = useLibrary();
+  const [deleted, setDeleted] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const fileOf = (src: string) => src.split("/").pop() ?? "";
+  const isUpload = (src: string) => src.startsWith("/api/uploads/");
+  // Uploads are deleted by file name; built-in pictures (public/images) are hidden by address.
+  const usageUrl = (src: string) =>
+    isUpload(src) ? `/api/admin/uploads/${encodeURIComponent(fileOf(src))}` : `/api/admin/uploads/built-in?src=${encodeURIComponent(src)}`;
+
+  /** Deletes an image from the library, after saying where it's still used. */
+  async function remove(p: Photo) {
+    setMediaError(null);
+    try {
+      const { lessons } = await api<{ lessons: { slug: string; title: string }[] }>(usageUrl(p.src));
+      const names = lessons.map((x) => (x.slug === l.slug ? "this lesson" : `“${x.title}”`));
+      if (JSON.stringify(l).includes(p.src) && !names.includes("this lesson")) names.unshift("this lesson");
+      const ok = await confirmAction(
+        names.length
+          ? `It’s still used in ${names.join(", ")}. Those cards keep showing it, but you won’t be able to pick it from the library again.`
+          : "It’s removed from the image library.",
+        { title: "Delete this image?", confirmLabel: "Delete", danger: true },
+      );
+      if (!ok) return;
+      if (isUpload(p.src)) await api(usageUrl(p.src), { method: "DELETE" });
+      else await api("/api/admin/uploads/built-in", { body: { src: p.src, hidden: true } });
+      setDeleted(p.src);
+      library.reload();
+    } catch (e) {
+      setMediaError((e as Error).message);
+    }
+  }
+  async function restore(src: string) {
+    setMediaError(null);
+    try {
+      if (isUpload(src)) await api(usageUrl(src), { body: { action: "restore" } });
+      else await api("/api/admin/uploads/built-in", { body: { src, hidden: false } });
+      if (deleted === src) setDeleted(null);
+      library.reload();
+    } catch (e) {
+      setMediaError((e as Error).message);
+    }
+  }
+
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title="Poster image" aside={<span className="text-sm text-ink-muted">Lesson intro and Learning tile</span>}>
         <StoryVisual {...l.visual} alt={l.visual.alt ?? ""} className="aspect-[16/10] rounded-2xl" />
+        <details className="group mt-3 rounded-2xl border border-line bg-muted/50" open={generating} onToggle={(e) => setGenerating(e.currentTarget.open)}>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 font-semibold">
+            <Icon name="spark" className="size-4 text-accent" /> Generate a picture with AI
+            <Icon name="chevron-down" className="ml-auto size-5 text-ink-muted transition-transform group-open:rotate-180" />
+          </summary>
+          {generating && (
+            <div className="px-3 pb-3">
+              <ImageGenerator
+                lesson={l}
+                onMade={library.reload}
+                onUse={(p, prompt) =>
+                  update((d) => {
+                    d.visual.photo = p;
+                    // A starting point for the alt text; the author can refine it in Details.
+                    if (!d.visual.alt) d.visual.alt = prompt.slice(0, 200);
+                  })
+                }
+              />
+            </div>
+          )}
+        </details>
         <div className="mt-3 grid grid-cols-6 gap-2">
           <UploadTile
             className="aspect-square"
@@ -4700,19 +5013,77 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
               library.reload();
             }}
           />
-          {library.photos.map((p) => (
-            <button
-              key={p.src}
-              type="button"
-              onClick={() => update((d) => void (d.visual.photo = p))}
-              className={cx("aspect-square overflow-hidden rounded-lg border-2", l.visual.photo?.src === p.src ? "border-action" : "border-transparent")}
-              aria-label={`Use ${p.src.split("/").pop()}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.src} alt="" className="size-full object-cover" />
-            </button>
-          ))}
+          {library.photos.map((p) => {
+            const name = (p as Photo & { name?: string }).name ?? fileOf(p.src);
+            return (
+              <div key={p.src} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => update((d) => void (d.visual.photo = p))}
+                  className={cx(
+                    "block aspect-square w-full overflow-hidden rounded-lg border-2",
+                    l.visual.photo?.src === p.src ? "border-action" : "border-transparent",
+                  )}
+                  aria-label={`Use ${name}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.src} alt="" className="size-full object-cover" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(p)}
+                  aria-label={`Delete ${name} from the library`}
+                  title="Delete from the library"
+                  className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-white/90 text-[#102a43] opacity-0 shadow ring-1 ring-black/10 transition-opacity hover:bg-white hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                >
+                  <Icon name="trash" className="size-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
+        {deleted && (
+          <p role="status" className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+            Image deleted from the library.
+            <button type="button" onClick={() => restore(deleted)} className="font-semibold text-accent hover:underline">
+              Undo
+            </button>
+          </p>
+        )}
+        {mediaError && (
+          <div className="mt-2">
+            <ErrorNote text={mediaError} />
+          </div>
+        )}
+        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+          <span>To delete an image, hover over it and press the bin.</span>
+          {library.deleted.length > 0 && (
+            <button type="button" aria-expanded={showDeleted} onClick={() => setShowDeleted((s) => !s)} className="font-semibold text-accent hover:underline">
+              {showDeleted ? "Hide deleted images" : `Show deleted images (${library.deleted.length})`}
+            </button>
+          )}
+        </p>
+        {showDeleted && library.deleted.length > 0 && (
+          <div className="mt-2 rounded-2xl bg-muted p-3">
+            <p className="text-sm font-semibold">Deleted images</p>
+            <ul className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {library.deleted.map((p) => (
+                <li key={p.src} className="flex flex-col gap-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.src} alt="" className="aspect-square w-full rounded-lg object-cover opacity-60" />
+                  <button
+                    type="button"
+                    onClick={() => restore(p.src)}
+                    aria-label={`Restore ${(p as Photo & { name?: string }).name ?? fileOf(p.src)} to the library`}
+                    className="min-h-8 rounded-full bg-surface text-xs font-semibold text-accent ring-1 ring-line hover:bg-tealtint"
+                  >
+                    Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           {TONES.map((t) => (
             <button

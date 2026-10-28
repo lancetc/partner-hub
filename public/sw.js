@@ -42,6 +42,8 @@ const isMedia = (url) =>
   url.pathname.startsWith("/api/uploads/") ||
   url.pathname.startsWith("/images/") ||
   url.pathname.startsWith("/brand/") ||
+  // The in-lesson PDF reader's worker and its fonts, so documents open offline too.
+  url.pathname.startsWith("/pdfjs/") ||
   url.pathname.startsWith("/api/tts") ||
   /\.(png|jpe?g|webp|gif|svg|ico|woff2?)$/.test(url.pathname);
 const isVideo = (url) => /\.(webm|mp4|mov)$/.test(url.pathname);

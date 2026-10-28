@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Db } from "./db";
 import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
+import { lessons as contentLessons } from "@/content/lessons";
 
 /* Card images, videos and PDFs uploaded by authors. Checked by content, renamed, and stored outside the public folder. */
 
@@ -37,6 +38,7 @@ type UploadRow = {
   uploaded_by: string;
   uploaded_at: string;
   credit: string | null;
+  deleted_at?: string | null;
 };
 export type Credit = { name: string; url: string; source: "Pexels"; page?: string };
 const publicUrl = (filename: string) => `/api/uploads/${filename}`;
@@ -78,7 +80,7 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
 export function listUploads(db: Db, actor: User) {
   requireAuthor(actor);
   // The image library lists images; videos are attached to cards as they're recorded.
-  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' ORDER BY uploaded_at DESC").all() as UploadRow[]).map(toItem);
+  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]).map(toItem);
 }
 
 /** The stored file for a public upload URL, or null. Only names this server generated are ever read. */
@@ -91,4 +93,89 @@ export function readUpload(db: Db, filename: string) {
   } catch {
     return null;
   }
+}
+
+function uploadRow(db: Db, filename: string) {
+  const row = NAME.test(filename) ? (db.prepare("SELECT * FROM uploads WHERE filename = ?").get(filename) as UploadRow | undefined) : undefined;
+  if (!row) throw new HttpError(404, "That image isn’t in the library.");
+  return row;
+}
+
+/** Lessons whose saved draft or live version uses an upload, so the author knows before deleting it. */
+export function uploadUsage(db: Db, actor: User, filename: string) {
+  requireAuthor(actor);
+  uploadRow(db, filename);
+  return { lessons: lessonsUsing(db, publicUrl(filename)) };
+}
+
+/** Lessons whose saved draft or live version mentions an image address: edited lessons, and lessons from the content files nobody has edited. */
+function lessonsUsing(db: Db, src: string) {
+  const like = `%${src}%`;
+  const rows = db
+    .prepare("SELECT slug, draft FROM authored_lessons WHERE deleted_at IS NULL AND (draft LIKE ? OR published LIKE ?) ORDER BY slug")
+    .all(like, like) as { slug: string; draft: string }[];
+  const edited = new Set((db.prepare("SELECT slug FROM authored_lessons").all() as { slug: string }[]).map((r) => r.slug));
+  return [
+    ...rows.map((r) => ({ slug: r.slug, title: (JSON.parse(r.draft) as { title?: string }).title || r.slug })),
+    ...contentLessons.filter((l) => !edited.has(l.slug) && JSON.stringify(l).includes(src)).map((l) => ({ slug: l.slug, title: l.title })),
+  ];
+}
+
+/**
+  Deletes an image from the library. The file itself is kept, so any card still using it keeps
+  showing it, and the delete can be undone.
+*/
+export function deleteUpload(db: Db, actor: User, filename: string, now: Date) {
+  requireAuthor(actor);
+  const row = uploadRow(db, filename);
+  if (row.deleted_at) return { ok: true };
+  db.prepare("UPDATE uploads SET deleted_at = ?, deleted_by = ? WHERE filename = ?").run(now.toISOString(), actor.id, filename);
+  audit(db, { actor: actor.id, event: "upload.deleted", entity: `upload:${filename}`, previous: { name: row.original_name }, at: now });
+  return { ok: true };
+}
+
+export function restoreUpload(db: Db, actor: User, filename: string, now: Date) {
+  requireAuthor(actor);
+  uploadRow(db, filename);
+  db.prepare("UPDATE uploads SET deleted_at = NULL, deleted_by = NULL WHERE filename = ?").run(filename);
+  audit(db, { actor: actor.id, event: "upload.restored", entity: `upload:${filename}`, at: now });
+  return { ok: true };
+}
+
+/** Images deleted from the library, newest first, so they can be brought back. */
+export function deletedUploads(db: Db, actor: User) {
+  requireAuthor(actor);
+  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NOT NULL ORDER BY deleted_at DESC").all() as UploadRow[]).map(toItem);
+}
+
+/*
+  The built-in pictures ship with the hub (public/images). They can't be removed, but an author can
+  hide them from the library; lessons already using one keep showing it.
+*/
+const BUILT_IN = /^\/images\/[\w.-]+\.(jpe?g|png|webp|gif)$/;
+const HIDDEN_KEY = "library_hidden_builtins";
+
+export function hiddenBuiltIns(db: Db): string[] {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(HIDDEN_KEY) as { value: string } | undefined;
+  return row ? (JSON.parse(row.value) as string[]) : [];
+}
+
+function checkBuiltIn(src: string) {
+  if (!BUILT_IN.test(src)) throw new HttpError(404, "That picture isn’t one of the built-in pictures.");
+}
+
+export function builtInUsage(db: Db, actor: User, src: string) {
+  requireAuthor(actor);
+  checkBuiltIn(src);
+  return { lessons: lessonsUsing(db, src) };
+}
+
+export function hideBuiltIn(db: Db, actor: User, src: string, hidden: boolean, now: Date) {
+  requireAuthor(actor);
+  checkBuiltIn(src);
+  const list = hiddenBuiltIns(db).filter((s) => s !== src);
+  if (hidden) list.push(src);
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(HIDDEN_KEY, JSON.stringify(list));
+  audit(db, { actor: actor.id, event: hidden ? "library.builtin_hidden" : "library.builtin_restored", entity: `image:${src}`, at: now });
+  return { hiddenBuiltIns: list };
 }

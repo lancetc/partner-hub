@@ -28,6 +28,12 @@ export function completionGate(
   },
 ): string | null {
   if (ctx.exempt || ctx.finished.has(node.id) || ctx.answers[`done:${node.id}`]) return null;
+  // Required reading: the card's PDF has to be opened, or read to its last page.
+  if (node.pdf?.required) {
+    const read = ctx.answers[`pdf:${node.id}`];
+    if (node.pdf.required === "open" && !read) return "Open the document to continue";
+    if (node.pdf.required === "end" && read !== "end") return "Read the document to the end to continue";
+  }
   if (node.requireComplete) {
     const v = node.visual;
     if ((node.type === "presenter" && v.kind === "presenter" && v.video) || node.bubbles?.length) return "Watch the video to continue";

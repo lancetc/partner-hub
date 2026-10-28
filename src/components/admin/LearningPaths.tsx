@@ -46,11 +46,24 @@ type PathSummary = {
   finished: number;
   canEdit: boolean;
 };
+type DeletedPath = { id: string; name: string; deletedAt: string; lessons: number; assigned: number; canEdit: boolean };
 type ListData = {
   paths: PathSummary[];
+  deleted?: DeletedPath[];
   people: Person[];
   catalogue: LessonInfo[];
 };
+
+/** Asks first, saying who it affects, then deletes the path (it can be restored from the list). */
+async function deletePath(p: { id: string; name: string; assigned: number }) {
+  const ok = await confirmAction(
+    `${p.assigned ? `It disappears for the ${p.assigned} ${p.assigned === 1 ? "person" : "people"} assigned to it. ` : ""}The lessons themselves aren’t touched, and lesson completions are kept. You can restore it from Deleted learning paths.`,
+    { title: `Delete “${p.name}”?`, confirmLabel: "Delete", danger: true },
+  );
+  if (!ok) return false;
+  await api(`/api/admin/learning-paths/${encodeURIComponent(p.id)}`, { method: "DELETE" });
+  return true;
+}
 type Step = LessonInfo & { completedAt: string | null; locked: boolean };
 type Assignment = {
   userId: string;
@@ -83,8 +96,34 @@ type Detail = {
 };
 
 export function LearningPathList() {
-  const { data, error } = useApi<ListData>("/api/admin/learning-paths");
+  const { data, error: loadError, reload } = useApi<ListData>("/api/admin/learning-paths");
   const me = useApi<Me>("/api/me").data;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const error = actionError ?? loadError;
+  async function remove(p: PathSummary) {
+    setActionError(null);
+    try {
+      if (await deletePath(p)) {
+        setNotice(`“${p.name}” deleted.`);
+        reload();
+      }
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
+  }
+  async function restore(p: DeletedPath) {
+    setActionError(null);
+    try {
+      await api(`/api/admin/learning-paths/${encodeURIComponent(p.id)}`, { body: { action: "restore" } });
+      setNotice(`“${p.name}” restored.`);
+      reload();
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
+  }
+  const deleted = data?.deleted ?? [];
   return (
     <AdminShell title="Learning paths">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -108,9 +147,48 @@ export function LearningPathList() {
       ) : (
         <ul className="mt-6 grid gap-4 lg:grid-cols-2">
           {data.paths.map((p) => (
-            <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} />
+            <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} onDelete={() => remove(p)} />
           ))}
         </ul>
+      )}
+      {notice && (
+        <p role="status" className="mt-4 rounded-2xl bg-tealtint px-4 py-2 text-sm">
+          {notice}
+        </p>
+      )}
+      {deleted.length > 0 && (
+        <section className="mt-8">
+          <button
+            type="button"
+            aria-expanded={showDeleted}
+            onClick={() => setShowDeleted((s) => !s)}
+            className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink-muted hover:text-ink"
+          >
+            <Icon name="trash" className="size-4" /> Deleted learning paths ({deleted.length})
+            <Icon name="chevron-down" className={cx("size-4 transition-transform", showDeleted && "rotate-180")} />
+          </button>
+          {showDeleted && (
+            <ul className="mt-2 flex flex-col divide-y divide-line rounded-2xl border border-line bg-surface">
+              {deleted.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{p.name}</span>
+                    <span className="text-sm text-ink-muted">
+                      {p.lessons} {p.lessons === 1 ? "lesson" : "lessons"}
+                      {p.assigned ? ` · was assigned to ${p.assigned}` : ""} · deleted{" "}
+                      {new Date(p.deletedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  </span>
+                  {p.canEdit && (
+                    <button type="button" className={btn.secondary} onClick={() => restore(p)}>
+                      <Icon name="refresh" className="size-4" /> Restore
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </AdminShell>
   );
@@ -120,7 +198,7 @@ export function LearningPathList() {
   One path on the list: what it's for, how far through writing it is, its shape (stages and
   chapters, or the first few lessons) and how the people on it are going.
 */
-function PathTile({ path: p, canPreview }: { path: PathSummary; canPreview: boolean }) {
+function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPreview: boolean; onDelete: () => void }) {
   const ready = p.lessons.filter((l) => !l.draft).length;
   const drafts = p.lessons.length - ready;
   const isReady = new Set(p.lessons.filter((l) => !l.draft).map((l) => l.slug));
@@ -239,11 +317,24 @@ function PathTile({ path: p, canPreview }: { path: PathSummary; canPreview: bool
         ) : (
           <p className="text-xs text-ink-muted">Not assigned to anyone yet</p>
         )}
-        {canPreview && p.lessons.length > 0 && (
-          <Link href={`/paths/${encodeURIComponent(p.id)}?preview=1`} className={cx(btn.quiet, "relative z-10")}>
-            <Icon name="play" className="size-4" /> Preview
-          </Link>
-        )}
+        <div className="flex items-center gap-1">
+          {canPreview && p.lessons.length > 0 && (
+            <Link href={`/paths/${encodeURIComponent(p.id)}?preview=1`} className={cx(btn.quiet, "relative z-10")}>
+              <Icon name="play" className="size-4" /> Preview
+            </Link>
+          )}
+          {p.canEdit && (
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label={`Delete ${p.name}`}
+              title="Delete learning path"
+              className="relative z-10 grid size-11 place-items-center rounded-full text-ink-muted hover:bg-muted hover:text-danger"
+            >
+              <Icon name="trash" className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -348,16 +439,13 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   }
 
   async function archive() {
-    if (
-      !(await confirmAction("It disappears for the people assigned to it. Their lesson completions are kept.", {
-        title: `Archive “${name}”?`,
-        confirmLabel: "Archive",
-      }))
-    )
-      return;
+    if (!id) return;
     setBusy(true);
     try {
-      await api(`/api/admin/learning-paths/${id}`, { method: "DELETE" });
+      if (!(await deletePath({ id, name, assigned: detail?.assignments.length ?? 0 }))) {
+        setBusy(false);
+        return;
+      }
       router.push("/admin/learning-paths");
     } catch (e) {
       setError((e as Error).message);
@@ -582,7 +670,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               </button>
               {!isNew && (
                 <button type="button" className={btn.danger} disabled={busy} onClick={archive}>
-                  Archive
+                  <Icon name="trash" className="size-4" /> Delete learning path
                 </button>
               )}
             </div>

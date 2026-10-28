@@ -179,6 +179,41 @@ CREATE TABLE IF NOT EXISTS card_comments (
   hidden_at TEXT, hidden_by TEXT, pinned_at TEXT, pinned_by TEXT
 );
 CREATE INDEX IF NOT EXISTS card_comments_card ON card_comments (lesson_slug, card_id);
+-- Review links: a private link that lets someone outside the hub (a subject expert, say) read a
+-- lesson's latest draft and comment on its cards. One active link per lesson; switching it off
+-- stops it working for everyone.
+CREATE TABLE IF NOT EXISTS review_links (
+  token TEXT PRIMARY KEY, lesson_slug TEXT NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
+);
+CREATE INDEX IF NOT EXISTS review_links_lesson ON review_links (lesson_slug);
+-- People who joined a review with their name and email. id is a secret kept in their browser.
+CREATE TABLE IF NOT EXISTS reviewers (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, created_at TEXT NOT NULL, last_seen_at TEXT
+);
+-- Review comments on lesson cards, from reviewers or authors. A reply has a parent; resolving is
+-- on the first comment of a thread. card_hash is the card as it was, to show when it has changed since.
+CREATE TABLE IF NOT EXISTS review_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_slug TEXT NOT NULL, card_id TEXT NOT NULL, parent_id INTEGER REFERENCES review_comments(id),
+  reviewer_id TEXT REFERENCES reviewers(id), user_id TEXT REFERENCES users(id),
+  text TEXT NOT NULL, card_hash TEXT NOT NULL, card_heading TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, resolved_at TEXT, resolved_by TEXT, deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS review_comments_lesson ON review_comments (lesson_slug);
+-- AI presenter videos (ElevenLabs voice + portrait, lip-synced): the script they were made from,
+-- the voice's word timings for captions, and the uploaded video.
+CREATE TABLE IF NOT EXISTS avatar_videos (
+  id TEXT PRIMARY KEY, lesson_slug TEXT NOT NULL, card_id TEXT NOT NULL, script_hash TEXT NOT NULL, script TEXT NOT NULL,
+  portrait TEXT NOT NULL, captions TEXT, status TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  finished_at TEXT, video_src TEXT, error TEXT
+);
+-- AI pictures made through ElevenLabs: the prompt and settings, and the upload it became.
+CREATE TABLE IF NOT EXISTS image_generations (
+  id TEXT PRIMARY KEY, lesson_slug TEXT, model TEXT NOT NULL, prompt TEXT NOT NULL, settings TEXT NOT NULL,
+  status TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, finished_at TEXT,
+  upload_src TEXT, width INTEGER, height INTEGER, error TEXT
+);
 -- Lessons translated for people who read the hub in another language. One row per lesson and
 -- language; source_hash ties it to the lesson text it was made from, so edits trigger a new one.
 CREATE TABLE IF NOT EXISTS lesson_translations (
@@ -359,6 +394,9 @@ export function migrate(db: Db) {
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).
   if (!uploadCols.includes("credit")) db.exec("ALTER TABLE uploads ADD COLUMN credit TEXT");
+  // Deleted from the library: hidden there, but the file is kept so cards still using it keep working.
+  if (!uploadCols.includes("deleted_at")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_at TEXT");
+  if (!uploadCols.includes("deleted_by")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_by TEXT");
   const authoredCols = (db.prepare("PRAGMA table_info(authored_lessons)").all() as { name: string }[]).map((c) => c.name);
   // Deleted lessons are hidden everywhere but kept on record, so they can be restored.
   if (!authoredCols.includes("deleted_at")) db.exec("ALTER TABLE authored_lessons ADD COLUMN deleted_at TEXT");

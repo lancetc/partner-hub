@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pdfjs:copy": "node scripts/copy-pdfjs.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
     "next": "16.4.2",
+    "pdfjs-dist": "6.3.289",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"

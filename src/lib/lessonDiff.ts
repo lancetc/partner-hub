@@ -25,6 +25,7 @@ const PART: Record<string, string> = {
   prompt: "question",
   keyPoints: "key points",
   figure: "picture in the text",
+  pdf: "document",
   points: "summary points",
   items: "items",
   criteria: "criteria",

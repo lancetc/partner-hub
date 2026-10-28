@@ -9,7 +9,7 @@ import { cx } from "@/lib/format";
 /** Phone navigation within thumb reach. Hidden inside the lesson player, which has its own controls. */
 export function BottomNav() {
   const pathname = usePathname();
-  if (/^\/learning\/[^/]+/.test(pathname)) return null;
+  if (/^\/(learning|review)\/[^/]+/.test(pathname)) return null;
   return (
     <nav
       aria-label="Primary"
@@ -23,10 +23,7 @@ export function BottomNav() {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={cx(
-                  "flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-medium",
-                  active ? "text-action" : "text-ink-muted",
-                )}
+                className={cx("flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-medium", active ? "text-action" : "text-ink-muted")}
               >
                 <span className={cx("rounded-full px-4 py-1", active && "bg-tealtint")}>
                   <Icon name={item.icon} className="size-5" />

@@ -1,9 +1,10 @@
 import { body, handle } from "@/server/http";
-import { assignableUsers, catalogueInfo, createLearningPath, listLearningPaths, type PathInput } from "@/server/learningPaths";
+import { assignableUsers, catalogueInfo, createLearningPath, deletedLearningPaths, listLearningPaths, type PathInput } from "@/server/learningPaths";
 
 export async function GET() {
   return handle(({ db, user }) => ({
     paths: listLearningPaths(db, user),
+    deleted: deletedLearningPaths(db, user),
     people: assignableUsers(db, user),
     catalogue: catalogueInfo(db),
   }));

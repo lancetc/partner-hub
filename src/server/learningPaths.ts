@@ -344,6 +344,28 @@ export function archiveLearningPath(db: Db, actor: User, id: string, now: Date) 
   audit(db, { actor: actor.id, event: "learning_path.archived", entity: `learning_path:${id}`, at: now });
 }
 
+/** Deleted (archived) paths, newest first, so one deleted by mistake can be brought back. */
+export function deletedLearningPaths(db: Db, actor: User) {
+  requireReporter(actor);
+  const rows = db.prepare("SELECT * FROM learning_paths WHERE archived = 1 ORDER BY updated_at DESC").all() as PathRow[];
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    deletedAt: p.updated_at,
+    lessons: slugsFor(db, p.id).length,
+    assigned: visibleAssignments(db, actor, p.id).length,
+    canEdit: canAuthor(actor) || p.created_by === actor.id,
+  }));
+}
+
+export function restoreLearningPath(db: Db, actor: User, id: string, now: Date) {
+  const row = db.prepare("SELECT * FROM learning_paths WHERE id = ? AND archived = 1").get(id) as PathRow | undefined;
+  if (!row) throw new HttpError(404, "That learning path isn’t in the deleted list.");
+  requireEditor(actor, row);
+  db.prepare("UPDATE learning_paths SET archived = 0, updated_at = ? WHERE id = ?").run(now.toISOString(), id);
+  audit(db, { actor: actor.id, event: "learning_path.restored", entity: `learning_path:${id}`, at: now });
+}
+
 export function assignLearningPath(db: Db, actor: User, id: string, userIds: string[], dueDate: string | null, now: Date) {
   getRow(db, id);
   requireReporter(actor);

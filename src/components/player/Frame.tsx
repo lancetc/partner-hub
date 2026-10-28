@@ -28,6 +28,7 @@ export function Frame({
   fill = false,
   deck,
   footer,
+  headerAction,
   children,
 }: {
   title: string;
@@ -52,6 +53,8 @@ export function Frame({
   };
   footer?: React.ReactNode;
   children?: React.ReactNode;
+  /** An extra button in the header for the card on screen, such as its bookmark. */
+  headerAction?: React.ReactNode;
 }) {
   const embeddedClose = useContext(EmbeddedClose);
   return (
@@ -83,6 +86,7 @@ export function Frame({
           <Image src="/brand/trilogy-logo-dark.svg" alt="Trilogy Care" width={1789} height={576} className="hidden h-8 w-auto dark:block" />
           <span className="ml-auto" />
           <SaveIndicator state={saveState} onRetry={onRetry} />
+          {headerAction}
           <AutoplayToggle />
           <ThemeToggle />
         </header>

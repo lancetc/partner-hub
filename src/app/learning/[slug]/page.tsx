@@ -75,6 +75,8 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
   const player = (shown: typeof lesson, notice?: React.ReactNode) => (
     <LessonPlayer
       lesson={shown}
+      // ?card=<id> opens a bookmarked card (as a review).
+      startAt={typeof query.card === "string" ? query.card : undefined}
       instanceId={typeof instance === "string" && /^\d+$/.test(instance) ? instance : undefined}
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
       notice={

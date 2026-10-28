@@ -4,7 +4,6 @@ export const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/", label: "News", icon: "news" },
   { href: "/learning", label: "Learning", icon: "book" },
   { href: "/webinars", label: "Webinars", icon: "play" },
-  { href: "/onboarding", label: "My onboarding", icon: "list" },
   { href: "/resources", label: "Resources", icon: "folder" },
 ];
 

@@ -72,3 +72,24 @@ describe("holding for audio", () => {
     expect(completionGate(plain, ctx({ exempt: true }))).toBeNull();
   });
 });
+
+describe("required reading", () => {
+  const doc = (required?: "open" | "end") =>
+    ({ ...base, requireComplete: false, id: "d", type: "image", next: "x", pdf: { src: "/api/uploads/a.pdf", title: "Policy", required } }) as Card;
+  const quiet = { narration: null, speaks: false };
+
+  it("holds until the document is opened", () => {
+    expect(completionGate(doc("open"), ctx(quiet))).toBe("Open the document to continue");
+    expect(completionGate(doc("open"), ctx({ ...quiet, answers: { "pdf:d": "opened" } }))).toBeNull();
+  });
+
+  it("holds until the last page has been reached", () => {
+    expect(completionGate(doc("end"), ctx({ ...quiet, answers: { "pdf:d": "opened" } }))).toBe("Read the document to the end to continue");
+    expect(completionGate(doc("end"), ctx({ ...quiet, answers: { "pdf:d": "end" } }))).toBeNull();
+  });
+
+  it("doesn't hold when reading isn't required, or in a review or preview", () => {
+    expect(completionGate(doc(), ctx(quiet))).toBeNull();
+    expect(completionGate(doc("end"), ctx({ ...quiet, exempt: true }))).toBeNull();
+  });
+});

@@ -24,7 +24,10 @@ export function ReportProblem({ slug, cardId, preview, onColour }: { slug: strin
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={cx("inline-flex items-center gap-1 self-start text-xs underline-offset-4 hover:underline [text-shadow:none]", onColour ? "opacity-80" : "text-ink-muted")}
+        className={cx(
+          "inline-flex items-center gap-1 self-start text-xs underline-offset-4 hover:underline [text-shadow:none]",
+          onColour ? "opacity-80" : "text-ink-muted",
+        )}
       >
         <Icon name="alert" className="size-3.5" /> Report a problem
       </button>

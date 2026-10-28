@@ -43,18 +43,22 @@ export type CardVisual =
       alt: string;
       /** Approved photograph shown as the poster instead of the drawn presenter. */
       photo?: { src: string; width: number; height: number };
-      /** Presenter video hosted with Synthesia; played only when the learner presses play. */
+      /** Presenter video; played only when the learner presses play. */
       video?: {
-        /** Synthesia (share link id) or YouTube (video id). */
-        provider: "synthesia" | "youtube";
+        /** Synthesia (share link id), YouTube (video id) or an ElevenLabs AI presenter made in the editor (generation id). */
+        provider: "synthesia" | "youtube" | "elevenlabs";
         id: string;
         title: string;
         /** Vertical (9:16) videos fill the whole card, with no text. */
         orientation?: "landscape" | "portrait";
-        /** The rendered MP4 from Synthesia, played in our own player so it can fill the card. */
+        /** The rendered MP4, played in our own player so it can fill the card. */
         src?: string;
-        /** Still shown before play. */
+        /** Still shown before play (for an AI presenter, the presenter's photo). */
         poster?: string;
+        /** AI presenter: the script it was made from, so the editor can tell when the words have changed since. */
+        scriptHash?: string;
+        /** AI presenter: the words spoken and when, for captions that follow the voice. */
+        captions?: { spoken: string; words: { from: number; to: number; start: number; end: number }[] };
       };
     }
   /** Client, coordinator and Trilogy relationship triangle; `labels` appear one by one. */
@@ -81,7 +85,8 @@ type Base = {
   source?: { title: string; url: string };
   /**
     A picture that's part of the content, inside the text: under the body (default) or above it.
-    Shown whole, uncropped, unless `fit` is "fill" (a wide, cropped frame). Separate from `visual`.
+    Shown whole, uncropped, unless `fit` is "fill" (a wide, cropped frame). Learners can tap it to see
+    it full screen, so it works for reference pictures such as a form or a diagram. Separate from `visual`.
   */
   figure?: {
     src: string;
@@ -93,8 +98,15 @@ type Base = {
     /** A GIF from GIPHY: `src` is its still frame. */
     animated?: { mp4: string };
     placement?: "below" | "above";
-    fit?: "whole" | "fill";
+    /** "full" runs edge to edge across the card, whole and uncropped. */
+    fit?: "whole" | "fill" | "full";
   };
+  /**
+    A PDF that's part of the content (a form, a policy, a fact sheet): a tile in the text with its first
+    page, opening the document inside the lesson. `required` keeps Continue locked until the learner has
+    opened it ("open"), or reached its last page ("end").
+  */
+  pdf?: { src: string; title: string; bytes?: number; pages?: number; placement?: "below" | "above"; required?: "open" | "end" };
   /** Short on-screen points: `chips` for an overview list, `tiles` for a few key ideas with icons. */
   keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: IconName }[]; tip?: string };
   /** Consequence styling for cards that show the result of a poorer choice. */
