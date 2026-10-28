@@ -28,3 +28,9 @@ export function syncPublishedLessons(db: Db) {
 
 /** The lesson as it shipped in the content files, before any edits. */
 export const originalLesson = (slug: string) => originals.find((l) => l.slug === slug);
+
+/** Reload the live lessons even though nothing was published (e.g. a picture they use was replaced). */
+export function refreshPublishedLessons(db: Db) {
+  signature = "";
+  syncPublishedLessons(db);
+}

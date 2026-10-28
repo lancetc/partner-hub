@@ -147,6 +147,22 @@ describe("skipping for testers", () => {
     updateLearningPath(db, u("jordan"), id, { name: "Overview test", lessons: ["a-little-extra-time"] }, now);
     expect(learnerPath(db, u("sam"), id)).toMatchObject({ whoFor: "", outcomes: [], reward: "" });
   });
+
+  it("keeps a picture for Who it's for, from the image library only", () => {
+    const pic = "/api/uploads/6c11c3ba-7079-4214-8405-1c9c09804ea8.webp";
+    const { id } = createLearningPath(
+      db,
+      u("jordan"),
+      { name: "Picture test", whoFor: "New coordinators", whoPhoto: pic, lessons: ["a-little-extra-time"] },
+      now,
+    );
+    expect(learnerPath(db, u("sam"), id).whoPhoto).toBe(pic);
+    expect(() => updateLearningPath(db, u("jordan"), id, { name: "Picture test", whoPhoto: "https://evil.example/x.jpg", lessons: [] }, now)).toThrow(
+      /image library/,
+    );
+    updateLearningPath(db, u("jordan"), id, { name: "Picture test", whoPhoto: "", lessons: ["a-little-extra-time"] }, now);
+    expect(learnerPath(db, u("sam"), id).whoPhoto).toBe("");
+  });
 });
 
 describe("deleting learning paths", () => {

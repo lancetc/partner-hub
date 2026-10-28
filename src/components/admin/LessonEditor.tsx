@@ -58,7 +58,6 @@ const TRACKS: { id: Lesson["track"]; label: string }[] = [
 const CARD_TYPES: { type: Card["type"]; label: string; icon: IconName; hint: string }[] = [
   { type: "checklist", label: "Checklist", icon: "checklist", hint: "A list learners tick off, with an optional note under each item" },
   { type: "rating", label: "Confidence", icon: "star", hint: "A 1 to 5 star rating; learners see the average after rating" },
-  { type: "hotspot", label: "Hotspot", icon: "target", hint: "A picture with spots to tap that reveal a note" },
   { type: "wall", label: "Insight wall", icon: "people", hint: "Learners share an idea, then see what others posted" },
   { type: "poll", label: "Poll", icon: "list", hint: "A vote with no right answer; learners see the results" },
   { type: "presenter", label: "Presenter", icon: "play", hint: "A video introduction" },
@@ -72,6 +71,7 @@ const CARD_TYPES: { type: Card["type"]; label: string; icon: IconName; hint: str
 ];
 // Older card types that existing lessons use but new cards don't need.
 const LEGACY_TYPES: typeof CARD_TYPES = [
+  { type: "hotspot", label: "Hotspot", icon: "target", hint: "A picture with spots to tap that reveal a note" },
   { type: "audio", label: "Narrated", icon: "volume", hint: "Content read aloud automatically" },
   { type: "listen", label: "Audio", icon: "volume", hint: "A card just for listening, with its own play button" },
   { type: "calculator", label: "Calculator", icon: "clock", hint: "An interactive cost slider" },
@@ -119,6 +119,37 @@ export async function uploadImage(file: File): Promise<Photo> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
   return { src: data.src, width: data.width, height: data.height };
+}
+
+/** Replaces a library picture with a new file everywhere it's used (lessons are updated on the server). */
+export async function replaceImage(filename: string, file: File): Promise<Photo & { lessons: string[] }> {
+  if (!file.type.startsWith("image/")) throw new Error("That file isn’t an image.");
+  let size: { width: number; height: number };
+  try {
+    const bmp = await createImageBitmap(file);
+    size = { width: bmp.width, height: bmp.height };
+    bmp.close();
+  } catch {
+    throw new Error("This browser can’t read that image. Try a JPEG or PNG.");
+  }
+  const form = new FormData();
+  form.append("file", file);
+  form.append("width", String(size.width));
+  form.append("height", String(size.height));
+  const res = await fetch(`/api/admin/uploads/${encodeURIComponent(filename)}`, { method: "PUT", body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "The picture couldn’t be replaced.");
+  return { src: data.src, width: data.width, height: data.height, lessons: data.lessons ?? [] };
+}
+
+/** The lesson with one picture swapped for another (and its size), as the server does when a picture is replaced. */
+function swapPicture(l: Lesson, from: string, to: Photo): Lesson {
+  return JSON.parse(JSON.stringify(l), (_k, v) => {
+    if (typeof v === "string" && v.includes(from)) return v.split(from).join(to.src);
+    if (v && typeof v === "object" && !Array.isArray(v) && (v.src === from || v.src === to.src) && typeof v.width === "number")
+      return { ...v, src: to.src, width: to.width, height: to.height };
+    return v;
+  });
 }
 
 /** Uploads a PDF for a Resources card. The server checks it really is a PDF. */
@@ -1078,12 +1109,6 @@ const PALETTE: { type: Card["type"]; label: string; icon: IconName; hint: string
     icon: "checklist",
     hint: "A list learners tick off. Add a note under any item, and choose whether every item must be ticked to continue.",
   },
-  {
-    type: "hotspot",
-    label: "Hotspot",
-    icon: "target",
-    hint: "A picture with spots to tap that reveal short notes. Learners explore the markers, or have to find the spots.",
-  },
   { type: "poll", label: "Poll", icon: "list", hint: "A question with no right answer. After voting, learners see how everyone else answered." },
   { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with one right answer and feedback for each choice. Use it to check understanding." },
   { type: "rating", label: "Rating", icon: "star", hint: "A 1 to 5 star confidence check. Learners see the group’s average after they rate." },
@@ -1699,7 +1724,7 @@ function Cards({
               onBlur={() => setTip(null)}
               className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-muted lg:w-full"
             >
-              <Icon name={p.icon} className="size-4 text-ink-muted" /> {p.label}
+              <Icon name={p.icon} className="size-4 shrink-0 text-ink-muted" /> {p.label}
             </button>
           ))}
         </div>
@@ -2444,7 +2469,7 @@ function InlineBody({
           multiline
         />
         {c.items.map((item, i) => (
-          <div key={item.id} className="flex items-start gap-2 rounded-xl border border-line-strong px-2.5 py-1.5">
+          <div key={item.id} className="flex items-start gap-2 rounded-xl border border-line-strong bg-surface px-2.5 py-1.5">
             <span aria-hidden className="mt-0.5 size-4 shrink-0 rounded border-2 border-line-strong" />
             <Editable
               value={item.text}
@@ -2739,10 +2764,16 @@ function MediaDialog({ card: c, lesson, update, onClose }: { card: Card; lesson:
       <hr className="my-5 border-line" />
       {c.visual.kind !== "none" && (
         <div className={cx("mx-auto mb-5", portrait ? "w-48" : "w-full")}>
-          <CardVisual visual={c.visual} className={cx("w-full overflow-hidden rounded-2xl", portrait ? "aspect-[9/16]" : "aspect-[16/10]")} />
+          {c.visual.kind === "illustration" ? (
+            <ReplaceablePicture card={c} set={set} update={update}>
+              <CardVisual visual={c.visual} className="aspect-[16/10] w-full overflow-hidden rounded-2xl" />
+            </ReplaceablePicture>
+          ) : (
+            <CardVisual visual={c.visual} className={cx("w-full overflow-hidden rounded-2xl", portrait ? "aspect-[9/16]" : "aspect-[16/10]")} />
+          )}
         </div>
       )}
-      <VisualField card={c} set={set} lesson={lesson} />
+      <VisualField card={c} set={set} lesson={lesson} update={update} />
       {(c.type === "image" || c.type === "audio") && (
         <>
           <hr className="my-5 border-line" />
@@ -2752,6 +2783,251 @@ function MediaDialog({ card: c, lesson, update, onClose }: { card: Card; lesson:
         </>
       )}
     </Drawer>
+  );
+}
+
+/**
+  A gallery picture with "Replace" on hover (or a file dropped on it): the new file takes its place
+  everywhere it's used, in every lesson. Only uploads can be replaced; built-in pictures can't.
+*/
+function ReplaceableTile({ photo, update, onReplaced, children }: { photo: Photo; update?: Update; onReplaced: () => void; children: React.ReactNode }) {
+  const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pick = useRef<HTMLInputElement>(null);
+  const uploaded = photo.src.startsWith("/api/uploads/");
+  const file = photo.src.split("/").pop() ?? "";
+
+  async function replace(next: File | undefined) {
+    if (!next) return;
+    setError(null);
+    try {
+      const { lessons } = await api<{ lessons: { slug: string; title: string }[] }>(`/api/admin/uploads/${encodeURIComponent(file)}`);
+      const where = lessons.map((x) => `“${x.title}”`).join(", ");
+      const ok = await confirmAction(
+        where
+          ? `Every card using this picture changes to the new one, in ${where}, including what learners see now. Cards keep their crop and position.`
+          : "The new picture takes its place in the library.",
+        { title: `Replace with “${next.name}”?`, confirmLabel: "Replace" },
+      );
+      if (!ok) return;
+      setBusy(true);
+      const done = await replaceImage(file, next);
+      // This editor's copy of the lesson changes too, so saving it doesn't put the old picture back.
+      update?.((d) => void Object.assign(d, swapPicture(d, photo.src, done)));
+      onReplaced();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!uploaded) return <>{children}</>;
+  return (
+    <div
+      className={cx("group relative", busy && "animate-pulse")}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        const f = e.dataTransfer.files?.[0];
+        if (!f) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        void replace(f);
+      }}
+    >
+      {children}
+      {over && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-xl bg-tealtint/90 text-xs font-bold text-ink">Drop to replace</div>
+      )}
+      <button
+        type="button"
+        onClick={() => pick.current?.click()}
+        disabled={busy}
+        title="Replace this picture everywhere it’s used (or drop a file on it)"
+        aria-label="Replace this picture with a new one, everywhere it’s used"
+        className="absolute inset-x-1 bottom-1 inline-flex min-h-7 items-center justify-center gap-1 rounded-full bg-white/95 text-[0.7rem] font-bold text-[#102a43] opacity-0 shadow ring-1 ring-black/10 transition-opacity hover:bg-white focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+      >
+        <Icon name="refresh" className="size-3" /> {busy ? "Replacing…" : "Replace"}
+      </button>
+      <input
+        ref={pick}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          void replace(f);
+        }}
+      />
+      {error && (
+        <p role="alert" className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg bg-surface p-1.5 text-[0.7rem] text-danger shadow">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+  The card's picture in the media panel: "Replace image" (or drop a file on it) swaps the picture on
+  this card, keeping its position. "Replace in every lesson" swaps the file everywhere it's used.
+*/
+function ReplaceablePicture({
+  card: c,
+  set,
+  update,
+  children,
+}: {
+  card: Card;
+  set: (fn: (x: Card) => void) => void;
+  update: Update;
+  children: React.ReactNode;
+}) {
+  const [busy, setBusy] = useState<"card" | "everywhere" | null>(null);
+  const [over, setOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const pick = useRef<HTMLInputElement>(null);
+  const everywhereInput = useRef<HTMLInputElement>(null);
+  const photo = c.visual.kind === "illustration" ? c.visual.photo : undefined;
+  const isUpload = Boolean(photo?.src.startsWith("/api/uploads/"));
+
+  async function onCard(file: File | undefined) {
+    if (!file) return;
+    setBusy("card");
+    setError(null);
+    setNote(null);
+    try {
+      const p = await uploadImage(file);
+      set((x) => {
+        if (x.visual.kind !== "illustration") return;
+        // A new picture: keep where it sits on the card, drop the old one's photo credit.
+        x.visual.photo = { src: p.src, width: p.width, height: p.height, ...(x.visual.photo?.position ? { position: x.visual.photo.position } : {}) };
+      });
+      setNote("Picture replaced on this card.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function everywhere(file: File | undefined) {
+    if (!file || !photo) return;
+    const ok = await confirmAction(
+      "Every card using this picture changes to the new one, in every lesson, including what learners see now. Cards keep their crop and position.",
+      { title: `Replace in every lesson with “${file.name}”?`, confirmLabel: "Replace everywhere" },
+    );
+    if (!ok) return;
+    setBusy("everywhere");
+    setError(null);
+    setNote(null);
+    try {
+      const next = await replaceImage(photo.src.split("/").pop()!, file);
+      // This editor's copy of the lesson changes too, so saving it doesn't put the old picture back.
+      update((d) => void Object.assign(d, swapPicture(d, photo.src, next)));
+      setNote(`Picture replaced in ${next.lessons.length || 1} ${next.lessons.length === 1 ? "lesson" : "lessons"}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className={cx("relative rounded-2xl", over && "ring-4 ring-action")}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          const file = e.dataTransfer.files?.[0];
+          if (!file) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setOver(false);
+          void onCard(file);
+        }}
+      >
+        {children}
+        {over && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-tealtint/85 font-semibold text-ink">
+            Drop to replace the picture
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => pick.current?.click()}
+          disabled={busy !== null}
+          className="absolute bottom-3 right-3 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-semibold text-[#102a43] shadow-md hover:bg-white/90 disabled:opacity-60"
+        >
+          <Icon name="refresh" className="size-4" /> {busy === "card" ? "Uploading…" : photo ? "Replace image" : "Add an image"}
+        </button>
+        <input
+          ref={pick}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            void onCard(file);
+          }}
+        />
+      </div>
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+        <span>Drop a picture on it to replace it on this card.</span>
+        {isUpload && (
+          <>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => everywhereInput.current?.click()}
+              className="font-semibold text-accent hover:underline disabled:opacity-60"
+            >
+              {busy === "everywhere" ? "Replacing everywhere…" : "Replace in every lesson"}
+            </button>
+            <input
+              ref={everywhereInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                void everywhere(file);
+              }}
+            />
+          </>
+        )}
+      </p>
+      {note && (
+        <p role="status" className="rounded-xl bg-tealtint px-3 py-2 text-sm">
+          {note}
+        </p>
+      )}
+      {error && <ErrorNote text={error} />}
+    </div>
   );
 }
 
@@ -3240,7 +3516,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         </Field>
       </div>
       <hr className="my-5 border-line" />
-      <VisualField card={c} set={set} lesson={l.slug} />
+      <VisualField card={c} set={set} lesson={l.slug} update={update} />
     </Panel>
   );
 }
@@ -4441,7 +4717,7 @@ const VISUAL_KINDS: { kind: Visual["kind"]; label: string }[] = [
   { kind: "orbit", label: "People around the client" },
 ];
 
-function VisualField({ card: c, set, lesson }: { card: Card; set: (fn: (c: Card) => void) => void; lesson: string }) {
+function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (c: Card) => void) => void; lesson: string; update?: Update }) {
   const v = c.visual;
   const library = useLibrary();
   const [pexels, setPexels] = useState(false);
@@ -4581,16 +4857,17 @@ function VisualField({ card: c, set, lesson }: { card: Card; set: (fn: (c: Card)
             <StoryVisual variant={v.variant} tone={v.tone} icon={v.icon} alt="" className="size-full" iconSize="size-5" />
           </button>
           {library.photos.map((p) => (
-            <button
-              key={p.src}
-              type="button"
-              onClick={() => applyPhoto(p)}
-              className={cx("aspect-[4/3] overflow-hidden rounded-xl border-2", v.photo?.src === p.src ? "border-action" : "border-transparent")}
-              aria-label={`Use ${p.src.split("/").pop()}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.src} alt="" className="size-full object-cover" />
-            </button>
+            <ReplaceableTile key={p.src} photo={p} update={update} onReplaced={library.reload}>
+              <button
+                type="button"
+                onClick={() => applyPhoto(p)}
+                className={cx("block aspect-[4/3] w-full overflow-hidden rounded-xl border-2", v.photo?.src === p.src ? "border-action" : "border-transparent")}
+                aria-label={`Use ${p.src.split("/").pop()}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.src} alt="" className="size-full object-cover" />
+              </button>
+            </ReplaceableTile>
           ))}
           <UploadTile
             className="aspect-[4/3]"
@@ -5015,6 +5292,40 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
       setMediaError((e as Error).message);
     }
   }
+  /** Replaces an uploaded picture with a new file, everywhere it's used, after saying where that is. */
+  const [replacing, setReplacing] = useState<Photo | null>(null);
+  const [replaced, setReplaced] = useState<string | null>(null);
+  const replaceInput = useRef<HTMLInputElement>(null);
+  // The picture the file chooser was opened for (cancelling the chooser leaves nothing behind).
+  const pickFor = useRef<Photo | null>(null);
+  async function replace(p: Photo, file: File) {
+    setMediaError(null);
+    setReplaced(null);
+    try {
+      const { lessons } = await api<{ lessons: { slug: string; title: string }[] }>(usageUrl(p.src));
+      const names = lessons.map((x) => (x.slug === l.slug ? "this lesson" : `“${x.title}”`));
+      if (JSON.stringify(l).includes(p.src) && !names.includes("this lesson")) names.unshift("this lesson");
+      const ok = await confirmAction(
+        names.length
+          ? `Every card using it changes to the new picture, in ${names.join(", ")}, including what learners see now. Cards keep their crop and position.`
+          : "The new picture takes its place in the library.",
+        { title: `Replace with “${file.name}”?`, confirmLabel: "Replace" },
+      );
+      if (!ok) return;
+      setReplacing(p);
+      const next = await replaceImage(fileOf(p.src), file);
+      // This editor's copy of the lesson changes too, so saving it doesn't put the old picture back.
+      if (JSON.stringify(l).includes(p.src)) update((d) => void Object.assign(d, swapPicture(d, p.src, next)));
+      setReplaced(
+        next.lessons.length ? `Picture replaced in ${next.lessons.length} ${next.lessons.length === 1 ? "lesson" : "lessons"}.` : "Picture replaced.",
+      );
+      library.reload();
+    } catch (e) {
+      setMediaError((e as Error).message);
+    } finally {
+      setReplacing(null);
+    }
+  }
   async function restore(src: string) {
     setMediaError(null);
     try {
@@ -5063,7 +5374,23 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
           {library.photos.map((p) => {
             const name = (p as Photo & { name?: string }).name ?? fileOf(p.src);
             return (
-              <div key={p.src} className="group relative">
+              <div
+                key={p.src}
+                className={cx("group relative", replacing?.src === p.src && "animate-pulse")}
+                // Drop a new file onto an uploaded picture to replace it.
+                onDragOver={(e) => {
+                  if (!isUpload(p.src) || !e.dataTransfer.types.includes("Files")) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={(e) => {
+                  const file = e.dataTransfer.files?.[0];
+                  if (!isUpload(p.src) || !file) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void replace(p, file);
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => update((d) => void (d.visual.photo = p))}
@@ -5085,10 +5412,45 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
                 >
                   <Icon name="trash" className="size-3.5" />
                 </button>
+                {/* Built-in pictures are part of the hub itself, so only uploads can be replaced. */}
+                {isUpload(p.src) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pickFor.current = p;
+                      replaceInput.current?.click();
+                    }}
+                    aria-label={`Replace ${name} with a new picture, everywhere it's used`}
+                    title="Replace with a new picture, everywhere it’s used (or drop a file here)"
+                    className="absolute left-1 top-1 grid size-7 place-items-center rounded-full bg-white/90 text-[#102a43] opacity-0 shadow ring-1 ring-black/10 transition-opacity hover:bg-white hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                  >
+                    <Icon name="refresh" className="size-3.5" />
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
+        <input
+          ref={replaceInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            const p = pickFor.current;
+            pickFor.current = null;
+            if (file && p) void replace(p, file);
+          }}
+        />
+        {replaced && (
+          <p role="status" className="mt-2 rounded-xl bg-tealtint px-3 py-2 text-sm">
+            {replaced}
+          </p>
+        )}
         {deleted && (
           <p role="status" className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
             Image deleted from the library.
@@ -5103,7 +5465,7 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
           </div>
         )}
         <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-          <span>To delete an image, hover over it and press the bin.</span>
+          <span>Hover over an image to delete it, or to replace it everywhere it’s used (you can also drop a new file onto it).</span>
           {library.deleted.length > 0 && (
             <button type="button" aria-expanded={showDeleted} onClick={() => setShowDeleted((s) => !s)} className="font-semibold text-accent hover:underline">
               {showDeleted ? "Hide deleted images" : `Show deleted images (${library.deleted.length})`}

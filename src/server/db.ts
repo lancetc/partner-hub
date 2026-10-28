@@ -386,6 +386,7 @@ export function migrate(db: Db) {
   if (!cols.includes("who_for")) db.exec("ALTER TABLE learning_paths ADD COLUMN who_for TEXT NOT NULL DEFAULT ''");
   if (!cols.includes("outcomes")) db.exec("ALTER TABLE learning_paths ADD COLUMN outcomes TEXT NOT NULL DEFAULT '[]'");
   if (!cols.includes("reward")) db.exec("ALTER TABLE learning_paths ADD COLUMN reward TEXT NOT NULL DEFAULT ''");
+  if (!cols.includes("who_photo")) db.exec("ALTER TABLE learning_paths ADD COLUMN who_photo TEXT");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.

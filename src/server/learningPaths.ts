@@ -17,6 +17,8 @@ type PathRow = {
   in_order: number;
   allow_skip: number;
   who_for: string;
+  /** A picture behind the "Who it's for" panel on the path page (an image library address). */
+  who_photo?: string | null;
   /** JSON list of strings. */
   outcomes: string;
   reward: string;
@@ -36,6 +38,8 @@ export type PathInput = {
   allowSkip?: boolean;
   /** The overview on the learner's path page. */
   whoFor?: string;
+  /** A picture behind "Who it's for": an image from the library, or empty for none. */
+  whoPhoto?: string;
   /** What they'll be able to do by the end, one per line on the page. */
   outcomes?: string[];
   /** What they get when they finish, e.g. a certificate. */
@@ -170,6 +174,7 @@ function validate(db: Db, input: PathInput) {
     inOrder: input.inOrder !== false,
     allowSkip: input.allowSkip === true,
     whoFor: (input.whoFor ?? "").trim().slice(0, 300),
+    whoPhoto: photoAddress(input.whoPhoto),
     outcomes: (Array.isArray(input.outcomes) ? input.outcomes : [])
       .map((o) =>
         String(o ?? "")
@@ -184,6 +189,15 @@ function validate(db: Db, input: PathInput) {
   };
 }
 
+/** An image library address (an upload or a built-in picture), or empty. */
+function photoAddress(src: unknown) {
+  const s = String(src ?? "").trim();
+  if (!s) return "";
+  if (!/^\/api\/uploads\/[0-9a-f-]{36}\.(webp|jpg|png|gif)$/.test(s) && !/^\/images\/[\w.-]+\.(jpe?g|png|webp)$/.test(s))
+    throw new HttpError(400, "Choose the picture from the image library.");
+  return s;
+}
+
 /** The overview fields, as stored. */
 const overview = (p: PathRow) => {
   let outcomes: string[] = [];
@@ -193,7 +207,7 @@ const overview = (p: PathRow) => {
   } catch {
     // A damaged value shows no outcomes rather than breaking the page.
   }
-  return { whoFor: p.who_for ?? "", outcomes, reward: p.reward ?? "" };
+  return { whoFor: p.who_for ?? "", whoPhoto: p.who_photo ?? "", outcomes, reward: p.reward ?? "" };
 };
 
 /** Replaces a path's lessons (and chapters, if it has them). */
@@ -304,9 +318,23 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
   const at = now.toISOString();
   tx(db, () => {
     db.prepare(
-      `INSERT INTO learning_paths (id, name, description, audience, in_order, allow_skip, who_for, outcomes, reward, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, v.name, v.description, v.audience, v.inOrder ? 1 : 0, v.allowSkip ? 1 : 0, v.whoFor, JSON.stringify(v.outcomes), v.reward, actor.id, at, at);
+      `INSERT INTO learning_paths (id, name, description, audience, in_order, allow_skip, who_for, who_photo, outcomes, reward, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      v.name,
+      v.description,
+      v.audience,
+      v.inOrder ? 1 : 0,
+      v.allowSkip ? 1 : 0,
+      v.whoFor,
+      v.whoPhoto || null,
+      JSON.stringify(v.outcomes),
+      v.reward,
+      actor.id,
+      at,
+      at,
+    );
     writeLessons(db, id, v);
     audit(db, { actor: actor.id, event: "learning_path.created", entity: `learning_path:${id}`, next: v, at: now });
   });
@@ -329,8 +357,20 @@ export function updateLearningPath(db: Db, actor: User, id: string, input: PathI
   };
   tx(db, () => {
     db.prepare(
-      "UPDATE learning_paths SET name = ?, description = ?, audience = ?, in_order = ?, allow_skip = ?, who_for = ?, outcomes = ?, reward = ?, updated_at = ? WHERE id = ?",
-    ).run(v.name, v.description, v.audience, v.inOrder ? 1 : 0, v.allowSkip ? 1 : 0, v.whoFor, JSON.stringify(v.outcomes), v.reward, now.toISOString(), id);
+      "UPDATE learning_paths SET name = ?, description = ?, audience = ?, in_order = ?, allow_skip = ?, who_for = ?, who_photo = ?, outcomes = ?, reward = ?, updated_at = ? WHERE id = ?",
+    ).run(
+      v.name,
+      v.description,
+      v.audience,
+      v.inOrder ? 1 : 0,
+      v.allowSkip ? 1 : 0,
+      v.whoFor,
+      v.whoPhoto || null,
+      JSON.stringify(v.outcomes),
+      v.reward,
+      now.toISOString(),
+      id,
+    );
     writeLessons(db, id, v);
     audit(db, { actor: actor.id, event: "learning_path.updated", entity: `learning_path:${id}`, previous, next: v, at: now });
   });

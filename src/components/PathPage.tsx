@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useApi } from "@/lib/api";
-import { formatDuration } from "@/lib/format";
+import { cx, formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
 import { Icon, type IconName } from "./Icon";
 
@@ -113,7 +113,20 @@ function Overview({ path: p }: { path: PathData }) {
           {/* Fixed brand colours, so both panels look the same in light and dark mode. */}
           {p.whoFor && (
             <section className="relative isolate overflow-hidden rounded-3xl bg-[linear-gradient(160deg,#36537f_0%,#2d4875_100%)] p-5 text-white ring-1 ring-white/10">
-              <svg aria-hidden viewBox="0 0 120 120" className="absolute -right-3 -top-4 -z-10 size-28 opacity-90">
+              {/* The path's own picture behind the panel, under a navy tint so the text stays readable. */}
+              {p.whoPhoto && (
+                <>
+                  {/* Slightly enlarged, so a picture with a thin border or shadow at its edges still fills the panel cleanly. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.whoPhoto} alt="" aria-hidden className="absolute inset-0 -z-20 size-full scale-[1.06] object-cover" />
+                  {/* Light at the top so the picture shows; deeper navy behind the words lower down. */}
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgb(16_42_67/0.05)_0%,rgb(16_42_67/0.35)_45%,rgb(16_42_67/0.75)_100%)]"
+                  />
+                </>
+              )}
+              <svg aria-hidden viewBox="0 0 120 120" className={cx("absolute -right-3 -top-4 -z-10 size-28 opacity-90", p.whoPhoto && "hidden")}>
                 <ellipse cx="78" cy="38" rx="34" ry="18" fill="#0e7c7b" transform="rotate(-30 78 38)" />
                 <ellipse cx="92" cy="78" rx="30" ry="15" fill="#ffc72c" opacity="0.85" transform="rotate(40 92 78)" />
                 <circle cx="40" cy="20" r="7" fill="#f26a36" />

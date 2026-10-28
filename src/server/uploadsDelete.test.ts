@@ -5,7 +5,8 @@ import path from "node:path";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import sharp from "sharp";
-import { editorLesson, saveDraft } from "./authoredLessons";
+import { editorLesson, publishLesson, saveDraft } from "./authoredLessons";
+import { lessonBySlug } from "@/content/lessons";
 
 /* Deleting images from the library: hidden there, kept for cards that still use them, and undoable. */
 
@@ -85,5 +86,36 @@ describe("pictures converted to WebP", () => {
     fs.rmSync(path.join(dir, oldName));
     db.prepare("UPDATE uploads SET replaced_by = ? WHERE filename = ?").run(newName, oldName);
     expect(up.readUpload(db, oldName)?.body.equals(up.readUpload(db, newName)!.body)).toBe(true);
+  });
+});
+
+describe("replacing a picture", () => {
+  it("swaps it everywhere it's used, live lessons included, and keeps the old address working", async () => {
+    const old = await up.saveUpload(db, u("jordan"), png(), { width: 800, height: 600 }, now);
+    const draft = editorLesson(db, "legislative-framework")!.lesson;
+    draft.visual.photo = { src: old.src, width: old.width, height: old.height, position: "center 30%" };
+    saveDraft(db, u("jordan"), "legislative-framework", draft, now);
+    publishLesson(db, u("jordan"), "legislative-framework", now);
+    db.prepare("INSERT INTO settings (key, value) VALUES ('avatar_presenter', ?)").run(JSON.stringify({ src: old.src, width: 800, height: 600 }));
+
+    const wide = await sharp({ create: { width: 1200, height: 400, channels: 3, background: "#ffc72c" } })
+      .png()
+      .toBuffer();
+    const oldName = old.src.split("/").pop()!;
+    await expect(up.replaceUpload(db, u("sam"), oldName, new File([wide], "x.png", { type: "image/png" }), { width: 1200, height: 400 }, now)).rejects.toThrow(
+      /authors/,
+    );
+    const r = await up.replaceUpload(db, u("jordan"), oldName, new File([wide], "Wider.png", { type: "image/png" }), { width: 1200, height: 400 }, now);
+    expect(r).toMatchObject({ width: 1200, height: 400, lessons: [draft.title] });
+
+    // The draft and the live lesson both use the new picture, with its size, and keep their position.
+    expect(editorLesson(db, "legislative-framework")!.lesson.visual.photo).toEqual({ src: r.src, width: 1200, height: 400, position: "center 30%" });
+    expect(lessonBySlug("legislative-framework")?.visual.photo?.src).toBe(r.src);
+    expect(db.prepare("SELECT value FROM settings WHERE key = 'avatar_presenter'").get()).toMatchObject({ value: expect.stringContaining(r.src) });
+    // The old address shows the new picture; the library lists only the new one.
+    expect(up.readUpload(db, oldName)?.body.equals(up.readUpload(db, r.src.split("/").pop()!)!.body)).toBe(true);
+    const listed = up.listUploads(db, u("jordan")).map((x) => x.src);
+    expect(listed).toContain(r.src);
+    expect(listed).not.toContain(old.src);
   });
 });

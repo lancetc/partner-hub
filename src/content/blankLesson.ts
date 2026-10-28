@@ -7,7 +7,7 @@ export function blankLesson(): Lesson {
     slug: "new-lesson",
     version: "0.1",
     // The house style; authors can pick another on the Details tab.
-    theme: "rhythmNavy",
+    theme: "rhythm",
     title: "Untitled lesson",
     summary: "",
     outcome: "",

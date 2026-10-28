@@ -23,13 +23,13 @@ You are writing draft micro-lessons for the Trilogy Care **Partner Hub**, a 7tap
 7. **Quick check**: a `quiz` with 3 questions (this is the completion card; `completion: { type: "quiz", cardId: "check", ... }`).
 8. **Wrap**: a `rating` (confidence), a `resources` card (official links), and a `summary` (5 points, one practical `action`, `references`, `cta: "Finish lesson"`).
 
-Typically 18 to 23 cards. Use a variety of card types across your lessons where they fit the purpose (`hotspot` needs a real photo with accurate spot positions; only use it if you can view the image to place spots, e.g. with the Read tool). Use `checklist` for routines, `listen` for a story told aloud, `calculator` only for "minutes × hourly price" budget illustrations.
+Typically 18 to 23 cards. Use a variety of card types across your lessons where they fit the purpose. Don't use `hotspot` cards; they've been retired. Use `checklist` for routines, `listen` for a story told aloud, `calculator` only for "minutes × hourly price" budget illustrations.
 
 ## Lesson file rules
 - File name: `<chapter>-<n>-<slug>.mjs`, e.g. `04-1-dignity-choice-informed-consent.mjs`. The chapter prefix is two digits.
 - **`slug` must be exactly the slug you were given.** It replaces an existing empty placeholder draft that's already linked into the Care Coordination learning path.
 - `title`: the topic title as given. `track: "coordinator"`. `version: "0.1"`. `minutes`: 8 to 10. `owner: "<team> (draft)"`. `reviewDate: "2027-04-30"`. `assignment: { required: false }`.
-- `theme`: `rhythmNavy` (Brand rhythm, soft navy), the house style for every lesson. The others (`classic`, `softTeal`, `navy`, `warm`, `rhythm`) only if asked.
+- `theme`: `rhythm` (Brand rhythm), the house style for every lesson. The others (`classic`, `softTeal`, `navy`, `warm`, `rhythmNavy`) only if asked.
 - Cover `visual`: `{ variant, tone, icon, alt, photo? }` using `PHOTOS` from lib (reuse is fine).
 - Icons (card art and keyPoints) must be one of: clock, shield, heart, leaf, chat, home, spark, doc, people, sun, route, book.
 - `beats`: names for the lesson's sections; every card's `beat` is an index into it, and every beat must have at least one card.

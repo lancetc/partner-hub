@@ -23,6 +23,7 @@ export type MyPath = {
   chapters?: PathChapter[];
   /** The overview on the path's own page. */
   whoFor?: string;
+  whoPhoto?: string;
   outcomes?: string[];
   reward?: string;
 };

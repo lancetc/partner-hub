@@ -7,6 +7,7 @@ import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { lessons as contentLessons } from "@/content/lessons";
 import { toWebp } from "./imageCompress";
+import { refreshPublishedLessons } from "./lessonRegistry";
 
 /* Card images, videos and PDFs uploaded by authors. Checked by content, renamed, and stored outside the public folder. */
 
@@ -41,6 +42,7 @@ type UploadRow = {
   uploaded_at: string;
   credit: string | null;
   deleted_at?: string | null;
+  deleted_by?: string | null;
   replaced_by?: string | null;
 };
 export type Credit = { name: string; url: string; source: "Pexels"; page?: string };
@@ -97,7 +99,9 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
 export function listUploads(db: Db, actor: User) {
   requireAuthor(actor);
   // The image library lists images; videos are attached to cards as they're recorded.
-  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL AND replaced_by IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]).map(toItem);
+  return (
+    db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL AND replaced_by IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]
+  ).map(toItem);
 }
 
 /** The stored file for a public upload URL, or null. Only names this server generated are ever read. */
@@ -171,7 +175,11 @@ export function restoreUpload(db: Db, actor: User, filename: string, now: Date) 
 /** Images deleted from the library, newest first, so they can be brought back. */
 export function deletedUploads(db: Db, actor: User) {
   requireAuthor(actor);
-  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NOT NULL AND replaced_by IS NULL ORDER BY deleted_at DESC").all() as UploadRow[]).map(toItem);
+  return (
+    db
+      .prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NOT NULL AND replaced_by IS NULL ORDER BY deleted_at DESC")
+      .all() as UploadRow[]
+  ).map(toItem);
 }
 
 /*
@@ -204,4 +212,66 @@ export function hideBuiltIn(db: Db, actor: User, src: string, hidden: boolean, n
   db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(HIDDEN_KEY, JSON.stringify(list));
   audit(db, { actor: actor.id, event: hidden ? "library.builtin_hidden" : "library.builtin_restored", entity: `image:${src}`, at: now });
   return { hiddenBuiltIns: list };
+}
+
+/** Swap a picture's address (and size) for the new one throughout a lesson. */
+function swapPicture(value: unknown, from: string, to: { src: string; width: number; height: number }): unknown {
+  if (typeof value === "string") return value.includes(from) ? value.split(from).join(to.src) : value;
+  if (Array.isArray(value)) return value.map((v) => swapPicture(v, from, to));
+  if (value && typeof value === "object") {
+    const o = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, swapPicture(v, from, to)])) as Record<string, unknown>;
+    // A picture object: keep its crop and position, take the new picture's size.
+    if (o.src === to.src && typeof o.width === "number" && typeof o.height === "number") Object.assign(o, { width: to.width, height: to.height });
+    return o;
+  }
+  return value;
+}
+
+/**
+  Replaces a picture in the library with a new file, everywhere it's used: every lesson's saved draft
+  and live version (without needing a publish), the presenter face and other records. The old address
+  keeps working too (it shows the new picture), so nothing that still points at it breaks. Earlier
+  versions in a lesson's history are left as they were.
+*/
+export async function replaceUpload(db: Db, actor: User, filename: string, file: File, size: { width: number; height: number }, now: Date) {
+  requireAuthor(actor);
+  const old = uploadRow(db, filename);
+  if (!old.mime.startsWith("image/")) throw new HttpError(400, "Only pictures can be replaced here.");
+  if (!file?.type?.startsWith?.("image/")) throw new HttpError(415, "Choose a picture to replace it with.");
+  const saved = await saveUpload(db, actor, file, size, now);
+  const next = saved.src.split("/").pop()!;
+  const from = publicUrl(filename);
+  const to = { src: saved.src, width: saved.width, height: saved.height };
+  // The old file, and any earlier pictures it had replaced, now show the new one.
+  db.prepare("UPDATE uploads SET replaced_by = ? WHERE filename = ? OR replaced_by = ?").run(next, filename, filename);
+  // It takes the old one's place in the library, including whether it was deleted.
+  db.prepare("UPDATE uploads SET deleted_at = ?, deleted_by = ? WHERE filename = ?").run(
+    old.deleted_at ?? null,
+    old.deleted_at ? (old.deleted_by ?? null) : null,
+    next,
+  );
+
+  const lessons: string[] = [];
+  const like = `%${from}%`;
+  for (const r of db.prepare("SELECT slug, draft, published FROM authored_lessons WHERE draft LIKE ? OR published LIKE ?").all(like, like) as {
+    slug: string;
+    draft: string;
+    published: string | null;
+  }[]) {
+    const draft = JSON.stringify(swapPicture(JSON.parse(r.draft), from, to));
+    const published = r.published ? JSON.stringify(swapPicture(JSON.parse(r.published), from, to)) : null;
+    db.prepare("UPDATE authored_lessons SET draft = ?, published = ? WHERE slug = ?").run(draft, published, r.slug);
+    lessons.push((JSON.parse(draft) as { title?: string }).title || r.slug);
+  }
+  // Other records that name the picture: the presenter face, AI pictures and videos, translations.
+  const skip = new Set(["uploads", "audit", "idempotency", "authored_lessons", "lesson_versions"]);
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]) {
+    if (skip.has(name)) continue;
+    for (const c of (db.prepare(`PRAGMA table_info("${name}")`).all() as { name: string; type: string }[]).filter((c) => /TEXT/i.test(c.type))) {
+      db.prepare(`UPDATE "${name}" SET "${c.name}" = replace("${c.name}", ?, ?) WHERE "${c.name}" LIKE ?`).run(from, saved.src, like);
+    }
+  }
+  refreshPublishedLessons(db);
+  audit(db, { actor: actor.id, event: "upload.replaced", entity: `upload:${filename}`, next: { by: next, lessons: lessons.length }, at: now });
+  return { ...to, name: saved.name, lessons };
 }

@@ -32,7 +32,7 @@ describe("new lessons", () => {
   it("saves a draft learners can't see, then publishes it as version 1.0", () => {
     const { slug } = createLesson(db, u("jordan"), { ...blankLesson(), title: "Talking about money" }, now);
     // New lessons start in the house theme.
-    expect(blankLesson().theme).toBe("rhythmNavy");
+    expect(blankLesson().theme).toBe("rhythm");
     expect(slug).toBe("talking-about-money");
     expect(lessonStatus(db, slug).state).toBe("unpublished");
     expect(lessons.some((l) => l.slug === slug)).toBe(false);

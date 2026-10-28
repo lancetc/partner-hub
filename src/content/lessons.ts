@@ -309,7 +309,7 @@ export type Lesson = {
 const extraTime: Lesson = {
   slug: "a-little-extra-time",
   version: "1.0-demo",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "A little extra time",
   summary: "What a longer visit means for cost, and what to check before you agree.",
   outcome: "Check the confirmation process before agreeing to extend a visit.",
@@ -587,7 +587,7 @@ const extraTime: Lesson = {
 const noticingChange: Lesson = {
   slug: "noticing-a-change",
   version: "1.0-demo",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Noticing a change",
   summary: "Practise listening, checking and escalating when a client’s needs seem to change.",
   outcome: "Recognise a possible change in needs and follow the escalation process.",
@@ -726,7 +726,7 @@ const noticingChange: Lesson = {
 const briefing: Lesson = {
   slug: "extra-time-briefing",
   version: "1.0-demo",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Briefing: confirming extra visit time",
   summary: "What changed, who it affects and what to do, in five short cards.",
   outcome: "Know what to do from 3 November when a client asks for extra time.",
@@ -811,7 +811,7 @@ const briefing: Lesson = {
 const missionAndModel: Lesson = {
   slug: "our-mission-and-model",
   version: "1.1",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Our Mission and Model",
   summary: "How the partnership between you and Trilogy Care works, and how to make it clear to your clients.",
   outcome: "Explain to a client who Trilogy Care is and how you work together.",
@@ -1052,7 +1052,7 @@ const missionAndModel: Lesson = {
 const legislativeFramework: Lesson = {
   slug: "legislative-framework",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Legislative Framework",
   summary: "The main parts of Australia’s aged care framework, and how they shape everyday care decisions.",
   outcome: "Recognise what each part of the framework does, and when to check the current requirements.",
@@ -1624,7 +1624,7 @@ const lfOwner = "Quality and practice (draft)";
 const lfRecall: Lesson = {
   slug: "lf-recall",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Legislative Framework: quick recall",
   summary: "Two quick questions to bring back the five parts of the framework.",
   outcome: "Recall what the Rights and the Code each do.",
@@ -1725,7 +1725,7 @@ const lfRecall: Lesson = {
 const lfApply: Lesson = {
   slug: "lf-apply",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Legislative Framework: a privacy request",
   summary: "A realistic situation that tests privacy and a person’s voice in their own care.",
   outcome: "Check a person’s wishes and the arrangements that apply before sharing information.",
@@ -1873,7 +1873,7 @@ const refreshDone = {
 const lfRefresh: Lesson = {
   slug: "lf-refresh",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Legislative Framework: refresher",
   summary: "One quick decision to keep the framework fresh.",
   outcome: "Give the person a voice in everyday service decisions.",
@@ -1894,7 +1894,7 @@ const lfRefresh: Lesson = {
 const lfRefreshSupport: Lesson = {
   slug: "lf-refresh-support",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "Legislative Framework: refresher with practice",
   summary: "A short reminder of the framework, some practice and one decision.",
   outcome: "Recognise what each part does and give the person a voice in everyday decisions.",
@@ -1977,7 +1977,7 @@ const etRule: { text: string; icon: IconName }[] = [
 const etRecall: Lesson = {
   slug: "et-recall",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "A little extra time: quick recall",
   summary: "Two quick questions on what to do when a client asks you to stay longer.",
   outcome: "Check with the coordinator before agreeing to extra time.",
@@ -2081,7 +2081,7 @@ function etApplyLesson(role: "default" | "gardening"): Lesson {
   return {
     slug: garden ? "et-apply-gardening" : "et-apply",
     version: "1.0",
-    theme: "rhythmNavy",
+    theme: "rhythm",
     title: garden ? "A little extra time: a different job" : "A little extra time: a different request",
     summary: garden
       ? "The visit length stays the same, but the client asks for a different job."
@@ -2295,7 +2295,7 @@ const etRefreshDone: Card = {
 const etRefresh: Lesson = {
   slug: "et-refresh",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "A little extra time: refresher",
   summary: "One quick decision to keep the habit of checking first.",
   outcome: "Check before agreeing to any change, whoever asks.",
@@ -2313,7 +2313,7 @@ const etRefresh: Lesson = {
 const etRefreshSupport: Lesson = {
   slug: "et-refresh-support",
   version: "1.0",
-  theme: "rhythmNavy",
+  theme: "rhythm",
   title: "A little extra time: refresher with practice",
   summary: "A short reminder of the steps, some practice and one decision.",
   outcome: "Check before agreeing to any change, and explain what it means for the client.",

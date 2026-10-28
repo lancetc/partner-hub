@@ -85,6 +85,7 @@ type Detail = {
   inOrder: boolean;
   allowSkip: boolean;
   whoFor: string;
+  whoPhoto?: string;
   outcomes: string[];
   reward: string;
   lessons: string[];
@@ -368,6 +369,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   // One outcome per line while editing.
   const [outcomes, setOutcomes] = useState((detail?.outcomes ?? []).join("\n"));
   const [reward, setReward] = useState(detail?.reward ?? "");
+  const [whoPhoto, setWhoPhoto] = useState(detail?.whoPhoto ?? "");
   const [flat, setPicked] = useState<string[]>(detail?.lessons ?? []);
   // Chapters (with optional stages); null for a path that's a plain list of lessons.
   const [chapters, setChapters] = useState<ChapterDraft[] | null>(detail?.chapters?.length ? detail.chapters : null);
@@ -409,6 +411,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
         inOrder,
         allowSkip,
         whoFor,
+        whoPhoto,
         outcomes: outcomes
           .split("\n")
           .map((o) => o.replace(/^\s*[-•*]\s*/, "").trim())
@@ -490,6 +493,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   maxLength={300}
                 />
               </Field>
+              <WhoPhotoField value={whoPhoto} onChange={(src) => change(() => setWhoPhoto(src))} />
               <Field label="What you’ll be able to do" hint="One outcome per line, up to 8. Start each with a verb: Know…, Run…, Recognise…">
                 <textarea
                   rows={5}
@@ -804,3 +808,54 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
 }
 
 /** Every lesson that can go in a path, with a checkbox. Ticking adds it to the end of the order. */
+
+/** A picture behind the "Who it's for" panel on the path page, chosen from the image library. */
+function WhoPhotoField({ value, onChange }: { value: string; onChange: (src: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const library = useApi<{ uploads: { src: string; name: string }[] }>(open ? "/api/admin/uploads" : null).data;
+  return (
+    <Field label="Picture behind “Who it’s for”" hint="Optional. Shown under a navy tint so the text stays readable.">
+      <div className="flex flex-wrap items-center gap-3">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="h-16 w-24 rounded-xl object-cover ring-1 ring-line" />
+        ) : (
+          <span className="grid h-16 w-24 place-items-center rounded-xl border border-dashed border-line-strong text-xs text-ink-muted">None</span>
+        )}
+        <button type="button" className={btn.secondary} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? "Done" : value ? "Change picture" : "Choose a picture"}
+        </button>
+        {value && (
+          <button type="button" className="font-semibold text-accent hover:underline" onClick={() => onChange("")}>
+            Remove
+          </button>
+        )}
+      </div>
+      {open && (
+        <ul className="mt-2 grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6">
+          {!library ? (
+            <li className="col-span-full text-sm text-ink-muted">Loading the image library…</li>
+          ) : (
+            library.uploads.map((p) => (
+              <li key={p.src}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(p.src);
+                    setOpen(false);
+                  }}
+                  aria-pressed={value === p.src}
+                  aria-label={`Use ${p.name}`}
+                  className={cx("block aspect-square w-full overflow-hidden rounded-lg border-2", value === p.src ? "border-action" : "border-transparent")}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.src} alt="" className="size-full object-cover" />
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </Field>
+  );
+}
