@@ -60,10 +60,10 @@ export function Resources({ card }: { card: ResourcesCard }) {
           );
         return (
           <li key={item.id}>
-            <a href={item.url} target="_blank" rel="noreferrer" className={tile}>
+            <a href={item.url} rel="noreferrer" className={tile}>
               {body}
               <Icon name="external" className="mt-1 size-4 shrink-0 text-ink-muted group-hover:text-accent" />
-              <span className="sr-only"> (opens in a new tab)</span>
+              <span className="sr-only"> (leaves the lesson; Back returns to this card)</span>
             </a>
           </li>
         );

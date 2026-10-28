@@ -51,7 +51,11 @@ describe("report scope", () => {
   });
 
   it("a Trilogy author sees every organisation", () => {
-    expect(pathReport(db, u("jordan"), "path-extra-time").timelines.map((x) => x.learner).sort()).toEqual(["Ash Nguyen", "Sam Taylor"]);
+    expect(
+      pathReport(db, u("jordan"), "path-extra-time")
+        .timelines.map((x) => x.learner)
+        .sort(),
+    ).toEqual(["Ash Nguyen", "Sam Taylor"]);
   });
 });
 

@@ -265,7 +265,7 @@ export function AvatarField({ card: c, lesson, photos, set }: { card: Card; less
         )}
       </div>
       <p className="text-xs text-ink-muted">
-        Uses ElevenLabs credits for the voice and the video. Save the draft once it’s made. Until then, learners hear the script read over the photo.
+        Uses ElevenLabs credits for the voice and the video. It saves with the lesson automatically. Until it’s made, learners hear the script read over the photo.
       </p>
       {error && <ErrorNote text={error} />}
     </div>

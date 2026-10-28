@@ -397,6 +397,8 @@ export function migrate(db: Db) {
   // Deleted from the library: hidden there, but the file is kept so cards still using it keep working.
   if (!uploadCols.includes("deleted_at")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_at TEXT");
   if (!uploadCols.includes("deleted_by")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_by TEXT");
+  // A picture converted to WebP points at its new file, so old addresses keep showing it.
+  if (!uploadCols.includes("replaced_by")) db.exec("ALTER TABLE uploads ADD COLUMN replaced_by TEXT");
   const authoredCols = (db.prepare("PRAGMA table_info(authored_lessons)").all() as { name: string }[]).map((c) => c.name);
   // Deleted lessons are hidden everywhere but kept on record, so they can be restored.
   if (!authoredCols.includes("deleted_at")) db.exec("ALTER TABLE authored_lessons ADD COLUMN deleted_at TEXT");

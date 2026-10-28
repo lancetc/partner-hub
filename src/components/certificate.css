@@ -10,7 +10,7 @@
 }
 .certificate-inner {
   height: 100%;
-  border: 2px solid #284d79;
+  border: 2px solid #2d4875;
   outline: 6px solid #ddf2f3;
   outline-offset: -12px;
   border-radius: 0.9rem;
@@ -32,7 +32,7 @@
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #284d79;
+  color: #2d4875;
   font-size: clamp(0.65rem, 1.3vw, 0.95rem);
 }
 .certificate-lead {
@@ -50,7 +50,7 @@
 .certificate-path {
   font-family: var(--font-roboto-serif), Georgia, serif;
   font-weight: 600;
-  color: #284d79;
+  color: #2d4875;
   font-size: clamp(1.1rem, 3vw, 2rem);
   line-height: 1.2;
 }

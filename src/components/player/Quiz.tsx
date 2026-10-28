@@ -41,7 +41,7 @@ export function Quiz({
                   key={o.id}
                   className={cx(
                     "fx-press relative flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-2 transition-colors",
-                    selected ? "border-action bg-tealtint" : "border-line hover:border-line-strong",
+                    selected ? "border-action bg-tealtint" : "border-line bg-surface hover:border-line-strong",
                     checked && "cursor-default",
                     // Chosen: a springy pop. Checked: a glow and burst if right, a small shake if not.
                     selected && (checked ? (right ? "fx-correct" : "fx-shake") : "fx-pop"),

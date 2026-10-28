@@ -44,7 +44,11 @@ describe("email campaigns", () => {
   it("sends partners and coordinators one copy each, never staff or people who unsubscribed", async () => {
     const { id } = createCampaign(db, u("jordan"), "monthly", now);
     setNewsletters(db, prefsFor(db, "ash").token, false, now);
-    expect(recipients(db, ["partner", "coordinator"]).map((x) => x.id).sort()).toEqual(["casey", "riley", "sam"]);
+    expect(
+      recipients(db, ["partner", "coordinator"])
+        .map((x) => x.id)
+        .sort(),
+    ).toEqual(["casey", "riley", "sam"]);
     const fake = new Fake();
     const first = await sendCampaign(db, id, now, fake, u("jordan"));
     expect(first.sent).toBe(3);
@@ -80,7 +84,19 @@ describe("email campaigns", () => {
 });
 
 describe("webinars", () => {
-  const input = { title: "Coordinator Q&A", summary: "", presenter: "", recordedOn: "2026-10-01", minutes: 30, video: { provider: "youtube" as const, id: "dQw4w9WgXcQ" }, thumbnail: null, audience: ["coordinator" as const], topics: ["Q&A"], transcript: "", resources: [] };
+  const input = {
+    title: "Coordinator Q&A",
+    summary: "",
+    presenter: "",
+    recordedOn: "2026-10-01",
+    minutes: 30,
+    video: { provider: "youtube" as const, id: "dQw4w9WgXcQ" },
+    thumbnail: null,
+    audience: ["coordinator" as const],
+    topics: ["Q&A"],
+    transcript: "",
+    resources: [],
+  };
 
   it("shows learners published recordings meant for them", () => {
     const { id } = saveWebinar(db, u("jordan"), null, input, now);

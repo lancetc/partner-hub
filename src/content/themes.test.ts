@@ -30,11 +30,11 @@ describe("lesson themes", () => {
   });
 
   it("paces Brand rhythm by card type", () => {
-    expect(cardSurface({ theme: "rhythm" }, card("image"))).toBeNull();
+    expect(cardSurface({ theme: "rhythm" }, card("image"))).toMatchObject({ css: GRADIENTS.mist.css, text: "dark" });
     expect(cardSurface({ theme: "rhythm" }, card("decision"))?.css).toBe(GRADIENTS.teal.css);
     expect(cardSurface({ theme: "rhythm" }, card("summary"))?.css).toBe(GRADIENTS.navy.css);
     // The soft navy version, in the design system's navy, orange, yellow and red.
-    expect(cardSurface({ theme: "rhythmNavy" }, card("image"))).toMatchObject({ text: "dark", accent: "text-[#284d79]" });
+    expect(cardSurface({ theme: "rhythmNavy" }, card("image"))).toMatchObject({ text: "dark", accent: "text-[#2d4875]" });
     expect(cardSurface({ theme: "rhythmNavy" }, card("quiz"))).toMatchObject({ text: "light", accent: "text-[#ffc72c]" });
     expect(cardSurface({ theme: "rhythmNavy" }, card("decision"))?.css).toContain("#f26a36");
     expect(cardSurface({ theme: "rhythmNavy" }, card("image", { emphasis: "consequence" }))?.css).toContain("#f9d6d3");

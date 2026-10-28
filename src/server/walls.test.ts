@@ -37,10 +37,9 @@ describe("insight walls", () => {
     expect(lesson).toBeTruthy();
     // The seeded wall shows names; turn it anonymous through a Claude-style draft copy.
     const card = { id: "share", type: "wall", beat: 0, label: "", heading: "", body: "", visual: { kind: "none" }, prompt: "Q", anonymous: true };
-    db.prepare("INSERT INTO generated_lessons (slug, master_slug, stage, status, content, model, created_at, created_by) VALUES ('anon', 'x', 'x', 'approved', ?, 't', ?, 'jordan')").run(
-      JSON.stringify({ slug: "anon", title: "A", start: "share", beats: ["A"], nodes: { share: card } }),
-      now.toISOString(),
-    );
+    db.prepare(
+      "INSERT INTO generated_lessons (slug, master_slug, stage, status, content, model, created_at, created_by) VALUES ('anon', 'x', 'x', 'approved', ?, 't', ?, 'jordan')",
+    ).run(JSON.stringify({ slug: "anon", title: "A", start: "share", beats: ["A"], nodes: { share: card } }), now.toISOString());
     postToWall(db, u("ash"), "anon", "share", "An anonymous idea.", now);
     expect(postToWall(db, u("sam"), "anon", "share", "Mine.", now).posts.map((p) => p.by)).toEqual([null]);
   });

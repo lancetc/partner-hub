@@ -45,6 +45,9 @@ const STEPS = [
 ] as const satisfies readonly { id: string; label: string; hint: string; icon: IconName }[];
 type StepId = (typeof STEPS)[number]["id"];
 
+/** How long after the last edit the draft saves itself. */
+const AUTOSAVE_MS = 1500;
+
 const TRACKS: { id: Lesson["track"]; label: string }[] = [
   { id: "core", label: "Everyone" },
   { id: "partner", label: "Service partners" },
@@ -179,38 +182,61 @@ function useLibrary() {
   };
 }
 
+/** Choose an image, or drag one from your computer onto the box. */
 function UploadTile({ onUploaded, className, children }: { onUploaded: (p: Photo) => void; className?: string; children?: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [over, setOver] = useState(false);
+  async function upload(file: File | undefined) {
+    if (!file || busy) return;
+    if (!file.type.startsWith("image/")) return setError("That isn’t an image. Drop a JPEG, PNG, WebP or GIF.");
+    setBusy(true);
+    setError(null);
+    try {
+      onUploaded(await uploadImage(file));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className={cx("flex flex-col gap-1", className)}>
       <label
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return;
+          e.preventDefault();
+          // Don't let the card underneath take the drop as well.
+          e.stopPropagation();
+          setOver(false);
+          void upload(e.dataTransfer.files[0]);
+        }}
         className={cx(
-          "flex size-full min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line-strong text-xs font-semibold text-ink-muted hover:border-action hover:text-ink has-[:focus-visible]:outline-2",
+          "flex size-full min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs font-semibold has-[:focus-visible]:outline-2",
+          over ? "border-action bg-tealtint text-ink" : "border-line-strong text-ink-muted hover:border-action hover:text-ink",
           busy && "cursor-wait opacity-60",
         )}
+        title="Choose an image, or drag one here"
       >
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="sr-only"
           disabled={busy}
-          onChange={async (e) => {
+          onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
-            if (!file) return;
-            setBusy(true);
-            setError(null);
-            try {
-              onUploaded(await uploadImage(file));
-            } catch (err) {
-              setError((err as Error).message);
-            } finally {
-              setBusy(false);
-            }
+            void upload(file);
           }}
         />
-        <Icon name="upload" className="size-4" /> {busy ? "Uploading…" : (children ?? "Upload")}
+        <Icon name="upload" className="size-4" /> {busy ? "Uploading…" : over ? "Drop to upload" : (children ?? "Upload")}
       </label>
       {error && (
         <p role="alert" className="text-xs text-danger">
@@ -493,7 +519,8 @@ const VARIANTS: VisualVariant[] = ["petals", "rings", "grid", "wave", "dots", "a
 
 const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
 const words = (s = "") => s.trim().split(/\s+/).filter(Boolean).length;
-const scriptOf = (c: Card) => (c.type === "presenter" ? c.transcript : c.type === "audio" ? c.script : c.narration) ?? "";
+// Audio and Listen cards keep their words in `script`, which the player reads; other cards use `narration`.
+const scriptOf = (c: Card) => (c.type === "presenter" ? c.transcript : c.type === "audio" || c.type === "listen" ? c.script : c.narration) ?? "";
 
 /** Where a saved lesson stands (see server/authoredLessons). */
 export type LessonStatus = { state: "unpublished" | "live" | "changes"; version: string; updatedAt: string | null; publishedAt: string | null };
@@ -515,12 +542,15 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
   const [step, setStep] = useState<StepId>("cards");
   const [selected, setSelected] = useState(card && initial.nodes[card] ? card : initial.start);
   const [dirty, setDirty] = useState(false);
+  // Counts edits, so a save only marks the lesson saved if nothing changed while it was on its way.
+  const edits = useRef(0);
   const update = (fn: (l: Lesson) => void) => {
     setLesson((prev) => {
       const next = structuredClone(prev);
       fn(next);
       return next;
     });
+    edits.current++;
     setDirty(true);
   };
   const checks = useMemo(() => runChecks(lesson), [lesson]);
@@ -531,10 +561,11 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
   const [commentsFor, setCommentsFor] = useState<string | null>(null);
 
   /** Save draft: learners keep seeing the published version. A new lesson gets its address on first save. */
-  async function save() {
+  async function save(auto = false) {
     setBusy("save");
     setSaveError(null);
-    setNotice(null);
+    if (!auto) setNotice(null);
+    const at = edits.current;
     try {
       if (isNew) {
         const r = await api<{ slug: string }>("/api/admin/lessons", { body: { lesson } });
@@ -544,7 +575,8 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
       }
       const r = await api<{ status: LessonStatus }>(`/api/admin/lessons/${initial.slug}/content`, { method: "PUT", body: { lesson } });
       setStatus(r.status);
-      setDirty(false);
+      // Edits made while saving stay unsaved; auto-save picks them up next.
+      if (edits.current === at) setDirty(false);
       return true;
     } catch (e) {
       setSaveError((e as Error).message);
@@ -618,6 +650,17 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // Auto-save: a moment after the last edit, the draft saves itself (a new lesson saves once, by hand, to get its address).
+  // After a failed save it waits for the next edit rather than retrying in a loop.
+  const failedAt = useRef(-1);
+  useEffect(() => {
+    if (isNew || !dirty || busy || failedAt.current === edits.current) return;
+    const t = window.setTimeout(async () => {
+      const at = edits.current;
+      if (!(await saveRef.current(true))) failedAt.current = at;
+    }, AUTOSAVE_MS);
+    return () => window.clearTimeout(t);
+  }, [lesson, dirty, busy, isNew]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -661,13 +704,13 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             type="button"
             className={btn.secondary}
             onClick={() => setPreviewing(true)}
-            title={dirty ? "Shows your last saved draft. Save first to preview your latest changes." : undefined}
+            title={dirty ? "Your latest changes are saving; preview shows them in a moment." : undefined}
           >
             <Icon name="play" className="size-4" /> Preview
           </button>
         )}
         {!isNew && status?.state !== "unpublished" && <QrShare kind="lesson" id={initial.slug} />}
-        <button type="button" className={btn.secondary} onClick={save} disabled={busy !== null || (!dirty && !isNew)}>
+        <button type="button" className={btn.secondary} onClick={() => save()} disabled={busy !== null || (!dirty && !isNew)}>
           {busy === "save" ? "Saving…" : dirty || isNew ? "Save draft" : "Saved"}
         </button>
         {!isNew && (
@@ -680,14 +723,18 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         <span>
           <Icon name="info" className="mr-1 inline size-4 align-[-3px]" />
           {isNew
-            ? "Save to keep this lesson as a draft. Learners won’t see it until you publish."
-            : dirty
-              ? "You have unsaved changes."
-              : status?.state === "unpublished"
-                ? `Draft saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until you publish.`
-                : status?.state === "changes"
-                  ? `Changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until you publish.`
-                  : "Everything is published."}
+            ? "Save once to keep this lesson as a draft; after that, changes save automatically. Learners won’t see it until you publish."
+            : busy === "save"
+              ? "Saving…"
+              : dirty
+                ? saveError
+                  ? "Not saved yet. Press Save draft to try again."
+                  : "Saving your changes…"
+                : status?.state === "unpublished"
+                  ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until you publish.`
+                  : status?.state === "changes"
+                    ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until you publish.`
+                    : "Everything is published."}
         </span>
         {!isNew && !dirty && status && status.state !== "live" && (
           <button
@@ -2004,7 +2051,12 @@ function CanvasCard({
                 {c.keyPoints.items.map((k, i) => (
                   <li
                     key={i}
-                    className={cx("text-xs text-ink", c.keyPoints!.style === "tiles" ? "rounded-xl bg-muted p-2" : "rounded-full bg-tealtint px-2.5 py-1")}
+                    className={cx(
+                      "text-xs",
+                      // As in the player: on a coloured card the points sit on white.
+                      surf ? "bg-white text-[#102a43] shadow-sm" : c.keyPoints!.style === "tiles" ? "bg-muted text-ink" : "bg-tealtint text-ink",
+                      c.keyPoints!.style === "tiles" ? "rounded-xl p-2" : "rounded-full px-2.5 py-1",
+                    )}
                   >
                     <Editable value={k.text} onChange={(t) => set((x) => void (x.keyPoints!.items[i].text = t))} placeholder="Point" />
                   </li>
@@ -2020,28 +2072,23 @@ function CanvasCard({
               <InlineBody card={c} lesson={l} set={set} onSettings={onSettings} onColour={Boolean(surf)} />
             )}
             {!background && position === "center" && <div aria-hidden className="-my-1 flex-1" />}
-            <div className="mt-auto flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onSettings}
-                className={cx(
-                  "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold",
-                  surf ? "bg-white/85 text-[#0a1a2e] backdrop-blur-sm" : script ? "bg-tealtint text-accent" : "bg-orange/15 text-warm",
-                )}
-                title="Edit the narration script"
-              >
-                <Icon name="volume" className="size-3.5" /> {script ? `Script · ${secs}s` : "Add script"}
-              </button>
-              <span aria-hidden className="ml-auto rounded-full bg-action px-3 py-1.5 text-xs font-semibold text-on-action">
-                {c.type === "summary"
-                  ? c.cta || "Finish"
-                  : c.type === "quiz"
-                    ? "Check"
-                    : c.type === "decision"
-                      ? "Choose"
-                      : ("cta" in c && c.cta) || "Continue"}
-              </span>
-            </div>
+          </div>
+          {/* Stays at the bottom of the card, however long its content, so the script is always in reach. */}
+          <div className="relative mt-auto flex shrink-0 items-center gap-2 px-4 pb-3 pt-2">
+            <button
+              type="button"
+              onClick={onSettings}
+              className={cx(
+                "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold",
+                surf ? "bg-white/85 text-[#0a1a2e] backdrop-blur-sm" : script ? "bg-tealtint text-accent" : "bg-orange/15 text-warm",
+              )}
+              title="Edit the narration script"
+            >
+              <Icon name="volume" className="size-3.5" /> {script ? `Script · ${secs}s` : "Add script"}
+            </button>
+            <span aria-hidden className="ml-auto rounded-full bg-action px-3 py-1.5 text-xs font-semibold text-on-action">
+              {c.type === "summary" ? c.cta || "Finish" : c.type === "quiz" ? "Check" : c.type === "decision" ? "Choose" : ("cta" in c && c.cta) || "Continue"}
+            </span>
           </div>
         </>
       )}
@@ -2096,7 +2143,7 @@ function InlineBody({
                 key={o.id}
                 className={cx(
                   "flex items-center gap-2 rounded-xl border px-2 py-1.5 text-sm",
-                  q.correct === o.id ? "border-action bg-tealtint" : "border-line-strong",
+                  q.correct === o.id ? "border-action bg-tealtint" : "border-line-strong bg-surface",
                 )}
               >
                 <button
@@ -2215,7 +2262,7 @@ function InlineBody({
           multiline
         />
         {c.options.map((o, oi) => (
-          <div key={o.id} className="flex items-center gap-2 rounded-xl border border-line-strong px-2.5 py-1.5 text-sm">
+          <div key={o.id} className="flex items-center gap-2 rounded-xl border border-line-strong bg-surface px-2.5 py-1.5 text-sm">
             <Editable
               value={o.label}
               onChange={(t) => set((x) => x.type === "poll" && void (x.options[oi].label = t))}
@@ -2264,7 +2311,7 @@ function InlineBody({
           className="font-semibold"
         />
         {c.options.map((o, oi) => (
-          <div key={o.id} className={cx("rounded-xl border px-2.5 py-1.5 text-sm", o.correct ? "border-action" : "border-line-strong")}>
+          <div key={o.id} className={cx("rounded-xl border bg-surface px-2.5 py-1.5 text-sm", o.correct ? "border-action" : "border-line-strong")}>
             <div className="flex items-start gap-1.5">
               <Editable
                 value={o.label}
@@ -3152,7 +3199,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
             onChange={(e) =>
               set((x) => {
                 if (x.type === "presenter") x.transcript = e.target.value;
-                else if (x.type === "audio") x.script = e.target.value;
+                else if (x.type === "audio" || x.type === "listen") x.script = e.target.value;
                 else x.narration = e.target.value;
               })
             }

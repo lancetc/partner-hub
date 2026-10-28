@@ -56,7 +56,7 @@ function QrDialog({ kind, id, assigned, onClose }: { kind: "path" | "lesson"; id
 <style>
   @page { size: A6; margin: 10mm; }
   body { font-family: Arial, sans-serif; color: #102a43; text-align: center; margin: 0; padding: 24px; }
-  .kind { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #284d79; }
+  .kind { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #2d4875; }
   h1 { font-size: 22px; margin: 6px 0 16px; }
   img { width: 62mm; height: 62mm; }
   p { font-size: 13px; margin: 12px 0 4px; }

@@ -6,11 +6,13 @@ import type { Db } from "./db";
 import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { lessons as contentLessons } from "@/content/lessons";
+import { toWebp } from "./imageCompress";
 
 /* Card images, videos and PDFs uploaded by authors. Checked by content, renamed, and stored outside the public folder. */
 
 const DIR = process.env.HUB_UPLOADS_DIR ?? path.join(process.cwd(), "data", "uploads");
-export const MAX_BYTES = 8 * 1024 * 1024;
+/** Largest image accepted; it's compressed to WebP (see imageCompress.ts), so what's stored is much smaller. */
+export const MAX_BYTES = 25 * 1024 * 1024;
 /** Short talking-head clips recorded in the editor, or uploaded. */
 export const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
 /** PDFs for Resources cards. */
@@ -39,6 +41,7 @@ type UploadRow = {
   uploaded_at: string;
   credit: string | null;
   deleted_at?: string | null;
+  replaced_by?: string | null;
 };
 export type Credit = { name: string; url: string; source: "Pexels"; page?: string };
 const publicUrl = (filename: string) => `/api/uploads/${filename}`;
@@ -55,32 +58,46 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
   requireAuthor(actor);
   if (!file || typeof file.arrayBuffer !== "function") throw new HttpError(400, "Choose an image to upload.");
   if (file.size > MAX_VIDEO_BYTES) throw new HttpError(413, "That file is over 80 MB. Try a shorter clip.");
-  const buf = Buffer.from(await file.arrayBuffer());
+  let buf = Buffer.from(await file.arrayBuffer());
   // Trust the file's bytes, not its name or the browser's label.
-  const type = buf.length >= 12 ? Object.entries(TYPES).find(([, t]) => t.magic(buf)) : undefined;
-  if (!type) throw new HttpError(415, "Upload a JPEG, PNG, WebP or GIF image, a WebM, MP4 or MOV video, or a PDF.");
-  if (type[0].startsWith("image/") && buf.length > MAX_BYTES) throw new HttpError(413, "That image is over 8 MB. Try a smaller copy.");
-  const pdf = type[0] === "application/pdf";
+  const detected = buf.length >= 12 ? Object.entries(TYPES).find(([, t]) => t.magic(buf)) : undefined;
+  if (!detected) throw new HttpError(415, "Upload a JPEG, PNG, WebP or GIF image, a WebM, MP4 or MOV video, or a PDF.");
+  let [mime, { ext }] = detected;
+  if (mime.startsWith("image/") && buf.length > MAX_BYTES) throw new HttpError(413, "That image is over 25 MB. Try a smaller copy.");
+  const pdf = mime === "application/pdf";
   if (pdf && buf.length > MAX_PDF_BYTES) throw new HttpError(413, "That PDF is over 20 MB. Try a smaller copy.");
   // PDFs have no picture size.
-  const width = pdf ? 0 : Math.round(Number(size.width));
-  const height = pdf ? 0 : Math.round(Number(size.height));
+  let width = pdf ? 0 : Math.round(Number(size.width));
+  let height = pdf ? 0 : Math.round(Number(size.height));
+  let name = (file.name || "image").replace(/[^\w .()-]/g, "").slice(0, 120) || "image";
+  // Photos and pictures are stored as compressed WebP; GIFs may be animated, so they're kept as they are.
+  if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp") {
+    try {
+      const small = await toWebp(buf);
+      buf = small.data;
+      ({ width, height } = small);
+    } catch {
+      throw new HttpError(415, "Couldn’t read that image. Try saving it again as a JPEG or PNG.");
+    }
+    mime = "image/webp";
+    ext = "webp";
+    name = name.replace(/\.(jpe?g|png|webp)$/i, "") + ".webp";
+  }
   if (!pdf && !(width > 0 && height > 0 && width < 20000 && height < 20000)) throw new HttpError(400, "Couldn’t read the image size.");
-  const filename = `${randomUUID()}.${type[1].ext}`;
+  const filename = `${randomUUID()}.${ext}`;
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, filename), buf, { flag: "wx" });
-  const name = (file.name || "image").replace(/[^\w .()-]/g, "").slice(0, 120) || "image";
   db.prepare(
     "INSERT INTO uploads (filename, original_name, mime, bytes, width, height, uploaded_by, uploaded_at, credit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run(filename, name, type[0], buf.length, width, height, actor.id, now.toISOString(), credit ? JSON.stringify(credit) : null);
-  audit(db, { actor: actor.id, event: "upload.created", entity: `upload:${filename}`, next: { name, bytes: buf.length, type: type[0] }, at: now });
+  ).run(filename, name, mime, buf.length, width, height, actor.id, now.toISOString(), credit ? JSON.stringify(credit) : null);
+  audit(db, { actor: actor.id, event: "upload.created", entity: `upload:${filename}`, next: { name, bytes: buf.length, type: mime }, at: now });
   return { src: publicUrl(filename), width, height, name, bytes: buf.length };
 }
 
 export function listUploads(db: Db, actor: User) {
   requireAuthor(actor);
   // The image library lists images; videos are attached to cards as they're recorded.
-  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]).map(toItem);
+  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL AND replaced_by IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]).map(toItem);
 }
 
 /** The stored file for a public upload URL, or null. Only names this server generated are ever read. */
@@ -88,8 +105,17 @@ export function readUpload(db: Db, filename: string) {
   if (!NAME.test(filename)) return null;
   const row = db.prepare("SELECT * FROM uploads WHERE filename = ?").get(filename) as UploadRow | undefined;
   if (!row) return null;
+  // Converted to WebP: the old address serves the new file (one step, so it can never loop).
+  if (row.replaced_by && row.replaced_by !== filename) {
+    const next = db.prepare("SELECT * FROM uploads WHERE filename = ?").get(row.replaced_by) as UploadRow | undefined;
+    if (next) return readFile(next);
+  }
+  return readFile(row);
+}
+
+function readFile(row: UploadRow) {
   try {
-    return { body: fs.readFileSync(path.join(DIR, filename)), mime: row.mime, name: row.original_name };
+    return { body: fs.readFileSync(path.join(DIR, row.filename)), mime: row.mime, name: row.original_name };
   } catch {
     return null;
   }
@@ -145,7 +171,7 @@ export function restoreUpload(db: Db, actor: User, filename: string, now: Date) 
 /** Images deleted from the library, newest first, so they can be brought back. */
 export function deletedUploads(db: Db, actor: User) {
   requireAuthor(actor);
-  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NOT NULL ORDER BY deleted_at DESC").all() as UploadRow[]).map(toItem);
+  return (db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NOT NULL AND replaced_by IS NULL ORDER BY deleted_at DESC").all() as UploadRow[]).map(toItem);
 }
 
 /*

@@ -1,7 +1,7 @@
 /*
   Image generators offered in the editor, run through ElevenLabs' Image & Video API. Each model
   takes different settings; ElevenLabs rejects settings a model doesn't take, so only these are
-  sent. Resolutions stop at 2K so a picture fits the hub's 8 MB upload limit.
+  sent. Resolutions stop at 2K; pictures are compressed to WebP when they're saved.
 */
 
 export type ImageModel = {

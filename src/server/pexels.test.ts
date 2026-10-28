@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
+import sharp from "sharp";
 
 /* Pexels photos: found through the API, then copied into our uploads with the photographer's credit. */
 
@@ -12,7 +13,13 @@ const { importPexels, jpegSize, searchPexels } = await import("./pexels");
 const { listUploads } = await import("./uploads");
 
 // A minimal JPEG: SOI, then a SOF0 frame header for 1600 x 1067.
-const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x04, 0x2b, 0x06, 0x40, 0x03, 0, 0, 0, 0, 0, 0, 0, 0]);
+const jpeg = new Uint8Array([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x04, 0x2b, 0x06, 0x40, 0x03, 0, 0, 0, 0, 0, 0, 0, 0,
+]);
+// What Pexels sends: a real 1600 × 1067 JPEG.
+const photoJpeg = await sharp({ create: { width: 1600, height: 1067, channels: 3, background: "#cdeaec" } })
+  .jpeg()
+  .toBuffer();
 const photo = {
   id: 42,
   width: 4800,
@@ -22,7 +29,11 @@ const photo = {
   photographer_url: "https://www.pexels.com/@analee",
   avg_color: "#6b7b5a",
   alt: "An older man watering a garden",
-  src: { original: "https://images.pexels.com/photos/42/pexels-photo-42.jpeg", medium: "https://images.pexels.com/m.jpeg", large: "https://images.pexels.com/l.jpeg" },
+  src: {
+    original: "https://images.pexels.com/photos/42/pexels-photo-42.jpeg",
+    medium: "https://images.pexels.com/m.jpeg",
+    large: "https://images.pexels.com/l.jpeg",
+  },
 };
 
 let db: Db;
@@ -36,7 +47,7 @@ beforeEach(() => {
     fetches.push(u);
     if (u.startsWith("https://api.pexels.com/v1/photos/42")) return Response.json(photo);
     if (u.startsWith("https://api.pexels.com/v1/search")) return Response.json({ photos: [photo], total_results: 1, next_page: "x" });
-    if (u.startsWith("https://images.pexels.com/photos/42/")) return new Response(jpeg);
+    if (u.startsWith("https://images.pexels.com/photos/42/")) return new Response(new Uint8Array(photoJpeg));
     return new Response("not found", { status: 404 });
   });
 });

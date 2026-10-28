@@ -55,7 +55,10 @@ describe("answering", () => {
 
   it("stores anonymous answers without a name, and only once", () => {
     submitSurvey(db, u("sam"), "sv-module-feedback", welcome, good, now);
-    const row = db.prepare("SELECT user_id, org_id FROM survey_responses WHERE target_id = 'lp-welcome' ORDER BY id DESC").get() as { user_id: string | null; org_id: string };
+    const row = db.prepare("SELECT user_id, org_id FROM survey_responses WHERE target_id = 'lp-welcome' ORDER BY id DESC").get() as {
+      user_id: string | null;
+      org_id: string;
+    };
     expect(row).toEqual({ user_id: null, org_id: "taylor-cleaning" });
     expect(() => submitSurvey(db, u("sam"), "sv-module-feedback", welcome, good, now)).toThrow(/isn’t waiting/);
   });
@@ -93,7 +96,9 @@ describe("results", () => {
 
   it("exports CSV without a person column for anonymous surveys", () => {
     const { body } = surveyCsv(db, u("jordan"), "sv-module-feedback");
-    expect(body.split("\n")[0]).toBe("Submitted,Where,Organisation,How useful was this for your work?,How clear was the content?,How confident do you feel putting this into practice?,I’ll do something differently because of this.,What would make it better?");
+    expect(body.split("\n")[0]).toBe(
+      "Submitted,Where,Organisation,How useful was this for your work?,How clear was the content?,How confident do you feel putting this into practice?,I’ll do something differently because of this.,What would make it better?",
+    );
     expect(body.split("\n")).toHaveLength(7);
   });
 });
@@ -103,14 +108,21 @@ describe("building surveys", () => {
     expect(() => createSurvey(db, u("casey"), { template: "module" }, now)).toThrow(/learning authors/);
     const { id } = createSurvey(db, u("jordan"), { template: "module", name: "Onboarding feedback" }, now);
     setSurveyLinks(db, u("jordan"), id, [{ type: "path", id: "lp-partner-onboarding" }], now);
-    const where = (sid: string) => (db.prepare("SELECT target_id FROM survey_links WHERE survey_id = ? ORDER BY target_id").all(sid) as { target_id: string }[]).map((r) => r.target_id);
+    const where = (sid: string) =>
+      (db.prepare("SELECT target_id FROM survey_links WHERE survey_id = ? ORDER BY target_id").all(sid) as { target_id: string }[]).map((r) => r.target_id);
     expect(where(id)).toEqual(["lp-partner-onboarding"]);
     expect(where("sv-module-feedback")).toEqual(["lp-welcome"]);
   });
 
   it("won't make an answered anonymous survey named", () => {
     expect(() =>
-      updateSurvey(db, u("jordan"), "sv-module-feedback", { name: "Module feedback", anonymous: false, questions: [{ id: "q", type: "text", prompt: "Hi", required: false }] }, now),
+      updateSurvey(
+        db,
+        u("jordan"),
+        "sv-module-feedback",
+        { name: "Module feedback", anonymous: false, questions: [{ id: "q", type: "text", prompt: "Hi", required: false }] },
+        now,
+      ),
     ).toThrow(/stay anonymous/);
   });
 });

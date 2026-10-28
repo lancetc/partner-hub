@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
+import sharp from "sharp";
 
 /* AI poster pictures through ElevenLabs, with ElevenLabs stood in for by a fake. */
 
@@ -23,7 +24,10 @@ afterEach(() => vi.unstubAllGlobals());
 const u = (id: string) => userById(db, id)!;
 const now = new Date("2026-10-28T05:00:00Z");
 
-// A 1200 × 750 PNG header (enough for its size to be read).
+// A 1200 × 750 PNG header (enough for its size to be read), and a real picture for the download.
+const finished = await sharp({ create: { width: 1200, height: 750, channels: 3, background: "#d6e1ee" } })
+  .png()
+  .toBuffer();
 const png = new Uint8Array(40);
 png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x04, 0xb0, 0, 0, 0x02, 0xee]);
 
@@ -82,7 +86,7 @@ describe("making a picture", () => {
               ? { id: "gen_123", status: "completed", content_url: "https://cdn.example.com/x.png?sig=1", content_mime_type: "image/png" }
               : { id: "gen_123", status: state },
           );
-        if (s.startsWith("https://cdn.example.com/")) return new Response(png);
+        if (s.startsWith("https://cdn.example.com/")) return new Response(new Uint8Array(finished));
         throw new Error(`unexpected ${s}`);
       }),
     );

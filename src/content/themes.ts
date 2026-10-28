@@ -22,13 +22,13 @@ type Theme = {
 };
 
 const softTeal: CardSurface = { css: "linear-gradient(170deg, #f4fbfb 0%, #d7eff0 100%)", text: "dark", accent: "text-[#00666d]" };
-const softNavy: CardSurface = { css: "linear-gradient(170deg, #f5f8fc 0%, #dbe5f1 100%)", text: "dark", accent: "text-[#284d79]" };
+const softNavy: CardSurface = { css: "linear-gradient(170deg, #f5f8fc 0%, #dbe5f1 100%)", text: "dark", accent: "text-[#2d4875]" };
 /*
   Brand rhythm, soft navy, in the design system's colours: navy #102A43, yellow #FFC72C,
   orange #F26A36 and red #D32F2F (teal is kept for buttons). Brand orange is too light for white
   text, so orange cards use dark text.
 */
-const brandNavy: CardSurface = { css: "linear-gradient(160deg, #1f3d5c 0%, #102a43 100%)", text: "light", accent: "text-[#ffc72c]" };
+const brandNavy: CardSurface = { css: "linear-gradient(160deg, #36537f 0%, #2d4875 100%)", text: "light", accent: "text-[#ffc72c]" };
 const brandOrange: CardSurface = { css: "linear-gradient(160deg, #f68b5e 0%, #f26a36 100%)", text: "dark", accent: "text-[#102a43]" };
 const brandYellow: CardSurface = { css: "linear-gradient(160deg, #ffd968 0%, #ffc72c 100%)", text: "dark", accent: "text-[#102a43]" };
 // What happens after a wrong choice: a soft red, with the label in a red deep enough to read.
@@ -37,6 +37,10 @@ const navy: CardSurface = { css: GRADIENTS.navy.css, text: "light", accent: "tex
 const warm: CardSurface = { css: "linear-gradient(170deg, #fffdf6 0%, #fcefc6 100%)", text: "dark", accent: "text-[#b8441a]" };
 // Labels stay white here: pale yellow on the lighter end of the teal is under 4.5:1.
 const teal: CardSurface = { css: GRADIENTS.teal.css, text: "light" };
+// Brand rhythm's recap: navy with a pale teal label, keeping the theme to teal, navy and white (no yellow).
+const rhythmRecap: CardSurface = { css: GRADIENTS.navy.css, text: "light", accent: "text-[#9adfe2]" };
+// Brand rhythm's content cards: the soft Mist background, with navy labels.
+const rhythmMist: CardSurface = { css: GRADIENTS.mist.css, text: "dark", accent: "text-[#2d4875]" };
 
 /** Cards that ask the learner something: in Brand rhythm they stand out in teal. */
 const QUESTION_TYPES = ["quiz", "decision", "poll", "rating", "written", "response", "hotspot", "checklist", "calculator", "wall"];
@@ -48,8 +52,8 @@ export const THEMES = {
   warm: { label: "Warm", description: "Cream cards with orange accents. Friendly, good for onboarding and stories.", surface: () => warm },
   rhythm: {
     label: "Brand rhythm",
-    description: "White content cards, teal question cards and a navy recap, so the lesson has a pace.",
-    surface: (card) => (card.type === "summary" ? navy : QUESTION_TYPES.includes(card.type) ? teal : null),
+    description: "Mist content cards, teal question cards and a navy recap, so the lesson has a pace.",
+    surface: (card) => (card.type === "summary" ? rhythmRecap : QUESTION_TYPES.includes(card.type) ? teal : rhythmMist),
   },
   rhythmNavy: {
     label: "Brand rhythm, soft navy",

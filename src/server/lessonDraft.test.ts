@@ -9,7 +9,8 @@ import type { Lesson } from "@/content/lessons";
 
 /* Drafting a new lesson with Claude from a brief and a source document. */
 
-const file = (bytes: Buffer | string, name: string, type = "") => new File([new Uint8Array(typeof bytes === "string" ? Buffer.from(bytes) : bytes)], name, { type });
+const file = (bytes: Buffer | string, name: string, type = "") =>
+  new File([new Uint8Array(typeof bytes === "string" ? Buffer.from(bytes) : bytes)], name, { type });
 
 describe("reading source documents", () => {
   it("sends PDFs as they are", async () => {
@@ -54,13 +55,50 @@ describe("the draft", () => {
       start: "intro",
       nodes: {
         intro: { id: "intro", type: "image", beat: 0, label: "Intro", heading: "A change", body: "", visual: { kind: "none" }, next: "q" },
-        q: { id: "q", type: "quiz", beat: 1, label: "Check", heading: "Check", body: "", visual: { kind: "none" }, questions: [{ id: "q", prompt: "?", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }], correct: "a", feedback: { correct: "Yes.", incorrect: "No." } }], next: "end" },
-        end: { id: "end", type: "summary", beat: 2, label: "Remember", heading: "Done", body: "", visual: { kind: "none" }, action: "Check first.", cta: "Finish" },
+        q: {
+          id: "q",
+          type: "quiz",
+          beat: 1,
+          label: "Check",
+          heading: "Check",
+          body: "",
+          visual: { kind: "none" },
+          questions: [
+            {
+              id: "q",
+              prompt: "?",
+              options: [
+                { id: "a", label: "A" },
+                { id: "b", label: "B" },
+              ],
+              correct: "a",
+              feedback: { correct: "Yes.", incorrect: "No." },
+            },
+          ],
+          next: "end",
+        },
+        end: {
+          id: "end",
+          type: "summary",
+          beat: 2,
+          label: "Remember",
+          heading: "Done",
+          body: "",
+          visual: { kind: "none" },
+          action: "Check first.",
+          cta: "Finish",
+        },
       },
     } as unknown as Lesson;
     expect(validateLesson(raw)).toEqual([]);
     const l = shapeDraft(raw, { brief: "x", audience: "coordinator" }, userById(db, "jordan")!, new Date("2026-10-23T00:00:00Z"));
-    expect(l).toMatchObject({ slug: "when-a-visit-changes", track: "coordinator", version: "0.1", completion: { type: "quiz", cardId: "q" }, reviewDate: "2027-04-23" });
+    expect(l).toMatchObject({
+      slug: "when-a-visit-changes",
+      track: "coordinator",
+      version: "0.1",
+      completion: { type: "quiz", cardId: "q" },
+      reviewDate: "2027-04-23",
+    });
     expect(l.owner).toMatch(/AI draft for review/);
   });
 });

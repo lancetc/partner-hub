@@ -55,7 +55,9 @@ describe("enrolment from lesson completion (acceptance 1 and 2)", () => {
     expect(count("SELECT COUNT(*) AS n FROM enrolments")).toBe(1);
     expect(count("SELECT COUNT(*) AS n FROM step_instances")).toBe(4);
     expect(replay.completedAt).toBe(first.completedAt); // the original server-confirmed time is kept
-    const planned = (db.prepare("SELECT planned_release FROM step_instances ORDER BY step_index").all() as { planned_release: string }[]).map((r) => r.planned_release);
+    const planned = (db.prepare("SELECT planned_release FROM step_instances ORDER BY step_index").all() as { planned_release: string }[]).map(
+      (r) => r.planned_release,
+    );
     expect(planned).toEqual([
       bne(2026, 10, 26, "09:30").toISOString(), // Sat 24 → Mon 26
       bne(2026, 11, 2, "09:30").toISOString(), // Sat 31 → Mon 2
@@ -139,12 +141,9 @@ describe("worker", () => {
     // Publish a copy of the path to simulate a second path with the same trigger.
     const pv = db.prepare("SELECT * FROM path_versions").get() as Record<string, string>;
     db.prepare("INSERT INTO paths VALUES ('path-two', ?, 'test')").run(pv.created_at);
-    db.prepare("INSERT INTO path_versions (path_id, version, status, config, steps, created_at, updated_at) VALUES ('path-two', 1, 'published', ?, ?, ?, ?)").run(
-      pv.config,
-      pv.steps,
-      pv.created_at,
-      pv.created_at,
-    );
+    db.prepare(
+      "INSERT INTO path_versions (path_id, version, status, config, steps, created_at, updated_at) VALUES ('path-two', 1, 'published', ?, ?, ?, ?)",
+    ).run(pv.config, pv.steps, pv.created_at, pv.created_at);
     db.prepare("DELETE FROM lesson_completions").run();
     db.prepare("DELETE FROM step_instances").run();
     db.prepare("DELETE FROM enrolments").run();

@@ -26,7 +26,7 @@ export function Checklist({ card, ticked, onChange }: { card: ChecklistCard; tic
             key={item.id}
             className={cx(
               "fx-press relative flex min-h-14 cursor-pointer gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
-              on ? "fx-pop border-success bg-success/10" : "border-line-strong hover:bg-muted",
+              on ? "fx-pop border-success bg-success/10" : "border-line-strong bg-surface hover:bg-muted",
             )}
           >
             <input

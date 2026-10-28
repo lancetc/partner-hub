@@ -25,7 +25,13 @@ async function finishSequence(recallCorrect = true) {
   const at = [bne(2026, 11, 5, "09:30"), bne(2026, 12, 21, "09:30"), bne(2027, 1, 28, "09:30")];
   for (let i = 0; i < 3; i++) {
     await runWorker(db, at[i], quiet);
-    followUpAct(db, u("sam"), steps()[i].id, { action: "complete_lesson", results: [{ id: "q", correct: i === 0 ? recallCorrect : true }] }, new Date(at[i].getTime() + 3600000));
+    followUpAct(
+      db,
+      u("sam"),
+      steps()[i].id,
+      { action: "complete_lesson", results: [{ id: "q", correct: i === 0 ? recallCorrect : true }] },
+      new Date(at[i].getTime() + 3600000),
+    );
   }
   return (db.prepare("SELECT id FROM enrolments WHERE user_id = 'sam' AND path_id = 'path-legislative-framework'").get() as { id: number }).id;
 }

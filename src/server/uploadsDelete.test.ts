@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
+import sharp from "sharp";
 import { editorLesson, saveDraft } from "./authoredLessons";
 
 /* Deleting images from the library: hidden there, kept for cards that still use them, and undoable. */
@@ -21,7 +22,10 @@ beforeEach(() => {
 });
 const u = (id: string) => userById(db, id)!;
 const now = new Date("2026-10-28T04:00:00Z");
-const png = () => new File([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], "Kitchen.png", { type: "image/png" });
+const pngBytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#0e7c7b" } })
+  .png()
+  .toBuffer();
+const png = () => new File([pngBytes], "Kitchen.png", { type: "image/png" });
 
 describe("deleting library images", () => {
   it("hides the image from the library but keeps serving it, and can be undone", async () => {
@@ -32,7 +36,7 @@ describe("deleting library images", () => {
     up.deleteUpload(db, u("jordan"), name, now);
     expect(up.listUploads(db, u("jordan")).map((x) => x.src)).not.toContain(src);
     // Cards still using it keep working.
-    expect(up.readUpload(db, name)?.mime).toBe("image/png");
+    expect(up.readUpload(db, name)?.mime).toBe("image/webp");
     up.restoreUpload(db, u("jordan"), name, now);
     expect(up.listUploads(db, u("jordan")).map((x) => x.src)).toContain(src);
   });
@@ -69,5 +73,17 @@ describe("deleting library images", () => {
 
   it("refuses names it didn't make", () => {
     expect(() => up.deleteUpload(db, u("jordan"), "../hub.sqlite", now)).toThrow(/isn’t in the library/);
+  });
+});
+
+describe("pictures converted to WebP", () => {
+  it("serves the new file at the old address", async () => {
+    const old = await up.saveUpload(db, u("jordan"), png(), { width: 800, height: 600 }, now);
+    const replacement = await up.saveUpload(db, u("jordan"), png(), { width: 800, height: 600 }, now);
+    const oldName = old.src.split("/").pop()!;
+    const newName = replacement.src.split("/").pop()!;
+    fs.rmSync(path.join(dir, oldName));
+    db.prepare("UPDATE uploads SET replaced_by = ? WHERE filename = ?").run(newName, oldName);
+    expect(up.readUpload(db, oldName)?.body.equals(up.readUpload(db, newName)!.body)).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 /*
-  Gradient card backgrounds, built from the Trilogy Care brand palette: navy #102a43, teal #0e7c7b,
+  Gradient card backgrounds, built from the Trilogy Care brand palette: navy #2d4875, teal #0e7c7b,
   yellow #ffc72c and red #d32f2f, plus three light tints. Green, orange and sunset are no longer
   offered but still render on cards that use them. Each preset
   knows which text colour reads on it, so authors pick a look, not a contrast setting. White text
@@ -8,7 +8,7 @@
 
 type Gradient = { label: string; css: string; text: "light" | "dark"; /** Kept so older cards still render; not offered to authors. */ legacy?: true };
 
-const navy = "linear-gradient(160deg, #1e3a5c 0%, #102a43 100%)";
+const navy = "linear-gradient(160deg, #36537f 0%, #2d4875 100%)";
 const mist = "linear-gradient(170deg, #f2fafb 0%, #cdeaec 100%)";
 const cream = "linear-gradient(170deg, #fffaeb 0%, #fde7a6 100%)";
 

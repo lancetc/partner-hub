@@ -112,7 +112,7 @@ function Overview({ path: p }: { path: PathData }) {
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {/* Fixed brand colours, so both panels look the same in light and dark mode. */}
           {p.whoFor && (
-            <section className="relative isolate overflow-hidden rounded-3xl bg-[linear-gradient(160deg,#1f3d5c_0%,#102a43_100%)] p-5 text-white ring-1 ring-white/10">
+            <section className="relative isolate overflow-hidden rounded-3xl bg-[linear-gradient(160deg,#36537f_0%,#2d4875_100%)] p-5 text-white ring-1 ring-white/10">
               <svg aria-hidden viewBox="0 0 120 120" className="absolute -right-3 -top-4 -z-10 size-28 opacity-90">
                 <ellipse cx="78" cy="38" rx="34" ry="18" fill="#0e7c7b" transform="rotate(-30 78 38)" />
                 <ellipse cx="92" cy="78" rx="30" ry="15" fill="#ffc72c" opacity="0.85" transform="rotate(40 92 78)" />
@@ -180,11 +180,11 @@ function CertificateArt({ className }: { className?: string }) {
   return (
     <svg aria-hidden viewBox="0 0 140 110" className={className}>
       <rect x="4" y="4" width="124" height="90" rx="8" fill="#ffffff" />
-      <rect x="11" y="11" width="110" height="76" rx="5" fill="none" stroke="#284d79" strokeWidth="1.5" />
-      <rect x="34" y="24" width="64" height="5" rx="2.5" fill="#284d79" opacity="0.8" />
+      <rect x="11" y="11" width="110" height="76" rx="5" fill="none" stroke="#2d4875" strokeWidth="1.5" />
+      <rect x="34" y="24" width="64" height="5" rx="2.5" fill="#2d4875" opacity="0.8" />
       <rect x="26" y="36" width="80" height="8" rx="4" fill="#102a43" />
-      <rect x="40" y="50" width="52" height="4" rx="2" fill="#284d79" opacity="0.45" />
-      <rect x="44" y="59" width="44" height="4" rx="2" fill="#284d79" opacity="0.3" />
+      <rect x="40" y="50" width="52" height="4" rx="2" fill="#2d4875" opacity="0.45" />
+      <rect x="44" y="59" width="44" height="4" rx="2" fill="#2d4875" opacity="0.3" />
       <path d="M100 82 l-6 22 8-5 6 8 2-24z" fill="#d32f2f" />
       <path d="M110 82 l6 22-8-5-6 8-2-24z" fill="#f26a36" />
       <circle cx="105" cy="78" r="13" fill="#0e7c7b" />

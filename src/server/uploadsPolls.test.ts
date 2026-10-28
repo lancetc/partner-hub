@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
+import sharp from "sharp";
 
 /* Card images authors upload, and poll cards learners vote on. */
 
@@ -24,15 +25,34 @@ beforeEach(() => {
 });
 const u = (id: string) => userById(db, id)!;
 const now = new Date("2026-10-23T04:00:00Z");
-const png = new File([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], "Mara at home.png", { type: "image/png" });
+// A real picture, so it can be compressed.
+const picture = (w: number, h: number, format: "png" | "jpeg" = "png") =>
+  sharp({ create: { width: w, height: h, channels: 3, background: "#2d4875" } })
+    [format]()
+    .toBuffer();
+const png = new File([await picture(800, 600)], "Mara at home.png", { type: "image/png" });
 
 describe("image uploads", () => {
   it("stores an author's image under a new name and serves it back", async () => {
     const r = await saveUpload(db, u("jordan"), png, { width: 800, height: 600 }, now);
-    expect(r.src).toMatch(/^\/api\/uploads\/[0-9a-f-]{36}\.png$/);
-    expect(r.name).toBe("Mara at home.png");
+    // Stored as compressed WebP, whatever it was uploaded as.
+    expect(r.src).toMatch(/^\/api\/uploads\/[0-9a-f-]{36}\.webp$/);
+    expect(r.name).toBe("Mara at home.webp");
+    expect(r).toMatchObject({ width: 800, height: 600 });
     const file = readUpload(db, r.src.split("/").pop()!);
-    expect(file?.mime).toBe("image/png");
+    expect(file?.mime).toBe("image/webp");
+  });
+
+  it("shrinks big pictures to 2400px on their longest side, and keeps GIFs as they are", async () => {
+    const big = new File([await picture(4000, 3000, "jpeg")], "Huge photo.jpg", { type: "image/jpeg" });
+    const r = await saveUpload(db, u("jordan"), big, { width: 4000, height: 3000 }, now);
+    expect(r).toMatchObject({ width: 2400, height: 1800 });
+    const gifBytes = await sharp({ create: { width: 20, height: 10, channels: 3, background: "#ffc72c" } })
+      .gif()
+      .toBuffer();
+    const gif = await saveUpload(db, u("jordan"), new File([gifBytes], "wave.gif", { type: "image/gif" }), { width: 20, height: 10 }, now);
+    expect(gif.src).toMatch(/\.gif$/);
+    expect(gif.bytes).toBe(gifBytes.length);
   });
 
   it("checks the file itself, not its name", async () => {

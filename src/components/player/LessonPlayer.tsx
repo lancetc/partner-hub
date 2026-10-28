@@ -38,6 +38,7 @@ import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
+import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
 // Press, pop, burst and other feedback on interactive cards.
 import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
@@ -202,11 +203,37 @@ export function LessonPlayer({
   // (as a review, so their progress is left alone).
   const started = useRef(false);
   useEffect(() => {
-    if (!startAt || !lesson.nodes[startAt] || started.current) return;
+    if (!hydrated || started.current) return;
+    // Back from a web link opened on a card: reopen that card. Their own progress carries on if it's where
+    // they'd got to; otherwise (or in a preview) it opens as a review.
+    const back = takeReturnCard();
+    if (back && lesson.nodes[back]) {
+      started.current = true;
+      // A one-off start once the page has loaded, like opening on a card below.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (!preview && stored?.version === lesson.version && stored.nodeId === back && stored.status !== "completed") begin(false);
+      else begin(true, true, back);
+      return;
+    }
+    if (!startAt || !lesson.nodes[startAt]) return;
     started.current = true;
     begin(true, true, startAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview, startAt]);
+  }, [hydrated, preview, startAt]);
+
+  // Web links open in this window: remember the card first, so Back returns to it.
+  const onCard = useRef<string | null>(null);
+  useEffect(() => {
+    onCard.current = phase === "playing" ? (attempt?.nodeId ?? null) : null;
+  });
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.("a");
+      if (a && onCard.current && leavesSite(a)) rememberCard(onCard.current);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
 
   function go(next: string, answers?: LessonAttempt["answers"]) {
     if (!attempt) return;
@@ -702,11 +729,10 @@ export function LessonPlayer({
                 onFinished={() => setAnswer(`pdf:${node.id}`, "end")}
               />
             )}
-            {node.keyPoints && <KeyPoints points={node.keyPoints} />}
+            {node.keyPoints && <KeyPoints points={node.keyPoints} onColour={Boolean(onColour)} />}
             {node.source && (
               <a
                 href={node.source.url}
-                target="_blank"
                 rel="noreferrer"
                 className={cx(
                   "mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm underline-offset-4 hover:underline",
@@ -950,7 +976,7 @@ function CardBody({
               key={o.id}
               className={cx(
                 "fx-press flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
-                choice === o.id ? "fx-pop border-action bg-tealtint" : "border-line hover:border-line-strong",
+                choice === o.id ? "fx-pop border-action bg-tealtint" : "border-line bg-surface hover:border-line-strong",
               )}
             >
               <input
@@ -1022,12 +1048,7 @@ function CardBody({
           )}
           {node.references && <OfficialResources items={node.references} />}
           {node.reference && (
-            <a
-              href={node.reference.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-14 items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-muted"
-            >
+            <a href={node.reference.url} rel="noreferrer" className="flex min-h-14 items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-muted">
               <Icon name="doc" className="size-5 shrink-0 text-accent" />
               <span className="flex-1">
                 <span className="block font-semibold">{node.reference.title}</span>
@@ -1434,12 +1455,7 @@ function OfficialResources({ items }: { items: { title: string; url: string; iss
         <ul className="mt-2 flex flex-col gap-2">
           {items.map((r) => (
             <li key={r.url}>
-              <a
-                href={r.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-h-12 items-center gap-3 rounded-2xl border border-line px-4 py-2 hover:bg-muted"
-              >
+              <a href={r.url} rel="noreferrer" className="flex min-h-12 items-center gap-3 rounded-2xl border border-line px-4 py-2 hover:bg-muted">
                 <span className="flex-1">
                   <span className="block font-semibold leading-snug">{r.title}</span>
                   <span className="block text-sm text-ink-muted">{r.issuer}</span>
@@ -1455,15 +1471,23 @@ function OfficialResources({ items }: { items: { title: string; url: string; iss
   );
 }
 
-function KeyPoints({ points }: { points: NonNullable<Card["keyPoints"]> }) {
+/** Key points as chips or tiles. On a coloured card (a theme, colour or photo) they sit on white so they stand out from it. */
+function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["keyPoints"]>; onColour?: boolean }) {
+  const box = onColour ? "bg-white text-[#102a43] shadow-sm [text-shadow:none]" : "bg-muted";
   return (
     <div className="mt-4 flex flex-col gap-3">
       {points.title && <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">{points.title}</p>}
       {points.style === "chips" ? (
         <ul className="flex flex-wrap gap-2">
           {points.items.map((p, i) => (
-            <li key={p.text} className="inline-flex items-center gap-2 rounded-full bg-muted py-1.5 pl-1.5 pr-3 text-[0.95rem]">
-              <span aria-hidden className="inline-flex size-6 items-center justify-center rounded-full bg-surface font-mulish text-xs font-bold text-accent">
+            <li key={p.text} className={cx("inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-[0.95rem]", box)}>
+              <span
+                aria-hidden
+                className={cx(
+                  "inline-flex size-6 items-center justify-center rounded-full font-mulish text-xs font-bold",
+                  onColour ? "bg-[#ddf2f3] text-[#2d4875]" : "bg-surface text-accent",
+                )}
+              >
                 {p.icon ? <Icon name={p.icon} className="size-3.5" /> : i + 1}
               </span>
               {p.text}
@@ -1473,9 +1497,15 @@ function KeyPoints({ points }: { points: NonNullable<Card["keyPoints"]> }) {
       ) : (
         <ul className="grid grid-cols-2 gap-2">
           {points.items.map((p) => (
-            <li key={p.text} className="flex flex-col gap-2 rounded-2xl bg-muted p-3">
+            <li key={p.text} className={cx("flex flex-col gap-2 rounded-2xl p-3", box)}>
               {p.icon && (
-                <span aria-hidden className="inline-flex size-8 items-center justify-center rounded-full bg-tealtint text-accent">
+                <span
+                  aria-hidden
+                  className={cx(
+                    "inline-flex size-8 items-center justify-center rounded-full",
+                    onColour ? "bg-[#ddf2f3] text-[#2d4875]" : "bg-tealtint text-accent",
+                  )}
+                >
                   <Icon name={p.icon} className="size-4" />
                 </span>
               )}
@@ -1485,7 +1515,12 @@ function KeyPoints({ points }: { points: NonNullable<Card["keyPoints"]> }) {
         </ul>
       )}
       {points.tip && (
-        <p className="flex gap-2 rounded-2xl border-l-4 border-action bg-surface pl-3 text-[0.95rem]">
+        <p
+          className={cx(
+            "flex gap-2 rounded-2xl border-l-4 border-action pl-3 text-[0.95rem]",
+            onColour ? "bg-white py-2 pr-3 text-[#102a43] [text-shadow:none]" : "bg-surface",
+          )}
+        >
           <span>
             <strong>In practice:</strong> {points.tip}
           </span>
@@ -1587,7 +1622,7 @@ function Poll({
             aria-pressed={mine}
             className={cx(
               "fx-press relative min-h-12 overflow-hidden rounded-2xl border-2 px-4 py-3 text-left text-[1.02rem] transition-colors",
-              mine ? "fx-pop border-action" : "border-line-strong hover:bg-muted",
+              mine ? "fx-pop border-action bg-surface" : "border-line-strong bg-surface hover:bg-muted",
             )}
           >
             {pct !== null && (

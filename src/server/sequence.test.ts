@@ -38,7 +38,19 @@ describe("learning sequence", () => {
     await runWorker(db, bne(2026, 11, 5, "09:30"), quiet);
     const recall = sequence()[0];
     expect(recall.status).toBe("available");
-    followUpAct(db, sam(), recall.id, { action: "complete_lesson", results: [{ id: "q1.q", correct: true }, { id: "q2.q", correct: true }] }, bne(2026, 11, 5, "10:00"));
+    followUpAct(
+      db,
+      sam(),
+      recall.id,
+      {
+        action: "complete_lesson",
+        results: [
+          { id: "q1.q", correct: true },
+          { id: "q2.q", correct: true },
+        ],
+      },
+      bne(2026, 11, 5, "10:00"),
+    );
     expect(sequence()[0].status).toBe("completed");
     const attempt = db.prepare("SELECT initial_correct, initial_response FROM attempts").get() as { initial_correct: number; initial_response: string };
     expect(attempt.initial_correct).toBe(1);
@@ -81,7 +93,11 @@ describe("learning sequence", () => {
     recordLessonCompletion(db, userById(db, "ash")!, { slug: "a-little-extra-time", version: "1.0-demo" }, bne(2026, 10, 22, "14:00"));
     const steps = (u: string) => learnerFollowUps(db, userById(db, u)!).filter((i) => i.pathId === "path-extra-time");
     expect(steps("sam").map((s) => s.stage)).toEqual(["Recall", "Apply", "Refresh"]);
-    expect(steps("sam").map((s) => s.title)).toEqual(["A little extra time: quick recall", "A little extra time: a different request", "A little extra time: refresher"]);
+    expect(steps("sam").map((s) => s.title)).toEqual([
+      "A little extra time: quick recall",
+      "A little extra time: a different request",
+      "A little extra time: refresher",
+    ]);
     expect(steps("ash")[1].title).toBe("A little extra time: a different job");
   });
 });

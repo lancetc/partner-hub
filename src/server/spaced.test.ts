@@ -32,10 +32,29 @@ const draft = (over: Partial<Lesson> = {}) =>
         heading: "Quick check",
         body: "",
         visual: { kind: "none" },
-        questions: [{ id: "q", prompt: "Who do you tell?", options: [{ id: "a", label: "The coordinator" }, { id: "b", label: "No one" }], correct: "a", feedback: { correct: "Yes.", incorrect: "Tell the coordinator." } }],
+        questions: [
+          {
+            id: "q",
+            prompt: "Who do you tell?",
+            options: [
+              { id: "a", label: "The coordinator" },
+              { id: "b", label: "No one" },
+            ],
+            correct: "a",
+            feedback: { correct: "Yes.", incorrect: "Tell the coordinator." },
+          },
+        ],
         next: "end",
       },
-      end: { id: "end", beat: 1, type: "summary", heading: "Done", body: "Nice work.", visual: { kind: "none" }, action: "Tell your coordinator about changes you notice." },
+      end: {
+        id: "end",
+        beat: 1,
+        type: "summary",
+        heading: "Done",
+        body: "Nice work.",
+        visual: { kind: "none" },
+        action: "Tell your coordinator about changes you notice.",
+      },
     },
     ...over,
   }) as unknown as Lesson;
@@ -77,13 +96,9 @@ describe("spaced learning checkbox", () => {
   });
 
   it("keeps drafts out of the player until approved", () => {
-    db.prepare("INSERT INTO generated_lessons (slug, master_slug, stage, status, content, model, created_at, created_by) VALUES (?, ?, ?, 'draft', ?, 'test', ?, 'jordan')").run(
-      "noticing-a-change-recall",
-      "noticing-a-change",
-      "recall",
-      JSON.stringify(draft()),
-      now.toISOString(),
-    );
+    db.prepare(
+      "INSERT INTO generated_lessons (slug, master_slug, stage, status, content, model, created_at, created_by) VALUES (?, ?, ?, 'draft', ?, 'test', ?, 'jordan')",
+    ).run("noticing-a-change-recall", "noticing-a-change", "recall", JSON.stringify(draft()), now.toISOString());
     expect(getLesson(db, "noticing-a-change-recall")).toMatchObject({ generated: { status: "draft", master: "noticing-a-change" } });
   });
 });
