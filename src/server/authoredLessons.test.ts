@@ -128,3 +128,22 @@ describe("deleting lessons", () => {
     expect(() => deleteLesson(db, u("sam"), slug, now)).toThrow();
   });
 });
+
+describe("saving over a newer save", () => {
+  it("refuses a save based on an older version, and saves when told to keep it", () => {
+    const slug = "legislative-framework";
+    const live = lessons.find((l) => l.slug === slug)!;
+    // Both tabs open the content-file lesson before it has ever been saved.
+    const first = saveDraft(db, u("jordan"), slug, { ...live, title: "Tab one" }, now, null);
+    expect(() => saveDraft(db, u("jordan"), slug, { ...live, title: "Stale tab" }, later, null)).toThrow(/saved by you, in another tab or window, at 11:00 am/);
+    // The tab that saved carries on from its own save.
+    const second = saveDraft(db, u("jordan"), slug, { ...live, title: "Tab one again" }, later, first.status.updatedAt);
+    expect(second.status.updatedAt).toBe(later.toISOString());
+    // Someone else's save is named. (Jordan is the only demo author, so the last save is put down to Sam.)
+    db.prepare("UPDATE authored_lessons SET updated_by = 'sam' WHERE slug = ?").run(slug);
+    expect(() => saveDraft(db, u("jordan"), slug, live, later, first.status.updatedAt)).toThrow(new RegExp(`saved by ${u("sam").name} at`));
+    // Keeping your version: no base, so it saves.
+    saveDraft(db, u("jordan"), slug, { ...live, title: "Kept" }, later);
+    expect(JSON.parse((db.prepare("SELECT draft FROM authored_lessons WHERE slug = ?").get(slug) as { draft: string }).draft).title).toBe("Kept");
+  });
+});

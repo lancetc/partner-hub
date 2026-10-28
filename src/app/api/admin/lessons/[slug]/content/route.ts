@@ -1,12 +1,24 @@
 import { body, handle } from "@/server/http";
-import { HttpError } from "@/server/auth";
+import { HttpError, requireAuthor } from "@/server/auth";
 import type { Lesson } from "@/content/lessons";
-import { deleteLesson, discardDraft, publishLesson, restoreLesson, restoreVersion, saveDraft } from "@/server/authoredLessons";
+import { deleteLesson, discardDraft, lessonStatus, publishLesson, restoreLesson, restoreVersion, saveDraft } from "@/server/authoredLessons";
 
-/** Save the editor's draft of a lesson. */
+/** Where the draft stands, so an open editor can tell when the lesson was saved somewhere else. */
+export async function GET(_req: Request, ctx: RouteContext<"/api/admin/lessons/[slug]/content">) {
+  const { slug } = await ctx.params;
+  return handle(({ db, user }) => {
+    requireAuthor(user);
+    return { status: lessonStatus(db, slug) };
+  });
+}
+
+/** Save the editor's draft of a lesson. `base` is the save the editor started from (see saveDraft). */
 export async function PUT(req: Request, ctx: RouteContext<"/api/admin/lessons/[slug]/content">) {
   const { slug } = await ctx.params;
-  return handle(async ({ db, user, now }) => saveDraft(db, user, slug, (await body<{ lesson: Lesson }>(req)).lesson, now));
+  return handle(async ({ db, user, now }) => {
+    const { lesson, base } = await body<{ lesson: Lesson; base?: string | null }>(req);
+    return saveDraft(db, user, slug, lesson, now, base);
+  });
 }
 
 /** `publish` makes the saved draft live; `discard` throws away unpublished changes; `delete` hides the lesson; `restore` brings it back. */

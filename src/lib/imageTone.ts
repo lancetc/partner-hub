@@ -87,5 +87,5 @@ export const toneClasses = (tone: TextTone) =>
   Card types whose questions and choices sit on a frosted panel when the card has a gradient or
   full-background photo, so their dark text stays readable. Used by the player and the editor.
 */
-export const PANELLED_ON_COLOUR = ["decision", "quiz", "calculator", "poll", "rating", "response", "written", "hotspot", "checklist"] as const;
+export const PANELLED_ON_COLOUR = ["decision", "quiz", "calculator", "widget", "poll", "rating", "response", "written", "hotspot", "checklist"] as const;
 export const panelledOnColour = (type: string) => (PANELLED_ON_COLOUR as readonly string[]).includes(type);

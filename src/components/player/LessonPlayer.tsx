@@ -36,6 +36,8 @@ import { OfflineButton } from "../OfflineButton";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
+import { Widget } from "./Widget";
+import { RichInline, RichText } from "../RichText";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
 import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
@@ -717,7 +719,7 @@ export function LessonPlayer({
               {node.heading}
             </h2>
             {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
-            {node.body && <p className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")}>{node.body}</p>}
+            {node.body && <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />}
             {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.pdf && (
               <CardDocument
@@ -965,6 +967,8 @@ function CardBody({
     case "audio":
       // Narrated content: the voice plays from the footer dock.
       return null;
+    case "widget":
+      return node.widget.html ? <Widget key={node.id} html={node.widget.html} alt={node.widget.alt} onUse={() => setAnswer(node.id, 1)} /> : null;
     case "calculator":
       return <Calculator calc={node.calc} value={(attempt.answers[node.id] as number) ?? node.calc.initial} onChange={(m) => setAnswer(node.id, m)} />;
     case "decision":
@@ -1021,24 +1025,31 @@ function CardBody({
     case "summary":
       return (
         <div className="flex flex-col gap-3">
-          <div className="rounded-2xl bg-tealtint p-4">
+          {/* Panels carry their own text colour, so they stay readable on a navy recap card. */}
+          <div className="rounded-2xl bg-tealtint p-4 text-ink">
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Your next action</p>
-            <p className="mt-1 text-lg font-semibold leading-snug">{node.action}</p>
+            <p className="mt-1 text-lg font-semibold leading-snug">
+              <RichInline text={node.action} />
+            </p>
           </div>
           {node.points && (
             <ul className="flex flex-col gap-2">
               {node.points.map((p) => {
                 const [term, rest] = p.split(/:\s*/, 2);
                 return (
-                  <li key={p} className="flex gap-3 rounded-2xl bg-muted px-4 py-3">
+                  <li key={p} className="flex gap-3 rounded-2xl bg-muted px-4 py-3 text-ink">
                     <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" />
                     <span>
-                      {rest ? (
+                      {/* "Term: explanation" points show the term in bold; any other formatting comes from the text. */}
+                      {rest && !/\*\*|\]\(/.test(p) ? (
                         <>
-                          <strong>{term}:</strong> {rest}
+                          <strong>
+                            <RichInline text={term} />:
+                          </strong>{" "}
+                          <RichInline text={rest} />
                         </>
                       ) : (
-                        p
+                        <RichInline text={p} />
                       )}
                     </span>
                   </li>
@@ -1490,7 +1501,9 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
               >
                 {p.icon ? <Icon name={p.icon} className="size-3.5" /> : i + 1}
               </span>
-              {p.text}
+              <span>
+                <RichInline text={p.text} />
+              </span>
             </li>
           ))}
         </ul>
@@ -1509,7 +1522,9 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
                   <Icon name={p.icon} className="size-4" />
                 </span>
               )}
-              <span className="text-[0.95rem] font-medium leading-snug">{p.text}</span>
+              <span className="text-[0.95rem] font-medium leading-snug">
+                <RichInline text={p.text} />
+              </span>
             </li>
           ))}
         </ul>

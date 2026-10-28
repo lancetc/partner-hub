@@ -1,4 +1,5 @@
 import type { IconName, VisualVariant } from "./stories";
+import type { IconName as AnyIcon } from "@/components/Icon";
 import type { GradientId } from "./gradients";
 import type { ThemeId } from "./themes";
 
@@ -108,7 +109,8 @@ type Base = {
   */
   pdf?: { src: string; title: string; bytes?: number; pages?: number; placement?: "below" | "above"; required?: "open" | "end" };
   /** Short on-screen points: `chips` for an overview list, `tiles` for a few key ideas with icons. */
-  keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: IconName }[]; tip?: string };
+  /** Item text may use **bold**, *italic* and [links](https://…) (lib/richText). */
+  keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: AnyIcon }[]; tip?: string };
   /** Consequence styling for cards that show the result of a poorer choice. */
   emphasis?: "consequence" | "recovery";
   /** Learners can read and add comments on this card (tips, local know-how, questions). On unless set to false. */
@@ -169,6 +171,22 @@ export type Card =
         version: string;
       };
       next: string;
+    })
+  /**
+    A widget: an animated diagram, calculator or small game that Claude built from the author's
+    description. It runs in a sandboxed frame with no network (lib/widgetFrame.ts).
+  */
+  | (Base & {
+      type: "widget";
+      widget: {
+        /** What the author asked for, kept so they can ask for changes later. Not shown to learners. */
+        request: string;
+        /** The widget: an HTML fragment with its own style and script. */
+        html: string;
+        /** What it shows and does, for screen readers. */
+        alt: string;
+      };
+      next?: string;
     })
   | (Base & { type: "decision"; prompt: string; options: Option[] })
   | (Base & {

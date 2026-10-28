@@ -34,6 +34,7 @@ const PART: Record<string, string> = {
   check: "check date",
   background: "background",
   calc: "calculator",
+  widget: "widget",
   source: "source",
 };
 

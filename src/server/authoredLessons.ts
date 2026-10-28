@@ -2,7 +2,7 @@ import "server-only";
 import { lessons, type Lesson } from "@/content/lessons";
 import type { Db } from "./db";
 import { audit } from "./db";
-import { HttpError, requireAuthor, type User } from "./auth";
+import { HttpError, requireAuthor, userById, type User } from "./auth";
 import { originalLesson, syncPublishedLessons } from "./lessonRegistry";
 import { recordVersion, versionContent } from "./lessonVersions";
 import { blankLesson } from "@/content/blankLesson";
@@ -132,11 +132,26 @@ export function createLesson(db: Db, actor: User, input: Lesson, now: Date) {
   return { slug, status: lessonStatus(db, slug) };
 }
 
-export function saveDraft(db: Db, actor: User, slug: string, input: Lesson, now: Date) {
+/**
+  Save the editor's draft. `base` is when the draft the editor started from was saved: if the lesson
+  has been saved since (another tab, another author, a change made for them), the save is refused so
+  it can't silently undo that work. Leaving `base` out saves regardless ("keep my version").
+*/
+export function saveDraft(db: Db, actor: User, slug: string, input: Lesson, now: Date, base?: string | null) {
   requireAuthor(actor);
   const existing = row(db, slug);
   const live = lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
   if ((!existing && !live) || existing?.deleted_at) throw new HttpError(404, "Lesson not found.");
+  if (base !== undefined && (existing?.updated_at ?? null) !== base) {
+    const who = existing?.updated_by === actor.id ? "you, in another tab or window," : (userById(db, existing?.updated_by ?? "")?.name ?? "someone else");
+    const when = existing
+      ? new Date(existing.updated_at).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" })
+      : "";
+    throw new HttpError(
+      409,
+      `This lesson was saved by ${who} at ${when}, after you opened it here. To avoid overwriting that, your changes here haven’t been saved.`,
+    );
+  }
   const lesson = validate(input, slug);
   const at = now.toISOString();
   if (existing)

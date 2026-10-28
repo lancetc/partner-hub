@@ -43,7 +43,7 @@ const rhythmRecap: CardSurface = { css: GRADIENTS.navy.css, text: "light", accen
 const rhythmMist: CardSurface = { css: GRADIENTS.mist.css, text: "dark", accent: "text-[#2d4875]" };
 
 /** Cards that ask the learner something: in Brand rhythm they stand out in teal. */
-const QUESTION_TYPES = ["quiz", "decision", "poll", "rating", "written", "response", "hotspot", "checklist", "calculator", "wall"];
+const QUESTION_TYPES = ["quiz", "decision", "poll", "rating", "written", "response", "hotspot", "checklist", "calculator", "widget", "wall"];
 
 export const THEMES = {
   classic: { label: "Classic", description: "White cards with teal accents.", surface: () => null },

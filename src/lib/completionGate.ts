@@ -46,6 +46,7 @@ export function completionGate(
     )
       return "Write your answer to continue";
     if (node.type === "calculator" && ctx.answers[node.id] === undefined) return "Try the calculator to continue";
+    if (node.type === "widget" && node.widget.html && ctx.answers[node.id] === undefined) return "Try the widget to continue";
   }
   // Cards you answer (quiz, decision, poll, rating, wall, written, hotspot) already hold you until you answer; with
   // audio on hold, they also wait for their question to be read out.

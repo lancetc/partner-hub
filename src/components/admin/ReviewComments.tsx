@@ -7,7 +7,7 @@ import { ordered } from "@/lib/lessonGraph";
 import { cx } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
 import { Icon } from "../Icon";
-import { threadsOf, ThreadView, when, type ReviewAction, type ReviewData } from "../ReviewThreads";
+import { Composer, threadsOf, ThreadView, when, type ReviewAction, type ReviewData } from "../ReviewThreads";
 import { btn, ErrorNote, input } from "./ui";
 
 /*
@@ -206,5 +206,135 @@ export function ReviewComments({
         )}
       </section>
     </div>
+  );
+}
+
+/**
+  Beside the cards: the comments on whichever card is selected, so they can be read in context and
+  the card changed straight away. It follows the selection, and steps between cards with comments.
+*/
+export function CardComments({
+  slug,
+  lesson,
+  data,
+  setData,
+  card,
+  onCard,
+  onClose,
+  onAll,
+}: {
+  slug: string;
+  lesson: Lesson;
+  data: EditorReview | null;
+  setData: (d: EditorReview) => void;
+  /** The selected card. */
+  card: string;
+  /** Select (and show) another card. */
+  onCard: (id: string) => void;
+  onClose: () => void;
+  /** The Comments tab: the review link and every card's comments. */
+  onAll: () => void;
+}) {
+  const [showResolved, setShowResolved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(body: ReviewAction) {
+    setError(null);
+    try {
+      setData(await api<EditorReview>(`/api/admin/lessons/${encodeURIComponent(slug)}/review`, { body }));
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  }
+
+  const cards = ordered(lesson);
+  const index = cards.findIndex((c) => c.id === card);
+  const threads = threadsOf(data?.comments ?? []);
+  const here = threads.filter((t) => t.card === card);
+  const shown = here.filter((t) => showResolved || !t.resolved);
+  const resolvedHere = here.filter((t) => t.resolved).length;
+  // Cards with open comments, in lesson order, to step through.
+  const withOpen = cards.filter((c) => threads.some((t) => t.card === c.id && !t.resolved)).map((c) => c.id);
+  const before = [...withOpen].reverse().find((id) => cards.findIndex((c) => c.id === id) < index);
+  const after = withOpen.find((id) => cards.findIndex((c) => c.id === id) > index);
+  const openTotal = threads.filter((t) => !t.resolved).length;
+  const c = lesson.nodes[card];
+
+  return (
+    <section aria-label="Comments on this card" className="flex max-h-[calc(100vh-7rem)] flex-col rounded-3xl bg-surface shadow-sm ring-1 ring-line">
+      <header className="flex items-start gap-2 border-b border-line p-3">
+        <Icon name="chat" className="mt-0.5 size-4 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Comments</h2>
+          <p className="truncate text-xs text-ink-muted">
+            Card {index + 1} · {c?.heading || c?.label || "Untitled card"}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Hide comments" className="grid size-8 place-items-center rounded-full hover:bg-muted">
+          <Icon name="close" className="size-4" />
+        </button>
+      </header>
+
+      <div className="flex items-center gap-1 border-b border-line px-3 py-2 text-xs">
+        <button
+          type="button"
+          disabled={!before}
+          onClick={() => before && onCard(before)}
+          className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 font-semibold text-accent hover:bg-muted disabled:text-ink-muted disabled:opacity-50"
+        >
+          <Icon name="arrow-left" className="size-3.5" /> Previous
+        </button>
+        <span className="flex-1 text-center text-ink-muted">{openTotal ? `${openTotal} open in this lesson` : "Nothing open in this lesson"}</span>
+        <button
+          type="button"
+          disabled={!after}
+          onClick={() => after && onCard(after)}
+          className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 font-semibold text-accent hover:bg-muted disabled:text-ink-muted disabled:opacity-50"
+        >
+          Next <Icon name="arrow-right" className="size-3.5" />
+        </button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+        {!data ? (
+          <p className="text-sm text-ink-muted">Loading comments…</p>
+        ) : (
+          <>
+            {error && <ErrorNote text={error} />}
+            {shown.length ? (
+              <ul className="flex flex-col gap-3 text-sm">
+                {shown.map((t) => (
+                  <ThreadView key={t.id} thread={t} canResolve act={send} />
+                ))}
+              </ul>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-line-strong p-3 text-center text-sm text-ink-muted">
+                {here.length ? "Every comment on this card is resolved." : "No comments on this card."}
+              </p>
+            )}
+            {resolvedHere > 0 && (
+              <button type="button" onClick={() => setShowResolved((v) => !v)} className="self-start text-xs font-semibold text-accent hover:underline">
+                {showResolved ? "Hide resolved" : `Show ${resolvedHere} resolved`}
+              </button>
+            )}
+            <Composer
+              key={card}
+              label="Add a comment on this card"
+              placeholder="A note for reviewers or other authors"
+              submit="Comment"
+              onSend={(text) => send({ action: "post", card, text })}
+            />
+          </>
+        )}
+      </div>
+
+      <footer className="border-t border-line px-3 py-2 text-xs">
+        <button type="button" onClick={onAll} className="font-semibold text-accent hover:underline">
+          Review link and all comments
+        </button>
+      </footer>
+    </section>
   );
 }

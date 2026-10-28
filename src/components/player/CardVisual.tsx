@@ -560,8 +560,12 @@ function YouTubeFrame({ id, title, onComplete }: { id: string; title: string; on
   );
 }
 
-/** "Photo: name / Pexels" (or "GIF: name / GIPHY"), linking to where it came from. */
+/**
+  "GIF: name / GIPHY", linking to where it came from. GIPHY asks for its credit to be shown; Pexels
+  doesn't require one, so Pexels photos show none (the credit is still kept with the picture).
+*/
 export function PhotoCredit({ credit, className }: { credit: { name: string; url: string; source: string; page?: string }; className?: string }) {
+  if (credit.source === "Pexels") return null;
   return (
     <a
       href={credit.page ?? credit.url}

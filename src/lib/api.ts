@@ -17,7 +17,7 @@ export async function api<T>(url: string, init?: { method?: string; body?: unkno
     throw new Error("You’re offline. This needs an internet connection, so try again when you’re back online.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error ?? `Request failed (${res.status})`), { status: res.status });
   return data as T;
 }
 

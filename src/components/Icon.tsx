@@ -29,6 +29,13 @@ export type IconName =
   | "volume-off"
   | "refresh"
   | "chevron-down"
+  | "widget"
+  | "calendar"
+  | "money"
+  | "phone"
+  | "eye"
+  | "flag"
+  | "bulb"
   | "file"
   | "copy"
   | "trash"
@@ -55,6 +62,14 @@ const paths: Record<IconName, React.ReactNode> = {
       <rect x="14" y="3.5" width="6.5" height="6.5" rx="1" />
       <rect x="3.5" y="14" width="6.5" height="6.5" rx="1" />
       <path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 19h1.5M19 14h1.5" />
+    </>
+  ),
+  widget: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="3.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
+      <path d="M17 13.5v7M13.5 17h7" />
     </>
   ),
   checklist: (
@@ -201,6 +216,32 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
       <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17h2" />
+    </>
+  ),
+  money: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.8 9.2c-.5-.9-1.6-1.5-2.8-1.5-1.6 0-2.8.9-2.8 2.1 0 2.9 5.6 1.5 5.6 4.4 0 1.2-1.2 2.1-2.8 2.1-1.3 0-2.4-.6-2.9-1.6M12 6v1.7M12 16.3V18" />
+    </>
+  ),
+  phone: <path d="M5 4h3.5l1.8 4.5-2.3 1.4a11 11 0 0 0 6.1 6.1l1.4-2.3L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16 16 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z" />,
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  flag: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
+  bulb: (
+    <>
+      <path d="M9 18h6M10 21h4" />
+      <path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" />
     </>
   ),
   alert: (
