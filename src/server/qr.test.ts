@@ -32,7 +32,7 @@ describe("QR codes", () => {
   it("only point at this hub's own paths and lessons", () => {
     const id = assignedPath();
     expect(qrTarget(db, { kind: "path", id }).url).toMatch(new RegExp(`/paths/${id}$`));
-    expect(qrTarget(db, { kind: "lesson", id: "a-little-extra-time" })).toMatchObject({ title: "A little extra time", kind: "Lesson" });
+    expect(qrTarget(db, { kind: "lesson", id: "a-little-extra-time" })).toMatchObject({ title: "A little extra time", kind: "Topic" });
     expect(() => qrTarget(db, { kind: "lesson", id: "https://example.com" })).toThrow(/not found/);
     expect(() => qrTarget(db, { kind: "path", id: "nope" })).toThrow(/not found/);
   });

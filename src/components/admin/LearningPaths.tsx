@@ -57,7 +57,7 @@ type ListData = {
 /** Asks first, saying who it affects, then deletes the path (it can be restored from the list). */
 async function deletePath(p: { id: string; name: string; assigned: number }) {
   const ok = await confirmAction(
-    `${p.assigned ? `It disappears for the ${p.assigned} ${p.assigned === 1 ? "person" : "people"} assigned to it. ` : ""}The lessons themselves aren’t touched, and lesson completions are kept. You can restore it from Deleted learning paths.`,
+    `${p.assigned ? `It disappears for the ${p.assigned} ${p.assigned === 1 ? "person" : "people"} assigned to it. ` : ""}The topics themselves aren’t touched, and topic completions are kept. You can restore it from Deleted learning paths.`,
     { title: `Delete “${p.name}”?`, confirmLabel: "Delete", danger: true },
   );
   if (!ok) return false;
@@ -129,7 +129,7 @@ export function LearningPathList() {
     <AdminShell title="Learning paths">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          A learning path is a named set of lessons in order. Build one, then assign it to the people who need it. They’ll see it on their Learning page with
+          A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Learning page with
           their progress and what’s next.
         </p>
         <Link href="/admin/learning-paths/new" className={btn.primary}>
@@ -219,7 +219,7 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
       <div>
         <div className="flex flex-wrap items-center gap-2">
           {p.audience && <Badge tone="info">{p.audience}</Badge>}
-          {!p.lessons.length && <Badge tone="warn">Planned: no lessons yet</Badge>}
+          {!p.lessons.length && <Badge tone="warn">Planned: no topics yet</Badge>}
           {p.allowSkip && <Badge tone="warn">Testing: skipping allowed</Badge>}
         </div>
         <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
@@ -239,7 +239,7 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
           <div
             className="flex h-2 overflow-hidden rounded-full bg-muted"
             role="img"
-            aria-label={`${ready} of ${p.lessons.length} lessons ready, ${drafts} in draft`}
+            aria-label={`${ready} of ${p.lessons.length} topics ready, ${drafts} in draft`}
           >
             <div className="h-full bg-action" style={{ width: pct(ready, p.lessons.length) }} />
             <div className="h-full bg-gold/60" style={{ width: pct(drafts, p.lessons.length) }} />
@@ -432,7 +432,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
         body: payload,
       });
       setDirty(false);
-      setNotice("Saved. People already assigned see the updated lessons straight away.");
+      setNotice("Saved. People already assigned see the updated topics straight away.");
       reload();
     } catch (e) {
       setError((e as Error).message);
@@ -514,7 +514,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                 />
                 <span>
                   <span className="font-semibold">Complete in order</span>
-                  <span className="block text-sm text-ink-muted">Each lesson opens once the one before it is finished.</span>
+                  <span className="block text-sm text-ink-muted">Each topic opens once the one before it is finished.</span>
                 </span>
               </label>
               <label className="flex min-h-11 items-start gap-3">
@@ -572,7 +572,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
 
           <section className="rounded-3xl border border-line bg-surface p-5">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="font-serif text-xl font-semibold">{canEdit ? (chapters ? "2. Chapters and topics" : "2. Put them in order") : "Lessons"}</h2>
+              <h2 className="font-serif text-xl font-semibold">{canEdit ? (chapters ? "2. Chapters and topics" : "2. Put them in order") : "Topics"}</h2>
               <span className="text-sm text-ink-muted">
                 {chapters ? `${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}
                 {picked.length} {picked.length === 1 ? "lesson" : "lessons"} · about {minutes} minutes
@@ -598,7 +598,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                     className={btn.quiet}
                     onClick={async () => {
                       if (
-                        await confirmAction("The lessons stay in the path, in the same order, as one list.", {
+                        await confirmAction("The topics stay in the path, in the same order, as one list.", {
                           title: "Remove the chapters?",
                           confirmLabel: "Remove chapters",
                         })
@@ -639,7 +639,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               />
             ) : !picked.length ? (
               <p className="rounded-2xl border border-dashed border-line-strong p-4 text-center text-ink-muted">
-                Add lessons above and they appear here. Drag them into order.
+                Add topics above and they appear here. Drag them into order.
               </p>
             ) : (
               <OrderedLessons
@@ -707,7 +707,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
             ) : (
               <div className="rounded-3xl border border-dashed border-line-strong p-5 text-sm text-ink-muted">
                 <h2 className="mb-1 font-semibold text-ink">Assign people</h2>
-                This path is still being planned. Tick at least one lesson and save, then you can assign it.
+                This path is still being planned. Tick at least one topic and save, then you can assign it.
               </div>
             ))
           )}
@@ -760,7 +760,7 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
           busy={busy}
           onRemove={async (a) => {
             if (
-              await confirmAction(`${a.name} will no longer see this path. The lessons they’ve finished stay finished.`, {
+              await confirmAction(`${a.name} will no longer see this path. The topics they’ve finished stay finished.`, {
                 title: `Remove ${a.name}?`,
                 confirmLabel: "Remove",
                 danger: true,

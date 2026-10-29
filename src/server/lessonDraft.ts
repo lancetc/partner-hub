@@ -141,8 +141,8 @@ async function ask(content: Anthropic.Beta.BetaContentBlockParam[], repair?: { p
     messages,
   });
   const message = await stream.finalMessage();
-  if (message.stop_reason === "refusal") throw new HttpError(502, "Claude declined to write this lesson. Try rewording the brief.");
-  if (message.stop_reason === "max_tokens") throw new HttpError(502, "Claude’s reply was cut off. Try a shorter lesson.");
+  if (message.stop_reason === "refusal") throw new HttpError(502, "Claude declined to write this topic. Try rewording the brief.");
+  if (message.stop_reason === "max_tokens") throw new HttpError(502, "Claude’s reply was cut off. Try a shorter topic.");
   const text = message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -180,7 +180,7 @@ export function shapeDraft(raw: Lesson, req: DraftRequest, actor: User, now: Dat
     version: "0.1",
     track: req.audience ?? "partner",
     minutes: Math.max(1, Math.min(10, Math.round(Number(raw.minutes) || 4))),
-    completion: quiz ? { type: "quiz", cardId: quiz.id, label: "Answer the quick check" } : { type: "acknowledge", cardId: summary.id, label: "Work through the lesson and finish" },
+    completion: quiz ? { type: "quiz", cardId: quiz.id, label: "Answer the quick check" } : { type: "acknowledge", cardId: summary.id, label: "Work through the topic and finish" },
     owner: `${actor.name} (AI draft for review)`,
     reviewDate: review,
     visual: { variant: "petals", tone: "teal", icon: "spark" },

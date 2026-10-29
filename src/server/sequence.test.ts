@@ -85,7 +85,7 @@ describe("learning sequence", () => {
     recordLessonCompletion(db, sam(), { slug: "a-little-extra-time", version: "1.0-demo" }, bne(2026, 10, 22, "14:00"));
     await runWorker(db, bne(2026, 10, 26, "09:30"), quiet);
     const fu = learnerFollowUps(db, sam()).find((i) => i.pathId === "path-extra-time")!;
-    expect(() => followUpAct(db, sam(), fu.id, { action: "complete_lesson", results: [] }, bne(2026, 10, 26, "10:00"))).toThrow(/isn’t a lesson/);
+    expect(() => followUpAct(db, sam(), fu.id, { action: "complete_lesson", results: [] }, bne(2026, 10, 26, "10:00"))).toThrow(/isn’t a topic/);
   });
 
   it("runs A little extra time as Recall, Apply and Refresh, with a gardening Apply", () => {

@@ -359,7 +359,7 @@ function Feedback({ option, best }: { option: FollowUpContent["question"]["optio
 
 function NextUp({ view }: { view: { next: View["next"]; timezone: string } }) {
   if (!view.next)
-    return <p className="rounded-2xl border border-line p-4">This was the last follow up in this path. The original lesson stays available any time.</p>;
+    return <p className="rounded-2xl border border-line p-4">This was the last follow up in this path. The original topic stays available any time.</p>;
   return (
     <p className="flex gap-3 rounded-2xl border border-line p-4">
       <Icon name="clock" className="mt-0.5 size-5 shrink-0 text-accent" />

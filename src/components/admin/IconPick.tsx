@@ -87,7 +87,7 @@ export function IconPick({ value, onChange, className }: { value?: IconName; onC
         className={cx(
           "inline-flex size-7 items-center justify-center rounded-full",
           value
-            ? "bg-tealtint text-accent hover:ring-2 hover:ring-action/50"
+            ? "bg-[#0e7c7b] text-white hover:ring-2 hover:ring-action/50"
             : "border border-dashed border-line-strong text-ink-muted hover:border-action hover:text-action",
         )}
       >

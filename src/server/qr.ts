@@ -22,8 +22,8 @@ export function qrTarget(db: Db, t: QrTarget) {
     return { url: `${baseUrl()}/paths/${encodeURIComponent(p.id)}`, title: p.name, kind: "Learning path" };
   }
   const l = lessons.find((x) => x.slug === t.id && x.track !== "reinforcement");
-  if (!l) throw new HttpError(404, "Lesson not found.");
-  return { url: `${baseUrl()}/learning/${encodeURIComponent(l.slug)}`, title: l.title, kind: "Lesson" };
+  if (!l) throw new HttpError(404, "Topic not found.");
+  return { url: `${baseUrl()}/learning/${encodeURIComponent(l.slug)}`, title: l.title, kind: "Topic" };
 }
 
 // Navy on white with a quiet zone, and enough error correction to survive a little glare or a crease.

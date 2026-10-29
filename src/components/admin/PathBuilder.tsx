@@ -151,7 +151,7 @@ export function PathBuilder({ id }: { id: string }) {
       id: `lesson:${l.slug}`,
       version: 0,
       status: "approved",
-      title: `${l.title} (short lesson)`,
+      title: `${l.title} (short topic)`,
       stage: "custom" as FollowUpStage,
       role: null,
       durationSec: l.minutes * 60,
@@ -159,7 +159,7 @@ export function PathBuilder({ id }: { id: string }) {
   ];
   const fu = (fid: string) => activities.find((f) => f.id === fid);
   const gapUnit = config.schedule.unit === "calendar" ? "calendar day" : "weekday";
-  const firstAnchor = config.trigger.type === "lesson_completion" ? "the base lesson is completed" : "the path is assigned";
+  const firstAnchor = config.trigger.type === "lesson_completion" ? "the base topic is completed" : "the path is assigned";
 
   return (
     <AdminShell title={config.name || "Untitled path"} back={{ href: "/admin/schedules", label: "Spaced schedules" }}>
@@ -405,7 +405,7 @@ function Settings({
             ))}
           </div>
         </fieldset>
-        <Field label="Enrolment trigger" hint="Completing this lesson version enrols the learner. The path doesn’t assign the base lesson again.">
+        <Field label="Enrolment trigger" hint="Completing this topic version enrols the learner. The path doesn’t assign the base topic again.">
           <select
             className={input}
             value={config.trigger.type === "lesson_completion" ? `${config.trigger.lessonSlug}@${config.trigger.lessonVersion}` : "manual"}
@@ -872,7 +872,7 @@ function DatePreview({ pathId, config, steps }: { pathId: string; config: PathCo
             ))}
           </select>
         </Field>
-        <Field label={config.trigger.type === "lesson_completion" ? "Base lesson completed" : "Assigned"}>
+        <Field label={config.trigger.type === "lesson_completion" ? "Base topic completed" : "Assigned"}>
           <input type="date" className={input} value={start} onChange={(e) => setStart(e.target.value)} />
         </Field>
         <Field label="at">
@@ -1033,7 +1033,7 @@ function ReportView({ report }: { report: Report }) {
       )}
       <h3 className="mt-6 font-semibold">Learner timelines</h3>
       {report.timelines.length === 0 ? (
-        <p className="mt-1 text-sm text-ink-muted">No enrolments yet. Complete the base lesson as a partner to create one.</p>
+        <p className="mt-1 text-sm text-ink-muted">No enrolments yet. Complete the base topic as a partner to create one.</p>
       ) : (
         <ul className="mt-2 flex flex-col gap-2">
           {report.timelines.map((t) => (

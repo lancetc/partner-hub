@@ -38,7 +38,7 @@ async function Page({ params }: Pick<PageProps<"/paths/[id]/certificate">, "para
       <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
         <h1 className="font-serif text-3xl font-semibold">Not quite there yet</h1>
         <p className="mt-3 text-ink-muted">
-          {path ? "Your certificate is ready once you've finished every lesson in this path." : "This learning path isn't available. It may have been removed."}
+          {path ? "Your certificate is ready once you've finished every topic in this path." : "This learning path isn't available. It may have been removed."}
         </p>
         <Link
           href={path ? `/paths/${encodeURIComponent(id)}` : "/learning"}

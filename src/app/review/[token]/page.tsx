@@ -12,7 +12,7 @@ import { linkLesson } from "@/server/reviews";
 import { currentReviewer } from "@/server/reviewSession";
 
 // A private link: keep it out of search engines and away from other sites.
-export const metadata: Metadata = { title: "Lesson review", robots: { index: false, follow: false }, referrer: "no-referrer" };
+export const metadata: Metadata = { title: "Topic review", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
 export default function ReviewPage({ params }: PageProps<"/review/[token]">) {
   return (

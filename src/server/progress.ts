@@ -20,8 +20,8 @@ export function readProgress(db: Db, user: User) {
 
 /** Keeps the newer of what's stored and what's sent. Returns whether this save was kept. */
 export function saveProgress(db: Db, user: User, slug: string, attempt: unknown, savedAt: string) {
-  if (!/^[a-z0-9-]{1,80}$/.test(slug ?? "")) throw new HttpError(400, "Which lesson?");
-  if (!attempt || typeof attempt !== "object") throw new HttpError(400, "Expected lesson progress.");
+  if (!/^[a-z0-9-]{1,80}$/.test(slug ?? "")) throw new HttpError(400, "Which topic?");
+  if (!attempt || typeof attempt !== "object") throw new HttpError(400, "Expected topic progress.");
   const when = new Date(savedAt);
   if (Number.isNaN(when.getTime())) throw new HttpError(400, "Expected when it was saved.");
   const json = JSON.stringify(attempt);

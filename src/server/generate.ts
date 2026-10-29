@@ -242,7 +242,7 @@ export const MAX_INSTRUCTIONS = 1500;
 
 export async function generateVariations(db: Db, actor: User, masterSlug: string, now: Date, instructions?: string) {
   const master = getLesson(db, masterSlug);
-  if (!master || master.track === "reinforcement" || "generated" in master) throw new HttpError(404, "Master lesson not found.");
+  if (!master || master.track === "reinforcement" || "generated" in master) throw new HttpError(404, "Master topic not found.");
 
   instructions = instructions?.trim().slice(0, MAX_INSTRUCTIONS) || undefined;
   let { text, usage } = await ask(master, instructions);

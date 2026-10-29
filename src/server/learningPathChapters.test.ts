@@ -117,6 +117,6 @@ describe("placeholder lessons", () => {
 
   it("is for learning authors only", () => {
     expect(() => createPlaceholders(db, u("casey"), ["Anything"], "core", now)).toThrow();
-    expect(() => createPlaceholders(db, u("jordan"), [], "core", now)).toThrow(/Which lessons/);
+    expect(() => createPlaceholders(db, u("jordan"), [], "core", now)).toThrow(/Which topics/);
   });
 });

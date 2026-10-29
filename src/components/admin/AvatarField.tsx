@@ -63,7 +63,7 @@ export function MakePresenterCard({ card: c, set }: { card: Card; set: (fn: (c: 
               name: "Ava",
               synthetic: true,
               tone: "navy",
-              alt: "AI presenter introducing the lesson",
+              alt: "AI presenter introducing the topic",
               video: { provider: "elevenlabs", id: "", title: "Presenter introduction", orientation: "portrait", poster: settings?.portrait?.src },
             };
           })
@@ -265,7 +265,8 @@ export function AvatarField({ card: c, lesson, photos, set }: { card: Card; less
         )}
       </div>
       <p className="text-xs text-ink-muted">
-        Uses ElevenLabs credits for the voice and the video. It saves with the lesson automatically. Until it’s made, learners hear the script read over the photo.
+        Uses ElevenLabs credits for the voice and the video. It saves with the topic automatically. Until it’s made, learners hear the script read over the
+        photo.
       </p>
       {error && <ErrorNote text={error} />}
     </div>

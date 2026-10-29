@@ -67,7 +67,7 @@ const CARD_TYPES: { type: Card["type"]; label: string; icon: IconName; hint: str
   { type: "presenter", label: "Presenter", icon: "play", hint: "A video introduction" },
   { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with feedback" },
   { type: "response", label: "Reflect", icon: "chat", hint: "A written answer with a model response" },
-  { type: "resources", label: "Resources", icon: "folder", hint: "A list of PDFs, websites and toolkits; never holds up the lesson" },
+  { type: "resources", label: "Resources", icon: "folder", hint: "A list of PDFs, websites and toolkits; never holds up the topic" },
   { type: "decision", label: "Role Play", icon: "route", hint: "A scenario with choices that branch to consequences" },
   { type: "summary", label: "Summary", icon: "spark", hint: "Recap, action and official resources" },
   { type: "image", label: "Text", icon: "doc", hint: "A heading, short text and a picture" },
@@ -673,7 +673,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         const r = await api<{ status: LessonStatus }>(`/api/admin/lessons/${initial.slug}/content`);
         if (!busyRef.current && r.status.updatedAt !== (statusRef.current?.updatedAt ?? null))
           setConflict(
-            "This lesson was saved somewhere else after you opened it here, for example in another tab. Load the latest version before you make changes, so you don’t overwrite it.",
+            "This topic was saved somewhere else after you opened it here, for example in another tab. Load the latest version before you make changes, so you don’t overwrite it.",
           );
       } catch {
         // Offline or signed out: the save itself will say so.
@@ -717,9 +717,9 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
     const ok = await confirmAction(
       never
         ? "It has never been published, so learners haven’t seen it."
-        : "Your saved changes are thrown away and the lesson goes back to the published version.",
+        : "Your saved changes are thrown away and the topic goes back to the published version.",
       never
-        ? { title: "Delete this lesson?", confirmLabel: "Delete", danger: true }
+        ? { title: "Delete this topic?", confirmLabel: "Delete", danger: true }
         : { title: "Discard your changes?", confirmLabel: "Discard changes", danger: true },
     );
     if (!ok) return;
@@ -786,12 +786,12 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
   }
 
   return (
-    <AdminShell title={isNew ? "New lesson" : "Edit lesson"} back={{ href: "/admin/lessons", label: "Lessons" }}>
+    <AdminShell title={isNew ? "New topic" : "Edit topic"} back={{ href: "/admin/lessons", label: "Topics" }}>
       <div className="flex flex-wrap items-center gap-3">
         <Editable
           value={lesson.title}
           onChange={(t) => update((d) => void (d.title = t))}
-          placeholder="Lesson title"
+          placeholder="Topic title"
           className="min-w-48 flex-1 px-1 font-serif text-2xl font-semibold sm:text-3xl"
         />
         {isNew || status?.state === "unpublished" ? (
@@ -825,7 +825,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         <span>
           <Icon name="info" className="mr-1 inline size-4 align-[-3px]" />
           {isNew
-            ? "Save once to keep this lesson as a draft; after that, changes save automatically. Learners won’t see it until you publish."
+            ? "Save once to keep this topic as a draft; after that, changes save automatically. Learners won’t see it until you publish."
             : busy === "save"
               ? "Saving…"
               : dirty
@@ -877,7 +877,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         </div>
       )}
 
-      <nav aria-label="Lesson editor" className="mt-5 flex gap-1 overflow-x-auto border-b border-line">
+      <nav aria-label="Topic editor" className="mt-5 flex gap-1 overflow-x-auto border-b border-line">
         {STEPS.map((s) => {
           const active = s.id === step;
           const warn = s.id === "review" && checks.some((c) => !c.ok);
@@ -984,7 +984,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             }}
           />
         )}
-        {step === "comments" && isNew && <p className="text-ink-muted">Save the lesson first, then share it for review.</p>}
+        {step === "comments" && isNew && <p className="text-ink-muted">Save the topic first, then share it for review.</p>}
         {previewing && <PreviewDialog slug={initial.slug} cardId={selected} dirty={dirty} onClose={() => setPreviewing(false)} />}
         {step === "review" && (
           <Review
@@ -1095,7 +1095,7 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
   const [sources, setSources] = useState<string[]>(isNew ? [] : ["Aged Care Act 2024 — Statement of Rights", "Trilogy Care service partner agreement"]);
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
-      <Panel title="What is this lesson for?">
+      <Panel title="What is this topic for?">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" className="sm:col-span-2">
             <input className={input} value={l.title} onChange={(e) => update((d) => void (d.title = e.target.value))} />
@@ -1171,7 +1171,7 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
       <div className="flex flex-col gap-5">
         <Panel title="Source material">
           <p className="text-sm text-ink-muted">
-            Lessons are written only from approved sources. Claude uses these, and nothing else, when drafting cards and follow ups.
+            Topics are written only from approved sources. Claude uses these, and nothing else, when drafting cards and follow ups.
           </p>
           <ul className="mt-3 flex flex-col gap-2">
             {sources.map((s, i) => (
@@ -1243,7 +1243,7 @@ const PALETTE: { type: Card["type"]; label: string; icon: IconName; hint: string
     type: "resources",
     label: "Resources",
     icon: "folder",
-    hint: "A tidy drawer of PDFs, websites and toolkits for further reading. Never holds up the lesson.",
+    hint: "A tidy drawer of PDFs, websites and toolkits for further reading. Never holds up the topic.",
   },
   {
     type: "decision",
@@ -1513,7 +1513,7 @@ function Cards({
   async function remove() {
     if (cards.length <= 1) return;
     if (
-      !(await confirmAction("The card is removed from this lesson. Save or publish to keep the change.", {
+      !(await confirmAction("The card is removed from this topic. Save or publish to keep the change.", {
         title: `Delete “${card.heading || typeInfo(card.type).label}”?`,
         confirmLabel: "Delete card",
         danger: true,
@@ -1808,7 +1808,7 @@ function Cards({
                     />
                   )}
                   <ToolButton icon="copy" label="Duplicate" onClick={duplicate} />
-                  <ToolButton icon="trash" label="Delete" onClick={remove} disabled={cards.length <= 1 ? "A lesson needs at least one card." : null} />
+                  <ToolButton icon="trash" label="Delete" onClick={remove} disabled={cards.length <= 1 ? "A topic needs at least one card." : null} />
                 </div>
               </li>
             );
@@ -2187,7 +2187,7 @@ function CanvasCard({
               placeholderClass={ph}
             />
             {c.figure && c.figure.placement === "above" && <CanvasFigure figure={c.figure} onEdit={onSettings} />}
-            {c.type === "image" || (c.type === "summary" && c.body) ? (
+            {c.type === "image" || c.type === "decision" || (c.type === "summary" && c.body) ? (
               <RichEditable
                 value={c.body}
                 onChange={(t) => set((x) => void (x.body = t))}
@@ -2481,7 +2481,8 @@ function InlineBody({
   if (c.type === "decision")
     return (
       <div className="flex flex-col gap-1.5">
-        <Editable
+        <RichEditable
+          inline
           value={c.prompt}
           onChange={(t) => set((x) => x.type === "decision" && void (x.prompt = t))}
           placeholder="What do you do?"
@@ -2490,13 +2491,14 @@ function InlineBody({
         {c.options.map((o, oi) => (
           <div key={o.id} className={cx("rounded-xl border bg-surface px-2.5 py-1.5 text-sm", o.correct ? "border-action" : "border-line-strong")}>
             <div className="flex items-start gap-1.5">
-              <Editable
-                value={o.label}
-                onChange={(t) => set((x) => x.type === "decision" && void (x.options[oi].label = t))}
-                placeholder={`Choice ${oi + 1}`}
-                className="min-w-0 flex-1"
-                multiline
-              />
+              <div className="min-w-0 flex-1">
+                <RichEditable
+                  inline
+                  value={o.label}
+                  onChange={(t) => set((x) => x.type === "decision" && void (x.options[oi].label = t))}
+                  placeholder={`Choice ${oi + 1}`}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => set((x) => x.type === "decision" && void (x.options[oi].correct = !x.options[oi].correct))}
@@ -3080,8 +3082,8 @@ function ReplaceablePicture({
   async function everywhere(file: File | undefined) {
     if (!file || !photo) return;
     const ok = await confirmAction(
-      "Every card using this picture changes to the new one, in every lesson, including what learners see now. Cards keep their crop and position.",
-      { title: `Replace in every lesson with “${file.name}”?`, confirmLabel: "Replace everywhere" },
+      "Every card using this picture changes to the new one, in every topic, including what learners see now. Cards keep their crop and position.",
+      { title: `Replace in every topic with “${file.name}”?`, confirmLabel: "Replace everywhere" },
     );
     if (!ok) return;
     setBusy("everywhere");
@@ -3157,7 +3159,7 @@ function ReplaceablePicture({
               onClick={() => everywhereInput.current?.click()}
               className="font-semibold text-accent hover:underline disabled:opacity-60"
             >
-              {busy === "everywhere" ? "Replacing everywhere…" : "Replace in every lesson"}
+              {busy === "everywhere" ? "Replacing everywhere…" : "Replace in every topic"}
             </button>
             <input
               ref={everywhereInput}
@@ -3330,7 +3332,7 @@ function requiredWhyNot(c: Card, holdForAudio: boolean | undefined) {
     return "Learners already have to answer this card before moving on";
   if (c.type === "checklist") return "Use “Tick every item to continue” on the card instead";
   if (c.type === "listen" || c.type === "audio" || c.narration)
-    return holdForAudio !== false ? "This lesson already holds learners until the audio finishes (Details tab)" : null;
+    return holdForAudio !== false ? "This topic already holds learners until the audio finishes (Details tab)" : null;
   return "Nothing to finish on this card: add narration or a video first";
 }
 
@@ -3579,7 +3581,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         </Field>
         <Field
           label="On-screen text"
-          hint={`${words(plainText(c.body))} words. Keep it to two or three short sentences.${c.type === "image" ? " Format it on the card, or here with **bold**, *italic*, [words](https://link), - bullets and | table | rows |." : ""}`}
+          hint={`${words(plainText(c.body))} words. Keep it to two or three short sentences.${c.type === "image" || c.type === "decision" ? " Format it on the card, or here with **bold**, *italic*, [words](https://link), - bullets and | table | rows |." : ""}`}
           className="sm:col-span-2"
         >
           <textarea rows={4} className={textarea} value={c.body} onChange={(e) => set((x) => void (x.body = e.target.value))} />
@@ -3617,7 +3619,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         {"next" in c && (
           <Field label="Then go to" hint={c.type === "quiz" ? "After the learner passes. Leave empty to finish here." : undefined} className="sm:col-span-2">
             <select className={input} value={c.next ?? ""} onChange={(e) => set((x) => "next" in x && void (x.next = e.target.value))}>
-              <option value="">{c.type === "quiz" ? "Finish the lesson" : "Choose a card…"}</option>
+              <option value="">{c.type === "quiz" ? "Finish the topic" : "Choose a card…"}</option>
               {others.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.heading || o.id}
@@ -3655,7 +3657,7 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
             className={btn.secondary}
             onClick={listen}
             disabled={isNew || !script}
-            title={isNew ? "Available once the lesson is saved" : undefined}
+            title={isNew ? "Available once the topic is saved" : undefined}
           >
             <Icon name={playing ? "pause" : "volume"} className="size-4" /> {playing ? "Stop" : "Listen"}
           </button>
@@ -3764,7 +3766,7 @@ function DecisionFields({ card: c, others, set }: { card: Extract<Card, { type: 
           <textarea
             rows={2}
             className={cx(textarea, "sm:col-span-2")}
-            placeholder="Feedback"
+            placeholder="Feedback (**bold** and *italic* work here)"
             value={o.feedback ?? ""}
             onChange={(e) => opt(i, (x) => void (x.feedback = e.target.value))}
           />
@@ -4717,7 +4719,7 @@ function DocumentField({ card: c, set }: { card: Card; set: (fn: (c: Card) => vo
       <div>
         <p className="text-sm font-semibold">Document in the text</p>
         <p className="text-sm text-ink-muted">
-          A PDF learners read inside the lesson, such as a form, a policy or a fact sheet. It shows as a tile with its first page. For a list of files to keep,
+          A PDF learners read inside the topic, such as a form, a policy or a fact sheet. It shows as a tile with its first page. For a list of files to keep,
           use a Resources card.
         </p>
       </div>
@@ -5303,7 +5305,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       if (file) form.append("file", file);
       const res = await fetch("/api/admin/lessons/draft", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Claude couldn’t draft the lesson.");
+      if (!res.ok) throw new Error(data.error ?? "Claude couldn’t draft the topic.");
       onDraft(data.lesson as Lesson, data.source ?? null);
     } catch (e) {
       setError((e as Error).message);
@@ -5320,7 +5322,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             <Icon name="spark" className="size-5 text-accent" /> Generate the cards with Claude
           </h2>
           <p className="mt-1 max-w-2xl text-ink-muted">
-            Describe the lesson, and attach a policy, procedure or guide if you have one. Claude drafts the cards: a scenario, a decision, a quick check and a
+            Describe the topic, and attach a policy, procedure or guide if you have one. Claude drafts the cards: a scenario, a decision, a quick check and a
             summary. You then edit everything on the canvas.
           </p>
         </div>
@@ -5458,8 +5460,8 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
     setMediaError(null);
     try {
       const { lessons } = await api<{ lessons: { slug: string; title: string }[] }>(usageUrl(p.src));
-      const names = lessons.map((x) => (x.slug === l.slug ? "this lesson" : `“${x.title}”`));
-      if (JSON.stringify(l).includes(p.src) && !names.includes("this lesson")) names.unshift("this lesson");
+      const names = lessons.map((x) => (x.slug === l.slug ? "this topic" : `“${x.title}”`));
+      if (JSON.stringify(l).includes(p.src) && !names.includes("this topic")) names.unshift("this topic");
       const ok = await confirmAction(
         names.length
           ? `It’s still used in ${names.join(", ")}. Those cards keep showing it, but you won’t be able to pick it from the library again.`
@@ -5486,8 +5488,8 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
     setReplaced(null);
     try {
       const { lessons } = await api<{ lessons: { slug: string; title: string }[] }>(usageUrl(p.src));
-      const names = lessons.map((x) => (x.slug === l.slug ? "this lesson" : `“${x.title}”`));
-      if (JSON.stringify(l).includes(p.src) && !names.includes("this lesson")) names.unshift("this lesson");
+      const names = lessons.map((x) => (x.slug === l.slug ? "this topic" : `“${x.title}”`));
+      if (JSON.stringify(l).includes(p.src) && !names.includes("this topic")) names.unshift("this topic");
       const ok = await confirmAction(
         names.length
           ? `Every card using it changes to the new picture, in ${names.join(", ")}, including what learners see now. Cards keep their crop and position.`
@@ -5523,7 +5525,7 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      <Panel title="Poster image" aside={<span className="text-sm text-ink-muted">Lesson intro and Learning tile</span>}>
+      <Panel title="Poster image" aside={<span className="text-sm text-ink-muted">Topic intro and Learning tile</span>}>
         <StoryVisual {...l.visual} alt={l.visual.alt ?? ""} className="aspect-[16/10] rounded-2xl" />
         <details className="group mt-3 rounded-2xl border border-line bg-muted/50" open={generating} onToggle={(e) => setGenerating(e.currentTarget.open)}>
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 font-semibold">
@@ -5731,7 +5733,7 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
             );
           })}
         </ul>
-        {isNew && <p className="mt-3 text-sm text-ink-muted">Voice previews are available once the lesson is saved.</p>}
+        {isNew && <p className="mt-3 text-sm text-ink-muted">Voice previews are available once the topic is saved.</p>}
       </Panel>
     </div>
   );
@@ -5746,7 +5748,7 @@ function Spaced({ lesson: l, isNew }: { lesson: Lesson; isNew: boolean }) {
   const [on, setOn] = useState<boolean | null>(null);
   const checked = on ?? live?.spaced ?? false;
   const plan = [
-    { when: "Day 0", stage: "Learn", text: "This master lesson", own: true },
+    { when: "Day 0", stage: "Learn", text: "This master topic", own: true },
     { when: "Week 2", stage: "Recall", text: "Two or three quick questions on the key facts" },
     { when: "Month 2", stage: "Apply", text: "A new scenario where they use it on the job" },
     { when: "Week 14", stage: "Refresh", text: "A short refresher before it fades" },
@@ -5757,9 +5759,9 @@ function Spaced({ lesson: l, isNew }: { lesson: Lesson; isNew: boolean }) {
         <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-2xl border border-line-strong p-4">
           <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={checked} onChange={(e) => setOn(e.target.checked)} />
           <span>
-            <span className="font-semibold">Bring this lesson back with spaced follow ups</span>
+            <span className="font-semibold">Bring this topic back with spaced follow ups</span>
             <span className="mt-1 block text-sm text-ink-muted">
-              Leave it off for lessons that stand on their own, like Our Mission and Model. Turn it on for rules and processes people need to remember.
+              Leave it off for topics that stand on their own, like Our Mission and Model. Turn it on for rules and processes people need to remember.
             </span>
           </span>
         </label>
@@ -5779,14 +5781,14 @@ function Spaced({ lesson: l, isNew }: { lesson: Lesson; isNew: boolean }) {
       </Panel>
       <Panel title="How it works">
         <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
-          <li>You write and approve one master lesson.</li>
+          <li>You write and approve one master topic.</li>
           <li>With spaced learning on, Claude writes the Recall, Apply and Refresh follow ups using only your cards.</li>
           <li>You preview each one, regenerate or edit it, then approve.</li>
           <li>Learners get each follow up in their daily digest when it’s due. They don’t choose them from the catalogue.</li>
         </ol>
         {!isNew && (
           <Link href="/admin/lessons" className={cx(btn.secondary, "mt-4")}>
-            {live?.state === "live" ? "See the approved follow ups" : "Generate on the Lessons page"} <Icon name="arrow-right" className="size-4" />
+            {live?.state === "live" ? "See the approved follow ups" : "Generate on the Topics page"} <Icon name="arrow-right" className="size-4" />
           </Link>
         )}
       </Panel>
@@ -5908,7 +5910,7 @@ function PreviewDialog({ slug, cardId, dirty, onClose }: { slug: string; cardId:
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Lesson preview"
+      aria-label="Topic preview"
       className="fixed inset-0 z-[60] flex flex-col items-center gap-3 bg-[rgb(10_26_46/0.75)] p-3 sm:p-5"
       onClick={onClose}
     >
@@ -5947,7 +5949,7 @@ function PreviewDialog({ slug, cardId, dirty, onClose }: { slug: string; cardId:
       <iframe
         key={`${src}#${run}`}
         src={src}
-        title="Lesson preview"
+        title="Topic preview"
         className="w-full max-w-[26rem] flex-1 rounded-[2rem] border-0 bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       />
@@ -6033,7 +6035,7 @@ function VersionHistory({ slug }: { slug: string }) {
                 </div>
                 {open === v.version && (
                   <ul className="mt-2 flex flex-col gap-1 rounded-xl bg-muted p-2.5 text-xs">
-                    {v.changes.lesson.length > 0 && <li>Lesson: {v.changes.lesson.join(", ")} changed</li>}
+                    {v.changes.lesson.length > 0 && <li>Topic: {v.changes.lesson.join(", ")} changed</li>}
                     {v.changes.cards.map((c) => (
                       <li key={c.id}>
                         <span
@@ -6147,14 +6149,14 @@ function Review({
             <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={important} onChange={(e) => setImportant(e.target.checked)} />
             <span>
               <span className="font-semibold">Important change</span>
-              <span className="block text-ink-muted">People who did an earlier version see this note next time they open the lesson.</span>
+              <span className="block text-ink-muted">People who did an earlier version see this note next time they open the topic.</span>
             </span>
           </label>
           <button type="button" className={cx(btn.primary, "mt-3 w-full")} onClick={onPublish} disabled={!canPublish || publishing}>
             {publishing ? "Publishing…" : "Publish"}
           </button>
           <p className="mt-2 text-xs text-ink-muted">
-            {isNew ? "Save the lesson first." : "Learners who already finished keep their completion. Publishing starts a new version."}
+            {isNew ? "Save the topic first." : "Learners who already finished keep their completion. Publishing starts a new version."}
           </p>
         </Panel>
         {!isNew && <VersionHistory key={historyKey} slug={slug} />}

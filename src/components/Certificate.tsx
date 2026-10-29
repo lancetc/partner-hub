@@ -56,7 +56,7 @@ export function Certificate({
           <p className="certificate-lead">has completed the learning path</p>
           <p className="certificate-path">{pathName}</p>
           <p className="certificate-meta">
-            {lessons} lessons · {formatDuration(minutes).replace(/^About/, "about")} of learning · completed {formatDate(completedAt)}
+            {lessons} topics · {formatDuration(minutes).replace(/^About/, "about")} of learning · completed {formatDate(completedAt)}
           </p>
           {outcomes.length > 0 && (
             <ul className="certificate-outcomes">

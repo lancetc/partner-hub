@@ -13,7 +13,7 @@ export default function LearningPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
       <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Learning</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Short, practical lessons you can finish between visits. Your place is saved as you go.</p>
+      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Short, practical topics you can finish between visits. Your place is saved as you go.</p>
       <div className="mt-8 max-w-2xl empty:hidden">
         <WaitingSurveys heading="Survey waiting for you" />
       </div>

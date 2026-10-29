@@ -188,7 +188,7 @@ function Panel({
                     )
                   </>
                 )}
-                . Everyone reviewing this lesson can see comments.
+                . Everyone reviewing this topic can see comments.
               </p>
               {here.length ? (
                 <ul className="mt-4 flex flex-col gap-3">

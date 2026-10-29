@@ -60,7 +60,7 @@ export function CardComments({ slug, cardId, onColour, readOnly }: { slug: strin
     try {
       if (payload.action === "post") {
         // A new comment can wait for a connection; pinning, hiding and deleting need one.
-        const r = await sendOrQueue<Thread>("/api/comments", payload, { label: "Comment on a lesson card" });
+        const r = await sendOrQueue<Thread>("/api/comments", payload, { label: "Comment on a topic card" });
         if (r.queued) setError("You’re offline. Your comment is saved and will be posted when you’re back online.");
         else setThread(r.data);
         after?.();
@@ -104,7 +104,7 @@ export function CardComments({ slug, cardId, onColour, readOnly }: { slug: strin
         className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-3 text-ink shadow-sm [text-shadow:none]"
       >
         {unavailable ? (
-          <p className="text-sm text-ink-muted">Comments appear here once the lesson is published.</p>
+          <p className="text-sm text-ink-muted">Comments appear here once the topic is published.</p>
         ) : (
           <>
             {!readOnly && (
@@ -128,7 +128,7 @@ export function CardComments({ slug, cardId, onColour, readOnly }: { slug: strin
                   className="rounded-xl border border-line-strong bg-surface p-2.5 text-[0.98rem]"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-ink-muted">Everyone taking this lesson can see it. Leave out client names and details.</span>
+                  <span className="text-xs text-ink-muted">Everyone taking this topic can see it. Leave out client names and details.</span>
                   <button
                     type="submit"
                     disabled={busy || text.trim().length < 3}

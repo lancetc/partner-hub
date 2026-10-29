@@ -72,7 +72,7 @@ const lessonLookup = (db: Db) => {
     if (l) return { slug, title: l.title, minutes: l.minutes, track: l.track as string | null, draft: false };
     const d = drafts.get(slug);
     if (d) return { slug, title: d.title, minutes: d.minutes, track: d.track as string | null, draft: true };
-    return { slug, title: "Lesson no longer available", minutes: 0, track: null, draft: false };
+    return { slug, title: "Topic no longer available", minutes: 0, track: null, draft: false };
   };
 };
 
@@ -144,7 +144,7 @@ function validate(db: Db, input: PathInput) {
     chapters = input.chapters.map((c, i) => {
       const title = String(c?.title ?? "").trim();
       if (!title) throw new HttpError(400, `Give chapter ${i + 1} a title.`);
-      if (!Array.isArray(c.lessons)) throw new HttpError(400, `Chapter “${title}” needs a list of lessons.`);
+      if (!Array.isArray(c.lessons)) throw new HttpError(400, `Chapter “${title}” needs a list of topics.`);
       let id = /^[a-z0-9-]{1,40}$/.test(String(c.id ?? "")) ? String(c.id) : `ch${i + 1}`;
       while (ids.has(id)) id = `${id}-${i + 1}`;
       ids.add(id);
@@ -162,11 +162,11 @@ function validate(db: Db, input: PathInput) {
     });
     input = { ...input, lessons: chapters.flatMap((c) => c.lessons) };
   }
-  if (!Array.isArray(input.lessons)) throw new HttpError(400, "Lessons must be a list.");
-  if (new Set(input.lessons).size !== input.lessons.length) throw new HttpError(400, "Each lesson can only appear once in a path.");
+  if (!Array.isArray(input.lessons)) throw new HttpError(400, "Topics must be a list.");
+  if (new Set(input.lessons).size !== input.lessons.length) throw new HttpError(400, "Each topic can only appear once in a path.");
   const known = new Set(catalogueInfo(db).map((l) => l.slug));
   const unknown = input.lessons.filter((s) => !known.has(s));
-  if (unknown.length) throw new HttpError(400, `Unknown lesson: ${unknown.join(", ")}.`);
+  if (unknown.length) throw new HttpError(400, `Unknown topic: ${unknown.join(", ")}.`);
   return {
     name,
     description: (input.description ?? "").trim().slice(0, 500),
@@ -410,7 +410,7 @@ export function assignLearningPath(db: Db, actor: User, id: string, userIds: str
   getRow(db, id);
   requireReporter(actor);
   if (!Array.isArray(userIds) || !userIds.length) throw new HttpError(400, "Choose at least one person.");
-  if (!slugsFor(db, id).length) throw new HttpError(409, "Add lessons to this path before assigning it.");
+  if (!slugsFor(db, id).length) throw new HttpError(409, "Add topics to this path before assigning it.");
   if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new HttpError(400, "Use a date like 2026-11-30.");
   const outside = userIds.filter((u) => !inScope(db, actor, u));
   if (outside.length) throw new HttpError(403, "You can only assign people in your organisation.");

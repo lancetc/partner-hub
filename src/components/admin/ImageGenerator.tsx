@@ -112,10 +112,10 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
             className="text-xs font-semibold text-accent hover:underline"
             onClick={() => {
               const about = l.summary.trim().replace(/\.$/, "");
-              setPrompt(`A poster photo for a lesson called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
+              setPrompt(`A poster photo for a topic called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
             }}
           >
-            Start from the lesson
+            Start from the topic
           </button>
         </span>
         <textarea

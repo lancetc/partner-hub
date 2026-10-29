@@ -54,8 +54,8 @@ export function FactsLibrary() {
     <AdminShell title="Facts">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          Rates, dates and numbers that appear in lessons. Put a fact’s code, like <code className="rounded bg-muted px-1">{"{{example_rate}}"}</code>, in a
-          card’s text and learners see its value. When it changes, update it here once and every lesson is current.
+          Rates, dates and numbers that appear in topics. Put a fact’s code, like <code className="rounded bg-muted px-1">{"{{example_rate}}"}</code>, in a
+          card’s text and learners see its value. When it changes, update it here once and every topic is current.
         </p>
         {!editing && (
           <button type="button" className={btn.primary} onClick={() => setEditing({ form: blank, isNew: true })}>
@@ -162,7 +162,7 @@ function FactCard({ fact: f, onEdit, onDeleted }: { fact: Fact; onEdit: () => vo
             ))}
           </>
         ) : (
-          "Not used in any lesson yet."
+          "Not used in any topic yet."
         )}
       </p>
       <p className="text-xs text-ink-muted">
@@ -179,7 +179,7 @@ function FactCard({ fact: f, onEdit, onDeleted }: { fact: Fact; onEdit: () => vo
           className={btn.quiet}
           onClick={remove}
           disabled={f.usedIn.length > 0}
-          title={f.usedIn.length ? "Remove it from lessons first" : undefined}
+          title={f.usedIn.length ? "Remove it from topics first" : undefined}
         >
           Delete
         </button>
@@ -224,7 +224,7 @@ function FactForm({ initial, isNew, onCancel, onSaved }: { initial: Form; isNew:
       <Field label="Value" hint="Exactly as learners should see it, e.g. $82.40 or 1 July 2027.">
         <input className={input} required value={f.value} onChange={(e) => set("value", e.target.value)} />
       </Field>
-      <Field label="Code" hint={isNew ? "Lowercase letters, numbers and underscores." : "Can’t change once lessons use it."}>
+      <Field label="Code" hint={isNew ? "Lowercase letters, numbers and underscores." : "Can’t change once topics use it."}>
         <input
           className={cx(input, "font-mono")}
           required

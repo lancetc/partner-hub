@@ -52,18 +52,18 @@ function staticAssets(html: string) {
 }
 
 export async function downloadLesson(slug: string, userId: string) {
-  if (!supportsOffline()) throw new Error("This browser can’t save lessons for offline use.");
+  if (!supportsOffline()) throw new Error("This browser can’t save topics for offline use.");
   progress = { ...progress, [slug]: 0 };
   emit();
   try {
     const res = await fetch(`/api/lessons/offline?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
-    if (!res.ok) throw new Error("Couldn’t get the lesson to download. Check your connection.");
+    if (!res.ok) throw new Error("Couldn’t get the topic to download. Check your connection.");
     const m = (await res.json()) as Manifest;
     const cache = await caches.open(OFFLINE_CACHE);
     // The page itself (as this person sees it), the Learning page to start from, and the offline fallback.
     const pages = [m.page, "/learning", "/offline"];
     const html = await fetch(m.page, { credentials: "same-origin", cache: "no-store" });
-    if (!html.ok) throw new Error("Couldn’t get the lesson to download.");
+    if (!html.ok) throw new Error("Couldn’t get the topic to download.");
     const text = await html.clone().text();
     await cache.put(m.page, html);
     const urls = [...new Set([...pages.slice(1), ...staticAssets(text), ...m.media, ...m.narration, "/api/me"])];

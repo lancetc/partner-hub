@@ -313,7 +313,7 @@ export function AssignedList({ assigned, busy, onRemove }: { assigned: AssignedP
                 </button>
               </div>
               <div className="mt-2 flex items-center gap-2">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${a.completed} of ${a.total} lessons done`}>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${a.completed} of ${a.total} topics done`}>
                   <div className="h-full rounded-full bg-action" style={{ width: `${a.total ? (a.completed / a.total) * 100 : 0}%` }} />
                 </div>
                 <span className="text-xs text-ink-muted">

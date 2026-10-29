@@ -25,10 +25,10 @@ export function Signoffs() {
   return (
     <AdminShell title="Sign-offs">
       <p className="max-w-3xl text-ink-muted">
-        When someone finishes a lesson’s spaced follow ups, their manager confirms they’re putting it into practice at work, or says what support would help. Switch
-        sign-off on for a lesson on the{" "}
+        When someone finishes a topic’s spaced follow ups, their manager confirms they’re putting it into practice at work, or says what support would help.
+        Switch sign-off on for a topic on the{" "}
         <Link href="/admin/lessons" className="font-medium text-accent underline-offset-4 hover:underline">
-          Lessons
+          Topics
         </Link>{" "}
         page.
       </p>
@@ -64,7 +64,12 @@ export function Signoffs() {
               <ul className="flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
                 {data.history.map((h) => (
                   <li key={h.enrolmentId} className="flex flex-wrap items-start gap-3 p-4">
-                    <span className={cx("mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full", h.outcome === "confirmed" ? "bg-action text-on-action" : "bg-gold/30")}>
+                    <span
+                      className={cx(
+                        "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full",
+                        h.outcome === "confirmed" ? "bg-action text-on-action" : "bg-gold/30",
+                      )}
+                    >
                       <Icon name={h.outcome === "confirmed" ? "check" : "chat"} className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -159,7 +164,11 @@ function SignoffCard({ item, onDone }: { item: Item; onDone: () => void }) {
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
               className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
-              placeholder={mode === "confirmed" ? "For example: saw them check with the coordinator before staying longer." : "For example: go through the change process together on the next visit."}
+              placeholder={
+                mode === "confirmed"
+                  ? "For example: saw them check with the coordinator before staying longer."
+                  : "For example: go through the change process together on the next visit."
+              }
             />
           </label>
           {error && <ErrorNote text={error} />}
@@ -171,7 +180,7 @@ function SignoffCard({ item, onDone }: { item: Item; onDone: () => void }) {
               Back
             </button>
           </div>
-          <p className="text-xs text-ink-muted">{item.learner.name} sees this on the lesson’s tile.</p>
+          <p className="text-xs text-ink-muted">{item.learner.name} sees this on the topic’s tile.</p>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">

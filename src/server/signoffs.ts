@@ -11,7 +11,15 @@ import { activityInfo, enrol, parseVersion, type PathVersionRow, type PinnedStep
 */
 
 type EnrolmentRow = { id: number; user_id: string; org_id: string; path_id: string; path_version: number; state: string };
-type SignoffRow = { enrolment_id: number; user_id: string; lesson_slug: string; outcome: "confirmed" | "support"; note: string; decided_by: string; decided_at: string };
+type SignoffRow = {
+  enrolment_id: number;
+  user_id: string;
+  lesson_slug: string;
+  outcome: "confirmed" | "support";
+  note: string;
+  decided_by: string;
+  decided_at: string;
+};
 
 /** The master lesson a spaced path belongs to, if sign-off is switched on for it. */
 function lessonForPath(db: Db, pathId: string) {
@@ -62,7 +70,12 @@ function describe(db: Db, e: EnrolmentRow) {
     learner: { id: learner.id, name: learner.name, role: learner.service_role ?? learner.audience, org },
     manager: learner.manager_id ? (userById(db, learner.manager_id)?.name ?? null) : null,
     lesson: masterInfo(lesson.slug),
-    finishedAt: results.map((r) => r.completedAt).filter((x): x is string => Boolean(x)).sort().at(-1) ?? null,
+    finishedAt:
+      results
+        .map((r) => r.completedAt)
+        .filter((x): x is string => Boolean(x))
+        .sort()
+        .at(-1) ?? null,
     results,
   };
 }
@@ -80,7 +93,14 @@ export function signoffQueue(db: Db, actor: User) {
     const learner = userById(db, e.user_id);
     if (!lesson || !learner || !canSignOff(actor, learner)) continue;
     const d = decided.get(e.id);
-    if (d) history.push({ ...describe(db, e), outcome: d.outcome, note: d.note, decidedBy: userById(db, d.decided_by)?.name ?? d.decided_by, decidedAt: d.decided_at });
+    if (d)
+      history.push({
+        ...describe(db, e),
+        outcome: d.outcome,
+        note: d.note,
+        decidedBy: userById(db, d.decided_by)?.name ?? d.decided_by,
+        decidedAt: d.decided_at,
+      });
     else if (lesson.signoff) waiting.push(describe(db, e));
   }
   return { waiting, history: history.sort((a, b) => b.decidedAt.localeCompare(a.decidedAt)) };
@@ -95,14 +115,22 @@ export function decideSignoff(db: Db, actor: User, enrolmentId: number, outcome:
   if (!canSignOff(actor, learner)) throw new HttpError(403, "You can only sign off people you manage.");
   if (e.state !== "completed") throw new HttpError(409, `${learner.name} hasn’t finished the follow ups yet.`);
   const lesson = lessonForPath(db, e.path_id);
-  if (!lesson) throw new HttpError(409, "This isn’t a spaced lesson.");
+  if (!lesson) throw new HttpError(409, "This isn’t a spaced topic.");
   const text = (note ?? "").trim().slice(0, 1000);
   if (outcome === "support" && !text) throw new HttpError(400, "Say what support would help, so it can be followed up.");
   const at = now.toISOString();
   tx(db, () => {
-    const res = db.prepare("INSERT OR IGNORE INTO signoffs VALUES (?, ?, ?, ?, ?, ?, ?)").run(enrolmentId, learner.id, lesson.slug, outcome, text, actor.id, at);
+    const res = db
+      .prepare("INSERT OR IGNORE INTO signoffs VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(enrolmentId, learner.id, lesson.slug, outcome, text, actor.id, at);
     if (!res.changes) throw new HttpError(409, "This has already been signed off.");
-    audit(db, { actor: actor.id, event: `signoff.${outcome}`, entity: `enrolment:${enrolmentId}`, next: { learner: learner.id, lesson: lesson.slug, note: text }, at: now });
+    audit(db, {
+      actor: actor.id,
+      event: `signoff.${outcome}`,
+      entity: `enrolment:${enrolmentId}`,
+      next: { learner: learner.id, lesson: lesson.slug, note: text },
+      at: now,
+    });
   });
   return { ok: true };
 }
@@ -111,7 +139,10 @@ export function decideSignoff(db: Db, actor: User, enrolmentId: number, outcome:
 export function mySignoffs(db: Db, user: User) {
   ensureDemo(db);
   const rows = db.prepare("SELECT * FROM enrolments WHERE user_id = ? ORDER BY id").all(user.id) as EnrolmentRow[];
-  const out: Record<string, { status: "after_follow_ups" | "waiting" | "confirmed" | "support"; manager: string | null; by?: string; at?: string; note?: string }> = {};
+  const out: Record<
+    string,
+    { status: "after_follow_ups" | "waiting" | "confirmed" | "support"; manager: string | null; by?: string; at?: string; note?: string }
+  > = {};
   const manager = user.manager_id ? (userById(db, user.manager_id)?.name ?? null) : null;
   for (const e of rows) {
     const lesson = lessonForPath(db, e.path_id);
@@ -142,12 +173,15 @@ function ensureDemo(db: Db) {
       const user = userById(db, d.user);
       if (!pathId || !user) continue;
       if (db.prepare("SELECT 1 FROM enrolments WHERE user_id = ? AND path_id = ?").get(user.id, pathId)) continue;
-      const pv = db.prepare("SELECT version, steps FROM path_versions WHERE path_id = ? AND status = 'published'").get(pathId) as { version: number; steps: string } | undefined;
+      const pv = db.prepare("SELECT version, steps FROM path_versions WHERE path_id = ? AND status = 'published'").get(pathId) as
+        { version: number; steps: string } | undefined;
       if (!pv) continue;
       const steps = JSON.parse(pv.steps) as PinnedStep[];
       const anchor = new Date(now.getTime() - 110 * 86400000);
       const { enrolment } = enrol(db, user, pathId, pv.version, "demo-signoff", anchor, anchor);
-      const instances = db.prepare("SELECT id, step_index, planned_release FROM step_instances WHERE enrolment_id = ? ORDER BY step_index").all(enrolment.id) as {
+      const instances = db
+        .prepare("SELECT id, step_index, planned_release FROM step_instances WHERE enrolment_id = ? ORDER BY step_index")
+        .all(enrolment.id) as {
         id: number;
         step_index: number;
         planned_release: string;
@@ -158,14 +192,20 @@ function ensureDemo(db: Db) {
         const done = new Date(new Date(inst.planned_release).getTime() + 2 * 3600000).toISOString();
         const correct = d.firstTries[inst.step_index] ?? true;
         if (step?.adaptive && struggled) db.prepare("UPDATE step_instances SET follow_up_id = ? WHERE id = ?").run(step.adaptive.ifStruggled, inst.id);
-        db.prepare("UPDATE step_instances SET released_at = planned_release, notified_at = planned_release, started_at = ?, feedback_viewed_at = ?, completed_at = ? WHERE id = ?").run(done, done, done, inst.id);
+        db.prepare(
+          "UPDATE step_instances SET released_at = planned_release, notified_at = planned_release, started_at = ?, feedback_viewed_at = ?, completed_at = ? WHERE id = ?",
+        ).run(done, done, done, inst.id);
         db.prepare(
           "INSERT INTO attempts (step_instance_id, question_id, follow_up_version, concept, initial_response, initial_correct, initial_at, feedback_shown_at) VALUES (?, 'lesson', 0, 'demo', '[]', ?, ?, ?)",
         ).run(inst.id, correct ? 1 : 0, done, done);
         if (!correct) struggled = true;
       }
       db.prepare("UPDATE enrolments SET state = 'completed' WHERE id = ?").run(enrolment.id);
-      db.prepare("INSERT OR IGNORE INTO lesson_completions (user_id, lesson_slug, lesson_version, completed_at) VALUES (?, ?, 'demo', ?)").run(user.id, d.lesson, anchor.toISOString());
+      db.prepare("INSERT OR IGNORE INTO lesson_completions (user_id, lesson_slug, lesson_version, completed_at) VALUES (?, ?, 'demo', ?)").run(
+        user.id,
+        d.lesson,
+        anchor.toISOString(),
+      );
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('signoff_demo', '1')").run();
   });

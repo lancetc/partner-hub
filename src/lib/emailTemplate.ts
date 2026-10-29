@@ -71,10 +71,8 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
         const l = lessons.find((x) => x.slug === b.slug);
         if (!l) break;
         const href = `${ctx.baseUrl}/learning/${l.slug}`;
-        rows.push(
-          card(l.visual.photo ? abs(l.visual.photo.src, ctx.baseUrl) : null, `Lesson · ${l.minutes} min`, l.title, l.summary, href, "Start the lesson"),
-        );
-        text.push(`${l.title} (${l.minutes} min lesson)\n${l.summary}\n${href}`, "");
+        rows.push(card(l.visual.photo ? abs(l.visual.photo.src, ctx.baseUrl) : null, `Topic · ${l.minutes} min`, l.title, l.summary, href, "Start the topic"));
+        text.push(`${l.title} (${l.minutes} min topic)\n${l.summary}\n${href}`, "");
         break;
       }
       case "webinar": {

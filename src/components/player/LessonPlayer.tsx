@@ -302,7 +302,7 @@ export function LessonPlayer({
         .filter(([k]) => k.startsWith("first:"))
         .map(([k, v]) => ({ id: k.slice(6), correct: v === 1 }));
       // Offline, the completion is kept on this device and recorded when the connection returns.
-      const label = `Lesson completed: “${lesson.title}”`;
+      const label = `Topic completed: “${lesson.title}”`;
       const sent = instanceId
         ? await sendOrQueue<{ completedAt: string }>(`/api/follow-ups/${instanceId}`, { action: "complete_lesson", results }, { label })
         : await sendOrQueue<CompletionResult>("/api/lessons/complete", { slug: lesson.slug, version: lesson.version }, { label });
@@ -322,14 +322,14 @@ export function LessonPlayer({
   }
 
   if (!hydrated) {
-    return <Frame closeHref={backTo?.href} title={`Lesson: ${lesson.title}`} beats={lesson.beats} saveState="idle" progress={null} />;
+    return <Frame closeHref={backTo?.href} title={`Topic: ${lesson.title}`} beats={lesson.beats} saveState="idle" progress={null} />;
   }
 
   if (phase === "intro") {
     return (
       <Frame
         closeHref={backTo?.href}
-        title={`Lesson: ${lesson.title}`}
+        title={`Topic: ${lesson.title}`}
         beats={lesson.beats}
         saveState="idle"
         progress={null}
@@ -349,7 +349,7 @@ export function LessonPlayer({
           <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
             {reviewToken ? (
               <>
-                <strong>You’re reviewing this lesson.</strong> Work through it as a learner would, and press <strong>Comment</strong> at the top of any card to
+                <strong>You’re reviewing this topic.</strong> Work through it as a learner would, and press <strong>Comment</strong> at the top of any card to
                 leave feedback for the author. Nothing you answer is recorded.
               </>
             ) : (
@@ -377,7 +377,7 @@ export function LessonPlayer({
     return (
       <Frame
         closeHref={backTo?.href}
-        title={`Lesson: ${lesson.title}`}
+        title={`Topic: ${lesson.title}`}
         beats={lesson.beats}
         saveState={saveState}
         progress={{ beat: lesson.beats.length, done: true }}
@@ -519,7 +519,7 @@ export function LessonPlayer({
   return (
     <Frame
       closeHref={backTo?.href}
-      title={`Lesson: ${lesson.title}`}
+      title={`Topic: ${lesson.title}`}
       beats={lesson.beats}
       saveState={review ? "idle" : saveState}
       headerAction={
@@ -546,7 +546,7 @@ export function LessonPlayer({
           {completing === "error" && (
             <p role="alert" className="flex items-start gap-2 rounded-2xl border border-danger/60 px-3 py-2 text-sm">
               <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" />
-              We couldn’t save your result, so the lesson isn’t marked complete yet. Check your connection and try again.
+              We couldn’t save your result, so the topic isn’t marked complete yet. Check your connection and try again.
             </p>
           )}
           {/* How much of the card's audio has played: a line across the top of the footer. */}
@@ -833,7 +833,7 @@ function primaryAction(
           kind: "check",
           disabled: !allAnswered,
         };
-      if (allRight) return node.next ? { label: "Continue", kind: "next" } : { label: "Finish lesson", kind: "complete", completes: true };
+      if (allRight) return node.next ? { label: "Continue", kind: "next" } : { label: "Finish topic", kind: "complete", completes: true };
       return { label: "Try again", kind: "retry" };
     }
     case "poll":
@@ -974,7 +974,9 @@ function CardBody({
     case "decision":
       return (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 font-semibold">{node.prompt}</legend>
+          <legend className="mb-2 font-semibold">
+            <RichInline text={node.prompt} />
+          </legend>
           {node.options.map((o) => (
             <label
               key={o.id}
@@ -991,7 +993,9 @@ function CardBody({
                 onChange={() => setChoice(o.id)}
                 className="size-5 shrink-0 accent-[var(--action)]"
               />
-              <span className="leading-snug">{o.label}</span>
+              <span className="leading-snug">
+                <RichInline text={o.label} />
+              </span>
             </label>
           ))}
           {stayFeedback && (
@@ -1002,7 +1006,7 @@ function CardBody({
             >
               <Icon name={positive ? "check" : "info"} className={cx("fx-tick mt-0.5 size-5 shrink-0", positive ? "text-accent" : "text-warm")} />
               <span>
-                {stayFeedback}
+                <RichInline text={stayFeedback} />
                 {!positive && <strong className="mt-1 block font-semibold">Try again.</strong>}
               </span>
             </p>
@@ -1026,7 +1030,7 @@ function CardBody({
       return (
         <div className="flex flex-col gap-3">
           {/* Panels carry their own text colour, so they stay readable on a navy recap card. */}
-          <div className="rounded-2xl bg-tealtint p-4 text-ink">
+          <div className="fx-stagger rounded-2xl bg-tealtint p-4 text-ink" style={{ ["--i" as string]: 0 }}>
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Your next action</p>
             <p className="mt-1 text-lg font-semibold leading-snug">
               <RichInline text={node.action} />
@@ -1034,10 +1038,10 @@ function CardBody({
           </div>
           {node.points && (
             <ul className="flex flex-col gap-2">
-              {node.points.map((p) => {
+              {node.points.map((p, i) => {
                 const [term, rest] = p.split(/:\s*/, 2);
                 return (
-                  <li key={p} className="flex gap-3 rounded-2xl bg-muted px-4 py-3 text-ink">
+                  <li key={p} className="fx-stagger flex gap-3 rounded-2xl bg-muted px-4 py-3 text-ink" style={{ ["--i" as string]: i + 1 }}>
                     <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" />
                     <span>
                       {/* "Term: explanation" points show the term in bold; any other formatting comes from the text. */}
@@ -1276,7 +1280,7 @@ function Intro({
           </>
         ) : (
           <button type="button" onClick={onStart} className="min-h-12 rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover">
-            Start lesson
+            Start topic
           </button>
         )}
       </div>
@@ -1298,12 +1302,12 @@ function Intro({
           {lesson.track === "briefing"
             ? "Policy briefing"
             : lesson.track === "coordinator"
-              ? "Coordinator lesson"
+              ? "Coordinator topic"
               : lesson.track === "core"
-                ? "Core lesson"
+                ? "Core topic"
                 : lesson.track === "reinforcement"
                   ? "Follow up"
-                  : "Partner lesson"}{" "}
+                  : "Partner topic"}{" "}
           · About {lesson.minutes} minutes
         </p>
         <h1 className="mt-2 font-serif text-[2.1rem] font-semibold leading-[1.1] tracking-tight">{lesson.title}</h1>
@@ -1338,7 +1342,7 @@ function Intro({
       </ul>
 
       {stored && !sameVersion && stored.status === "in_progress" && (
-        <p className="rounded-2xl bg-muted p-3 text-sm">This lesson has been updated since you started. You’ll begin the new version.</p>
+        <p className="rounded-2xl bg-muted p-3 text-sm">This topic has been updated since you started. You’ll begin the new version.</p>
       )}
     </div>
   );
@@ -1383,7 +1387,7 @@ function Complete({
       <div>
         <h2 ref={headingRef} tabIndex={-1} className="font-serif text-[2rem] font-semibold leading-tight outline-none">
           {reviewLink
-            ? "End of the lesson"
+            ? "End of the topic"
             : preview
               ? "Preview finished"
               : review
@@ -1392,7 +1396,7 @@ function Complete({
                   ? "Follow up done"
                   : ack
                     ? "Briefing acknowledged"
-                    : "Lesson complete"}
+                    : "Topic complete"}
         </h2>
         <p className="mt-3 text-lg">
           {reviewLink
@@ -1401,7 +1405,7 @@ function Complete({
               ? "Nothing was recorded. Approve the variations when you’re happy with them."
               : review
                 ? "Your original completion record is unchanged."
-                : "Your result is saved. You can come back to this lesson at any time."}
+                : "Your result is saved. You can come back to this topic at any time."}
         </p>
         {lesson.completionMessage && <p className="mt-4 font-serif text-2xl font-semibold leading-snug text-accent">{lesson.completionMessage}</p>}
       </div>
@@ -1514,10 +1518,8 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
               {p.icon && (
                 <span
                   aria-hidden
-                  className={cx(
-                    "inline-flex size-8 items-center justify-center rounded-full",
-                    onColour ? "bg-[#ddf2f3] text-[#2d4875]" : "bg-tealtint text-accent",
-                  )}
+                  // Solid brand teal with a white icon, the same on any card colour and in dark mode.
+                  className="inline-flex size-8 items-center justify-center rounded-full bg-[#0e7c7b] text-white"
                 >
                   <Icon name={p.icon} className="size-4" />
                 </span>

@@ -144,7 +144,7 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
       ) : (
         <>
           <div className="flex items-center gap-3">
-            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${done} of ${live.length} lessons done`}>
+            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${done} of ${live.length} topics done`}>
               <div className="h-full rounded-full bg-action transition-[width]" style={{ width: `${live.length ? (done / live.length) * 100 : 0}%` }} />
             </div>
             <span className="font-mulish text-sm font-bold">
@@ -205,7 +205,7 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
       ) : live.length ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2 font-semibold text-accent">
-            <Icon name="check" className="size-5" /> {soon ? "All available lessons done. More are coming soon." : "Path complete"}
+            <Icon name="check" className="size-5" /> {soon ? "All available topics done. More are coming soon." : "Path complete"}
           </p>
           {finished && !preview && (
             <Link
@@ -217,7 +217,7 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
           )}
         </div>
       ) : (
-        <p className="text-ink-muted">The lessons in this path are coming soon.</p>
+        <p className="text-ink-muted">The topics in this path are coming soon.</p>
       )}
     </li>
   );

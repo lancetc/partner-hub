@@ -46,8 +46,8 @@ describe("learning paths", () => {
 
   it("saves a planned path with no lessons, but won't assign it until it has some", () => {
     const { id } = createLearningPath(db, u("jordan"), { name: "Later", audience: "Managers", lessons: [] }, now);
-    expect(() => assignLearningPath(db, u("jordan"), id, ["sam"], null, now)).toThrow(/Add lessons/);
-    expect(() => assignLearningPath(db, u("jordan"), "lp-leadership", ["sam"], null, now)).toThrow(/Add lessons/);
+    expect(() => assignLearningPath(db, u("jordan"), id, ["sam"], null, now)).toThrow(/Add topics/);
+    expect(() => assignLearningPath(db, u("jordan"), "lp-leadership", ["sam"], null, now)).toThrow(/Add topics/);
   });
 
   it("opens lessons one at a time when the path is in order, and tracks progress", () => {
@@ -76,7 +76,7 @@ describe("learning paths", () => {
     const j = u("jordan");
     expect(() => createLearningPath(db, j, { name: " ", lessons: ["noticing-a-change"] }, now)).toThrow(/name/);
     expect(() => createLearningPath(db, j, { name: "Twice", lessons: ["noticing-a-change", "noticing-a-change"] }, now)).toThrow(/only appear once/);
-    expect(() => createLearningPath(db, j, { name: "Follow up", lessons: ["lf-recall"] }, now)).toThrow(/Unknown lesson/);
+    expect(() => createLearningPath(db, j, { name: "Follow up", lessons: ["lf-recall"] }, now)).toThrow(/Unknown topic/);
   });
 
   it("lets an organisation admin assign only their own people", () => {

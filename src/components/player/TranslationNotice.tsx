@@ -49,15 +49,15 @@ export function TranslationNotice({ lang, state }: { lang: string; state: Notice
         )}
         {state === "original" && (
           <>
-            Showing the English lesson.{" "}
+            Showing the English topic.{" "}
             <a href="?" className="font-semibold underline">
               Show in {name}
             </a>
           </>
         )}
-        {state === "pending" && <>Translating this lesson into {name}. It switches over by itself in a moment; you can start in English.</>}
-        {state === "failed" && <>This lesson couldn’t be translated into {name} just now, so it’s in English. We’ll try again next time you open it.</>}
-        {state === "unavailable" && <>Lessons aren’t translated into {name} yet, so this one is in English.</>}
+        {state === "pending" && <>Translating this topic into {name}. It switches over by itself in a moment; you can start in English.</>}
+        {state === "failed" && <>This topic couldn’t be translated into {name} just now, so it’s in English. We’ll try again next time you open it.</>}
+        {state === "unavailable" && <>Topics aren’t translated into {name} yet, so this one is in English.</>}
       </span>
     </p>
   );

@@ -31,7 +31,7 @@ export function Header() {
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
           <span aria-hidden className="h-6 w-px bg-line-strong" />
-          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">Lesson review</span>
+          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">Topic review</span>
         </div>
       </header>
     );

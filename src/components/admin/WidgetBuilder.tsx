@@ -175,7 +175,7 @@ export function WidgetFields({ card: c, set }: { card: WidgetCard; set: Set }) {
       <details className="rounded-2xl border border-line p-3">
         <summary className="cursor-pointer font-semibold">Code (HTML, CSS and JavaScript)</summary>
         <p className="mt-1 text-sm text-ink-muted">
-          Runs in a sealed frame: it can’t reach the internet, the lesson or the learner’s account. Edits show on the card straight away.
+          Runs in a sealed frame: it can’t reach the internet, the topic or the learner’s account. Edits show on the card straight away.
         </p>
         <textarea
           rows={16}

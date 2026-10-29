@@ -45,7 +45,7 @@ export function ReportProblem({ slug, cardId, preview, onColour }: { slug: strin
         setState("sending");
         setError(null);
         try {
-          const r = await sendOrQueue("/api/reports", { lesson: slug, card: cardId, text }, { label: "Problem reported on a lesson card" });
+          const r = await sendOrQueue("/api/reports", { lesson: slug, card: cardId, text }, { label: "Problem reported on a topic card" });
           setState(r.queued ? "queued" : "sent");
         } catch (err) {
           setError((err as Error).message);

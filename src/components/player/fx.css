@@ -141,6 +141,11 @@
   .fx-rise {
     animation: fx-rise 320ms ease-out both;
   }
+  /* One after another: each item sets --i (0, 1, 2…) and comes in a beat after the one before. */
+  .fx-stagger {
+    animation: fx-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(350ms + var(--i, 0) * 450ms);
+  }
   .fx-burst > span {
     animation: fx-burst 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }

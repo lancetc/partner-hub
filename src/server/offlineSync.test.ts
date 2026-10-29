@@ -42,7 +42,7 @@ describe("lesson progress across devices", () => {
   });
 
   it("checks what it's given", () => {
-    expect(() => saveProgress(db, sam(), "../etc", attempt("a"), "2026-10-26T01:00:00Z")).toThrow(/Which lesson/);
+    expect(() => saveProgress(db, sam(), "../etc", attempt("a"), "2026-10-26T01:00:00Z")).toThrow(/Which topic/);
     expect(() => saveProgress(db, sam(), "lesson", null, "2026-10-26T01:00:00Z")).toThrow(/progress/);
     expect(() => saveProgress(db, sam(), "lesson", attempt("a"), "not a date")).toThrow(/when it was saved/);
   });

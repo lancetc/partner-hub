@@ -4,7 +4,18 @@ import { lessons } from "@/content/lessons";
 import { projectSchedule, releaseAfter, validateSchedule, zonedToUtc, type PlainDate } from "@/lib/schedule";
 import { audit, tx, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
-import { followUp, isLessonActivity, lessonForActivity, parseVersion, pathVersion, scheduleFor, type EnrolmentRow, type InstanceRow, type PathVersionRow, type PinnedStep } from "./learning";
+import {
+  followUp,
+  isLessonActivity,
+  lessonForActivity,
+  parseVersion,
+  pathVersion,
+  scheduleFor,
+  type EnrolmentRow,
+  type InstanceRow,
+  type PathVersionRow,
+  type PinnedStep,
+} from "./learning";
 
 /* Authoring: drafts, review, publication of immutable versions, pause, resume and withdrawal. */
 
@@ -19,9 +30,8 @@ export function listPaths(db: Db) {
 }
 
 export function editableVersion(db: Db, pathId: string) {
-  const row = db
-    .prepare("SELECT * FROM path_versions WHERE path_id = ? AND status IN ('draft','in_review') ORDER BY version DESC LIMIT 1")
-    .get(pathId) as PathVersionRow | undefined;
+  const row = db.prepare("SELECT * FROM path_versions WHERE path_id = ? AND status IN ('draft','in_review') ORDER BY version DESC LIMIT 1").get(pathId) as
+    PathVersionRow | undefined;
   return row ? parseVersion(row) : undefined;
 }
 
@@ -66,24 +76,34 @@ export function saveDraft(db: Db, actor: User, pathId: string, input: { config: 
 }
 
 const latestApproved = (db: Db, id: string) =>
-  isLessonActivity(id) ? 0 : (db.prepare("SELECT version FROM follow_ups WHERE id = ? AND status = 'approved' ORDER BY version DESC LIMIT 1").get(id) as { version: number } | undefined)?.version;
+  isLessonActivity(id)
+    ? 0
+    : (
+        db.prepare("SELECT version FROM follow_ups WHERE id = ? AND status = 'approved' ORDER BY version DESC LIMIT 1").get(id) as
+          { version: number } | undefined
+      )?.version;
 
 /** Publication checks: references, completion rules, accessible media, audience and schedule. */
 export function validatePath(db: Db, config: PathConfig, steps: PathStep[]) {
-  const issues: string[] = [...validateSchedule({ ...config.schedule, timezone: config.timezoneFallback }, steps.map((s) => s.gap))];
+  const issues: string[] = [
+    ...validateSchedule(
+      { ...config.schedule, timezone: config.timezoneFallback },
+      steps.map((s) => s.gap),
+    ),
+  ];
   if (!config.name.trim()) issues.push("Give the path a name");
   if (!config.owner.trim()) issues.push("Name a content owner");
   if (!config.audience.length) issues.push("Choose an approved audience");
   if (config.trigger.type === "lesson_completion") {
     const t = config.trigger;
-    if (!lessons.some((l) => l.slug === t.lessonSlug && l.version === t.lessonVersion)) issues.push("The trigger lesson version doesn’t exist");
+    if (!lessons.some((l) => l.slug === t.lessonSlug && l.version === t.lessonVersion)) issues.push("The trigger topic version doesn’t exist");
   }
   steps.forEach((s, i) => {
     const n = `Activity ${i + 1}`;
     const check = (id: string, label: string) => {
       if (isLessonActivity(id)) {
         const l = lessonForActivity(db, id);
-        if (!l) issues.push(`${n}: ${label} lesson doesn’t exist`);
+        if (!l) issues.push(`${n}: ${label} topic doesn’t exist`);
         else if ("generated" in l && l.generated?.status !== "approved") issues.push(`${n}: “${l.title}” is still a draft`);
         return;
       }
@@ -121,7 +141,12 @@ export function submitForReview(db: Db, actor: User, pathId: string, now: Date) 
   if (!draft) throw new HttpError(409, "There’s no draft to submit.");
   const issues = validatePath(db, draft.config, draft.steps);
   if (issues.length) throw new HttpError(422, issues.join("\n"));
-  db.prepare("UPDATE path_versions SET status = 'in_review', submitted_by = ?, updated_at = ? WHERE path_id = ? AND version = ?").run(actor.id, now.toISOString(), pathId, draft.version);
+  db.prepare("UPDATE path_versions SET status = 'in_review', submitted_by = ?, updated_at = ? WHERE path_id = ? AND version = ?").run(
+    actor.id,
+    now.toISOString(),
+    pathId,
+    draft.version,
+  );
   audit(db, { actor: actor.id, event: "path.submitted", entity: `path:${pathId}@${draft.version}`, at: now });
 }
 
@@ -142,14 +167,9 @@ export function publish(db: Db, actor: User, pathId: string, now: Date) {
     }));
     const previous = db.prepare("SELECT version FROM path_versions WHERE path_id = ? AND status = 'published'").get(pathId) as { version: number } | undefined;
     db.prepare("UPDATE path_versions SET status = 'superseded' WHERE path_id = ? AND status = 'published'").run(pathId);
-    db.prepare("UPDATE path_versions SET status = 'published', steps = ?, published_at = ?, published_by = ?, updated_at = ? WHERE path_id = ? AND version = ?").run(
-      JSON.stringify(pinned),
-      now.toISOString(),
-      actor.id,
-      now.toISOString(),
-      pathId,
-      draft.version,
-    );
+    db.prepare(
+      "UPDATE path_versions SET status = 'published', steps = ?, published_at = ?, published_by = ?, updated_at = ? WHERE path_id = ? AND version = ?",
+    ).run(JSON.stringify(pinned), now.toISOString(), actor.id, now.toISOString(), pathId, draft.version);
     audit(db, {
       actor: actor.id,
       event: "path.published",
@@ -164,9 +184,9 @@ export function publish(db: Db, actor: User, pathId: string, now: Date) {
 export function createFromLesson(db: Db, actor: User, lessonSlug: string, now: Date) {
   requireAuthor(actor);
   const lesson = lessons.find((l) => l.slug === lessonSlug);
-  if (!lesson) throw new HttpError(404, "Lesson not found.");
+  if (!lesson) throw new HttpError(404, "Topic not found.");
   const pathId = `path-${lesson.slug}-${now.getTime().toString(36)}`;
-  const sources = [{ title: `${lesson.title}, lesson version ${lesson.version}`, url: `/learning/${lesson.slug}` }];
+  const sources = [{ title: `${lesson.title}, topic version ${lesson.version}`, url: `/learning/${lesson.slug}` }];
   const stages = [
     { stage: "recall", title: "A quick recall", hint: "Ask the learner to recall what should happen first." },
     { stage: "scenario", title: "A new scenario", hint: "Change the situation while keeping the same objective." },
@@ -240,9 +260,21 @@ export function saveFollowUp(db: Db, actor: User, content: FollowUpContent, appr
     const status = approve ? "approved" : "draft";
     if (latest.status === "approved") {
       const version = latest.version + 1;
-      db.prepare("INSERT INTO follow_ups VALUES (?, ?, ?, ?, ?, ?)").run(content.id, version, status, JSON.stringify({ ...content, version, status }), now.toISOString(), actor.id);
+      db.prepare("INSERT INTO follow_ups VALUES (?, ?, ?, ?, ?, ?)").run(
+        content.id,
+        version,
+        status,
+        JSON.stringify({ ...content, version, status }),
+        now.toISOString(),
+        actor.id,
+      );
     } else {
-      db.prepare("UPDATE follow_ups SET content = ?, status = ? WHERE id = ? AND version = ?").run(JSON.stringify({ ...content, version: latest.version, status }), status, content.id, latest.version);
+      db.prepare("UPDATE follow_ups SET content = ?, status = ? WHERE id = ? AND version = ?").run(
+        JSON.stringify({ ...content, version: latest.version, status }),
+        status,
+        content.id,
+        latest.version,
+      );
     }
     audit(db, { actor: actor.id, event: approve ? "follow_up.approved" : "follow_up.saved", entity: `follow_up:${content.id}`, at: now });
     return followUp(db, content.id)!;
@@ -252,10 +284,13 @@ export function saveFollowUp(db: Db, actor: User, content: FollowUpContent, appr
 export function previewSchedule(input: { config: PathConfig; steps: PathStep[]; timezone: string; start: PlainDate; time: string }) {
   const cfg = scheduleFor(input.config, input.timezone);
   const anchor = zonedToUtc(input.start, input.time, input.timezone);
-  const anchorLabel = input.config.trigger.type === "lesson_completion" ? "the base lesson was completed" : "the path was assigned";
+  const anchorLabel = input.config.trigger.type === "lesson_completion" ? "the base topic was completed" : "the path was assigned";
   return {
     anchor: anchor.toISOString(),
-    steps: projectSchedule({ cfg, anchor, anchorLabel, gaps: input.steps.map((s) => s.gap), estimate: true }).map((s) => ({ ...s, at: s.at?.toISOString() ?? null })),
+    steps: projectSchedule({ cfg, anchor, anchorLabel, gaps: input.steps.map((s) => s.gap), estimate: true }).map((s) => ({
+      ...s,
+      at: s.at?.toISOString() ?? null,
+    })),
   };
 }
 
@@ -270,7 +305,11 @@ export function pausePath(db: Db, actor: User, pathId: string, now: Date) {
   tx(db, () => {
     const pv = publishedVersion(db, pathId);
     db.prepare("UPDATE path_versions SET paused = 1 WHERE path_id = ? AND version = ?").run(pathId, pv.version);
-    db.prepare("UPDATE enrolments SET state = 'paused', paused_at = ? WHERE path_id = ? AND path_version = ? AND state = 'active'").run(now.toISOString(), pathId, pv.version);
+    db.prepare("UPDATE enrolments SET state = 'paused', paused_at = ? WHERE path_id = ? AND path_version = ? AND state = 'active'").run(
+      now.toISOString(),
+      pathId,
+      pv.version,
+    );
     audit(db, { actor: actor.id, event: "path.paused", entity: `path:${pathId}@${pv.version}`, at: now });
   });
 }
@@ -287,7 +326,9 @@ export function resumePreview(db: Db, pathId: string, now: Date) {
   const overdue = rows.filter((r) => r.planned_release && r.planned_release <= now.toISOString()).length;
   const future = rows.filter((r) => r.planned_release && r.planned_release > now.toISOString()).length;
   const waiting = rows.filter((r) => !r.planned_release).length;
-  const enrolments = (db.prepare("SELECT COUNT(*) AS n FROM enrolments WHERE path_id = ? AND path_version = ? AND state = 'paused'").get(pathId, pv.version) as { n: number }).n;
+  const enrolments = (
+    db.prepare("SELECT COUNT(*) AS n FROM enrolments WHERE path_id = ? AND path_version = ? AND state = 'paused'").get(pathId, pv.version) as { n: number }
+  ).n;
   return {
     enrolments,
     overdue,
@@ -319,18 +360,30 @@ export function rebaseline(db: Db, actor: User, pathId: string, reason: string, 
   if (!reason.trim()) throw new HttpError(400, "Give a reason for the rebaseline.");
   tx(db, () => {
     const pv = publishedVersion(db, pathId);
-    const enrolments = db.prepare("SELECT * FROM enrolments WHERE path_id = ? AND path_version = ? AND state IN ('active','paused')").all(pathId, pv.version) as EnrolmentRow[];
+    const enrolments = db
+      .prepare("SELECT * FROM enrolments WHERE path_id = ? AND path_version = ? AND state IN ('active','paused')")
+      .all(pathId, pv.version) as EnrolmentRow[];
     for (const e of enrolments) {
       const cfg = scheduleFor(pv.config, e.timezone);
       const pending = db
-        .prepare("SELECT * FROM step_instances WHERE enrolment_id = ? AND released_at IS NULL AND cancelled_at IS NULL AND planned_release IS NOT NULL ORDER BY step_index")
+        .prepare(
+          "SELECT * FROM step_instances WHERE enrolment_id = ? AND released_at IS NULL AND cancelled_at IS NULL AND planned_release IS NOT NULL ORDER BY step_index",
+        )
         .all(e.id) as InstanceRow[];
       let prev = now;
       for (const si of pending) {
         const at = pv.config.schedule.mode === "scheduled" || si === pending[0] ? releaseAfter(prev, pv.steps[si.step_index].gap, cfg).at : null;
         if (!at) break;
         db.prepare("UPDATE step_instances SET planned_release = ? WHERE id = ?").run(at.toISOString(), si.id);
-        audit(db, { actor: actor.id, event: "step.rebaselined", entity: `step_instance:${si.id}`, previous: si.planned_release, next: at.toISOString(), reason, at: now });
+        audit(db, {
+          actor: actor.id,
+          event: "step.rebaselined",
+          entity: `step_instance:${si.id}`,
+          previous: si.planned_release,
+          next: at.toISOString(),
+          reason,
+          at: now,
+        });
         prev = at;
       }
     }
@@ -344,7 +397,12 @@ export function withdraw(db: Db, actor: User, pathId: string, version: number, r
   tx(db, () => {
     const pv = pathVersion(db, pathId, version);
     if (!pv || !["published", "superseded"].includes(pv.status)) throw new HttpError(409, "Only a published or superseded version can be withdrawn.");
-    db.prepare("UPDATE path_versions SET status = 'withdrawn', withdrawn_reason = ?, updated_at = ? WHERE path_id = ? AND version = ?").run(reason, now.toISOString(), pathId, version);
+    db.prepare("UPDATE path_versions SET status = 'withdrawn', withdrawn_reason = ?, updated_at = ? WHERE path_id = ? AND version = ?").run(
+      reason,
+      now.toISOString(),
+      pathId,
+      version,
+    );
     db.prepare(
       `UPDATE step_instances SET cancelled_at = ? WHERE completed_at IS NULL AND cancelled_at IS NULL
        AND enrolment_id IN (SELECT id FROM enrolments WHERE path_id = ? AND path_version = ?)`,

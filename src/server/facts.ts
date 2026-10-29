@@ -23,7 +23,16 @@ type Row = {
   updated_at: string;
   updated_by: string;
 };
-export type FactInput = { key: string; label: string; value: string; notes?: string; sourceTitle?: string; sourceUrl?: string; owner?: string; checkBy?: string | null };
+export type FactInput = {
+  key: string;
+  label: string;
+  value: string;
+  notes?: string;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  owner?: string;
+  checkBy?: string | null;
+};
 
 const view = (r: Row) => ({
   key: r.key,
@@ -96,7 +105,7 @@ export function saveFact(db: Db, actor: User, input: FactInput, now: Date) {
 export function deleteFact(db: Db, actor: User, key: string, now: Date) {
   requireAuthor(actor);
   const used = factUsage(db)[key] ?? [];
-  if (used.length) throw new HttpError(409, `It’s used in ${used.map((l) => `“${l.title}”`).join(", ")}. Take it out of those lessons first.`);
+  if (used.length) throw new HttpError(409, `It’s used in ${used.map((l) => `“${l.title}”`).join(", ")}. Take it out of those topics first.`);
   db.prepare("DELETE FROM facts WHERE key = ?").run(key);
   audit(db, { actor: actor.id, event: "fact.deleted", entity: `fact:${key}`, at: now });
 }

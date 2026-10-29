@@ -93,7 +93,7 @@ function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: string) {
 
 const findLesson = (slug: string) => {
   const l = catalogue().find((x) => x.slug === slug);
-  if (!l) throw new HttpError(404, "Lesson not found.");
+  if (!l) throw new HttpError(404, "Topic not found.");
   return l;
 };
 
@@ -246,7 +246,7 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
     "Email",
     "Organisation",
     "Audience",
-    "Lesson",
+    "Topic",
     "Status",
     "Version completed",
     "Completed at",

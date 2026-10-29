@@ -21,11 +21,13 @@ export function recordVersion(
   const has = db.prepare("SELECT 1 FROM lesson_versions WHERE slug = ? LIMIT 1").get(slug);
   // The version learners had before history was kept.
   if (!has && opts.baseline && opts.baseline.version !== lesson.version)
-    db.prepare("INSERT OR IGNORE INTO lesson_versions (slug, version, content, notes, kind, published_by, published_at) VALUES (?, ?, ?, ?, 'minor', ?, ?)").run(
+    db.prepare(
+      "INSERT OR IGNORE INTO lesson_versions (slug, version, content, notes, kind, published_by, published_at) VALUES (?, ?, ?, ?, 'minor', ?, ?)",
+    ).run(
       slug,
       opts.baseline.version,
       JSON.stringify(opts.baseline),
-      "The lesson as it was before version history began.",
+      "The topic as it was before version history began.",
       "content files",
       opts.baselineAt ?? "",
     );

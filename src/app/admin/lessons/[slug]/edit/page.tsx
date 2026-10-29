@@ -7,7 +7,7 @@ import { LessonEditor } from "@/components/admin/LessonEditor";
 import { getDb } from "@/server/db";
 import { editorLesson } from "@/server/authoredLessons";
 
-export const metadata: Metadata = { title: "Edit lesson" };
+export const metadata: Metadata = { title: "Edit topic" };
 
 export function generateStaticParams() {
   return lessons.filter((l) => l.track !== "reinforcement").map((l) => ({ slug: l.slug }));

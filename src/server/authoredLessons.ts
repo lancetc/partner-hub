@@ -63,14 +63,14 @@ export function editorLesson(db: Db, slug: string) {
 */
 export function createPlaceholders(db: Db, actor: User, titles: string[], track: string | undefined, now: Date) {
   requireAuthor(actor);
-  if (!Array.isArray(titles) || !titles.length) throw new HttpError(400, "Which lessons?");
+  if (!Array.isArray(titles) || !titles.length) throw new HttpError(400, "Which topics?");
   if (titles.length > 100) throw new HttpError(400, "Add up to 100 at a time.");
   const t = (TRACKS as string[]).includes(track ?? "") ? (track as Lesson["track"]) : "core";
   return titles.map((raw) => {
     const title = String(raw ?? "")
       .trim()
       .slice(0, 160);
-    if (!title) throw new HttpError(400, "Each lesson needs a title.");
+    if (!title) throw new HttpError(400, "Each topic needs a title.");
     const { slug } = createLesson(db, actor, { ...blankLesson(), title, track: t, summary: "Coming soon." }, now);
     return { slug, title, summary: "Coming soon.", minutes: blankLesson().minutes, track: t, draft: true };
   });
@@ -88,16 +88,16 @@ export function lessonStatus(db: Db, slug: string) {
 }
 
 function validate(input: Lesson, slug: string): Lesson {
-  if (!input || typeof input !== "object" || !input.nodes || typeof input.nodes !== "object") throw new HttpError(400, "That doesn’t look like a lesson.");
+  if (!input || typeof input !== "object" || !input.nodes || typeof input.nodes !== "object") throw new HttpError(400, "That doesn’t look like a topic.");
   const title = String(input.title ?? "").trim();
-  if (!title) throw new HttpError(400, "Give the lesson a title.");
+  if (!title) throw new HttpError(400, "Give the topic a title.");
   const ids = Object.keys(input.nodes);
   if (!ids.length) throw new HttpError(400, "Add at least one card.");
-  if (!input.nodes[input.start]) throw new HttpError(400, "The lesson’s first card is missing.");
+  if (!input.nodes[input.start]) throw new HttpError(400, "The topic’s first card is missing.");
   for (const id of ids) if (input.nodes[id]?.id !== id) throw new HttpError(400, `Card “${id}” is damaged. Reload the editor and try again.`);
-  if (!TRACKS.includes(input.track)) throw new HttpError(400, "Choose who the lesson is for.");
+  if (!TRACKS.includes(input.track)) throw new HttpError(400, "Choose who the topic is for.");
   const lesson = { ...input, slug, title: title.slice(0, 160) };
-  if (JSON.stringify(lesson).length > MAX_BYTES) throw new HttpError(413, "This lesson is too large to save. Use uploaded images rather than pasted ones.");
+  if (JSON.stringify(lesson).length > MAX_BYTES) throw new HttpError(413, "This topic is too large to save. Use uploaded images rather than pasted ones.");
   return lesson;
 }
 
@@ -141,7 +141,7 @@ export function saveDraft(db: Db, actor: User, slug: string, input: Lesson, now:
   requireAuthor(actor);
   const existing = row(db, slug);
   const live = lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
-  if ((!existing && !live) || existing?.deleted_at) throw new HttpError(404, "Lesson not found.");
+  if ((!existing && !live) || existing?.deleted_at) throw new HttpError(404, "Topic not found.");
   if (base !== undefined && (existing?.updated_at ?? null) !== base) {
     const who = existing?.updated_by === actor.id ? "you, in another tab or window," : (userById(db, existing?.updated_by ?? "")?.name ?? "someone else");
     const when = existing
@@ -149,7 +149,7 @@ export function saveDraft(db: Db, actor: User, slug: string, input: Lesson, now:
       : "";
     throw new HttpError(
       409,
-      `This lesson was saved by ${who} at ${when}, after you opened it here. To avoid overwriting that, your changes here haven’t been saved.`,
+      `This topic was saved by ${who} at ${when}, after you opened it here. To avoid overwriting that, your changes here haven’t been saved.`,
     );
   }
   const lesson = validate(input, slug);
@@ -182,8 +182,8 @@ export function nextVersion(current: string | undefined, firstPublish: boolean) 
 export function publishLesson(db: Db, actor: User, slug: string, now: Date, opts: { notes?: string; kind?: "minor" | "important" } = {}) {
   requireAuthor(actor);
   const r = row(db, slug);
-  if (r?.deleted_at) throw new HttpError(404, "Lesson not found.");
-  if (!r) throw new HttpError(409, "Save the lesson before publishing it.");
+  if (r?.deleted_at) throw new HttpError(404, "Topic not found.");
+  if (!r) throw new HttpError(409, "Save the topic before publishing it.");
   const live = r.published ? (JSON.parse(r.published) as Lesson) : undefined;
   const draft = JSON.parse(r.draft) as Lesson;
   const lesson = { ...draft, version: nextVersion(live?.version, !live) };
@@ -241,12 +241,12 @@ export function deleteLesson(db: Db, actor: User, slug: string, now: Date) {
   requireAuthor(actor);
   const r = row(db, slug);
   const live = lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
-  if ((!r && !live) || r?.deleted_at) throw new HttpError(404, "Lesson not found.");
+  if ((!r && !live) || r?.deleted_at) throw new HttpError(404, "Topic not found.");
   const paths = pathsWith(db, slug);
   if (paths.length)
     throw new HttpError(
       409,
-      `This lesson is in ${paths.length === 1 ? "the learning path" : "the learning paths"} ${paths.map((p) => `“${p}”`).join(", ")}. Take it out of ${paths.length === 1 ? "that path" : "those paths"} first.`,
+      `This topic is in ${paths.length === 1 ? "the learning path" : "the learning paths"} ${paths.map((p) => `“${p}”`).join(", ")}. Take it out of ${paths.length === 1 ? "that path" : "those paths"} first.`,
     );
   const at = now.toISOString();
   if (r) db.prepare("UPDATE authored_lessons SET deleted_at = ?, updated_at = ?, updated_by = ? WHERE slug = ?").run(at, at, actor.id, slug);
@@ -266,7 +266,7 @@ export function deleteLesson(db: Db, actor: User, slug: string, now: Date) {
 export function restoreLesson(db: Db, actor: User, slug: string, now: Date) {
   requireAuthor(actor);
   const r = row(db, slug);
-  if (!r?.deleted_at) throw new HttpError(404, "That lesson isn’t deleted.");
+  if (!r?.deleted_at) throw new HttpError(404, "That topic isn’t deleted.");
   db.prepare("UPDATE authored_lessons SET deleted_at = NULL, updated_at = ?, updated_by = ? WHERE slug = ?").run(now.toISOString(), actor.id, slug);
   audit(db, { actor: actor.id, event: "lesson.restored", entity: `lesson:${slug}`, at: now });
   syncPublishedLessons(db);

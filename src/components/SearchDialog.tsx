@@ -19,13 +19,15 @@ const index: Result[] = [
     meta: categoryLabel(s.category),
     text: `${s.title} ${s.dek} ${s.body.map((b) => ("text" in b ? b.text : "items" in b ? b.items.join(" ") : "")).join(" ")}`,
   })),
-  ...lessons.filter((l) => l.track !== "reinforcement").map((l) => ({
-    id: `lesson:${l.slug}`,
-    href: `/learning/${l.slug}`,
-    title: l.title,
-    meta: `Lesson · ${l.minutes} min`,
-    text: `${l.title} ${l.summary} ${l.outcome}`,
-  })),
+  ...lessons
+    .filter((l) => l.track !== "reinforcement")
+    .map((l) => ({
+      id: `lesson:${l.slug}`,
+      href: `/learning/${l.slug}`,
+      title: l.title,
+      meta: `Topic · ${l.minutes} min`,
+      text: `${l.title} ${l.summary} ${l.outcome}`,
+    })),
   ...resources.map((r) => ({
     id: `resource:${r.id}`,
     href: `/resources#${r.id}`,
@@ -76,7 +78,7 @@ export function SearchButton() {
         <div className="flex items-center gap-2 border-b border-line p-3">
           <Icon name="search" className="ml-2 size-5 shrink-0 text-ink-muted" />
           <label htmlFor="hub-search" className="sr-only">
-            Search news, lessons and resources
+            Search news, topics and resources
           </label>
           <input
             id="hub-search"
@@ -84,7 +86,7 @@ export function SearchButton() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search news, lessons and resources"
+            placeholder="Search news, topics and resources"
             className="min-h-11 w-full bg-transparent px-2 text-lg outline-none placeholder:text-ink-muted"
           />
           <HeaderIconButton label="Close search" icon="close" onClick={close} />
@@ -103,7 +105,7 @@ export function SearchButton() {
               {savedItems.length ? (
                 <ResultList items={savedItems} onPick={close} />
               ) : (
-                <p className="px-3 py-3 text-ink-muted">Nothing saved yet. Use the bookmark on any story or lesson.</p>
+                <p className="px-3 py-3 text-ink-muted">Nothing saved yet. Use the bookmark on any story or topic.</p>
               )}
             </>
           )}

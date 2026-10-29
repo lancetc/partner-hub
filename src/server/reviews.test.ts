@@ -78,7 +78,7 @@ describe("review comments", () => {
 
   it("refuses cards that aren't in the lesson, empty or very long comments", () => {
     const { who } = linkAndJoin();
-    expect(() => postReviewComment(db, who, slug, { card: "no-such-card", text: "Hello there" }, now)).toThrow(/isn’t in the lesson/);
+    expect(() => postReviewComment(db, who, slug, { card: "no-such-card", text: "Hello there" }, now)).toThrow(/isn’t in the topic/);
     expect(() => postReviewComment(db, who, slug, { card: "kit", text: " " }, now)).toThrow(/Write/);
     expect(() => postReviewComment(db, who, slug, { card: "kit", text: "x".repeat(2001) }, now)).toThrow(/2000/);
   });

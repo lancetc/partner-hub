@@ -101,7 +101,7 @@ export function CompletionsOverview() {
     <AdminShell title="Completions">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          Who has finished each lesson, who started and stopped, and who hasn’t opened it yet. “Needs refresher” means they finished a version from before an
+          Who has finished each topic, who started and stopped, and who hasn’t opened it yet. “Needs refresher” means they finished a version from before an
           important change.
         </p>
         <Export />
@@ -114,7 +114,7 @@ export function CompletionsOverview() {
       <div role="tablist" aria-label="View" className="mt-6 inline-flex rounded-full border border-line-strong p-1">
         {(
           [
-            ["lessons", "By lesson"],
+            ["lessons", "By topic"],
             ["people", "By person"],
           ] as const
         ).map(([v, label]) => (
@@ -167,7 +167,7 @@ export function CompletionsOverview() {
               <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
                 <tr>
                   <th className="px-4 py-3">Person</th>
-                  <th className="px-4 py-3">Lessons completed</th>
+                  <th className="px-4 py-3">Topics completed</th>
                   <th className="px-4 py-3">Attention</th>
                   <th className="px-4 py-3">Last active</th>
                 </tr>
@@ -230,7 +230,7 @@ export function LessonCompletions({ slug }: { slug: string }) {
   const count = (f: (typeof FILTERS)[number][0]) =>
     (data?.people ?? []).filter((r) => (f === "all" ? true : f === "refresher" ? r.needsRefresher : r.state === f)).length;
   return (
-    <AdminShell title={data?.lesson.title ?? "Lesson completions"} back={{ href: "/admin/completions", label: "Completions" }}>
+    <AdminShell title={data?.lesson.title ?? "Topic completions"} back={{ href: "/admin/completions", label: "Completions" }}>
       {error && <ErrorNote text={error} />}
       {!data ? (
         <p className="text-ink-muted">Loading…</p>
@@ -358,12 +358,12 @@ export function PersonCompletions({ id }: { id: string }) {
             {data.person.org} · {audienceLabel(data.person.audience)} · {data.person.email}
           </p>
           <section>
-            <h2 className="font-serif text-xl font-semibold">Lessons</h2>
+            <h2 className="font-serif text-xl font-semibold">Topics</h2>
             <div className="mt-3 overflow-x-auto rounded-3xl border border-line bg-surface">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
                   <tr>
-                    <th className="px-4 py-3">Lesson</th>
+                    <th className="px-4 py-3">Topic</th>
                     <th className="px-4 py-3">Progress</th>
                     <th className="px-4 py-3">Quiz first try</th>
                   </tr>
@@ -400,7 +400,7 @@ export function PersonCompletions({ id }: { id: string }) {
                     </Link>
                     <Bar completed={p.completed} inProgress={0} total={p.total} />
                     <p className="flex flex-wrap items-center gap-2 text-sm">
-                      {p.completed} of {p.total} lessons
+                      {p.completed} of {p.total} topics
                       {p.done ? (
                         <Badge tone="good">Finished</Badge>
                       ) : (

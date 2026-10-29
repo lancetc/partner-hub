@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { LessonEditor } from "@/components/admin/LessonEditor";
 import { blankLesson } from "@/content/blankLesson";
 
-export const metadata: Metadata = { title: "New lesson" };
+export const metadata: Metadata = { title: "New topic" };
 
 export default function NewLessonPage() {
   return (

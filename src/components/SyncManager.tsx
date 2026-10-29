@@ -32,7 +32,7 @@ async function syncProgress(userId: string) {
     setHub((s) => ({ ...s, lessons: merged }));
     for (const slug of toPush) {
       const attempt = { ...merged[slug], savedAt: merged[slug].savedAt ?? new Date().toISOString() };
-      await send("/api/progress", { slug, attempt, savedAt: attempt.savedAt }, { method: "PUT", label: "Lesson progress", coalesce: `progress:${slug}` });
+      await send("/api/progress", { slug, attempt, savedAt: attempt.savedAt }, { method: "PUT", label: "Topic progress", coalesce: `progress:${slug}` });
     }
   } catch {
     // Offline: try again next time the app opens.

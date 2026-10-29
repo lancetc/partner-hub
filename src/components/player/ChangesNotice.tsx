@@ -5,7 +5,7 @@ export function ChangesNotice({ changes }: { changes: { version: string; notes: 
   return (
     <div role="status" className="rounded-2xl bg-gold/15 p-3 text-sm ring-1 ring-gold/60">
       <p className="flex items-center gap-2 font-semibold">
-        <Icon name="refresh" className="size-4" /> Updated since you last did this lesson
+        <Icon name="refresh" className="size-4" /> Updated since you last did this topic
       </p>
       <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-6">
         {changes.map((c) => (

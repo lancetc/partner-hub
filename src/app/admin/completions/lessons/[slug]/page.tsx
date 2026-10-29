@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { LessonCompletions } from "@/components/admin/Completions";
 
-export const metadata: Metadata = { title: "Lesson completions" };
+export const metadata: Metadata = { title: "Topic completions" };
 
 export default function AdminLessonCompletionsPage({ params }: PageProps<"/admin/completions/lessons/[slug]">) {
   return (

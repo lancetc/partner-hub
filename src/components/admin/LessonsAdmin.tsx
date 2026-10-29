@@ -56,10 +56,10 @@ export function LessonsAdmin() {
     if (
       action === "delete" &&
       !(await confirmAction(
-        "Learners won’t see it any more and it leaves this list. Their progress and completions are kept, and you can restore it from Deleted lessons.",
+        "Learners won’t see it any more and it leaves this list. Their progress and completions are kept, and you can restore it from Deleted topics.",
         {
           title: `Delete “${l.title}”?`,
-          confirmLabel: "Delete lesson",
+          confirmLabel: "Delete topic",
           danger: true,
         },
       ))
@@ -91,17 +91,17 @@ export function LessonsAdmin() {
   }
 
   return (
-    <AdminShell title="Lessons">
+    <AdminShell title="Topics">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-serif text-xl font-semibold">Master lessons</h2>
+        <h2 className="font-serif text-xl font-semibold">Master topics</h2>
         {me?.canAuthor && (
           <Link href="/admin/lessons/new" className={btn.primary}>
-            <Icon name="plus" className="size-4" /> New lesson
+            <Icon name="plus" className="size-4" /> New topic
           </Link>
         )}
       </div>
       <p className="max-w-3xl text-ink-muted">
-        Write one master lesson. Tick <strong>Spaced learning</strong> and Claude writes the follow ups from it: a quick Recall at week 2, an Apply scenario at
+        Write one master topic. Tick <strong>Spaced learning</strong> and Claude writes the follow ups from it: a quick Recall at week 2, an Apply scenario at
         month 2 and a Refresh at week 14, with an easier Refresh for anyone who struggled. Review them, then approve to send them to learners.
       </p>
       {data.data && !data.data.generator.connected && (
@@ -109,7 +109,7 @@ export function LessonsAdmin() {
           <Icon name="spark" className="mt-0.5 size-4 shrink-0" />
           <span>
             <strong>Claude isn’t connected.</strong> Add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the server to generate new
-            variations. Lessons that already have follow ups still work.
+            variations. Topics that already have follow ups still work.
           </span>
         </p>
       )}
@@ -124,7 +124,7 @@ export function LessonsAdmin() {
         </div>
       )}
       {!data.data ? (
-        <p className="mt-6 text-ink-muted">Loading lessons…</p>
+        <p className="mt-6 text-ink-muted">Loading topics…</p>
       ) : (
         <LessonGrid lessons={data.data.lessons}>
           {(l) => (
@@ -143,7 +143,7 @@ export function LessonsAdmin() {
       )}
       {data.data && (data.data.deleted ?? []).length > 0 && (
         <details className="mt-8 rounded-3xl border border-line bg-surface p-5">
-          <summary className="cursor-pointer font-serif text-lg font-semibold">Deleted lessons ({data.data.deleted!.length})</summary>
+          <summary className="cursor-pointer font-serif text-lg font-semibold">Deleted topics ({data.data.deleted!.length})</summary>
           <p className="mt-2 text-sm text-ink-muted">Hidden from learners and from learning paths. Restore one to put it back as it was.</p>
           <ul className="mt-3 divide-y divide-line">
             {data.data.deleted!.map((d) => (
@@ -234,7 +234,7 @@ function LessonGrid({ lessons, children }: { lessons: LessonRow[]; children: (l:
           Search
           <span className="relative">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
-            <input type="search" className={cx(input, "pl-9 font-normal")} placeholder="Lesson title" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input type="search" className={cx(input, "pl-9 font-normal")} placeholder="Topic title" value={q} onChange={(e) => setQ(e.target.value)} />
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm font-semibold">
@@ -259,14 +259,14 @@ function LessonGrid({ lessons, children }: { lessons: LessonRow[]; children: (l:
           </select>
         </label>
         <p className="ml-auto pb-2.5 text-sm text-ink-muted" role="status">
-          {shown.length === lessons.length ? `${lessons.length} lessons` : `Showing ${shown.length} of ${lessons.length}`}
+          {shown.length === lessons.length ? `${lessons.length} topics` : `Showing ${shown.length} of ${lessons.length}`}
         </p>
       </div>
       {shown.length ? (
         <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{shown.map(children)}</ul>
       ) : (
         <p className="mt-4 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">
-          No lessons match.{" "}
+          No topics match.{" "}
           <button
             type="button"
             className="font-semibold text-accent hover:underline"
@@ -338,7 +338,7 @@ function LessonCard({
           type="button"
           onClick={() => setOpen(true)}
           disabled={l.status === "unpublished"}
-          title={l.status === "unpublished" ? "Publish the lesson first" : "Spaced learning and follow ups"}
+          title={l.status === "unpublished" ? "Publish the topic first" : "Spaced learning and follow ups"}
           className="flex items-center gap-2 self-start rounded-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Badge tone={spaced.tone}>
@@ -350,7 +350,7 @@ function LessonCard({
         <div className="mt-auto flex flex-col gap-2 pt-2">
           {canEdit && (
             <Link href={`/admin/lessons/${l.slug}/edit`} className={cx(btn.primary, "w-full justify-center")}>
-              Edit lesson
+              Edit topic
             </Link>
           )}
           <div className="flex items-center justify-between gap-2">
@@ -456,7 +456,7 @@ function SpacedPanel({
           className="size-5 accent-[var(--action)]"
           checked={l.spaced}
           disabled={!canEdit || anyBusy || l.status === "unpublished"}
-          title={l.status === "unpublished" ? "Publish the lesson first" : undefined}
+          title={l.status === "unpublished" ? "Publish the topic first" : undefined}
           onChange={(e) => toggle(e.target.checked)}
         />
         <span className="font-semibold">Spaced learning</span>
@@ -496,13 +496,13 @@ function SpacedPanel({
       ) : generating ? (
         <p className="mt-4 flex items-center gap-3 rounded-2xl bg-tealtint p-4" role="status">
           <span className="size-5 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden />
-          Claude ({model}) is writing the Recall, Apply and Refresh variations from this lesson. This usually takes a minute or two.
+          Claude ({model}) is writing the Recall, Apply and Refresh variations from this topic. This usually takes a minute or two.
         </p>
       ) : !l.spaced ? (
         <p className="mt-3 text-sm text-ink-muted">
           {l.variations.length
             ? "Off. New completions won’t start follow ups; anyone already part way through carries on."
-            : "Off. This lesson stands on its own."}
+            : "Off. This topic stands on its own."}
         </p>
       ) : (
         <>
@@ -591,7 +591,7 @@ function Compose({
           <Icon name="spark" className="size-4 text-accent" /> Instructions for Claude <span className="font-normal text-ink-muted">(optional)</span>
         </span>
         <span className="text-sm text-ink-muted">
-          Steer the focus, tone or examples. Claude still writes only from this lesson’s cards, so instructions can’t add new facts or policy.
+          Steer the focus, tone or examples. Claude still writes only from this topic’s cards, so instructions can’t add new facts or policy.
         </span>
         <textarea
           rows={4}

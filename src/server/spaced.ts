@@ -103,7 +103,7 @@ export type SpacedActionName = "enable" | "disable" | "regenerate" | "approve" |
 export async function spacedAction(db: Db, user: User, slug: string, action: SpacedActionName, now: Date, instructions?: string) {
   requireAuthor(user);
   const master = lessons.find((l) => l.slug === slug && l.track !== "reinforcement");
-  if (!master) throw new HttpError(404, "Lesson not found.");
+  if (!master) throw new HttpError(404, "Topic not found.");
   const setting = lessonSetting(db, slug);
   const at = now.toISOString();
   const setSpaced = (on: boolean) =>

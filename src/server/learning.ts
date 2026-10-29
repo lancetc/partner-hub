@@ -119,8 +119,7 @@ export function resolveStep(step: PinnedStep, user: User) {
   return { id: step.followUpId, version: step.pinned?.default ?? (isLessonActivity(step.followUpId) ? 0 : 1) };
 }
 
-const anchorLabelFor = (config: PathConfig) =>
-  config.trigger.type === "lesson_completion" ? "the base lesson was completed" : "the path was assigned";
+const anchorLabelFor = (config: PathConfig) => (config.trigger.type === "lesson_completion" ? "the base topic was completed" : "the path was assigned");
 
 function dueFor(step: PinnedStep, release: Date | null, cfg: ScheduleConfig) {
   if (!step.required || !step.dueWeekdays || !release) return null;
@@ -136,7 +135,18 @@ export function enrol(db: Db, user: User, pathId: string, version: number, trigg
     .prepare(
       "INSERT OR IGNORE INTO enrolments (user_id, org_id, path_id, path_version, trigger_occurrence, anchor, timezone, state, paused_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .run(user.id, user.org_id, pathId, version, trigger, anchor.toISOString(), timezone, pv.paused ? "paused" : "active", pv.paused ? now.toISOString() : null, now.toISOString());
+    .run(
+      user.id,
+      user.org_id,
+      pathId,
+      version,
+      trigger,
+      anchor.toISOString(),
+      timezone,
+      pv.paused ? "paused" : "active",
+      pv.paused ? now.toISOString() : null,
+      now.toISOString(),
+    );
   const enrolment = db
     .prepare("SELECT * FROM enrolments WHERE user_id = ? AND path_id = ? AND path_version = ? AND trigger_occurrence = ?")
     .get(user.id, pathId, version, trigger) as EnrolmentRow;
@@ -224,7 +234,8 @@ export function learnerFollowUps(db: Db, user: User) {
     const pv = pathVersion(db, e.path_id, e.path_version)!;
     const instances = db.prepare("SELECT * FROM step_instances WHERE enrolment_id = ? ORDER BY step_index").all(e.id) as InstanceRow[];
     const explained = explainEnrolment(db, e, instances);
-    const base = pv.config.trigger.type === "lesson_completion" ? lessons.find((l) => l.slug === (pv.config.trigger as { lessonSlug: string }).lessonSlug) : undefined;
+    const base =
+      pv.config.trigger.type === "lesson_completion" ? lessons.find((l) => l.slug === (pv.config.trigger as { lessonSlug: string }).lessonSlug) : undefined;
     return instances.map((i) => {
       const content = activityInfo(db, i.follow_up_id, i.follow_up_version);
       return {
@@ -257,9 +268,8 @@ export function learnerFollowUps(db: Db, user: User) {
 
 /** Loads an instance only if it belongs to the signed-in learner; otherwise it does not exist for them. */
 export function ownedInstance(db: Db, user: User, id: number) {
-  const row = db
-    .prepare("SELECT si.*, e.user_id AS owner FROM step_instances si JOIN enrolments e ON e.id = si.enrolment_id WHERE si.id = ?")
-    .get(id) as (InstanceRow & { owner: string }) | undefined;
+  const row = db.prepare("SELECT si.*, e.user_id AS owner FROM step_instances si JOIN enrolments e ON e.id = si.enrolment_id WHERE si.id = ?").get(id) as
+    (InstanceRow & { owner: string }) | undefined;
   if (!row || row.owner !== user.id) throw new HttpError(404, "Follow up not found.");
   const enrolment = db.prepare("SELECT * FROM enrolments WHERE id = ?").get(row.enrolment_id) as EnrolmentRow;
   return { instance: row as InstanceRow, enrolment };
@@ -281,9 +291,8 @@ export function followUpView(db: Db, user: User, id: number) {
     full && !attempt
       ? { ...full, question: { ...full.question, options: full.question.options.map((o) => ({ id: o.id, label: o.label, correct: false, feedback: "" })) } }
       : full;
-  const next = db
-    .prepare("SELECT * FROM step_instances WHERE enrolment_id = ? AND step_index = ?")
-    .get(enrolment.id, instance.step_index + 1) as InstanceRow | undefined;
+  const next = db.prepare("SELECT * FROM step_instances WHERE enrolment_id = ? AND step_index = ?").get(enrolment.id, instance.step_index + 1) as
+    InstanceRow | undefined;
   const nextContent = next ? activityInfo(db, next.follow_up_id, next.follow_up_version) : undefined;
   const step = pv.steps[instance.step_index];
   return {
@@ -360,7 +369,12 @@ export function followUpAct(db: Db, user: User, id: number, body: FollowUpAction
           ).run(id, content.id, content.version, content.concept, option.id, option.correct ? 1 : 0, at, body.assisted ? 1 : 0);
         } else {
           if (!existing.feedback_shown_at) throw new HttpError(409, "A corrected response follows feedback.");
-          db.prepare("UPDATE attempts SET corrected_response = ?, corrected_correct = ?, corrected_at = ? WHERE id = ?").run(option.id, option.correct ? 1 : 0, at, existing.id);
+          db.prepare("UPDATE attempts SET corrected_response = ?, corrected_correct = ?, corrected_at = ? WHERE id = ?").run(
+            option.id,
+            option.correct ? 1 : 0,
+            at,
+            existing.id,
+          );
         }
         db.prepare("UPDATE attempts SET feedback_shown_at = COALESCE(feedback_shown_at, ?) WHERE step_instance_id = ?").run(at, id);
         db.prepare("UPDATE step_instances SET started_at = COALESCE(started_at, ?) WHERE id = ?").run(at, id);
@@ -371,14 +385,16 @@ export function followUpAct(db: Db, user: User, id: number, body: FollowUpAction
         break;
       case "complete_lesson": {
         // Prototype: the lesson player reports first-attempt results. Production scores on the server.
-        if (!isLessonActivity(instance.follow_up_id)) throw new HttpError(400, "This activity isn’t a lesson.");
+        if (!isLessonActivity(instance.follow_up_id)) throw new HttpError(400, "This activity isn’t a topic.");
         if (instance.completed_at) break;
         const results = Array.isArray(body.results) ? body.results.slice(0, 50) : [];
         const allCorrect = results.length > 0 && results.every((r) => r.correct);
         db.prepare(
           "INSERT OR IGNORE INTO attempts (step_instance_id, question_id, follow_up_version, concept, initial_response, initial_correct, initial_at, feedback_shown_at) VALUES (?, ?, 0, ?, ?, ?, ?, ?)",
         ).run(id, instance.follow_up_id, instance.follow_up_id.replace("lesson:", ""), JSON.stringify(results), allCorrect ? 1 : 0, at, at);
-        db.prepare("UPDATE step_instances SET started_at = COALESCE(started_at, ?), feedback_viewed_at = COALESCE(feedback_viewed_at, ?), completed_at = ? WHERE id = ?").run(at, at, at, id);
+        db.prepare(
+          "UPDATE step_instances SET started_at = COALESCE(started_at, ?), feedback_viewed_at = COALESCE(feedback_viewed_at, ?), completed_at = ? WHERE id = ?",
+        ).run(at, at, at, id);
         onStepCompleted(db, enrolment, instance, now);
         audit(db, { actor: user.id, event: "step.completed", entity: `step_instance:${id}`, next: { firstAttemptCorrect: allCorrect }, at: now });
         break;
@@ -406,9 +422,8 @@ export function followUpAct(db: Db, user: User, id: number, body: FollowUpAction
 /** After completion mode starts the next gap from the confirmed completion; finishes the enrolment at the end. */
 function onStepCompleted(db: Db, enrolment: EnrolmentRow, instance: InstanceRow, now: Date) {
   const pv = pathVersion(db, enrolment.path_id, enrolment.path_version)!;
-  const next = db
-    .prepare("SELECT * FROM step_instances WHERE enrolment_id = ? AND step_index = ?")
-    .get(enrolment.id, instance.step_index + 1) as InstanceRow | undefined;
+  const next = db.prepare("SELECT * FROM step_instances WHERE enrolment_id = ? AND step_index = ?").get(enrolment.id, instance.step_index + 1) as
+    InstanceRow | undefined;
   if (next && pv.config.schedule.mode === "after_completion" && !next.planned_release && !next.cancelled_at) {
     const cfg = scheduleFor(pv.config, enrolment.timezone);
     const release = releaseAfter(now, pv.steps[next.step_index].gap, cfg).at;
@@ -418,7 +433,9 @@ function onStepCompleted(db: Db, enrolment: EnrolmentRow, instance: InstanceRow,
       next.id,
     );
   }
-  const open = db.prepare("SELECT COUNT(*) AS n FROM step_instances WHERE enrolment_id = ? AND completed_at IS NULL AND cancelled_at IS NULL").get(enrolment.id) as {
+  const open = db
+    .prepare("SELECT COUNT(*) AS n FROM step_instances WHERE enrolment_id = ? AND completed_at IS NULL AND cancelled_at IS NULL")
+    .get(enrolment.id) as {
     n: number;
   };
   if (open.n === 0 && enrolment.state === "active") db.prepare("UPDATE enrolments SET state = 'completed' WHERE id = ?").run(enrolment.id);

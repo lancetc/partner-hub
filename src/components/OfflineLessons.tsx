@@ -21,14 +21,14 @@ export function OfflineLessons() {
   return (
     <section className="mt-5 rounded-3xl border border-line bg-surface p-5">
       <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
-        <Icon name="upload" className="size-5 rotate-180 text-accent" /> Offline lessons
+        <Icon name="upload" className="size-5 rotate-180 text-accent" /> Offline topics
       </h2>
       {!hydrated ? null : !supportsOffline() ? (
-        <p className="mt-2 text-ink-muted">This browser can’t save lessons for offline use. Try Chrome, Edge or Safari.</p>
+        <p className="mt-2 text-ink-muted">This browser can’t save topics for offline use. Try Chrome, Edge or Safari.</p>
       ) : (
         <>
           <p className="mt-1 text-ink-muted">
-            Lessons saved on this device open without a connection. Use <strong>Download for offline</strong> on a lesson or learning path. Anything you do
+            Topics saved on this device open without a connection. Use <strong>Download for offline</strong> on a topic or learning path. Anything you do
             offline is saved here and syncs when you’re back online.
           </p>
           {downloads.length ? (
@@ -54,12 +54,12 @@ export function OfflineLessons() {
               ))}
             </ul>
           ) : (
-            <p className="mt-3 rounded-2xl bg-muted p-3 text-sm">No lessons saved on this device yet.</p>
+            <p className="mt-3 rounded-2xl bg-muted p-3 text-sm">No topics saved on this device yet.</p>
           )}
           {space && (
             <p className="mt-3 text-xs text-ink-muted">
               The hub is using {formatBytes(space.used)} on this device.{" "}
-              {space.persisted ? "Your browser will keep it." : "On iPhone, add the hub to your Home Screen so saved lessons aren’t cleared."}
+              {space.persisted ? "Your browser will keep it." : "On iPhone, add the hub to your Home Screen so saved topics aren’t cleared."}
             </p>
           )}
         </>

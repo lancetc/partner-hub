@@ -7,7 +7,7 @@ import { recordLessonCompletion } from "@/server/learning";
 export async function POST(req: Request) {
   return handle(async ({ db, user, now }) => {
     const { slug, version } = await body<{ slug: string; version: string }>(req);
-    if (!lessons.some((l) => l.slug === slug && l.version === version)) throw new HttpError(404, "Unknown lesson version.");
+    if (!lessons.some((l) => l.slug === slug && l.version === version)) throw new HttpError(404, "Unknown topic version.");
     return recordLessonCompletion(db, user, { slug, version }, now);
   });
 }

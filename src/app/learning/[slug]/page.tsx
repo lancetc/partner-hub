@@ -26,7 +26,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps<"/learning/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   getDb();
-  return { title: lessonBySlug(slug)?.title ?? "Lesson" };
+  return { title: lessonBySlug(slug)?.title ?? "Topic" };
 }
 
 export default function LessonPage({ params, searchParams }: PageProps<"/learning/[slug]">) {

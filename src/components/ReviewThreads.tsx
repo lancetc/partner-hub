@@ -169,7 +169,7 @@ export function ThreadView({
             </span>
           )}
           {t.changed && <span className="rounded-full bg-gold/30 px-2 py-0.5 text-xs font-semibold">Card edited since this comment</span>}
-          {t.cardGone && <span className="rounded-full bg-orange/20 px-2 py-0.5 text-xs font-semibold">Card no longer in the lesson</span>}
+          {t.cardGone && <span className="rounded-full bg-orange/20 px-2 py-0.5 text-xs font-semibold">Card no longer in the topic</span>}
         </p>
       )}
       <Bubble c={t} onDelete={t.mine ? () => del(t) : undefined} />

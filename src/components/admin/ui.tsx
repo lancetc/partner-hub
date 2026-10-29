@@ -72,7 +72,7 @@ export const statusText: Record<string, string> = {
 };
 
 const tabs: { href: string; label: string; authorOnly?: boolean }[] = [
-  { href: "/admin/lessons", label: "Lessons" },
+  { href: "/admin/lessons", label: "Topics" },
   { href: "/admin/learning-paths", label: "Learning paths" },
   { href: "/admin/completions", label: "Completions" },
   { href: "/admin/content-review", label: "Content review", authorOnly: true },

@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   return handle(({ db, now }) => {
     const lesson = lessonBySlug(q.get("slug") ?? "");
     const lang = q.get("lang");
-    if (!lesson) throw new HttpError(404, "Lesson not found.");
+    if (!lesson) throw new HttpError(404, "Topic not found.");
     if (!isLanguage(lang) || lang === "en") throw new HttpError(400, "Which language?");
     const t = lessonIn(db, lesson, lang, now);
     return t.state === "ready" ? { state: "ready" } : t;

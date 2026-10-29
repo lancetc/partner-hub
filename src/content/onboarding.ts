@@ -120,7 +120,7 @@ export const onboardingTasks: OnboardingTask[] = [
     group: "Starter learning",
     kind: "learning",
     title: "A little extra time",
-    why: "A three minute lesson on extending visits.",
+    why: "A three minute topic on extending visits.",
     responsible: "You",
     requiredForReadiness: true,
     lessonSlug: "a-little-extra-time",
@@ -137,10 +137,4 @@ export const onboardingTasks: OnboardingTask[] = [
   },
 ];
 
-export const groupsInOrder: OnboardingTask["group"][] = [
-  "Profile",
-  "Organisation",
-  "Documents",
-  "Agreements",
-  "Starter learning",
-];
+export const groupsInOrder: OnboardingTask["group"][] = ["Profile", "Organisation", "Documents", "Agreements", "Starter learning"];

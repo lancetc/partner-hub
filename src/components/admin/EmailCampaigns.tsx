@@ -99,7 +99,7 @@ export function CampaignList() {
   return (
     <AdminShell title="Email campaigns">
       <p className="max-w-3xl text-ink-muted">
-        A monthly update and a quarterly newsletter to service partners and coordinators. Each is built from blocks, filled with the latest news, lessons and
+        A monthly update and a quarterly newsletter to service partners and coordinators. Each is built from blocks, filled with the latest news, topics and
         webinars, and includes an unsubscribe link.
       </p>
       {(error || err) && (
@@ -190,7 +190,7 @@ const BLOCKS: { type: Block["type"]; label: string; icon: IconName }[] = [
   { type: "heading", label: "Heading", icon: "doc" },
   { type: "text", label: "Text", icon: "list" },
   { type: "story", label: "News story", icon: "news" },
-  { type: "lesson", label: "Lesson", icon: "book" },
+  { type: "lesson", label: "Topic", icon: "book" },
   { type: "webinar", label: "Webinar", icon: "play" },
   { type: "button", label: "Button", icon: "arrow-right" },
   { type: "image", label: "Image", icon: "image" },
@@ -400,7 +400,7 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                       </select>
                     )}
                     {b.type === "lesson" && (
-                      <select className={input} value={b.slug} onChange={(e) => setBlock(i, { slug: e.target.value })} aria-label="Lesson">
+                      <select className={input} value={b.slug} onChange={(e) => setBlock(i, { slug: e.target.value })} aria-label="Topic">
                         {d.catalogue.lessons.map((l) => (
                           <option key={l.slug} value={l.slug}>
                             {l.title}

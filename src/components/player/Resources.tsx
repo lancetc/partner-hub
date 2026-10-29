@@ -63,7 +63,7 @@ export function Resources({ card }: { card: ResourcesCard }) {
             <a href={item.url} rel="noreferrer" className={tile}>
               {body}
               <Icon name="external" className="mt-1 size-4 shrink-0 text-ink-muted group-hover:text-accent" />
-              <span className="sr-only"> (leaves the lesson; Back returns to this card)</span>
+              <span className="sr-only"> (leaves the topic; Back returns to this card)</span>
             </a>
           </li>
         );

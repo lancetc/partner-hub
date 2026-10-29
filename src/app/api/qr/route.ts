@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
   const target: QrTarget | null = q.get("path") ? { kind: "path", id: q.get("path")! } : q.get("lesson") ? { kind: "lesson", id: q.get("lesson")! } : null;
   try {
-    if (!target) throw new HttpError(400, "Which path or lesson?");
+    if (!target) throw new HttpError(400, "Which path or topic?");
     const { url, title } = qrTarget(getDb(), target);
     const name = `qr-${
       title

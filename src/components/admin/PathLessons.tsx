@@ -58,7 +58,7 @@ export function LessonPicker({
   return (
     <section className="rounded-3xl border border-line bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-serif text-xl font-semibold">1. Add lessons</h2>
+        <h2 className="font-serif text-xl font-semibold">1. Add topics</h2>
         <span className="text-sm text-ink-muted">
           {picked.length} added · {catalogue.length} available
         </span>
@@ -116,7 +116,7 @@ export function LessonPicker({
         {toolbar}
       </div>
       <p className="mt-3 text-sm text-ink-muted" role="status">
-        {matches.length ? `Showing ${shown.length} of ${matches.length} ${matches.length === 1 ? "lesson" : "lessons"}` : "No lessons match."}
+        {matches.length ? `Showing ${shown.length} of ${matches.length} ${matches.length === 1 ? "lesson" : "lessons"}` : "No topics match."}
       </p>
       {shown.length > 0 && (
         <ul className="mt-2 flex flex-col divide-y divide-line rounded-2xl border border-line">
@@ -184,7 +184,7 @@ export function OrderedLessons({
     const slug = slugs[from];
     onReorder(from, to);
     setLanded(slug);
-    setAnnounce(`${info(slug)?.title ?? "Lesson"} moved to position ${to + 1} of ${slugs.length}.`);
+    setAnnounce(`${info(slug)?.title ?? "Topic"} moved to position ${to + 1} of ${slugs.length}.`);
   };
 
   // Where the dragged lesson would land: the number of other lessons whose middle is above the pointer.

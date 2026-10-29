@@ -27,7 +27,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
         <>
           {preview && (
             <p className="mt-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
-              <strong>Path preview.</strong> Every lesson opens, drafts included, so you can check the whole path. Nothing is recorded.
+              <strong>Path preview.</strong> Every topic opens, drafts included, so you can check the whole path. Nothing is recorded.
             </p>
           )}
           <Overview path={data} />
@@ -67,9 +67,9 @@ function Overview({ path: p }: { path: PathData }) {
       : []),
   ];
   const how: { icon: IconName; text: React.ReactNode }[] = [
-    { icon: "clock", text: "Go at your own pace: a lesson or two between visits is plenty." },
+    { icon: "clock", text: "Go at your own pace: a topic or two between visits is plenty." },
     { icon: "refresh", text: "Stop any time. Your place is saved after every card, so you can pick up where you left off." },
-    { icon: "volume", text: "Every lesson can be listened to, and the words follow along as it's read." },
+    { icon: "volume", text: "Every topic can be listened to, and the words follow along as it's read." },
     { icon: "check", text: "Download the path to keep working when you're offline. Progress syncs when you're back online." },
     {
       icon: "home",
@@ -77,12 +77,12 @@ function Overview({ path: p }: { path: PathData }) {
         ? "Sign in on any device and you'll find this path on your Learning page, right where you left it."
         : "Sign in on any device and come back to this page: your progress comes with you.",
     },
-    ...(p.inOrder ? [{ icon: "list" as const, text: "Lessons open one at a time, each after the one before it." }] : []),
+    ...(p.inOrder ? [{ icon: "list" as const, text: "Topics open one at a time, each after the one before it." }] : []),
     ...(soon
       ? [
           {
             icon: "lock" as const,
-            text: `${soon} ${soon === 1 ? "lesson is" : "lessons are"} still being written. They show as coming soon and don't count yet.`,
+            text: `${soon} ${soon === 1 ? "topic is" : "topics are"} still being written. They show as coming soon and don't count yet.`,
           },
         ]
       : []),

@@ -313,7 +313,7 @@ function AddTopic({
     <div className="relative mt-2">
       <input
         className={cx(input, "min-h-10 text-sm")}
-        placeholder={canCreate ? "Add a topic: find a lesson, or type a new one" : "Add a topic: find a lesson"}
+        placeholder={canCreate ? "Add a topic: find a topic, or type a new one" : "Add a topic: find a topic"}
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -357,11 +357,11 @@ function AddTopic({
                   }
                 }}
               >
-                <Icon name="pen" className="size-4 shrink-0" /> {busy ? "Creating…" : `Create draft lesson “${q.trim()}”`}
+                <Icon name="pen" className="size-4 shrink-0" /> {busy ? "Creating…" : `Create draft topic “${q.trim()}”`}
               </button>
             </li>
           )}
-          {!found.length && !canCreate && <li className="px-3 py-2 text-sm text-ink-muted">No lessons match.</li>}
+          {!found.length && !canCreate && <li className="px-3 py-2 text-sm text-ink-muted">No topics match.</li>}
         </ul>
       )}
       {error && <ErrorNote text={error} />}
@@ -443,8 +443,8 @@ export function OutlineImport({
               Import an outline
             </h2>
             <p className="text-sm text-ink-muted">
-              Paste chapters and topics. Topics that match a lesson are linked; the rest{" "}
-              {canCreate ? "become empty draft lessons" : "are left out (only learning authors can create lessons)"}.
+              Paste chapters and topics. Topics that match a topic are linked; the rest{" "}
+              {canCreate ? "become empty draft topics" : "are left out (only learning authors can create topics)"}.
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="grid size-10 shrink-0 place-items-center rounded-full hover:bg-muted">
@@ -471,7 +471,7 @@ export function OutlineImport({
           ) : (
             <div className="flex flex-col gap-4">
               <p className="text-sm">
-                {plan.length} chapters · {topicCount} topics · <strong>{topicCount - newCount} linked</strong> to existing lessons
+                {plan.length} chapters · {topicCount} topics · <strong>{topicCount - newCount} linked</strong> to existing topics
                 {canCreate ? (
                   <>
                     {" "}
@@ -499,7 +499,7 @@ export function OutlineImport({
                             <select
                               className={cx(input, "min-h-9 w-auto max-w-[18rem] text-xs")}
                               value={c.picks[ti]}
-                              aria-label={`Lesson for “${t}”`}
+                              aria-label={`Topic for “${t}”`}
                               onChange={(e) =>
                                 setPlan(plan.map((x, i) => (i === ci ? { ...x, picks: x.picks.map((p, j) => (j === ti ? e.target.value : p)) } : x)))
                               }
@@ -510,7 +510,7 @@ export function OutlineImport({
                                   {o.draft ? " (draft)" : ""}
                                 </option>
                               ))}
-                              {canCreate && <option value="new">New draft lesson</option>}
+                              {canCreate && <option value="new">New draft topic</option>}
                               {!canCreate && !options.length && <option value="new">Not available</option>}
                             </select>
                           </li>
@@ -554,7 +554,7 @@ export function OutlineImport({
             <button type="button" className={btn.primary} onClick={apply} disabled={busy}>
               {busy
                 ? "Creating drafts…"
-                : `${replacing ? "Replace the path’s lessons" : "Use this outline"}${newCount && canCreate ? ` and create ${newCount} drafts` : ""}`}
+                : `${replacing ? "Replace the path’s topics" : "Use this outline"}${newCount && canCreate ? ` and create ${newCount} drafts` : ""}`}
             </button>
           )}
         </footer>

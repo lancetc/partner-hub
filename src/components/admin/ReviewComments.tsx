@@ -286,7 +286,7 @@ export function CardComments({
         >
           <Icon name="arrow-left" className="size-3.5" /> Previous
         </button>
-        <span className="flex-1 text-center text-ink-muted">{openTotal ? `${openTotal} open in this lesson` : "Nothing open in this lesson"}</span>
+        <span className="flex-1 text-center text-ink-muted">{openTotal ? `${openTotal} open in this topic` : "Nothing open in this topic"}</span>
         <button
           type="button"
           disabled={!after}

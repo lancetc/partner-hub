@@ -7,7 +7,7 @@ import type { IconName } from "@/components/Icon";
 export const metadata: Metadata = { title: "Page not found" };
 
 const PLACES: { href: string; label: string; note: string; icon: IconName }[] = [
-  { href: "/learning", label: "Learning", note: "Lessons and learning paths", icon: "book" },
+  { href: "/learning", label: "Learning", note: "Topics and learning paths", icon: "book" },
   { href: "/news", label: "News", note: "What’s changing, and why", icon: "news" },
   { href: "/onboarding", label: "My onboarding", note: "Your next steps", icon: "checklist" },
   { href: "/resources", label: "Resources", note: "Guides, forms and contacts", icon: "folder" },
@@ -47,7 +47,7 @@ export default function NotFound() {
           ))}
         </ul>
         <p className="mt-8 text-sm text-ink-muted">
-          Followed a link from an email or a QR code? It may point to a lesson that’s been updated. Let your coordinator know so they can send a fresh one.
+          Followed a link from an email or a QR code? It may point to a topic that’s been updated. Let your coordinator know so they can send a fresh one.
         </p>
       </div>
       <div className="relative order-first mx-auto w-full max-w-[15rem] md:order-none md:max-w-none">

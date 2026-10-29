@@ -47,7 +47,17 @@ export function datedItems(db: Db, now: Date, source: Lesson[] = lessons.filter(
   for (const l of source) {
     if (l.reviewDate) {
       const days = daysUntil(l.reviewDate, now);
-      items.push({ key: `lesson:${l.slug}`, kind: "lesson", title: l.title, slug: l.slug, due: l.reviewDate, days, status: statusOf(days), owner: l.owner, note: "Review the whole lesson" });
+      items.push({
+        key: `lesson:${l.slug}`,
+        kind: "lesson",
+        title: l.title,
+        slug: l.slug,
+        due: l.reviewDate,
+        days,
+        status: statusOf(days),
+        owner: l.owner,
+        note: "Review the whole topic",
+      });
     }
     for (const card of Object.values(l.nodes)) {
       if (!card.check?.by) continue;
@@ -71,7 +81,18 @@ export function datedItems(db: Db, now: Date, source: Lesson[] = lessons.filter(
   for (const f of allFacts(db)) {
     if (!f.checkBy) continue;
     const days = daysUntil(f.checkBy, now);
-    items.push({ key: `fact:${f.key}`, kind: "fact", title: f.label, factKey: f.key, due: f.checkBy, days, status: statusOf(days), note: `Currently “${f.value}”`, owner: f.owner, source: f.source ?? undefined });
+    items.push({
+      key: `fact:${f.key}`,
+      kind: "fact",
+      title: f.label,
+      factKey: f.key,
+      due: f.checkBy,
+      days,
+      status: statusOf(days),
+      note: `Currently “${f.value}”`,
+      owner: f.owner,
+      source: f.source ?? undefined,
+    });
   }
   return items.sort((a, b) => a.days - b.days);
 }

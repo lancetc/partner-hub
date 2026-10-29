@@ -49,7 +49,7 @@ export function cardHash(card: Card) {
 
 function draftOf(db: Db, slug: string) {
   const d = editorLesson(db, slug);
-  if (!d) throw new HttpError(404, "This lesson isn’t available for review.");
+  if (!d) throw new HttpError(404, "This topic isn’t available for review.");
   return d.lesson;
 }
 
@@ -194,7 +194,7 @@ export function postReviewComment(db: Db, who: Reviewer, slug: string, input: { 
     cardId = p.card_id;
   }
   const card = lesson.nodes[cardId];
-  if (!card && !parent) throw new HttpError(404, "That card isn’t in the lesson any more.");
+  if (!card && !parent) throw new HttpError(404, "That card isn’t in the topic any more.");
   const since = new Date(now.getTime() - 3600_000).toISOString();
   const recent = (
     who.kind === "reviewer"

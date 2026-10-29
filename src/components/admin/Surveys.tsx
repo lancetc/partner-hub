@@ -74,7 +74,7 @@ export function SurveyList() {
     <AdminShell title="Surveys">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          Ask people what they thought when they finish a learning path, or a single lesson. Surveys appear straight after the completion screen, and anything
+          Ask people what they thought when they finish a learning path, or a single topic. Surveys appear straight after the completion screen, and anything
           skipped waits on their Learning page.
         </p>
         {me?.canAuthor && (
@@ -487,8 +487,8 @@ function WhereTab({ detail, reload }: { detail: Detail; reload: () => void }) {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      {group("path", "When someone finishes a learning path", "Asked once they’ve completed every lesson in the path. This is the module survey.")}
-      {group("lesson", "When someone finishes a single lesson", "Optional. Asked on that lesson’s completion screen.")}
+      {group("path", "When someone finishes a learning path", "Asked once they’ve completed every topic in the path. This is the module survey.")}
+      {group("lesson", "When someone finishes a single topic", "Optional. Asked on that topic’s completion screen.")}
       {moving.length > 0 && (
         <p className="rounded-2xl border-2 border-dashed border-gold p-3 text-sm">
           Each place asks one survey. Saving moves {moving.map((m) => `“${m.title}”`).join(", ")} to this survey.

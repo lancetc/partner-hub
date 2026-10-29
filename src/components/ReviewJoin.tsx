@@ -14,10 +14,10 @@ export function ReviewJoin({ token, title }: { token: string; title: string }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <main className="mx-auto max-w-md px-4 py-12">
-      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Lesson review</p>
+      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Topic review</p>
       <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight">{title}</h1>
       <p className="mt-3 text-ink-muted">
-        You’ve been asked to review this lesson before it goes to learners. Work through it, and leave comments on any card. The author sees each comment with
+        You’ve been asked to review this topic before it goes to learners. Work through it, and leave comments on any card. The author sees each comment with
         your name.
       </p>
       <form
@@ -42,7 +42,7 @@ export function ReviewJoin({ token, title }: { token: string; title: string }) {
         <label className="flex flex-col gap-1.5 font-semibold">
           Your email
           <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required maxLength={160} />
-          <span className="text-sm font-normal text-ink-muted">Only the lesson’s authors see it, in case they want to follow up with you.</span>
+          <span className="text-sm font-normal text-ink-muted">Only the topic’s authors see it, in case they want to follow up with you.</span>
         </label>
         {error && (
           <p role="alert" className="rounded-xl bg-orange/10 p-2.5 text-sm">

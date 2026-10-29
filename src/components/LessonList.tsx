@@ -51,9 +51,7 @@ export function LessonList({ lessons }: { lessons: Lesson[] }) {
                 <li key={l.slug} className="relative flex gap-4 rounded-3xl border-2 border-action/40 bg-tealtint p-4">
                   <StoryVisual {...l.visual} alt="" className="size-24 shrink-0 rounded-2xl" iconSize="size-6" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="font-mulish text-xs font-bold text-warm">
-                      Required{l.assignment?.due && ` · due ${formatDate(l.assignment.due)}`}
-                    </p>
+                    <p className="font-mulish text-xs font-bold text-warm">Required{l.assignment?.due && ` · due ${formatDate(l.assignment.due)}`}</p>
                     <h3 className="font-serif text-xl font-semibold leading-snug">
                       <Link href={`/learning/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
                         {l.title}
@@ -92,7 +90,10 @@ export function LessonList({ lessons }: { lessons: Lesson[] }) {
                       <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-3" />
                     </div>
                     <h3 className="font-serif text-xl font-semibold leading-snug">
-                      <Link href={`/learning/${l.slug}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+                      <Link
+                        href={`/learning/${l.slug}`}
+                        className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
+                      >
                         {l.title}
                       </Link>
                     </h3>
@@ -125,26 +126,40 @@ function SpacedStatus({ stages, steps, signoff, slug }: { stages: { stage: strin
     <div className="flex flex-col gap-2 rounded-2xl bg-muted px-3 py-2.5 text-sm">
       <p className="flex items-center gap-2 font-semibold">
         <Icon name="route" className="size-4 text-accent" /> Spaced learning
-        {steps.length > 0 && <span className="font-normal text-ink-muted">· {done} of {total} follow ups done</span>}
+        {steps.length > 0 && (
+          <span className="font-normal text-ink-muted">
+            · {done} of {total} follow ups done
+          </span>
+        )}
       </p>
       <ol className="flex gap-1.5" aria-label="Follow ups">
-        {(steps.length ? steps.map((f) => ({ stage: f.stage ?? f.title, status: f.status })) : stages.map((x) => ({ stage: x.stage, status: "planned" }))).map((x, i) => (
-          <li
-            key={i}
-            className={
-              "rounded-full px-2 py-0.5 font-mulish text-xs font-bold " +
-              (x.status === "completed" ? "bg-action text-on-action" : x.status === "available" || x.status === "in_progress" ? "bg-gold text-ink" : "border border-line-strong text-ink-muted")
-            }
-          >
-            {x.status === "completed" && "✓ "}
-            {x.stage}
-          </li>
-        ))}
+        {(steps.length ? steps.map((f) => ({ stage: f.stage ?? f.title, status: f.status })) : stages.map((x) => ({ stage: x.stage, status: "planned" }))).map(
+          (x, i) => (
+            <li
+              key={i}
+              className={
+                "rounded-full px-2 py-0.5 font-mulish text-xs font-bold " +
+                (x.status === "completed"
+                  ? "bg-action text-on-action"
+                  : x.status === "available" || x.status === "in_progress"
+                    ? "bg-gold text-ink"
+                    : "border border-line-strong text-ink-muted")
+              }
+            >
+              {x.status === "completed" && "✓ "}
+              {x.stage}
+            </li>
+          ),
+        )}
         {signoff && (
           <li
             className={cx(
               "rounded-full px-2 py-0.5 font-mulish text-xs font-bold",
-              signoff.status === "confirmed" ? "bg-action text-on-action" : signoff.status === "after_follow_ups" ? "border border-dashed border-line-strong text-ink-muted" : "bg-gold text-ink",
+              signoff.status === "confirmed"
+                ? "bg-action text-on-action"
+                : signoff.status === "after_follow_ups"
+                  ? "border border-dashed border-line-strong text-ink-muted"
+                  : "bg-gold text-ink",
             )}
           >
             {signoff.status === "confirmed" && "✓ "}Sign-off
@@ -163,12 +178,18 @@ function SpacedStatus({ stages, steps, signoff, slug }: { stages: { stage: strin
           <p>
             <span className="font-semibold">{signoff.by} suggested more support:</span> “{signoff.note}”
           </p>
-          <Link href={`/learning/${slug}`} className="relative z-10 inline-flex min-h-11 items-center gap-1 font-semibold text-accent underline-offset-4 hover:underline">
-            Go over the lesson again <Icon name="arrow-right" className="size-4" />
+          <Link
+            href={`/learning/${slug}`}
+            className="relative z-10 inline-flex min-h-11 items-center gap-1 font-semibold text-accent underline-offset-4 hover:underline"
+          >
+            Go over the topic again <Icon name="arrow-right" className="size-4" />
           </Link>
         </div>
       ) : ready ? (
-        <Link href={ready.href} className="relative z-10 inline-flex min-h-11 items-center gap-1 self-start font-semibold text-accent underline-offset-4 hover:underline">
+        <Link
+          href={ready.href}
+          className="relative z-10 inline-flex min-h-11 items-center gap-1 self-start font-semibold text-accent underline-offset-4 hover:underline"
+        >
           {ready.stage ?? "Follow up"} is ready <Icon name="arrow-right" className="size-4" />
         </Link>
       ) : next?.plannedRelease ? (
@@ -176,7 +197,7 @@ function SpacedStatus({ stages, steps, signoff, slug }: { stages: { stage: strin
           {next.stage ?? "Next follow up"} arrives {formatWhen(next.plannedRelease, next.timezone)}
         </p>
       ) : !steps.length ? (
-        <p className="text-ink-muted">Starts when you finish the lesson.</p>
+        <p className="text-ink-muted">Starts when you finish the topic.</p>
       ) : null}
     </div>
   );

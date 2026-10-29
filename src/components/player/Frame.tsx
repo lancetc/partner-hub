@@ -93,7 +93,7 @@ export function Frame({
 
         {progress && (
           <div className="px-4 pt-3">
-            <ol className="flex gap-1.5" aria-label="Lesson progress">
+            <ol className="flex gap-1.5" aria-label="Topic progress">
               {beats.map((b, i) => {
                 const state = progress.done || i < progress.beat ? "done" : i === progress.beat ? "current" : "todo";
                 return (

@@ -17,7 +17,7 @@ export function SavedList() {
   if (!items.length && !cards.length) {
     return (
       <p className="mt-8 rounded-3xl bg-muted p-6">
-        Nothing saved yet. Use the bookmark on any story, lesson or resource, or on a card inside a lesson, to find it here.{" "}
+        Nothing saved yet. Use the bookmark on any story, topic or resource, or on a card inside a topic, to find it here.{" "}
         <Link href="/" className="font-semibold text-accent underline underline-offset-4">
           Browse the news
         </Link>
@@ -55,7 +55,7 @@ function SavedCards({ cards }: { cards: CardBookmark[] }) {
       <h2 id="saved-cards" className="font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">
         Saved cards
       </h2>
-      <p className="mt-1 text-sm text-ink-muted">Cards you bookmarked inside a lesson. Opening one takes you straight to it, without changing your progress.</p>
+      <p className="mt-1 text-sm text-ink-muted">Cards you bookmarked inside a topic. Opening one takes you straight to it, without changing your progress.</p>
       <div className="mt-3 flex flex-col gap-4">
         {lessons.map((slug) => {
           const here = cards.filter((c) => c.lesson === slug);

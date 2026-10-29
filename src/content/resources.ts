@@ -15,10 +15,14 @@ export const resources: Resource[] = [
     id: "hub-guide",
     title: "Getting around the Partner Hub",
     kind: "Guide",
-    description: "Where to find news, lessons, onboarding and saved items.",
+    description: "Where to find news, topics, onboarding and saved items.",
     audience: ["partner", "coordinator"],
     updated: "2026-10-20",
-    points: ["News shows the latest stories and policy updates", "Learning shows assigned lessons and your progress", "My onboarding lists what is with you and what is with us"],
+    points: [
+      "News shows the latest stories and policy updates",
+      "Learning shows assigned topics and your progress",
+      "My onboarding lists what is with you and what is with us",
+    ],
   },
   {
     id: "change-request-guide",
@@ -54,6 +58,10 @@ export const resources: Resource[] = [
     description: "Who to contact about onboarding, payments or the hub itself.",
     audience: ["partner", "coordinator"],
     updated: "2026-10-20",
-    points: ["Onboarding questions: your partner onboarding contact (demo)", "Visit changes: your care coordinator", "Hub feedback: use the feedback link in any lesson"],
+    points: [
+      "Onboarding questions: your partner onboarding contact (demo)",
+      "Visit changes: your care coordinator",
+      "Hub feedback: use the feedback link in any topic",
+    ],
   },
 ];

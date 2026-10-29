@@ -29,7 +29,7 @@ type Review = { today: string; overdue: Item[]; due: Item[]; ok: Item[]; reports
 
 const editLink = (slug: string, cardId?: string) => `/admin/lessons/${slug}/edit${cardId ? `?card=${encodeURIComponent(cardId)}` : ""}`;
 const linkFor = (i: Item) => (i.kind === "fact" ? `/admin/facts#${i.factKey}` : editLink(i.slug!, i.cardId));
-const kindLabel = { lesson: "Lesson review", card: "Card", fact: "Fact" };
+const kindLabel = { lesson: "Topic review", card: "Card", fact: "Fact" };
 
 export function ContentReview() {
   const { data, error, reload } = useApi<Review>("/api/admin/content-review");
@@ -155,7 +155,7 @@ function ItemRow({ item: i }: { item: Item }) {
         </span>
       </span>
       <Link href={linkFor(i)} className={btn.secondary}>
-        {i.kind === "fact" ? "Open fact" : i.kind === "card" ? "Open card" : "Open lesson"}
+        {i.kind === "fact" ? "Open fact" : i.kind === "card" ? "Open card" : "Open topic"}
       </Link>
     </li>
   );

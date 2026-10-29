@@ -28,7 +28,15 @@ export const moduleFeedbackQuestions: SurveyQuestion[] = [
   { id: "better", type: "text", prompt: "What would make it better?", required: false },
 ];
 
-export const demoSurveys: { id: string; name: string; description: string; anonymous: boolean; required: boolean; questions: SurveyQuestion[]; links: ["path" | "lesson", string][] }[] = [
+export const demoSurveys: {
+  id: string;
+  name: string;
+  description: string;
+  anonymous: boolean;
+  required: boolean;
+  questions: SurveyQuestion[];
+  links: ["path" | "lesson", string][];
+}[] = [
   {
     id: "sv-module-feedback",
     name: "Module feedback",
@@ -43,12 +51,12 @@ export const demoSurveys: { id: string; name: string; description: string; anony
   },
   {
     id: "sv-lesson-check-in",
-    name: "Quick lesson check-in",
-    description: "Two questions after a single lesson.",
+    name: "Quick topic check-in",
+    description: "Two questions after a single topic.",
     anonymous: false,
     required: false,
     questions: [
-      { id: "clear", type: "rating", prompt: "How clear was this lesson?", required: true },
+      { id: "clear", type: "rating", prompt: "How clear was this topic?", required: true },
       { id: "missing", type: "text", prompt: "Anything we should add or explain better?", required: false },
     ],
     links: [["lesson", "legislative-framework"]],

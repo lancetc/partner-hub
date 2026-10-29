@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     requireReporter(user);
     const path = q.get("path");
     const lesson = q.get("lesson");
-    if (!path && !lesson) throw new HttpError(400, "Which path or lesson?");
+    if (!path && !lesson) throw new HttpError(400, "Which path or topic?");
     return { ...qrTarget(db, path ? { kind: "path", id: path } : { kind: "lesson", id: lesson! }), localOnly: localOnly() };
   });
 }

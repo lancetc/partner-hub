@@ -38,7 +38,7 @@ export function PathCelebration({ lessonSlug }: { lessonSlug: string }) {
         <span>
           <span className="block font-serif text-xl font-semibold">Learning path complete!</span>
           <span className="block">
-            You’ve finished every lesson in <strong>{path.name}</strong>.{" "}
+            You’ve finished every topic in <strong>{path.name}</strong>.{" "}
             <Link href={`/paths/${path.id}`} className="font-semibold text-accent underline-offset-4 hover:underline">
               See your path
             </Link>

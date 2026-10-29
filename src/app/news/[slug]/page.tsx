@@ -93,9 +93,7 @@ async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["par
                 <Icon name="info" className="size-5 text-accent" /> {policyStatusLabel[p.status]}
               </p>
               {p.correction && <p className="mt-2 text-danger">Correction: {p.correction}</p>}
-              <p className="mt-2 text-ink-muted">
-                Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.
-              </p>
+              <p className="mt-2 text-ink-muted">Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.</p>
             </div>
           )}
           {story.body.map((b, i) => (
@@ -107,7 +105,7 @@ async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["par
           {lesson && (
             <div className="rounded-3xl bg-tealtint p-5">
               <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                {lesson.track === "briefing" ? "Short briefing" : "Related lesson"}
+                {lesson.track === "briefing" ? "Short briefing" : "Related topic"}
               </p>
               <p className="mt-2 font-serif text-xl font-semibold leading-snug">{lesson.title}</p>
               <p className="mt-1 text-[0.95rem] text-ink-muted">{lesson.summary}</p>
@@ -115,7 +113,7 @@ async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["par
                 href={`/learning/${lesson.slug}`}
                 className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
               >
-                {lesson.track === "briefing" ? "See what changed" : "Start lesson"} · {lesson.minutes} min
+                {lesson.track === "briefing" ? "See what changed" : "Start topic"} · {lesson.minutes} min
               </Link>
             </div>
           )}

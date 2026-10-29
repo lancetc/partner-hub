@@ -102,10 +102,10 @@ export function ProfileSettings() {
             <li>Translations are automatic and may not be exact. The English version is the one that counts for policy, rates and procedures.</li>
             <li>When a language is chosen, page text is sent to Google to translate it. Nothing is sent while you read in English.</li>
             <li>
-              Lessons are translated the first time someone opens them in your language, then saved for everyone. The first visit may start in English for a
+              Topics are translated the first time someone opens them in your language, then saved for everyone. The first visit may start in English for a
               moment.
             </li>
-            <li>Lesson audio is still read in English.</li>
+            <li>Topic audio is still read in English.</li>
             <li>Your choice is saved to your account, so it follows you to other devices.</li>
           </ul>
         </div>

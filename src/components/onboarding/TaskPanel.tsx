@@ -36,17 +36,7 @@ function SaveError({ text }: { text: string }) {
   );
 }
 
-export function TaskPanel({
-  task,
-  state,
-  status,
-  blocked,
-}: {
-  task: OnboardingTask;
-  state?: TaskState;
-  status: DocStatus;
-  blocked?: { reason: string };
-}) {
+export function TaskPanel({ task, state, status, blocked }: { task: OnboardingTask; state?: TaskState; status: DocStatus; blocked?: { reason: string } }) {
   if (blocked) {
     return (
       <p className="flex gap-2 rounded-2xl bg-muted p-4">
@@ -65,9 +55,9 @@ export function TaskPanel({
       return (
         <div className="flex flex-wrap items-center gap-3">
           <Link href={`/learning/${task.lessonSlug}`} className={primaryBtn}>
-            {status === "verified" ? "Review lesson" : status === "draft" ? "Keep learning" : "Start lesson"}
+            {status === "verified" ? "Review topic" : status === "draft" ? "Keep learning" : "Start topic"}
           </Link>
-          <p className="text-sm text-ink-muted">Opens the lesson. Your onboarding updates when it’s complete.</p>
+          <p className="text-sm text-ink-muted">Opens the topic. Your onboarding updates when it’s complete.</p>
         </div>
       );
     case "document":
@@ -130,14 +120,20 @@ function AgreementForm({ task, status }: { task: OnboardingTask; status: DocStat
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "error">("idle");
   if (status === "received") {
-    return <p className="flex items-center gap-2"><Icon name="check" className="size-5 text-accent" /> You accepted this agreement.</p>;
+    return (
+      <p className="flex items-center gap-2">
+        <Icon name="check" className="size-5 text-accent" /> You accepted this agreement.
+      </p>
+    );
   }
   return (
     <div className="flex flex-col gap-3">
       <div className="max-h-48 overflow-y-auto rounded-2xl border border-line p-4 text-[0.95rem] text-ink-muted" tabIndex={0} aria-label="Agreement summary">
         <p className="font-semibold text-ink">Service partner agreement (demonstration summary)</p>
         <p className="mt-2">This placeholder stands in for the real agreement, which Trilogy’s legal and partnerships teams must provide.</p>
-        <p className="mt-2">It would cover how services are arranged and confirmed, how changes are agreed, invoicing, privacy and confidentiality, and how to raise concerns.</p>
+        <p className="mt-2">
+          It would cover how services are arranged and confirmed, how changes are agreed, invoicing, privacy and confidentiality, and how to raise concerns.
+        </p>
       </div>
       <label className="flex min-h-11 cursor-pointer items-center gap-3">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="size-5 accent-[var(--action)]" />
@@ -255,7 +251,16 @@ function DocumentForm({ task, state, status }: { task: OnboardingTask; state?: T
 
           <div className="flex flex-wrap gap-2">
             <input ref={pick} type="file" accept={task.accept} className="sr-only" tabIndex={-1} onChange={(e) => choose(e.target.files?.[0])} aria-hidden />
-            <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} onChange={(e) => choose(e.target.files?.[0])} aria-hidden />
+            <input
+              ref={camera}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              tabIndex={-1}
+              onChange={(e) => choose(e.target.files?.[0])}
+              aria-hidden
+            />
             <button type="button" className={secondaryBtn} onClick={() => pick.current?.click()}>
               <Icon name="upload" className="size-5" /> Choose a file
             </button>

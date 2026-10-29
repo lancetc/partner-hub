@@ -16,7 +16,7 @@ export function ConnectionBanner() {
           <span className="min-w-0 flex-1">
             {offline ? (
               <>
-                <strong>You’re offline.</strong> Downloaded lessons still work, and what you do is saved on this device
+                <strong>You’re offline.</strong> Downloaded topics still work, and what you do is saved on this device
                 {n ? `: ${n} ${n === 1 ? "save is" : "saves are"} waiting to sync.` : "."}
               </>
             ) : (

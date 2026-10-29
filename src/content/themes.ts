@@ -52,7 +52,7 @@ export const THEMES = {
   warm: { label: "Warm", description: "Cream cards with orange accents. Friendly, good for onboarding and stories.", surface: () => warm },
   rhythm: {
     label: "Brand rhythm",
-    description: "Mist content cards, teal question cards and a navy recap, so the lesson has a pace.",
+    description: "Mist content cards, teal question cards and a navy recap, so the topic has a pace.",
     surface: (card) => (card.type === "summary" ? rhythmRecap : QUESTION_TYPES.includes(card.type) ? teal : rhythmMist),
   },
   rhythmNavy: {
