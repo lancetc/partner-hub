@@ -20,7 +20,7 @@ export default function NewsHome() {
           <span className="rounded-full bg-muted px-3 py-1">Demonstration content</span>
         </p>
       </header>
-      <Suspense fallback={<div className="mt-6 min-h-40" aria-hidden />}>
+      <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <Learning />
       </Suspense>
       <div className="mt-6">
