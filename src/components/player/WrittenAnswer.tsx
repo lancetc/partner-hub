@@ -5,6 +5,7 @@ import type { Card } from "@/content/lessons";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
+import { SpokenAnswer } from "./VoiceInput";
 
 /*
   Written answer card: the learner answers in their own words and Claude checks it against the
@@ -137,43 +138,46 @@ export function WrittenAnswer({
   const outOfTries = card.mustPass && state === "tried" && tries >= max;
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={`${card.id}-answer`} className="text-lg font-semibold">
+      <p id={`${card.id}-prompt`} className="text-lg font-semibold">
         {card.prompt}
-      </label>
-      <textarea
-        id={`${card.id}-answer`}
-        rows={5}
-        value={text}
-        maxLength={2000}
-        placeholder={card.placeholder || "Write your answer in your own words."}
-        onChange={(e) => setAnswer(`${card.id}.text`, e.target.value)}
-        className="rounded-2xl border border-line-strong bg-surface p-3 text-[1.05rem] text-ink"
-        aria-describedby={`${card.id}-hint`}
-      />
-      <p id={`${card.id}-hint`} className="flex flex-wrap justify-between gap-2 text-sm text-ink-muted">
-        <span>Leave out client names and details. Your answer isn’t saved.</span>
-        <span className={cx(count < min && "font-semibold")}>{count < min ? `${count} of at least ${min} words` : `${count} words`}</span>
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={check}
-          disabled={count < min || busy || state === "unavailable"}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
-        >
-          {busy ? (
-            <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <Icon name="spark" className="size-4" />
-          )}
-          {busy ? "Checking your answer…" : fb ? "Check again" : "Check my answer"}
-        </button>
-        {card.example && card.showExample && fb && (
-          <button type="button" aria-expanded={showExample} onClick={() => setShowExample((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
-            {showExample ? "Hide example answer" : "See an example answer"}
-          </button>
-        )}
-      </div>
+      {/* Speaking is the main way to answer; the words then show in the answer box to check and correct. */}
+      <SpokenAnswer
+        id={`${card.id}-answer`}
+        value={text}
+        onChange={(t) => setAnswer(`${card.id}.text`, t)}
+        disabled={busy}
+        placeholder={card.placeholder || undefined}
+        describedBy={`${card.id}-prompt ${card.id}-hint`}
+        after={
+          <>
+            <p id={`${card.id}-hint`} className="flex flex-wrap justify-between gap-2 text-sm text-ink-muted">
+              <span>Leave out client names and details. Your answer and voice aren’t saved.</span>
+              <span className={cx(count < min && "font-semibold")}>{count < min ? `${count} of at least ${min} words` : `${count} words`}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={check}
+                disabled={count < min || busy || state === "unavailable"}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
+              >
+                {busy ? (
+                  <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Icon name="spark" className="size-4" />
+                )}
+                {busy ? "Checking your answer…" : fb ? "Check again" : "Check my answer"}
+              </button>
+              {card.example && card.showExample && fb && (
+                <button type="button" aria-expanded={showExample} onClick={() => setShowExample((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
+                  {showExample ? "Hide example answer" : "See an example answer"}
+                </button>
+              )}
+            </div>
+          </>
+        }
+      />
       {error && (
         <p role="alert" className="rounded-2xl bg-orange/10 p-3 text-sm text-ink">
           {error}

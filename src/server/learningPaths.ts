@@ -337,8 +337,35 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
     );
     writeLessons(db, id, v);
     audit(db, { actor: actor.id, event: "learning_path.created", entity: `learning_path:${id}`, next: v, at: now });
+    attachDefaultSurvey(db, id, now);
   });
   return { id };
+}
+
+/** The survey every learning path is given, unless an author chooses another in Admin › Surveys. */
+export const DEFAULT_PATH_SURVEY = "sv-module-feedback";
+
+/**
+  Asks the default survey at the end of a path that has none, while that survey exists and isn't
+  archived. People who finish the path from now on are asked; anyone who finished before isn't.
+*/
+export function attachDefaultSurvey(db: Db, pathId: string, now: Date) {
+  if (db.prepare("SELECT 1 FROM survey_links WHERE target_type = 'path' AND target_id = ?").get(pathId)) return false;
+  if (!db.prepare("SELECT 1 FROM surveys WHERE id = ? AND archived = 0").get(DEFAULT_PATH_SURVEY)) return false;
+  db.prepare("INSERT INTO survey_links (survey_id, target_type, target_id, linked_at) VALUES (?, 'path', ?, ?)").run(
+    DEFAULT_PATH_SURVEY,
+    pathId,
+    now.toISOString(),
+  );
+  audit(db, {
+    actor: "system",
+    event: "survey.linked",
+    entity: `survey:${DEFAULT_PATH_SURVEY}`,
+    next: [{ type: "path", id: pathId }],
+    reason: "default for learning paths",
+    at: now,
+  });
+  return true;
 }
 
 export function updateLearningPath(db: Db, actor: User, id: string, input: PathInput, now: Date) {
@@ -404,6 +431,7 @@ export function restoreLearningPath(db: Db, actor: User, id: string, now: Date) 
   requireEditor(actor, row);
   db.prepare("UPDATE learning_paths SET archived = 0, updated_at = ? WHERE id = ?").run(now.toISOString(), id);
   audit(db, { actor: actor.id, event: "learning_path.restored", entity: `learning_path:${id}`, at: now });
+  attachDefaultSurvey(db, id, now);
 }
 
 export function assignLearningPath(db: Db, actor: User, id: string, userIds: string[], dueDate: string | null, now: Date) {
@@ -501,4 +529,48 @@ export function canSkipHolds(db: Db, userId: string, lessonSlug: string) {
       )
       .get(lessonSlug, userId),
   );
+}
+
+/* Certificates: one for each path a person has finished, kept even if the path is later deleted. */
+
+export type PathCertificate = {
+  id: string;
+  name: string;
+  completedAt: string;
+  topics: number;
+  minutes: number;
+  outcomes: string[];
+  /** The path has since been deleted: the certificate still stands. */
+  deleted: boolean;
+  reference: string;
+};
+
+/** The certificate for this path, or null if they haven't finished every topic in it. */
+export function certificateFor(db: Db, user: User, id: string): PathCertificate | null {
+  const p = db.prepare("SELECT * FROM learning_paths WHERE id = ?").get(id) as PathRow | undefined;
+  if (!p) return null;
+  const slugs = slugsFor(db, id);
+  if (!slugs.length) return null;
+  const done = completedSlugs(db, user.id);
+  // Earned means every topic finished. (A topic still being written can't be finished, so a path with one isn't.)
+  if (!slugs.every((s) => done.has(s)) || slugs.some((s) => lessonLookup(db)(s).draft)) return null;
+  const completedAt = slugs.reduce((latest, s) => (done.get(s)! > latest ? done.get(s)! : latest), "");
+  return {
+    id: p.id,
+    name: p.name,
+    completedAt,
+    topics: slugs.length,
+    minutes: slugs.reduce((n, s) => n + lessonLookup(db)(s).minutes, 0),
+    outcomes: overview(p).outcomes,
+    deleted: Boolean(p.archived),
+    reference: `${p.id.replace(/^lp-/, "").toUpperCase()}-${user.id.toUpperCase()}-${completedAt.slice(0, 10).replaceAll("-", "")}`,
+  };
+}
+
+/** Every certificate this person has earned, newest first. */
+export function myCertificates(db: Db, user: User) {
+  return (db.prepare("SELECT id FROM learning_paths").all() as { id: string }[])
+    .map((r) => certificateFor(db, user, r.id))
+    .filter((c): c is PathCertificate => Boolean(c))
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 }

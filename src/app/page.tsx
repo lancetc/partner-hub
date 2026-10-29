@@ -1,26 +1,52 @@
 import { stories } from "@/content/stories";
 import { NewsGrid } from "@/components/NewsGrid";
-import { ActionStrip } from "@/components/ActionStrip";
+import { HomeLearning } from "@/components/HomeLearning";
+import { lessons } from "@/content/lessons";
+import { topicSummary } from "@/lib/topicSummary";
+import { topicDates, topicSubjects } from "@/server/topicSubjects";
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { getDb } from "@/server/db";
 
 export default function NewsHome() {
-  const ordered = [...stories].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       <header className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-[2.75rem]">The latest at Trilogy</h1>
-          <p className="mt-1 max-w-2xl text-lg text-ink-muted">
-            News, practical learning and updates for our service partners and care coordinators.
-          </p>
+          <p className="mt-1 max-w-2xl text-lg text-ink-muted">News, practical learning and updates for our service partners and care coordinators.</p>
         </div>
         <p className="font-mulish text-sm font-semibold text-ink-muted">
           <span className="rounded-full bg-muted px-3 py-1">Demonstration content</span>
         </p>
       </header>
-      <ActionStrip />
+      <Suspense fallback={<div className="mt-6 min-h-40" aria-hidden />}>
+        <Learning />
+      </Suspense>
       <div className="mt-6">
-        <NewsGrid stories={ordered} />
+        <Suspense>
+          <Stories />
+        </Suspense>
       </div>
     </div>
+  );
+}
+
+/** Read per request: stories can be edited and published in admin at any time. */
+async function Stories() {
+  await connection();
+  getDb();
+  const ordered = [...stories].sort((a, b) => b.date.localeCompare(a.date));
+  return <NewsGrid stories={ordered} />;
+}
+
+/** Where the person is in their learning, read per request (topics are published at any time). */
+async function Learning() {
+  await connection();
+  const db = getDb();
+  const subjects = topicSubjects(db);
+  const dates = topicDates(db);
+  return (
+    <HomeLearning topics={lessons.filter((l) => l.track !== "reinforcement").map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null))} />
   );
 }

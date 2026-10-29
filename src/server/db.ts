@@ -5,6 +5,7 @@ import path from "node:path";
 import { seedFollowUps, seedPath, seedSequencePath, type PathStep } from "@/content/followups";
 import { demoSurveys } from "@/content/surveys";
 import { syncPublishedLessons } from "./lessonRegistry";
+import { syncStories } from "./storyRegistry";
 
 /*
   Local relational store for the prototype server (Node's built-in SQLite).
@@ -170,6 +171,15 @@ CREATE TABLE IF NOT EXISTS authored_lessons (
   slug TEXT PRIMARY KEY, draft TEXT NOT NULL, published TEXT,
   created_by TEXT NOT NULL, created_at TEXT NOT NULL,
   updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT
+);
+-- Each topic's subject, for browsing the Learning page (kept apart from content, so no publish is needed).
+CREATE TABLE IF NOT EXISTS topic_subjects (slug TEXT PRIMARY KEY, subject TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
+-- News stories edited in admin. A row replaces the story of the same slug in the content file (or adds a new one).
+-- status: draft (not shown) or published; deleted_at hides it.
+CREATE TABLE IF NOT EXISTS authored_stories (
+  slug TEXT PRIMARY KEY, data TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  published_at TEXT, deleted_at TEXT
 );
 -- Comments on individual lesson cards (when the author turns them on for that card).
 CREATE TABLE IF NOT EXISTS card_comments (
@@ -501,6 +511,8 @@ export function getDb(): Db {
   }
   // Lessons published from the editor replace (or join) the ones in the content files.
   syncPublishedLessons(globalForDb.__hubDb);
+  // …and so do news stories edited in admin.
+  syncStories(globalForDb.__hubDb);
   return globalForDb.__hubDb;
 }
 

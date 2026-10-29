@@ -12,6 +12,7 @@ import { api, useApi } from "@/lib/api";
 import { factsUsed, tokenFor, volatileIn } from "@/lib/facts";
 import { extractText } from "@/lib/lessonText";
 import { plainText } from "@/lib/richText";
+import { SUBJECTS } from "@/lib/subjects";
 import { cx, formatBytes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
@@ -1112,6 +1113,7 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
           <Field label="Tile summary" hint="Shown under the title on the Learning page." className="sm:col-span-2">
             <textarea rows={2} className={textarea} value={l.summary} onChange={(e) => update((d) => void (d.summary = e.target.value))} />
           </Field>
+          {!isNew && <SubjectField slug={l.slug} />}
           <fieldset className="sm:col-span-2">
             <legend className="text-sm font-semibold">Audience</legend>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -2320,7 +2322,7 @@ function InlineBody({
                 key={o.id}
                 className={cx(
                   "flex items-center gap-2 rounded-xl border px-2 py-1.5 text-sm",
-                  q.correct === o.id ? "border-action bg-tealtint" : "border-line-strong bg-surface",
+                  q.correct === o.id ? "border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line-strong bg-surface",
                 )}
               >
                 <button
@@ -2567,8 +2569,8 @@ function InlineBody({
         >
           + Point
         </button>
-        <div className="rounded-xl bg-tealtint p-2.5 text-sm text-ink">
-          <p className="text-[0.7rem] font-bold uppercase tracking-wider text-accent">Take it to work</p>
+        <div className="rounded-xl bg-[#DCECE5] p-2.5 text-sm text-[#102a43] [text-shadow:none]">
+          <p className="text-[0.7rem] font-bold uppercase tracking-wider text-[#0e7c7b]">Take it to work</p>
           <RichEditable
             inline
             value={c.action}
@@ -5950,6 +5952,8 @@ function PreviewDialog({ slug, cardId, dirty, onClose }: { slug: string; cardId:
         key={`${src}#${run}`}
         src={src}
         title="Topic preview"
+        // Answer cards can be spoken, so the preview may use the microphone.
+        allow="microphone"
         className="w-full max-w-[26rem] flex-1 rounded-[2rem] border-0 bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       />
@@ -6162,5 +6166,35 @@ function Review({
         {!isNew && <VersionHistory key={historyKey} slug={slug} />}
       </div>
     </div>
+  );
+}
+
+/** The topic's subject on the Learning page. Saved as soon as it's chosen; no publish needed. */
+function SubjectField({ slug }: { slug: string }) {
+  const { data } = useApi<{ subject: string | null }>(`/api/admin/lessons/${encodeURIComponent(slug)}/subject`);
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const [note, setNote] = useState<string | null>(null);
+  const value = chosen !== undefined ? chosen : (data?.subject ?? null);
+  async function choose(subject: string | null) {
+    setChosen(subject);
+    setNote(null);
+    try {
+      await api(`/api/admin/lessons/${encodeURIComponent(slug)}/subject`, { method: "PUT", body: { subject } });
+      setNote("Saved. The Learning page shows it straight away.");
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+  }
+  return (
+    <Field label="Subject" hint={note ?? "Where the topic sits when people browse the Learning page."} className="sm:col-span-2">
+      <select className={input} value={value ?? ""} disabled={!data} onChange={(e) => choose(e.target.value || null)}>
+        <option value="">No subject</option>
+        {SUBJECTS.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }

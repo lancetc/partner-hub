@@ -18,6 +18,7 @@ export function Certificate({
   minutes,
   outcomes,
   reference,
+  back,
 }: {
   pathId: string;
   pathName: string;
@@ -27,12 +28,15 @@ export function Certificate({
   minutes: number;
   outcomes: string[];
   reference: string;
+  /** Where "Back" goes: the path, or the profile (from Certificates, or when the path has been deleted). */
+  back?: { href: string; label: string };
 }) {
+  const to = back ?? { href: `/paths/${encodeURIComponent(pathId)}`, label: "Back to the path" };
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
       <div className="certificate-controls mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/paths/${encodeURIComponent(pathId)}`} className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline">
-          <Icon name="arrow-left" className="size-4" /> Back to the path
+        <Link href={to.href} className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline">
+          <Icon name="arrow-left" className="size-4" /> {to.label}
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-ink-muted">Choose “Save as PDF” in the print window to keep a copy.</p>

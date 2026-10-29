@@ -36,6 +36,15 @@ export type IconName =
   | "eye"
   | "flag"
   | "bulb"
+  | "mic"
+  | "circle-check"
+  | "building"
+  | "landmark"
+  | "clipboard"
+  | "layers"
+  | "briefcase"
+  | "mail"
+  | "pin"
   | "file"
   | "copy"
   | "trash"
@@ -242,6 +251,60 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M9 18h6M10 21h4" />
       <path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" />
+    </>
+  ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" />
+    </>
+  ),
+  "circle-check": (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 12.2l2.4 2.4 4.8-5" />
+    </>
+  ),
+  building: (
+    <>
+      <path d="M4 20.5h16M6 20.5V5.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v15M14 9.5h3a1 1 0 0 1 1 1v10" />
+      <path d="M9 8.5h2M9 12h2M9 15.5h2" />
+    </>
+  ),
+  landmark: (
+    <>
+      <path d="M3.5 9.5L12 4l8.5 5.5M5 9.5h14M3.5 20.5h17M6 17.5h12" />
+      <path d="M7 10v7.5M10.5 10v7.5M13.5 10v7.5M17 10v7.5" />
+    </>
+  ),
+  clipboard: (
+    <>
+      <rect x="5" y="4.5" width="14" height="16" rx="2" />
+      <path d="M9 4.5V3.5h6v1M9 10h6M9 13.5h6M9 17h3.5" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="M12 4l8.5 4.5L12 13 3.5 8.5z" />
+      <path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5" />
+    </>
+  ),
+  briefcase: (
+    <>
+      <rect x="3.5" y="7.5" width="17" height="12" rx="2" />
+      <path d="M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3.5 12.5h17" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+      <path d="M3.5 7l8.5 6 8.5-6" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z" />
+      <circle cx="12" cy="10" r="2.3" />
     </>
   ),
   alert: (

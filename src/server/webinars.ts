@@ -1,7 +1,7 @@
 import "server-only";
 import type { Db } from "./db";
 import { audit } from "./db";
-import { HttpError, requireAuthor, type User } from "./auth";
+import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 
 /*
   Recorded webinars. Authors add the recording (YouTube, Synthesia or an uploaded file), a summary,
@@ -206,4 +206,32 @@ export function deleteWebinar(db: Db, actor: User, id: string, now: Date) {
   db.prepare("DELETE FROM webinar_views WHERE webinar_id = ?").run(id);
   db.prepare("DELETE FROM webinars WHERE id = ?").run(id);
   audit(db, { actor: actor.id, event: "webinar.deleted", entity: `webinar:${id}`, at: now });
+}
+
+/* The Webinars page's own heading and introduction, editable in admin. */
+
+export const WEBINARS_PAGE_DEFAULT = {
+  heading: "Webinars",
+  intro: "Recordings of our sessions for partners and coordinators. Watch when it suits you.",
+};
+export type WebinarsPage = typeof WEBINARS_PAGE_DEFAULT;
+
+export function webinarsPage(db: Db): WebinarsPage {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'webinars_page'").get() as { value: string } | undefined;
+  return row ? { ...WEBINARS_PAGE_DEFAULT, ...(JSON.parse(row.value) as Partial<WebinarsPage>) } : WEBINARS_PAGE_DEFAULT;
+}
+
+export function setWebinarsPage(db: Db, actor: User, input: Partial<WebinarsPage>, now: Date) {
+  if (!canAuthor(actor)) throw new HttpError(403, "Only learning authors can edit the Webinars page.");
+  const heading = String(input?.heading ?? "")
+    .trim()
+    .slice(0, 80);
+  const intro = String(input?.intro ?? "")
+    .trim()
+    .slice(0, 400);
+  if (!heading) throw new HttpError(400, "Give the page a heading.");
+  const value = JSON.stringify({ heading, intro });
+  db.prepare("INSERT INTO settings (key, value) VALUES ('webinars_page', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(value);
+  audit(db, { actor: actor.id, event: "webinars.page_saved", entity: "webinars_page", next: { heading, intro }, at: now });
+  return webinarsPage(db);
 }

@@ -4,36 +4,37 @@ import { connection } from "next/server";
 import type { Metadata } from "next";
 import { getDb } from "@/server/db";
 import { currentUser, HttpError } from "@/server/auth";
-import { learnerPath } from "@/server/learningPaths";
+import { certificateFor, learnerPath } from "@/server/learningPaths";
 import { Certificate } from "@/components/Certificate";
 import { Icon } from "@/components/Icon";
 
 export const metadata: Metadata = { title: "Certificate" };
 
 /** A certificate for a finished learning path, to print or save as a PDF. */
-export default function CertificatePage({ params }: PageProps<"/paths/[id]/certificate">) {
+export default function CertificatePage({ params, searchParams }: PageProps<"/paths/[id]/certificate">) {
   return (
     <Suspense>
-      <Page params={params} />
+      <Page params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Page({ params }: Pick<PageProps<"/paths/[id]/certificate">, "params">) {
+async function Page({ params, searchParams }: Pick<PageProps<"/paths/[id]/certificate">, "params" | "searchParams">) {
   const { id } = await params;
+  const fromProfile = (await searchParams).from === "profile";
   // Completions change as people learn, so always read them fresh.
   await connection();
   const db = getDb();
   const user = await currentUser(db);
-  let path: ReturnType<typeof learnerPath> | null = null;
-  try {
-    path = learnerPath(db, user, id);
-  } catch (e) {
-    if (!(e instanceof HttpError)) throw e;
-  }
-  // Only a whole path earns one: every lesson finished, none still being written.
-  const finished = path && path.steps.length > 0 && path.steps.every((s) => !s.draft && s.completedAt);
-  if (!path || !finished) {
+  // Earned certificates open even if the path has since been deleted.
+  const cert = certificateFor(db, user, id);
+  if (!cert) {
+    let path: ReturnType<typeof learnerPath> | null = null;
+    try {
+      path = learnerPath(db, user, id);
+    } catch (e) {
+      if (!(e instanceof HttpError)) throw e;
+    }
     return (
       <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
         <h1 className="font-serif text-3xl font-semibold">Not quite there yet</h1>
@@ -49,17 +50,17 @@ async function Page({ params }: Pick<PageProps<"/paths/[id]/certificate">, "para
       </div>
     );
   }
-  const completedAt = path.steps.reduce((latest, s) => (s.completedAt! > latest ? s.completedAt! : latest), "");
   return (
     <Certificate
-      pathId={path.id}
-      pathName={path.name}
+      pathId={cert.id}
+      pathName={cert.name}
       person={user.name}
-      completedAt={completedAt}
-      lessons={path.steps.length}
-      minutes={path.minutes}
-      outcomes={path.outcomes}
-      reference={`${path.id.replace(/^lp-/, "").toUpperCase()}-${user.id.toUpperCase()}-${completedAt.slice(0, 10).replaceAll("-", "")}`}
+      completedAt={cert.completedAt}
+      lessons={cert.topics}
+      minutes={cert.minutes}
+      outcomes={cert.outcomes}
+      reference={cert.reference}
+      back={fromProfile || cert.deleted ? { href: "/settings#certificates", label: "Back to your profile" } : undefined}
     />
   );
 }

@@ -57,7 +57,8 @@ describe("card comments", () => {
   });
 
   it("limits how fast one person can post", () => {
-    for (let i = 0; i < 15; i++) postComment(db, u("ash"), ...card, `Tip number ${i}`, now);
-    expect(() => postComment(db, u("ash"), ...card, "One more tip", now)).toThrow(/a lot of comments/);
+    // Sam has no demo comments, so the count starts from nothing whatever the real date is.
+    for (let i = 0; i < 15; i++) postComment(db, u("sam"), ...card, `Tip number ${i}`, now);
+    expect(() => postComment(db, u("sam"), ...card, "One more tip", now)).toThrow(/a lot of comments/);
   });
 });

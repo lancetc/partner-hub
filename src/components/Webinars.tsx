@@ -3,7 +3,7 @@
 import { send as sendOrQueue } from "@/lib/outbox";
 import Link from "next/link";
 import { useState } from "react";
-import { useApi } from "@/lib/api";
+import { useApi, type Me } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import { Icon } from "./Icon";
 import { WebinarPlayer } from "./WebinarPlayer";
@@ -26,14 +26,27 @@ type Webinar = {
 };
 
 export function WebinarIndex() {
-  const { data, error } = useApi<{ webinars: Webinar[] }>("/api/webinars");
+  const { data, error } = useApi<{ webinars: Webinar[]; page: { heading: string; intro: string } }>("/api/webinars");
+  const canEdit = useApi<Me>("/api/me").data?.canAuthor;
   const [topic, setTopic] = useState<string | null>(null);
   const topics = [...new Set((data?.webinars ?? []).flatMap((w) => w.topics))];
   const shown = (data?.webinars ?? []).filter((w) => !topic || w.topics.includes(topic));
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Webinars</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Recordings of our sessions for partners and coordinators. Watch when it suits you.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">{data?.page.heading ?? "Webinars"}</h1>
+          {data?.page.intro && <p className="mt-2 max-w-2xl text-lg text-ink-muted">{data.page.intro}</p>}
+        </div>
+        {canEdit && (
+          <Link
+            href="/admin/webinars"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 text-sm font-semibold hover:bg-muted"
+          >
+            <Icon name="pen" className="size-4" /> Manage webinars
+          </Link>
+        )}
+      </div>
       {topics.length > 1 && (
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filter by topic">
           {[null, ...topics].map((t) => (
@@ -57,6 +70,15 @@ export function WebinarIndex() {
       <ul className="mt-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((w) => (
           <li key={w.id} className="group relative flex flex-col gap-3">
+            {canEdit && (
+              // Above the card's own link, which covers the whole card.
+              <Link
+                href={`/admin/webinars/${encodeURIComponent(w.id)}`}
+                className="absolute left-2 top-2 z-10 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white/95 px-3 text-xs font-semibold text-[#102a43] shadow hover:bg-white"
+              >
+                <Icon name="pen" className="size-3.5" /> Edit
+              </Link>
+            )}
             <div className="relative aspect-video overflow-hidden rounded-2xl bg-[#102a43]">
               {w.thumbnail && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -97,6 +119,7 @@ export function WebinarIndex() {
 
 export function WebinarWatch({ id }: { id: string }) {
   const { data, error } = useApi<Webinar>(`/api/webinars/${id}`);
+  const canEdit = useApi<Me>("/api/me").data?.canAuthor;
   const [watched, setWatched] = useState<boolean | null>(null);
   const [transcript, setTranscript] = useState(false);
   const isWatched = watched ?? data?.watched ?? false;
@@ -110,9 +133,19 @@ export function WebinarWatch({ id }: { id: string }) {
   if (!data) return <p className="mx-auto max-w-4xl px-4 py-10 text-ink-muted">Loading…</p>;
   return (
     <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6 lg:pt-8">
-      <Link href="/webinars" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink">
-        <Icon name="arrow-left" className="size-4" /> All webinars
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/webinars" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink">
+          <Icon name="arrow-left" className="size-4" /> All webinars
+        </Link>
+        {canEdit && (
+          <Link
+            href={`/admin/webinars/${encodeURIComponent(id)}`}
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline"
+          >
+            <Icon name="pen" className="size-4" /> Edit this webinar
+          </Link>
+        )}
+      </div>
       <WebinarPlayer video={data.video} title={data.title} poster={data.thumbnail} onEnded={mark} />
       <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">

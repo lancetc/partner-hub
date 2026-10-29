@@ -70,7 +70,7 @@ function documents(db: Db, user: User): Doc[] {
     meta: categoryLabel(s.category),
     head: s.title,
     summary: s.dek,
-    body: s.body.map((b) => ("text" in b ? b.text : "items" in b ? b.items.join(" ") : "")).join(" "),
+    body: s.body.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "image" ? `${b.alt} ${b.caption ?? ""}` : plainText(b.text))).join(" "),
   }));
 
   const library: Doc[] = resources.map((r) => ({

@@ -39,8 +39,8 @@ export const demoSurveys: {
 }[] = [
   {
     id: "sv-module-feedback",
-    name: "Module feedback",
-    description: "Asked when someone finishes a learning path.",
+    name: "Learning path feedback",
+    description: "Asked when someone finishes a learning path. Every new path gets this survey.",
     anonymous: true,
     required: false,
     questions: moduleFeedbackQuestions,

@@ -277,3 +277,94 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
     }
   return lines.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
+
+/* Learning paths: who's been given each path, and how far each person has got. */
+
+type PathPerson = {
+  person: Person;
+  completed: number;
+  total: number;
+  state: "completed" | "in_progress" | "not_started";
+  dueDate: string | null;
+  overdue: boolean;
+  lastActive: string | null;
+  next: { slug: string; title: string } | null;
+};
+
+function pathPeople(db: Db, viewer: User, pathId: string, slugs: string[], f: ReturnType<typeof facts>, today: string): PathPerson[] {
+  const inScope = new Map(people(db, viewer).map((p) => [p.id, p]));
+  const live = slugs.filter((s) => catalogue().some((l) => l.slug === s));
+  const rows = db.prepare("SELECT user_id, due_date FROM learning_path_assignments WHERE path_id = ? ORDER BY assigned_at").all(pathId) as {
+    user_id: string;
+    due_date: string | null;
+  }[];
+  return rows
+    .filter((r) => inScope.has(r.user_id))
+    .map((r) => {
+      const done = live.filter((s) => f.completions.has(`${r.user_id}|${s}`));
+      const started = live.some((s) => f.progress.has(`${r.user_id}|${s}`)) || done.length > 0;
+      const times = live
+        .flatMap((s) => [f.completions.get(`${r.user_id}|${s}`)?.at, f.progress.get(`${r.user_id}|${s}`)?.savedAt])
+        .filter((x): x is string => Boolean(x));
+      const complete = live.length > 0 && done.length === live.length;
+      const nextSlug = live.find((s) => !done.includes(s));
+      const next = nextSlug ? catalogue().find((l) => l.slug === nextSlug) : undefined;
+      return {
+        person: inScope.get(r.user_id)!,
+        completed: done.length,
+        total: live.length,
+        state: complete ? "completed" : started ? "in_progress" : "not_started",
+        dueDate: r.due_date,
+        overdue: !complete && Boolean(r.due_date && r.due_date < today),
+        lastActive: times.sort().at(-1) ?? null,
+        next: next ? { slug: next.slug, title: next.title } : null,
+      } satisfies PathPerson;
+    });
+}
+
+const activePaths = (db: Db) => db.prepare("SELECT id, name FROM learning_paths WHERE archived = 0 ORDER BY name").all() as { id: string; name: string }[];
+const pathSlugs = (db: Db, id: string) =>
+  (db.prepare("SELECT lesson_slug FROM learning_path_lessons WHERE path_id = ? ORDER BY position").all(id) as { lesson_slug: string }[]).map(
+    (r) => r.lesson_slug,
+  );
+
+/** Every learning path with how its assigned people are getting on. */
+export function pathsOverview(db: Db, viewer: User, now: Date) {
+  requireReporter(viewer);
+  const f = facts(db);
+  const today = now.toISOString().slice(0, 10);
+  return activePaths(db).map((p) => {
+    const slugs = pathSlugs(db, p.id);
+    const rows = pathPeople(db, viewer, p.id, slugs, f, today);
+    return {
+      id: p.id,
+      name: p.name,
+      topics: slugs.filter((s) => catalogue().some((l) => l.slug === s)).length,
+      assigned: rows.length,
+      completed: rows.filter((r) => r.state === "completed").length,
+      inProgress: rows.filter((r) => r.state === "in_progress").length,
+      notStarted: rows.filter((r) => r.state === "not_started").length,
+      overdue: rows.filter((r) => r.overdue).length,
+    };
+  });
+}
+
+/** One learning path: each assigned person's progress, and how far everyone has got with each topic in it. */
+export function pathReport(db: Db, viewer: User, pathId: string, now: Date) {
+  requireReporter(viewer);
+  const p = db.prepare("SELECT id, name, archived FROM learning_paths WHERE id = ?").get(pathId) as { id: string; name: string; archived: number } | undefined;
+  if (!p || p.archived) throw new HttpError(404, "Learning path not found.");
+  const f = facts(db);
+  const slugs = pathSlugs(db, pathId);
+  const rows = pathPeople(db, viewer, pathId, slugs, f, now.toISOString().slice(0, 10));
+  const topics = slugs
+    .map((s) => catalogue().find((l) => l.slug === s))
+    .filter((l): l is Lesson => Boolean(l))
+    .map((l) => ({
+      slug: l.slug,
+      title: l.title,
+      completed: rows.filter((r) => f.completions.has(`${r.person.id}|${l.slug}`)).length,
+      inProgress: rows.filter((r) => !f.completions.has(`${r.person.id}|${l.slug}`) && f.progress.has(`${r.person.id}|${l.slug}`)).length,
+    }));
+  return { path: { id: p.id, name: p.name }, people: rows, topics };
+}

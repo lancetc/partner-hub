@@ -38,6 +38,7 @@ import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
 import { Widget } from "./Widget";
 import { TopicChat } from "./TopicChat";
+import { SpokenAnswer } from "./VoiceInput";
 import { RichInline, RichText } from "../RichText";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
@@ -987,7 +988,7 @@ function CardBody({
               key={o.id}
               className={cx(
                 "fx-press flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
-                choice === o.id ? "fx-pop border-action bg-tealtint" : "border-line bg-surface hover:border-line-strong",
+                choice === o.id ? "fx-pop border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line bg-surface hover:border-line-strong",
               )}
             >
               <input
@@ -1007,7 +1008,10 @@ function CardBody({
             <p
               id="stay-feedback"
               role="status"
-              className={cx("fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]", positive ? "bg-tealtint" : "border border-warm/60")}
+              className={cx(
+                "fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]",
+                positive ? "bg-[#DDE8D9] dark:bg-tealtint" : "border border-warm/60",
+              )}
             >
               <Icon name={positive ? "check" : "info"} className={cx("fx-tick mt-0.5 size-5 shrink-0", positive ? "text-accent" : "text-warm")} />
               <span>
@@ -1034,9 +1038,9 @@ function CardBody({
     case "summary":
       return (
         <div className="flex flex-col gap-3">
-          {/* Panels carry their own text colour, so they stay readable on a navy recap card. */}
-          <div className="fx-stagger rounded-2xl bg-tealtint p-4 text-ink" style={{ ["--i" as string]: 0 }}>
-            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Your next action</p>
+          {/* Fixed colours, sage for the action and ivory for the points, so they read the same on any card and in dark mode. */}
+          <div className="fx-stagger rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] [text-shadow:none]" style={{ ["--i" as string]: 0 }}>
+            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#0e7c7b]">Your next action</p>
             <p className="mt-1 text-lg font-semibold leading-snug">
               <RichInline text={node.action} />
             </p>
@@ -1046,8 +1050,12 @@ function CardBody({
               {node.points.map((p, i) => {
                 const [term, rest] = p.split(/:\s*/, 2);
                 return (
-                  <li key={p} className="fx-stagger flex gap-3 rounded-2xl bg-muted px-4 py-3 text-ink" style={{ ["--i" as string]: i + 1 }}>
-                    <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" />
+                  <li
+                    key={p}
+                    className="fx-stagger flex gap-3 rounded-2xl bg-[#F5F0E6] px-4 py-3 text-[#102a43] [text-shadow:none]"
+                    style={{ ["--i" as string]: i + 1 }}
+                  >
+                    <Icon name="check" className="mt-1 size-4 shrink-0 text-[#0e7c7b]" />
                     <span>
                       {/* "Term: explanation" points show the term in bold; any other formatting comes from the text. */}
                       {rest && !/\*\*|\]\(/.test(p) ? (
@@ -1135,39 +1143,43 @@ function ResponseCard({
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={`${node.id}-text`} className="font-semibold">
+      <p id={`${node.id}-prompt`} className="font-semibold">
         {node.prompt}
-      </label>
-      <textarea
-        id={`${node.id}-text`}
-        rows={4}
-        value={value}
-        maxLength={2000}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-2xl border border-line-strong bg-surface p-3 text-[1.05rem]"
-        aria-describedby={`${node.id}-vis`}
-      />
-      <p id={`${node.id}-vis`} className="text-sm text-ink-muted">
-        {node.visibility} Avoid client names or details.
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={ask}
-          disabled={!enough || busy}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
-        >
-          {busy ? (
-            <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <Icon name="spark" className="size-4" />
-          )}
-          {busy ? "Reading your answer…" : feedback ? "Get feedback again" : "Get feedback"}
-        </button>
-        <button type="button" aria-expanded={showModel} onClick={() => setShowModel((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
-          {showModel ? "Hide example answer" : "See an example answer"}
-        </button>
-      </div>
+      {/* Say it or type it, as on the Answer card. */}
+      <SpokenAnswer
+        id={`${node.id}-text`}
+        value={value}
+        onChange={onChange}
+        disabled={busy}
+        rows={4}
+        describedBy={`${node.id}-prompt ${node.id}-vis`}
+        after={
+          <>
+            <p id={`${node.id}-vis`} className="text-sm text-ink-muted">
+              {node.visibility} Avoid client names or details. Your voice isn’t saved.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={ask}
+                disabled={!enough || busy}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
+              >
+                {busy ? (
+                  <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Icon name="spark" className="size-4" />
+                )}
+                {busy ? "Reading your answer…" : feedback ? "Get feedback again" : "Get feedback"}
+              </button>
+              <button type="button" aria-expanded={showModel} onClick={() => setShowModel((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
+                {showModel ? "Hide example answer" : "See an example answer"}
+              </button>
+            </div>
+          </>
+        }
+      />
       {error && (
         <p role="alert" className="rounded-2xl bg-orange/10 p-3 text-sm">
           {error}

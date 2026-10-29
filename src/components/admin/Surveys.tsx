@@ -80,7 +80,7 @@ export function SurveyList() {
         {me?.canAuthor && (
           <div className="flex flex-wrap gap-2">
             <button type="button" className={btn.primary} disabled={busy} onClick={() => create("module")}>
-              <Icon name="plus" className="size-4" /> New from module feedback template
+              <Icon name="plus" className="size-4" /> New from learning path feedback template
             </button>
             <button type="button" className={btn.secondary} disabled={busy} onClick={() => create("blank")}>
               Blank survey

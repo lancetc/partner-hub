@@ -93,16 +93,16 @@ function StateCell({ r }: { r: Row }) {
 const Score = ({ s }: { s: Row["score"] }) => (s ? <span>{`${s.right}/${s.asked}`}</span> : <span className="text-ink-muted">—</span>);
 
 export function CompletionsOverview() {
-  const { data, error } = useApi<{ lessons: LessonSummary[]; people: PersonSummary[] }>("/api/admin/completions");
-  const [view, setView] = useState<"lessons" | "people">("lessons");
+  const { data, error } = useApi<{ lessons: LessonSummary[]; paths: PathSummary[]; people: PersonSummary[] }>("/api/admin/completions");
+  const [view, setView] = useState<"lessons" | "paths" | "people">("lessons");
   const [q, setQ] = useState("");
   const people = useMemo(() => (data?.people ?? []).filter((p) => `${p.name} ${p.org} ${p.email}`.toLowerCase().includes(q.trim().toLowerCase())), [data, q]);
   return (
     <AdminShell title="Completions">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          Who has finished each topic, who started and stopped, and who hasn’t opened it yet. “Needs refresher” means they finished a version from before an
-          important change.
+          Who has finished each topic and learning path, who started and stopped, and who hasn’t opened it yet. “Needs refresher” means they finished a version
+          from before an important change.
         </p>
         <Export />
       </div>
@@ -115,6 +115,7 @@ export function CompletionsOverview() {
         {(
           [
             ["lessons", "By topic"],
+            ["paths", "By learning path"],
             ["people", "By person"],
           ] as const
         ).map(([v, label]) => (
@@ -132,6 +133,40 @@ export function CompletionsOverview() {
       </div>
       {!data ? (
         <p className="mt-6 text-ink-muted">Loading…</p>
+      ) : view === "paths" ? (
+        !data.paths.length ? (
+          <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">No learning paths yet.</p>
+        ) : (
+          <ul className="mt-4 grid gap-3 md:grid-cols-2">
+            {data.paths.map((p) => (
+              <li key={p.id} className="relative flex flex-col gap-2 rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
+                <h2 className="font-serif text-lg font-semibold leading-snug">
+                  <Link href={`/admin/completions/paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
+                    {p.name}
+                  </Link>
+                </h2>
+                <p className="text-sm text-ink-muted">
+                  {p.topics} {p.topics === 1 ? "topic" : "topics"} · {p.assigned} {p.assigned === 1 ? "person" : "people"} assigned
+                </p>
+                {p.assigned > 0 ? (
+                  <>
+                    <Bar completed={p.completed} inProgress={p.inProgress} total={p.assigned} />
+                    <p className="text-sm">
+                      <strong>{p.completed}</strong> of {p.assigned} finished · {p.inProgress} in progress · {p.notStarted} not started
+                    </p>
+                    {p.overdue > 0 && (
+                      <div>
+                        <Badge tone="bad">{p.overdue} overdue</Badge>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-ink-muted">Nobody is assigned this path yet.</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
       ) : view === "lessons" ? (
         <ul className="mt-4 grid gap-3 md:grid-cols-2">
           {data.lessons.map((l) => (
@@ -439,6 +474,138 @@ export function PersonCompletions({ id }: { id: string }) {
               <p className="mt-2 text-sm text-ink-muted">No sign-offs yet.</p>
             )}
           </section>
+        </div>
+      )}
+    </AdminShell>
+  );
+}
+
+type PathSummary = { id: string; name: string; topics: number; assigned: number; completed: number; inProgress: number; notStarted: number; overdue: number };
+type PathPersonRow = {
+  person: Person;
+  completed: number;
+  total: number;
+  state: "completed" | "in_progress" | "not_started";
+  dueDate: string | null;
+  overdue: boolean;
+  lastActive: string | null;
+  next: { slug: string; title: string } | null;
+};
+const PATH_FILTERS = [
+  ["all", "Everyone"],
+  ["completed", "Finished"],
+  ["in_progress", "In progress"],
+  ["not_started", "Not started"],
+  ["overdue", "Overdue"],
+] as const;
+
+/** One learning path: each assigned person's progress, and how far everyone has got with each topic. */
+export function PathCompletions({ id }: { id: string }) {
+  const { data, error } = useApi<{
+    path: { id: string; name: string };
+    people: PathPersonRow[];
+    topics: { slug: string; title: string; completed: number; inProgress: number }[];
+  }>(`/api/admin/completions/paths/${id}`);
+  const [filter, setFilter] = useState<(typeof PATH_FILTERS)[number][0]>("all");
+  const match = (r: PathPersonRow, f: (typeof PATH_FILTERS)[number][0]) => (f === "all" ? true : f === "overdue" ? r.overdue : r.state === f);
+  const rows = (data?.people ?? []).filter((r) => match(r, filter));
+  const assigned = data?.people.length ?? 0;
+  return (
+    <AdminShell title={data?.path.name ?? "Learning path"} back={{ href: "/admin/completions", label: "Completions" }}>
+      {error && <ErrorNote text={error} />}
+      {!data ? (
+        <p className="text-ink-muted">Loading…</p>
+      ) : (
+        <div className="flex flex-col gap-8">
+          <section aria-label="People">
+            <div className="flex flex-wrap items-center gap-2">
+              {PATH_FILTERS.map(([f, label]) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={filter === f}
+                  onClick={() => setFilter(f)}
+                  className={cx(
+                    "min-h-9 rounded-full border px-3 text-sm font-semibold",
+                    filter === f ? "border-action bg-tealtint" : "border-line-strong hover:bg-muted",
+                  )}
+                >
+                  {label} <span className="font-normal text-ink-muted">{data.people.filter((r) => match(r, f)).length}</span>
+                </button>
+              ))}
+              <Link href={`/admin/learning-paths/${encodeURIComponent(id)}`} className="ml-auto text-sm font-semibold text-accent hover:underline">
+                Assign people or edit the path
+              </Link>
+            </div>
+            <div className="mt-4 overflow-x-auto rounded-3xl border border-line bg-surface">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
+                  <tr>
+                    <th className="px-4 py-3">Person</th>
+                    <th className="px-4 py-3">Progress</th>
+                    <th className="px-4 py-3">Next topic</th>
+                    <th className="px-4 py-3">Due</th>
+                    <th className="px-4 py-3">Last active</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {rows.map((r) => (
+                    <tr key={r.person.id}>
+                      <td className="px-4 py-3">
+                        <Link href={`/admin/completions/people/${r.person.id}`} className="font-semibold hover:underline">
+                          {r.person.name}
+                        </Link>
+                        <span className="block text-xs text-ink-muted">{r.person.org}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-28">
+                            <Bar completed={r.completed} inProgress={r.state === "in_progress" && !r.completed ? 1 : 0} total={r.total} />
+                          </div>
+                          {r.completed}/{r.total}
+                          {r.state === "completed" && <Badge tone="good">Finished</Badge>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{r.next ? r.next.title : <span className="text-ink-muted">—</span>}</td>
+                      <td className="px-4 py-3">
+                        {r.dueDate ? formatDate(r.dueDate) : <span className="text-ink-muted">No due date</span>}
+                        {r.overdue && (
+                          <span className="ml-1.5">
+                            <Badge tone="bad">Overdue</Badge>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-ink-muted">{r.lastActive ? formatDate(r.lastActive) : "Not yet"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!rows.length && <p className="p-6 text-center text-ink-muted">{assigned ? "No one matches." : "Nobody is assigned this path yet."}</p>}
+            </div>
+          </section>
+
+          {assigned > 0 && (
+            <section aria-labelledby="path-topics">
+              <h2 id="path-topics" className="font-serif text-xl font-semibold">
+                Topic by topic
+              </h2>
+              <p className="mt-1 text-sm text-ink-muted">How many of the {assigned} people assigned have finished each topic in the path.</p>
+              <ol className="mt-3 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
+                {data.topics.map((t, i) => (
+                  <li key={t.slug} className="grid items-center gap-2 px-4 py-3 sm:grid-cols-[2rem_minmax(0,1fr)_12rem_6rem]">
+                    <span className="text-sm tabular-nums text-ink-muted">{i + 1}</span>
+                    <Link href={`/admin/completions/lessons/${t.slug}`} className="font-semibold hover:underline">
+                      {t.title}
+                    </Link>
+                    <Bar completed={t.completed} inProgress={t.inProgress} total={assigned} />
+                    <span className="text-sm tabular-nums">
+                      {t.completed}/{assigned}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </div>
       )}
     </AdminShell>

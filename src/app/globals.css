@@ -50,7 +50,7 @@
   --line-strong: rgb(16 42 67 / 0.28);
   --focus: #0e7c7b;
   --overlay: rgb(10 26 46 / 0.55);
-  --hero: #102a43;
+  --hero: #2d4875;
   --on-hero: #ffffff;
   color-scheme: light;
 }
@@ -78,7 +78,7 @@
   --line-strong: rgb(255 255 255 / 0.26);
   --focus: #4cc3c9;
   --overlay: rgb(0 0 0 / 0.6);
-  --hero: #102a43;
+  --hero: #2d4875;
   --on-hero: #f2f6fa;
   color-scheme: dark;
 }

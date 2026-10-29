@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { lessons } from "@/content/lessons";
 import { getDb } from "@/server/db";
 import { LessonList } from "@/components/LessonList";
+import { topicSummary } from "@/lib/topicSummary";
+import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { MyLearningPaths } from "@/components/MyLearningPaths";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 
@@ -26,9 +28,13 @@ export default function LearningPage() {
   );
 }
 
-/** Read per request: authors can publish new lessons from the editor at any time. */
+/** Read per request: authors can publish new topics, and change subjects, at any time. */
 async function Catalogue() {
   await connection();
-  getDb();
-  return <LessonList lessons={lessons.filter((l) => l.track !== "reinforcement")} />;
+  const db = getDb();
+  const subjects = topicSubjects(db);
+  const dates = topicDates(db);
+  return (
+    <LessonList topics={lessons.filter((l) => l.track !== "reinforcement").map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null))} />
+  );
 }

@@ -71,7 +71,7 @@ export function Header() {
               since admin pages need an admin. Real sign-in would show it to admins only; the API enforces access either way. */}
           {me && (
             <Link
-              href={me.canAuthor ? "/admin/lessons" : "/admin/learning-paths"}
+              href="/admin"
               aria-current={inAdmin ? "page" : undefined}
               title={me.canReport ? undefined : "Switches to the demo author account (Jordan Lee)"}
               onClick={async (e) => {

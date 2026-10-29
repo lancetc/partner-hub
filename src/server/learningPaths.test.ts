@@ -16,6 +16,8 @@ import {
   myLearningPaths,
   unassignLearningPath,
   updateLearningPath,
+  certificateFor,
+  myCertificates,
 } from "./learningPaths";
 
 /* Learning paths: named sets of lessons, in order, assigned to people. */
@@ -177,5 +179,56 @@ describe("deleting learning paths", () => {
     expect(myLearningPaths(db, u("sam")).some((p) => p.id === id)).toBe(true);
     expect(deletedLearningPaths(db, u("jordan"))).toEqual([]);
     expect(() => restoreLearningPath(db, u("jordan"), id, now)).toThrow(/deleted list/);
+  });
+});
+
+describe("the survey at the end of every path", () => {
+  const surveyFor = (id: string) =>
+    (db.prepare("SELECT survey_id FROM survey_links WHERE target_type = 'path' AND target_id = ?").get(id) as { survey_id: string } | undefined)?.survey_id;
+
+  it("gives a new path the learning path feedback survey", () => {
+    const { id } = createLearningPath(db, u("jordan"), { name: "Survey test", lessons: ["a-little-extra-time"] }, now);
+    expect(surveyFor(id)).toBe("sv-module-feedback");
+  });
+
+  it("gives a restored path one if it has none, and leaves an author's choice alone", () => {
+    const id = "lp-care-coordination";
+    archiveLearningPath(db, u("jordan"), id, now);
+    db.prepare("DELETE FROM survey_links WHERE target_id = ?").run(id);
+    restoreLearningPath(db, u("jordan"), id, now);
+    expect(surveyFor(id)).toBe("sv-module-feedback");
+    db.prepare("UPDATE survey_links SET survey_id = 'sv-lesson-check-in' WHERE target_id = ?").run(id);
+    archiveLearningPath(db, u("jordan"), id, now);
+    restoreLearningPath(db, u("jordan"), id, now);
+    expect(surveyFor(id)).toBe("sv-lesson-check-in");
+  });
+
+  it("does nothing once the default survey is archived", () => {
+    db.prepare("UPDATE surveys SET archived = 1 WHERE id = 'sv-module-feedback'").run();
+    const { id } = createLearningPath(db, u("jordan"), { name: "No survey", lessons: ["a-little-extra-time"] }, now);
+    expect(surveyFor(id)).toBeUndefined();
+  });
+});
+
+describe("certificates", () => {
+  const finish = (user: string, slugs: string[], at: Date) => slugs.forEach((slug) => recordLessonCompletion(db, u(user), { slug, version: "1.1" }, at));
+
+  it("is earned by finishing every topic, and dated by the last one", () => {
+    const { id } = createLearningPath(db, u("jordan"), { name: "Two topics", lessons: ["a-little-extra-time", "our-mission-and-model"] }, now);
+    finish("sam", ["a-little-extra-time"], now);
+    expect(certificateFor(db, u("sam"), id)).toBeNull();
+    const later = new Date("2026-10-23T04:00:00Z");
+    finish("sam", ["our-mission-and-model"], later);
+    expect(certificateFor(db, u("sam"), id)).toMatchObject({ name: "Two topics", topics: 2, completedAt: later.toISOString(), deleted: false });
+    expect(myCertificates(db, u("sam")).map((c) => c.id)).toContain(id);
+    expect(myCertificates(db, u("riley")).map((c) => c.id)).not.toContain(id);
+  });
+
+  it("still stands after the path is deleted", () => {
+    const { id } = createLearningPath(db, u("jordan"), { name: "Short path", lessons: ["a-little-extra-time"] }, now);
+    finish("sam", ["a-little-extra-time"], now);
+    archiveLearningPath(db, u("jordan"), id, now);
+    expect(certificateFor(db, u("sam"), id)).toMatchObject({ deleted: true });
+    expect(myCertificates(db, u("sam")).some((c) => c.id === id)).toBe(true);
   });
 });

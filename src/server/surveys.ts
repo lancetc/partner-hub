@@ -5,7 +5,7 @@ import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, requireReporter, type User } from "./auth";
 
 /*
-  Surveys: asked when someone finishes a learning path, or a single lesson.
+  Surveys: asked when someone finishes a learning path, or a single topic.
   Only completions after the survey was attached count, so attaching one never surveys people about old work.
   Who answered is kept apart from what they answered, so anonymous answers stay anonymous.
 */
@@ -142,7 +142,7 @@ export function surveyDetail(db: Db, actor: User, id: string) {
 export function createSurvey(db: Db, actor: User, input: Partial<SurveyInput> & { template?: "module" | "blank" }, now: Date) {
   requireAuthor(actor);
   const v = validate({
-    name: input.name ?? (input.template === "blank" ? "Untitled survey" : "Module feedback"),
+    name: input.name ?? (input.template === "blank" ? "Untitled survey" : "Learning path feedback"),
     description: input.description,
     anonymous: input.anonymous,
     required: input.required,
@@ -207,7 +207,8 @@ export function archiveSurvey(db: Db, actor: User, id: string, now: Date) {
 export function setSurveyLinks(db: Db, actor: User, id: string, targets: Target[], now: Date) {
   requireAuthor(actor);
   getSurvey(db, id);
-  const valid = new Set(attachable(db).map((t) => `${t.type}:${t.id}`));
+  // Places it's already asked at stay valid even if that path has since been deleted, so the survey can still be saved.
+  const valid = new Set([...attachable(db).map((t) => `${t.type}:${t.id}`), ...linksFor(db, id).map((l) => `${l.target_type}:${l.target_id}`)]);
   for (const t of targets) if (!valid.has(`${t.type}:${t.id}`)) throw new HttpError(400, "That learning path or topic doesn’t exist.");
   const at = now.toISOString();
   const keep = new Map(linksFor(db, id).map((l) => [`${l.target_type}:${l.target_id}`, l.linked_at]));
@@ -270,7 +271,7 @@ export function pendingSurveys(db: Db, user: User, onlyForLesson?: string) {
       finishedAt,
     });
   }
-  // Path surveys first: finishing a whole module is the bigger moment.
+  // Path surveys first: finishing a whole learning path is the bigger moment.
   return out.sort((a, b) => (a.target.type === b.target.type ? 0 : a.target.type === "path" ? -1 : 1));
 }
 

@@ -271,7 +271,7 @@ export function FollowUpPlayer({ id }: { id: string }) {
                       key={o.id}
                       className={cx(
                         "flex min-h-14 items-center gap-3 rounded-2xl border-2 px-4 py-3",
-                        picked ? "border-action bg-tealtint" : "border-line",
+                        picked ? "border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line",
                         !lockedOut && "cursor-pointer hover:border-line-strong",
                       )}
                     >
@@ -346,7 +346,11 @@ function CardHeading({ label, heading, refEl }: { label: string; heading: string
 
 function Feedback({ option, best }: { option: FollowUpContent["question"]["options"][number]; best: FollowUpContent["question"]["options"][number] }) {
   return (
-    <div id="fu-feedback" role="status" className={cx("flex gap-3 rounded-2xl px-4 py-3", option.correct ? "bg-tealtint" : "border-2 border-warm/60")}>
+    <div
+      id="fu-feedback"
+      role="status"
+      className={cx("flex gap-3 rounded-2xl px-4 py-3", option.correct ? "bg-[#DDE8D9] dark:bg-tealtint" : "border-2 border-warm/60")}
+    >
       <Icon name={option.correct ? "check" : "info"} className={cx("mt-0.5 size-5 shrink-0", option.correct ? "text-accent" : "text-warm")} />
       <div className="text-[0.98rem]">
         <p className="font-semibold">{option.correct ? "That’s the better choice." : "Here’s what would happen."}</p>

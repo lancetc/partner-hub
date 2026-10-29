@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { recordLessonCompletion } from "./learning";
+import { archiveLearningPath } from "./learningPaths";
 import { createSurvey, pendingSurveys, setSurveyLinks, skipSurvey, submitSurvey, surveyCsv, surveyResults, updateSurvey } from "./surveys";
 
-/* Surveys asked when someone finishes a learning path (the module) or a single lesson. */
+/* Surveys asked when someone finishes a learning path or a single topic. */
 
 let db: Db;
 beforeEach(() => {
@@ -26,12 +27,12 @@ describe("when surveys are asked", () => {
     expect(pending("sam", "legislative-framework")).toEqual(["sv-lesson-check-in@legislative-framework"]);
   });
 
-  it("asks the module survey only once every lesson in the path is done, path first", () => {
+  it("asks the path survey only once every lesson in the path is done, path first", () => {
     finish("sam", "our-mission-and-model");
     expect(pending("sam")).toEqual([]);
     finish("sam", "legislative-framework");
     expect(pending("sam", "legislative-framework")).toEqual(["sv-module-feedback@lp-welcome", "sv-lesson-check-in@legislative-framework"]);
-    // Not assigned the path, so no module survey.
+    // Not assigned the path, so no path survey.
     finish("casey", "our-mission-and-model");
     finish("casey", "legislative-framework");
     expect(pending("casey")).toEqual(["sv-lesson-check-in@legislative-framework"]);
@@ -120,9 +121,21 @@ describe("building surveys", () => {
         db,
         u("jordan"),
         "sv-module-feedback",
-        { name: "Module feedback", anonymous: false, questions: [{ id: "q", type: "text", prompt: "Hi", required: false }] },
+        { name: "Learning path feedback", anonymous: false, questions: [{ id: "q", type: "text", prompt: "Hi", required: false }] },
         now,
       ),
     ).toThrow(/stay anonymous/);
+  });
+});
+
+describe("survey places", () => {
+  it("can still be saved when one of its paths has been deleted", () => {
+    archiveLearningPath(db, userById(db, "jordan")!, "lp-welcome", now);
+    const targets = [
+      { type: "path" as const, id: "lp-welcome" },
+      { type: "path" as const, id: "lp-care-coordination" },
+    ];
+    expect(() => setSurveyLinks(db, userById(db, "jordan")!, "sv-module-feedback", targets, now)).not.toThrow();
+    expect(() => setSurveyLinks(db, userById(db, "jordan")!, "sv-module-feedback", [{ type: "path", id: "nope" }], now)).toThrow(/doesn’t exist/);
   });
 });

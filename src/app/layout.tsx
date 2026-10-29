@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Mulish, Roboto_Flex, Roboto_Serif } from "next/font/google";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteTranslator } from "@/components/SiteTranslator";
 import { SyncManager } from "@/components/SyncManager";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
@@ -14,6 +15,8 @@ const robotoSerif = Roboto_Serif({ variable: "--font-roboto-serif", subsets: ["l
 const mulish = Mulish({ variable: "--font-mulish-face", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
+  // Full addresses for share images and canonical links: the hub's public address in production.
+  metadataBase: new URL(process.env.HUB_PUBLIC_URL ?? "http://localhost:3000"),
   title: { default: "Partner Hub · Trilogy Care", template: "%s · Partner Hub" },
   description: "News, practical learning and onboarding for Trilogy Care service partners and care coordinators.",
   // Installed on an iPhone home screen, it opens full screen like an app.
@@ -47,12 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main id="main" className="min-w-0">
           {children}
         </main>
-        <footer className="mx-auto mt-16 max-w-7xl border-t border-line px-4 py-8 text-sm text-ink-muted sm:px-6">
-          <p className="font-mulish">
-            Prototype with demonstration content. Stories, people, rates and processes shown here are illustrative and not current Trilogy Care policy or
-            pricing.
-          </p>
-        </footer>
+        <SiteFooter />
         <Suspense>
           <BottomNav />
         </Suspense>

@@ -16,11 +16,16 @@ export const categories: { id: CategoryId; label: string }[] = [
 
 export const categoryLabel = (id: CategoryId) => categories.find((c) => c.id === id)?.label ?? id;
 
+/** `p` text may use **bold**, *italic*, [links](https://…) and lists (lib/richText). */
 export type StoryBlock =
   | { type: "p"; text: string }
   | { type: "h2"; text: string }
+  /** A subheading, under an h2. */
+  | { type: "h3"; text: string }
   | { type: "list"; items: string[] }
-  | { type: "quote"; text: string; cite: string };
+  | { type: "quote"; text: string; cite: string }
+  /** A picture in the story: beside the text (left or right), centred, or the full width. */
+  | { type: "image"; src: string; width: number; height: number; alt: string; align: "left" | "right" | "center" | "full"; caption?: string };
 
 export type PolicyMeta = {
   status: "proposal" | "announced" | "in_effect" | "superseded";
@@ -58,21 +63,13 @@ export type Story = {
   relatedLesson?: string;
   relatedResources?: string[];
   audience: ("partner" | "coordinator")[];
+  /** How the story appears in search results and when shared; the title and standfirst are used when these are empty. */
+  seo?: { title?: string; description?: string };
+  /** When it was last edited in admin (for search engines' "updated" date). */
+  updated?: string;
 };
 
-export type IconName =
-  | "clock"
-  | "shield"
-  | "heart"
-  | "leaf"
-  | "chat"
-  | "home"
-  | "spark"
-  | "doc"
-  | "people"
-  | "sun"
-  | "route"
-  | "book";
+export type IconName = "clock" | "shield" | "heart" | "leaf" | "chat" | "home" | "spark" | "doc" | "people" | "sun" | "route" | "book";
 
 export const stories: Story[] = [
   {
@@ -94,13 +91,30 @@ export const stories: Story[] = [
     relatedLesson: "a-little-extra-time",
     relatedResources: ["hub-guide", "support-contacts"],
     body: [
-      { type: "p", text: "The Partner Hub brings news, practical learning and onboarding into one place. It is built for the people who deliver and coordinate support every day: physiotherapists, nurses, gardeners, cleaners, and internal and external care coordinators." },
+      {
+        type: "p",
+        text: "The Partner Hub brings news, practical learning and onboarding into one place. It is built for the people who deliver and coordinate support every day: physiotherapists, nurses, gardeners, cleaners, and internal and external care coordinators.",
+      },
       { type: "h2", text: "What the pilot is testing" },
-      { type: "list", items: ["Lessons of two to five minutes that you can finish between visits", "Scenarios where your choice changes what happens next", "An onboarding checklist that shows what you need to do and what we are still checking", "Short policy briefings that start with what changes for you"] },
-      { type: "p", text: "Everything you see in this prototype is demonstration content. It helps us check the experience before real requirements and policy are connected." },
+      {
+        type: "list",
+        items: [
+          "Lessons of two to five minutes that you can finish between visits",
+          "Scenarios where your choice changes what happens next",
+          "An onboarding checklist that shows what you need to do and what we are still checking",
+          "Short policy briefings that start with what changes for you",
+        ],
+      },
+      {
+        type: "p",
+        text: "Everything you see in this prototype is demonstration content. It helps us check the experience before real requirements and policy are connected.",
+      },
       { type: "quote", text: "If a lesson helps you decide what to do on your next visit, it has done its job.", cite: "Pilot learning lead (demo)" },
       { type: "h2", text: "Tell us what works" },
-      { type: "p", text: "Use the feedback link on any lesson, or talk with your coordinator. We are especially keen to hear where something was unclear or took longer than it should." },
+      {
+        type: "p",
+        text: "Use the feedback link on any lesson, or talk with your coordinator. We are especially keen to hear where something was unclear or took longer than it should.",
+      },
     ],
   },
   {
@@ -134,11 +148,22 @@ export const stories: Story[] = [
     },
     body: [
       { type: "h2", text: "What changed" },
-      { type: "p", text: "From the effective date, any extension to a planned visit needs to be confirmed through the care coordinator before the extra time is delivered. Previously, short extensions could be noted afterwards." },
+      {
+        type: "p",
+        text: "From the effective date, any extension to a planned visit needs to be confirmed through the care coordinator before the extra time is delivered. Previously, short extensions could be noted afterwards.",
+      },
       { type: "h2", text: "Who it affects" },
       { type: "p", text: "All service partners delivering scheduled visits, and the coordinators who confirm changes." },
       { type: "h2", text: "What to do" },
-      { type: "list", items: ["Tell the client you are happy to check", "Contact the coordinator using the usual channel", "Only stay longer once the change is confirmed", "Record what was agreed in your visit note"] },
+      {
+        type: "list",
+        items: [
+          "Tell the client you are happy to check",
+          "Contact the coordinator using the usual channel",
+          "Only stay longer once the change is confirmed",
+          "Record what was agreed in your visit note",
+        ],
+      },
       { type: "p", text: "This is demonstration content. The real process must be approved by the responsible Trilogy owner before it is used." },
     ],
   },
@@ -154,10 +179,20 @@ export const stories: Story[] = [
     audience: ["partner"],
     relatedResources: ["visit-note-template"],
     body: [
-      { type: "p", text: "Our demo partner, Jordan, has looked after the same handful of gardens for three years. The work is practical: mowing, pruning, clearing gutters before storm season. The relationships are what make it last." },
-      { type: "quote", text: "If the path is getting mossy or the hose is left out, I mention it. It is usually nothing, but sometimes it matters.", cite: "Jordan, garden partner (demo)" },
+      {
+        type: "p",
+        text: "Our demo partner, Jordan, has looked after the same handful of gardens for three years. The work is practical: mowing, pruning, clearing gutters before storm season. The relationships are what make it last.",
+      },
+      {
+        type: "quote",
+        text: "If the path is getting mossy or the hose is left out, I mention it. It is usually nothing, but sometimes it matters.",
+        cite: "Jordan, garden partner (demo)",
+      },
       { type: "h2", text: "A good note is short and specific" },
-      { type: "p", text: "Jordan keeps visit notes to what changed and what someone else might need to know. That habit makes it easier for coordinators to act early." },
+      {
+        type: "p",
+        text: "Jordan keeps visit notes to what changed and what someone else might need to know. That habit makes it easier for coordinators to act early.",
+      },
     ],
   },
   {
@@ -172,9 +207,19 @@ export const stories: Story[] = [
     audience: ["coordinator"],
     relatedLesson: "noticing-a-change",
     body: [
-      { type: "p", text: "In this demonstration case, a coordinator noticed that a client who usually chatted about their week sounded tired and was repeating questions. The coordinator slowed down, asked open questions and confirmed what support was already in place." },
+      {
+        type: "p",
+        text: "In this demonstration case, a coordinator noticed that a client who usually chatted about their week sounded tired and was repeating questions. The coordinator slowed down, asked open questions and confirmed what support was already in place.",
+      },
       { type: "h2", text: "What helped" },
-      { type: "list", items: ["Asking how the week had been, then pausing", "Checking recent visit notes from partners", "Following the escalation process instead of solving everything on the call"] },
+      {
+        type: "list",
+        items: [
+          "Asking how the week had been, then pausing",
+          "Checking recent visit notes from partners",
+          "Following the escalation process instead of solving everything on the call",
+        ],
+      },
       { type: "p", text: "Practise a similar conversation in the coordinator scenario lesson." },
     ],
   },
@@ -190,7 +235,10 @@ export const stories: Story[] = [
     audience: ["partner", "coordinator"],
     relatedLesson: "a-little-extra-time",
     body: [
-      { type: "p", text: "Each lesson focuses on one useful outcome. You will see one card at a time, with a short explanation and one clear action. Audio and video are optional: everything essential is available to read." },
+      {
+        type: "p",
+        text: "Each lesson focuses on one useful outcome. You will see one card at a time, with a short explanation and one clear action. Audio and video are optional: everything essential is available to read.",
+      },
       { type: "p", text: "Your place is saved as you go, so you can leave and resume later." },
     ],
   },
@@ -202,11 +250,27 @@ export const stories: Story[] = [
     byline: "Industry roundup (demo)",
     date: "2026-10-15T00:00:00Z",
     readMinutes: 4,
-    visual: { variant: "dots", tone: "navy", icon: "sun", alt: "An older couple sitting at a kitchen table going through paperwork together, beside a Trilogy home and flower graphic", photo: { src: "/images/jill.jpeg", width: 576, height: 300, position: "70% center" } },
+    visual: {
+      variant: "dots",
+      tone: "navy",
+      icon: "sun",
+      alt: "An older couple sitting at a kitchen table going through paperwork together, beside a Trilogy home and flower graphic",
+      photo: { src: "/images/jill.jpeg", width: 576, height: 300, position: "70% center" },
+    },
     audience: ["partner"],
     body: [
-      { type: "p", text: "Shorter days and wet surfaces change how visits feel. Plan outdoor tasks for daylight, check paths and steps, and mention anything that could make the home less safe." },
-      { type: "list", items: ["Check heating is working where it is part of your service", "Note slippery or poorly lit areas", "Allow extra travel time and tell your coordinator early if you are delayed"] },
+      {
+        type: "p",
+        text: "Shorter days and wet surfaces change how visits feel. Plan outdoor tasks for daylight, check paths and steps, and mention anything that could make the home less safe.",
+      },
+      {
+        type: "list",
+        items: [
+          "Check heating is working where it is part of your service",
+          "Note slippery or poorly lit areas",
+          "Allow extra travel time and tell your coordinator early if you are delayed",
+        ],
+      },
     ],
   },
   {
@@ -220,7 +284,10 @@ export const stories: Story[] = [
     visual: { variant: "grid", tone: "sky", icon: "doc", alt: "Pale blue tiles like a checklist" },
     audience: ["partner"],
     body: [
-      { type: "p", text: "Uploading a document is not the same as it being verified. The checklist now shows each step clearly: received, in review, action required or verified." },
+      {
+        type: "p",
+        text: "Uploading a document is not the same as it being verified. The checklist now shows each step clearly: received, in review, action required or verified.",
+      },
       { type: "p", text: "You can keep learning while we check your documents." },
     ],
   },
@@ -245,7 +312,10 @@ export const stories: Story[] = [
       reviewDate: "2026-12-13",
     },
     body: [
-      { type: "p", text: "This is a proposal only. The draft template asks for three things: what you did, what you noticed and what someone else needs to know." },
+      {
+        type: "p",
+        text: "This is a proposal only. The draft template asks for three things: what you did, what you noticed and what someone else needs to know.",
+      },
       { type: "p", text: "Share feedback with your coordinator. We will publish a briefing if and when the template is adopted." },
     ],
   },
@@ -260,7 +330,10 @@ export const stories: Story[] = [
     visual: { variant: "arc", tone: "teal", icon: "heart", alt: "Teal arcs with a heart motif" },
     audience: ["partner"],
     body: [
-      { type: "p", text: "Our demo physiotherapy partner, Priya, starts each program by asking what the client wants to be able to do again. It might be reaching the letterbox or getting into the garden." },
+      {
+        type: "p",
+        text: "Our demo physiotherapy partner, Priya, starts each program by asking what the client wants to be able to do again. It might be reaching the letterbox or getting into the garden.",
+      },
       { type: "p", text: "Goals expressed in the client’s own words make it easier to explain progress to families and coordinators." },
     ],
   },
@@ -272,10 +345,19 @@ export const stories: Story[] = [
     byline: "Care coordination (demo)",
     date: "2026-10-10T02:00:00Z",
     readMinutes: 4,
-    visual: { variant: "wave", tone: "sky", icon: "home", alt: "An older couple smiling and holding hands on a couch at home, beside a Trilogy Care booklet graphic", photo: { src: "/images/karen.jpeg", width: 311, height: 162, position: "70% center" } },
+    visual: {
+      variant: "wave",
+      tone: "sky",
+      icon: "home",
+      alt: "An older couple smiling and holding hands on a couch at home, beside a Trilogy Care booklet graphic",
+      photo: { src: "/images/karen.jpeg", width: 311, height: 162, position: "70% center" },
+    },
     audience: ["partner", "coordinator"],
     body: [
-      { type: "p", text: "In this demo case, a client found mornings tiring. The partner suggested starting with quieter tasks and leaving vacuuming until later. The coordinator confirmed the change suited the plan." },
+      {
+        type: "p",
+        text: "In this demo case, a client found mornings tiring. The partner suggested starting with quieter tasks and leaving vacuuming until later. The coordinator confirmed the change suited the plan.",
+      },
     ],
   },
   {
@@ -290,7 +372,10 @@ export const stories: Story[] = [
     audience: ["coordinator"],
     relatedLesson: "noticing-a-change",
     body: [
-      { type: "p", text: "The coordinator path starts with a scenario about noticing a change in a client’s needs. More scenarios will follow after the pilot." },
+      {
+        type: "p",
+        text: "The coordinator path starts with a scenario about noticing a change in a client’s needs. More scenarios will follow after the pilot.",
+      },
     ],
   },
   {
@@ -301,7 +386,13 @@ export const stories: Story[] = [
     byline: "Industry roundup (demo)",
     date: "2026-10-06T23:00:00Z",
     readMinutes: 5,
-    visual: { variant: "petals", tone: "sky", icon: "spark", alt: "An older couple sitting at a kitchen table going through paperwork together, beside a Trilogy home and flower graphic", photo: { src: "/images/jill.jpeg", width: 576, height: 300, position: "70% center" } },
+    visual: {
+      variant: "petals",
+      tone: "sky",
+      icon: "spark",
+      alt: "An older couple sitting at a kitchen table going through paperwork together, beside a Trilogy home and flower graphic",
+      photo: { src: "/images/jill.jpeg", width: 576, height: 300, position: "70% center" },
+    },
     audience: ["partner", "coordinator"],
     body: [
       { type: "p", text: "Roundups will summarise relevant sector news with a clear source and date for each item. This demonstration shows the format only." },

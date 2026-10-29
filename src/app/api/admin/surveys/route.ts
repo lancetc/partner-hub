@@ -5,7 +5,7 @@ export async function GET() {
   return handle(({ db, user }) => ({ surveys: listSurveys(db, user) }));
 }
 
-/** New survey, from the module feedback template or blank. */
+/** New survey, from the learning path feedback template or blank. */
 export async function POST(req: Request) {
   return handle(async ({ db, user, now }) => createSurvey(db, user, await body<Partial<SurveyInput> & { template?: "module" | "blank" }>(req), now));
 }

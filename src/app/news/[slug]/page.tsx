@@ -2,28 +2,100 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { categoryLabel, policyStatusLabel, stories, storyBySlug, type StoryBlock } from "@/content/stories";
+import { categoryLabel, policyStatusLabel, stories, storyBySlug, type Story, type StoryBlock } from "@/content/stories";
 import { lessonBySlug } from "@/content/lessons";
 import { resources } from "@/content/resources";
 import { StoryVisual } from "@/components/StoryVisual";
 import { SaveButton } from "@/components/SaveButton";
 import { StoryTile } from "@/components/StoryTile";
 import { Icon } from "@/components/Icon";
+import { RichInline, RichText } from "@/components/RichText";
 import { formatDate } from "@/lib/format";
+import { connection } from "next/server";
+import { getDb } from "@/server/db";
+import { currentUser } from "@/server/auth";
+import { storyPreview } from "@/server/stories";
 
 export function generateStaticParams() {
   return stories.map((s) => ({ slug: s.slug }));
 }
 
-export async function generateMetadata({ params }: PageProps<"/news/[slug]">): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps<"/news/[slug]">): Promise<Metadata> {
+  getDb();
   const story = storyBySlug((await params).slug);
-  return { title: story?.title ?? "Story" };
+  if (!story) return { title: "Story", robots: { index: false } };
+  const title = story.seo?.title || story.title;
+  const description = story.seo?.description || story.dek;
+  const url = `/news/${story.slug}`;
+  const image = story.visual.photo
+    ? [{ url: story.visual.photo.src, width: story.visual.photo.width, height: story.visual.photo.height, alt: story.visual.alt }]
+    : undefined;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      url,
+      title,
+      description,
+      siteName: "Trilogy Care Partner Hub",
+      locale: "en_AU",
+      publishedTime: story.date,
+      ...(story.updated ? { modifiedTime: story.updated } : {}),
+      section: categoryLabel(story.category),
+      authors: [story.byline],
+      ...(image ? { images: image } : {}),
+    },
+    twitter: { card: image ? "summary_large_image" : "summary", title, description, ...(image ? { images: [image[0].url] } : {}) },
+    // An author's preview of a draft is never indexed.
+    ...((await searchParams).preview === "1" ? { robots: { index: false, follow: false } } : {}),
+  };
+}
+
+/** NewsArticle structured data, so search engines can show the headline, picture and dates. */
+function articleData(story: Story) {
+  const base = (process.env.HUB_PUBLIC_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const url = `${base}/news/${story.slug}`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: (story.seo?.title || story.title).slice(0, 110),
+    description: story.seo?.description || story.dek,
+    ...(story.visual.photo ? { image: [`${base}${story.visual.photo.src}`] } : {}),
+    datePublished: story.date,
+    dateModified: story.updated ?? story.date,
+    articleSection: categoryLabel(story.category),
+    author: { "@type": "Organization", name: story.byline || "Trilogy Care" },
+    publisher: { "@type": "Organization", name: "Trilogy Care", logo: { "@type": "ImageObject", url: `${base}/brand/trilogy-logo.svg` } },
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+  };
 }
 
 function Block({ block }: { block: StoryBlock }) {
   switch (block.type) {
     case "p":
-      return <p>{block.text}</p>;
+      return <RichText text={block.text} />;
+    case "image":
+      return (
+        <figure
+          className={
+            block.align === "left"
+              ? "sm:float-left sm:mb-3 sm:mr-6 sm:w-[45%]"
+              : block.align === "right"
+                ? "sm:float-right sm:mb-3 sm:ml-6 sm:w-[45%]"
+                : block.align === "center"
+                  ? "mx-auto max-w-md"
+                  : "clear-both"
+          }
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={block.src} alt={block.alt} width={block.width} height={block.height} loading="lazy" className="h-auto w-full rounded-2xl" />
+          {block.caption && <figcaption className="mt-2 font-mulish text-sm text-ink-muted">{block.caption}</figcaption>}
+        </figure>
+      );
+    case "h3":
+      return <h3 className="pt-2 font-serif text-xl font-semibold text-ink">{block.text}</h3>;
     case "h2":
       return <h2 className="pt-4 font-serif text-2xl font-semibold text-ink">{block.text}</h2>;
     case "list":
@@ -32,7 +104,9 @@ function Block({ block }: { block: StoryBlock }) {
           {block.items.map((i) => (
             <li key={i} className="flex gap-3">
               <Icon name="check" className="mt-1 size-5 shrink-0 text-accent" />
-              <span>{i}</span>
+              <span>
+                <RichInline text={i} />
+              </span>
             </li>
           ))}
         </ul>
@@ -47,17 +121,27 @@ function Block({ block }: { block: StoryBlock }) {
   }
 }
 
-export default function StoryPage({ params }: PageProps<"/news/[slug]">) {
+export default function StoryPage({ params, searchParams }: PageProps<"/news/[slug]">) {
   return (
     <Suspense fallback={<div className="mx-auto min-h-[70vh] max-w-7xl px-4 pt-6 sm:px-6" aria-busy="true" />}>
-      <StoryArticle params={params} />
+      <StoryArticle params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["params"] }) {
+async function StoryArticle({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/news/[slug]">["params"];
+  searchParams: PageProps<"/news/[slug]">["searchParams"];
+}) {
   const { slug } = await params;
-  const story = storyBySlug(slug);
+  // Stories can be edited in admin at any time, so read them fresh; authors can preview a draft with ?preview=1.
+  await connection();
+  const db = getDb();
+  const draft = (await searchParams).preview === "1" ? storyPreview(db, await currentUser(db), slug) : null;
+  const story = draft ?? storyBySlug(slug);
   if (!story) notFound();
 
   const lesson = story.relatedLesson ? lessonBySlug(story.relatedLesson) : undefined;
@@ -67,6 +151,13 @@ async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["par
 
   return (
     <article className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
+      {/* JSON.stringify output can't close the script tag: "<" is escaped. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleData(story)).replace(/</g, "\\u003c") }} />
+      {draft && (
+        <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
+          <strong>Author preview.</strong> This is the saved version from the News editor. Learners see it only once it’s published.
+        </p>
+      )}
       <Link href="/" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink">
         <Icon name="arrow-left" className="size-4" /> All news
       </Link>
@@ -86,7 +177,8 @@ async function StoryArticle({ params }: { params: PageProps<"/news/[slug]">["par
       <StoryVisual {...story.visual} className="mx-auto mt-8 aspect-[21/9] max-w-5xl rounded-3xl" iconSize="size-14" priority />
 
       <div className="mx-auto mt-10 grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex flex-col gap-5 text-lg leading-relaxed text-ink">
+        {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
+        <div className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5">
           {p && (
             <div className="rounded-2xl border border-line bg-muted p-5 text-base">
               <p className="flex items-center gap-2 font-semibold">

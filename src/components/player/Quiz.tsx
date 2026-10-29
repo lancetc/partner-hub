@@ -41,7 +41,7 @@ export function Quiz({
                   key={o.id}
                   className={cx(
                     "fx-press relative flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-2 transition-colors",
-                    selected ? "border-action bg-tealtint" : "border-line bg-surface hover:border-line-strong",
+                    selected ? "border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line bg-surface hover:border-line-strong",
                     checked && "cursor-default",
                     // Chosen: a springy pop. Checked: a glow and burst if right, a small shake if not.
                     selected && (checked ? (right ? "fx-correct" : "fx-shake") : "fx-pop"),
@@ -67,7 +67,10 @@ export function Quiz({
             {checked && picked && (
               <p
                 role="status"
-                className={cx("fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]", right ? "bg-tealtint" : "border border-danger/60 bg-surface")}
+                className={cx(
+                  "fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]",
+                  right ? "bg-[#DDE8D9] dark:bg-tealtint" : "border border-danger/60 bg-surface",
+                )}
               >
                 <Icon name={right ? "check" : "alert"} className={cx("fx-tick mt-0.5 size-5 shrink-0", right ? "text-accent" : "text-danger")} />
                 <span>

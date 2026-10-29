@@ -6,7 +6,8 @@ import { syncPublishedLessons } from "./lessonRegistry";
 import { editorLesson, publishLesson, saveDraft } from "./authoredLessons";
 import { recordLessonCompletion } from "./learning";
 import { saveProgress } from "./progress";
-import { completionsCsv, isFor, lessonReport, lessonsOverview, peopleOverview, personReport } from "./completionReports";
+import { completionsCsv, isFor, lessonReport, lessonsOverview, pathReport, pathsOverview, peopleOverview, personReport } from "./completionReports";
+import { assignLearningPath, createLearningPath } from "./learningPaths";
 
 /* Completion reports: by lesson and by person, scoped to the viewer's organisation. */
 
@@ -94,6 +95,28 @@ describe("by person", () => {
     expect(Array.isArray(r.paths)).toBe(true);
     expect(Array.isArray(r.signoffs)).toBe(true);
     expect(peopleOverview(db, u("jordan"), now).find((p) => p.id === "sam")!.completed).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("by learning path", () => {
+  it("shows who finished the path, who is part way, who is overdue, and each topic", () => {
+    const other = lessons.find((l) => l.slug !== slug)!.slug;
+    const { id } = createLearningPath(db, u("jordan"), { name: "Path report test", lessons: [slug, other] }, now);
+    assignLearningPath(db, u("jordan"), id, ["sam"], "2026-12-01", now);
+    assignLearningPath(db, u("jordan"), id, ["ash"], "2026-10-01", now);
+    recordLessonCompletion(db, u("sam"), { slug, version: lesson().version }, now);
+    recordLessonCompletion(db, u("sam"), { slug: other, version: lessons.find((l) => l.slug === other)!.version }, now);
+    partWay("ash");
+
+    expect(pathsOverview(db, u("jordan"), now).find((p) => p.id === id)).toMatchObject({ topics: 2, assigned: 2, completed: 1, inProgress: 1, overdue: 1 });
+    const r = pathReport(db, u("jordan"), id, now);
+    expect(r.people.find((p) => p.person.id === "sam")).toMatchObject({ state: "completed", completed: 2, overdue: false, next: null });
+    expect(r.people.find((p) => p.person.id === "ash")).toMatchObject({ state: "in_progress", completed: 0, overdue: true, next: { slug } });
+    expect(r.topics[0]).toMatchObject({ slug, completed: 1, inProgress: 1 });
+
+    // An organisation admin only sees their own people.
+    expect(pathReport(db, u("casey"), id, now).people.map((p) => p.person.id)).toEqual(["sam"]);
+    expect(() => pathReport(db, u("jordan"), "no-such-path", now)).toThrow(/not found/);
   });
 });
 

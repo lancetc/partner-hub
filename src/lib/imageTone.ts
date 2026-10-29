@@ -57,13 +57,15 @@ export function useTextTone(src: string | undefined, choice: "auto" | TextTone =
   return cache.get(src) ?? (measured?.src === src ? measured.tone : "light");
 }
 
-// Frosted glass: the background shows through, blurred, while dark text stays readable on it.
-const GLASS =
-  "rounded-2xl border border-white/45 p-3 text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_8px_32px_rgb(0_0_0/0.18)] backdrop-blur-[36px] backdrop-saturate-[1.8] [text-shadow:none] dark:border-white/15";
-/** Over a light background: clear glass. */
-export const ON_COLOUR_PANEL = `${GLASS} bg-white/35 backdrop-brightness-[1.12] dark:bg-surface/40`;
-/** Over a dark background: frosted a little more so hint text stays readable. */
-const ON_DARK_PANEL = `${GLASS} bg-white/55 backdrop-brightness-[1.3] dark:bg-surface/55`;
+/*
+  The panel questions and choices sit on over a coloured card or photo: solid warm ivory (#F3EDE1),
+  so dark text stays readable on anything. In dark mode it stays frosted glass over the dark surface,
+  since the choices inside follow the dark colours.
+*/
+const PANEL =
+  "rounded-2xl p-3 text-ink shadow-[0_8px_28px_rgb(0_0_0/0.16)] [text-shadow:none] bg-[#F3EDE1] dark:border dark:border-white/15 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_8px_32px_rgb(0_0_0/0.18)] dark:backdrop-blur-[36px] dark:backdrop-saturate-[1.8]";
+export const ON_COLOUR_PANEL = `${PANEL} dark:bg-surface/40`;
+const ON_DARK_PANEL = `${PANEL} dark:bg-surface/55`;
 
 /** Classes for text over a full-background photo. */
 export const toneClasses = (tone: TextTone) =>

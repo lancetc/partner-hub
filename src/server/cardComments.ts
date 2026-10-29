@@ -87,7 +87,12 @@ export function postComment(db: Db, user: User, slug: string, cardId: string, te
   if (clean.length < 3) throw new HttpError(400, "Write a few words first.");
   if (clean.length > MAX_COMMENT) throw new HttpError(400, `Keep it under ${MAX_COMMENT} characters.`);
   const since = new Date(now.getTime() - 3600_000).toISOString();
-  const recent = (db.prepare("SELECT COUNT(*) AS n FROM card_comments WHERE user_id = ? AND created_at >= ?").get(user.id, since) as { n: number }).n;
+  // The hour up to now (not anything dated later, such as demo comments).
+  const recent = (
+    db.prepare("SELECT COUNT(*) AS n FROM card_comments WHERE user_id = ? AND created_at >= ? AND created_at <= ?").get(user.id, since, now.toISOString()) as {
+      n: number;
+    }
+  ).n;
   if (recent >= PER_HOUR) throw new HttpError(429, "That’s a lot of comments for one hour. Try again later.");
   const at = now.toISOString();
   db.prepare("INSERT INTO card_comments (lesson_slug, card_id, user_id, text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(

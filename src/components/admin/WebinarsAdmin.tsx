@@ -9,8 +9,9 @@ import { parseVideoLink, videoLinkFor } from "@/lib/videoLinks";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { WebinarPlayer } from "../WebinarPlayer";
-import { uploadImage, uploadVideo } from "./LessonEditor";
+import { uploadVideo } from "./LessonEditor";
 import { confirmAction } from "@/lib/confirm";
+import { ImageDropZone } from "./ImagePicker";
 
 /* Recorded webinars: add the recording and details, then publish for learners. */
 
@@ -44,6 +45,7 @@ export function WebinarList() {
           <Icon name="plus" className="size-4" /> Add a webinar
         </Link>
       </div>
+      <PageText />
       {error && (
         <div className="mt-4">
           <ErrorNote text={error} />
@@ -271,26 +273,14 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
 
           <section className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5">
             <h2 className="font-serif text-xl font-semibold">Thumbnail, resources and transcript</h2>
-            <div className="flex flex-wrap items-center gap-3">
-              {w.thumbnail ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={w.thumbnail} alt="" className="h-20 w-36 rounded-xl object-cover" />
-              ) : (
-                <span className="grid h-20 w-36 place-items-center rounded-xl bg-muted text-xs text-ink-muted">No thumbnail</span>
-              )}
-              <label className={cx(btn.secondary, "cursor-pointer")}>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) run(async () => set({ thumbnail: (await uploadImage(f)).src }), "Thumbnail uploaded.");
-                  }}
-                />
-                <Icon name="image" className="size-4" /> Choose an image
-              </label>
+            <div className="max-w-sm">
+              <p className="mb-1.5 text-sm font-semibold">Thumbnail</p>
+              <ImageDropZone
+                picture={w.thumbnail ? { src: w.thumbnail, width: 1600, height: 900 } : undefined}
+                label="Drag a thumbnail here"
+                aspect="aspect-video"
+                onChange={(p) => set({ thumbnail: p?.src ?? null })}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <p className="text-sm font-semibold">Resources</p>
@@ -390,5 +380,55 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
         </aside>
       </div>
     </AdminShell>
+  );
+}
+
+/** The Webinars page's own heading and introduction. */
+function PageText() {
+  const { data } = useApi<{ heading: string; intro: string }>("/api/admin/webinars/page");
+  const [draft, setDraft] = useState<{ heading: string; intro: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+  const v = draft ?? data;
+  if (!v) return null;
+  async function save() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await api<{ heading: string; intro: string }>("/api/admin/webinars/page", { method: "PUT", body: v });
+      setDraft(r);
+      setNote({ text: "Saved. The Webinars page is updated.", ok: true });
+    } catch (e) {
+      setNote({ text: (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <details className="mt-5 rounded-2xl border border-line bg-surface p-4">
+      <summary className="cursor-pointer font-semibold">Page heading and introduction</summary>
+      <div className="mt-3 grid max-w-3xl gap-3">
+        <Field label="Heading">
+          <input className={input} value={v.heading} onChange={(e) => setDraft({ ...v, heading: e.target.value })} />
+        </Field>
+        <Field label="Introduction" hint="Shown under the heading on the Webinars page.">
+          <textarea
+            rows={2}
+            className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2"
+            value={v.intro}
+            onChange={(e) => setDraft({ ...v, intro: e.target.value })}
+          />
+        </Field>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className={btn.primary} disabled={busy || !draft} onClick={save}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <a href="/webinars" target="_blank" rel="noopener" className="text-sm font-semibold text-accent hover:underline">
+            View the page
+          </a>
+          {note && <span className={cx("text-sm", note.ok ? "text-ink-muted" : "font-semibold text-danger")}>{note.text}</span>}
+        </div>
+      </div>
+    </details>
   );
 }

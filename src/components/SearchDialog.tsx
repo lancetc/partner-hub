@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { stories, categoryLabel } from "@/content/stories";
 import { lessons } from "@/content/lessons";
 import { resources } from "@/content/resources";
+import { plainText } from "@/lib/richText";
 import { HeaderIconButton } from "./IconButton";
 import { Icon } from "./Icon";
 import { useHub } from "@/lib/store";
@@ -22,7 +23,7 @@ const index: Result[] = [
     href: `/news/${s.slug}`,
     title: s.title,
     meta: categoryLabel(s.category),
-    text: `${s.title} ${s.dek} ${s.body.map((b) => ("text" in b ? b.text : "items" in b ? b.items.join(" ") : "")).join(" ")}`,
+    text: `${s.title} ${s.dek} ${s.body.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "image" ? `${b.alt} ${b.caption ?? ""}` : plainText(b.text))).join(" ")}`,
   })),
   ...lessons
     .filter((l) => l.track !== "reinforcement")

@@ -228,17 +228,17 @@ export function plainText(src: string) {
 
 /* For the editor: escaped HTML to edit in place, and reading what the author typed or pasted back into blocks. */
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function inlineHtml(c: Inline[]): string {
+export function inlineHtml(c: Inline[]): string {
   return c
     .map((x) =>
       x.t === "text"
-        ? esc(x.v)
+        ? escapeHtml(x.v)
         : x.t === "br"
           ? "<br>"
           : x.t === "a"
-            ? `<a href="${esc(x.href)}">${inlineHtml(x.c)}</a>`
+            ? `<a href="${escapeHtml(x.href)}">${inlineHtml(x.c)}</a>`
             : `<${x.t === "b" ? "strong" : "em"}>${inlineHtml(x.c)}</${x.t === "b" ? "strong" : "em"}>`,
     )
     .join("");
