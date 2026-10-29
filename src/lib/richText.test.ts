@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blocksToText, domToText, hasFormatting, parseRich, plainText, toHtml, type DomLike } from "./richText";
+import { blocksToText, domToText, hasFormatting, parseRich, plainText, toHtml, toInlineHtml, type DomLike } from "./richText";
 
 /* Rich text on Text cards: a few marks in a plain string, read into blocks and written back. */
 
@@ -96,5 +96,19 @@ describe("reading the editor", () => {
       el("TABLE", [el("THEAD", [el("TR", [el("TH", ["A"]), el("TH", ["B"])])]), el("TBODY", [el("TR", [el("TD", ["1"]), el("TD", ["2|3"])])])]),
     ]);
     expect(domToText(root)).toBe("- one\n- two\n\n| A | B |\n| --- | --- |\n| 1 | 2\\|3 |");
+  });
+});
+
+describe("sentences that look like list items", () => {
+  it("keeps a numbered or dashed sentence as typed, and reads it back the same", () => {
+    const root = el("DIV", [el("P", ["3. Trilogy claims the agreed price"]), el("P", ["- not a list either"])]);
+    const text = domToText(root);
+    expect(parseRich(text).map((b) => b.t)).toEqual(["p", "p"]);
+    expect(plainText(text)).toBe("3. Trilogy claims the agreed price - not a list either");
+    expect(blocksToText(parseRich(text))).toBe(text);
+  });
+
+  it("draws a point as one line, never a list", () => {
+    expect(toInlineHtml("3. Trilogy **claims**")).toBe("<p>3. Trilogy <strong>claims</strong></p>");
   });
 });

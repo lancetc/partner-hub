@@ -34,7 +34,7 @@ export function parseInline(s: string): Inline[] {
   let i = 0;
   while (i < s.length) {
     const ch = s[i];
-    if (ch === "\\" && i + 1 < s.length && /[\\*[\]|]/.test(s[i + 1])) {
+    if (ch === "\\" && i + 1 < s.length && /[\\*[\]|.)•-]/.test(s[i + 1])) {
       text += s[i + 1];
       i += 2;
       continue;
@@ -196,7 +196,14 @@ function wrap(s: string, m: string) {
 export function blocksToText(blocks: Block[]) {
   return blocks
     .map((b) => {
-      if (b.t === "p") return inlineToText(b.c).replace(/^\n+|\n+$/g, "");
+      if (b.t === "p")
+        return (
+          inlineToText(b.c)
+            .replace(/^\n+|\n+$/g, "")
+            // A line that starts like "3. " or "- " is still a sentence, not a list: mark it so it reads back the same.
+            .replace(/^(\s*\d+)([.)])(\s)/gm, "$1\\$2$3")
+            .replace(/^(\s*)([-•])(\s)/gm, "$1\\$2$3")
+        );
       if (b.t === "ul") return b.items.map((it) => `- ${inlineToText(it).replace(/\n/g, " ")}`).join("\n");
       if (b.t === "ol") return b.items.map((it, n) => `${n + 1}. ${inlineToText(it).replace(/\n/g, " ")}`).join("\n");
       const row = (r: Inline[][]) => `| ${r.map((c) => inlineToText(c, true).trim() || " ").join(" | ")} |`;
@@ -235,6 +242,11 @@ function inlineHtml(c: Inline[]): string {
             : `<${x.t === "b" ? "strong" : "em"}>${inlineHtml(x.c)}</${x.t === "b" ? "strong" : "em"}>`,
     )
     .join("");
+}
+
+/** One line, for points and choices: the text is never read as a list or a table, so "3. Trilogy claims…" stays as typed. */
+export function toInlineHtml(src: string) {
+  return `<p>${inlineHtml(parseInline(src)) || "<br>"}</p>`;
 }
 
 export function toHtml(src: string) {

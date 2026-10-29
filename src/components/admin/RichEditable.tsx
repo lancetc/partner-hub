@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
-import { domToText, safeHref, toHtml } from "@/lib/richText";
+import { domToText, safeHref, toHtml, toInlineHtml } from "@/lib/richText";
 import { Icon } from "../Icon";
 
 /*
@@ -53,7 +53,7 @@ export function RichEditable({
   const saved = useRef<Range | null>(null);
   const last = useRef(value);
   // Rendered once; after that the browser owns the editing area.
-  const [initial] = useState(() => toHtml(value));
+  const [initial] = useState(() => (inline ? toInlineHtml(value) : toHtml(value)));
   const [focused, setFocused] = useState(false);
   const [inTable, setInTable] = useState(false);
   const [active, setActive] = useState({ bold: false, italic: false, link: false });
@@ -73,10 +73,10 @@ export function RichEditable({
   useEffect(() => {
     const el = ref.current;
     if (el && value !== last.current && !el.contains(document.activeElement)) {
-      el.innerHTML = toHtml(value);
+      el.innerHTML = inline ? toInlineHtml(value) : toHtml(value);
       last.current = value;
     }
-  }, [value]);
+  }, [value, inline]);
 
   useEffect(() => {
     if (!focused) return;

@@ -4,15 +4,16 @@ import Link from "next/link";
 import { toggleCardBookmark, useHub, useHydrated, type CardBookmark } from "@/lib/store";
 import { formatDate } from "@/lib/format";
 import { Icon } from "./Icon";
-import { searchIndex } from "./SearchDialog";
+import { useSavedItems } from "./SearchDialog";
 import { SaveButton } from "./SaveButton";
 
 export function SavedList() {
   const hydrated = useHydrated();
   const saved = useHub((s) => s.saved);
   const cards = useHub((s) => s.bookmarks ?? []);
-  if (!hydrated) return null;
-  const items = saved.map((id) => searchIndex.find((r) => r.id === id)).filter((r) => r !== undefined);
+  const loaded = useSavedItems(hydrated ? saved : []);
+  if (!hydrated || !loaded) return null;
+  const items = loaded;
 
   if (!items.length && !cards.length) {
     return (

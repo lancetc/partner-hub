@@ -37,6 +37,7 @@ import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
 import { Widget } from "./Widget";
+import { TopicChat } from "./TopicChat";
 import { RichInline, RichText } from "../RichText";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
@@ -578,18 +579,22 @@ export function LessonPlayer({
               </p>
             ))}
           <div className="flex items-center justify-between gap-2">
-            {attempt.route.length > 1 ? (
-              <button
-                type="button"
-                onClick={back}
-                aria-label="Back"
-                className="inline-flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-line-strong px-3 font-medium hover:bg-muted min-[400px]:px-4"
-              >
-                <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
-              </button>
-            ) : (
-              dock && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
-            )}
+            <div className="flex items-center gap-2">
+              {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
+              {!reviewToken && <TopicChat slug={lesson.slug} title={lesson.title} card={{ id: node.id, heading: node.heading }} preview={preview} />}
+              {attempt.route.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={back}
+                  aria-label="Back"
+                  className="inline-flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-line-strong px-3 font-medium hover:bg-muted min-[400px]:px-4"
+                >
+                  <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
+                </button>
+              ) : (
+                dock && reviewToken && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
+              )}
+            </div>
             {dock && (
               <Narration
                 key={node.id}
@@ -1495,7 +1500,11 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
       {points.style === "chips" ? (
         <ul className="flex flex-wrap gap-2">
           {points.items.map((p, i) => (
-            <li key={p.text} className={cx("inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-[0.95rem]", box)}>
+            <li
+              key={p.text}
+              className={cx("fx-stagger inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-[0.95rem]", box)}
+              style={{ ["--i" as string]: i }}
+            >
               <span
                 aria-hidden
                 className={cx(
@@ -1513,8 +1522,9 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
         </ul>
       ) : (
         <ul className="grid grid-cols-2 gap-2">
-          {points.items.map((p) => (
-            <li key={p.text} className={cx("flex flex-col gap-2 rounded-2xl p-3", box)}>
+          {/* One after another, like the summary card's points. */}
+          {points.items.map((p, i) => (
+            <li key={p.text} className={cx("fx-stagger flex flex-col gap-2 rounded-2xl p-3", box)} style={{ ["--i" as string]: i }}>
               {p.icon && (
                 <span
                   aria-hidden
