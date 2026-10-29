@@ -20,7 +20,7 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
   const hydrated = useHydrated();
   const attempts = useHub((s) => s.lessons);
   const me = useApi<Me>("/api/me").data;
-  const paths = useApi<{ paths: (MyPath & { done?: boolean })[] }>("/api/learning-paths").data?.paths ?? [];
+  const paths = useApi<{ paths: (MyPath & { done?: boolean; assigned?: boolean })[] }>("/api/learning-paths?started=1").data?.paths ?? [];
   const followUps = useApi<{ items: FollowUpListItem[] }>("/api/follow-ups").data?.items ?? [];
   const certificates = useApi<{ certificates: { id: string }[] }>("/api/me/certificates").data?.certificates.length ?? 0;
   if (!hydrated) return <div className="mt-6 min-h-40" aria-hidden />;
@@ -91,7 +91,9 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
             <div key={p.id} className="flex flex-col gap-2 rounded-2xl border border-line p-4">
               <div className="flex items-start justify-between gap-3">
                 <span className="min-w-0">
-                  <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Learning path</span>
+                  <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+                    {p.assigned === false ? "Learning path you’ve started" : "Learning path"}
+                  </span>
                   <Link href={`/paths/${encodeURIComponent(p.id)}`} className="font-serif text-lg font-semibold leading-snug hover:underline">
                     {p.name}
                   </Link>

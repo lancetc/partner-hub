@@ -491,6 +491,34 @@ export function myLearningPaths(db: Db, user: User) {
 }
 
 /**
+  Paths someone is working through on their own: live paths not assigned to them that include a
+  topic they've started or finished. Shown beside their assigned paths in Your learning.
+*/
+export function startedLearningPaths(db: Db, user: User) {
+  const touched = new Set([
+    ...completedSlugs(db, user.id).keys(),
+    ...(db.prepare("SELECT slug FROM lesson_progress WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug),
+  ]);
+  const rows = db
+    .prepare(
+      "SELECT p.* FROM learning_paths p WHERE p.archived = 0 AND NOT EXISTS (SELECT 1 FROM learning_path_assignments a WHERE a.path_id = p.id AND a.user_id = ?) ORDER BY p.name",
+    )
+    .all(user.id) as PathRow[];
+  return rows
+    .filter((p) => slugsFor(db, p.id).some((s) => touched.has(s)))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      inOrder: Boolean(p.in_order),
+      dueDate: null,
+      assigned: false,
+      chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
+      ...progress(db, user.id, slugsFor(db, p.id), Boolean(p.in_order)),
+    }));
+}
+
+/**
   One path as a learner sees it, for its own page (where a QR code leads). Anyone signed in can
   open it; it shows their own progress, and their due date if it's assigned to them.
 */

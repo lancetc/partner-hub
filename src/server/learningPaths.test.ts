@@ -18,6 +18,7 @@ import {
   updateLearningPath,
   certificateFor,
   myCertificates,
+  startedLearningPaths,
 } from "./learningPaths";
 
 /* Learning paths: named sets of lessons, in order, assigned to people. */
@@ -230,5 +231,20 @@ describe("certificates", () => {
     archiveLearningPath(db, u("jordan"), id, now);
     expect(certificateFor(db, u("sam"), id)).toMatchObject({ deleted: true });
     expect(myCertificates(db, u("sam")).some((c) => c.id === id)).toBe(true);
+  });
+});
+
+describe("paths someone has started on their own", () => {
+  it("lists live, unassigned paths with a topic they've done, and not their assigned ones", () => {
+    const { id } = createLearningPath(db, u("jordan"), { name: "Self-paced", lessons: ["noticing-a-change", "our-mission-and-model"] }, now);
+    expect(startedLearningPaths(db, u("riley")).map((p) => p.id)).not.toContain(id);
+    recordLessonCompletion(db, u("riley"), { slug: "noticing-a-change", version: "1.0" }, now);
+    const started = startedLearningPaths(db, u("riley")).find((p) => p.id === id);
+    expect(started).toMatchObject({ assigned: false, completed: 1, dueDate: null });
+    assignLearningPath(db, u("jordan"), id, ["riley"], null, now);
+    expect(startedLearningPaths(db, u("riley")).map((p) => p.id)).not.toContain(id);
+    expect(myLearningPaths(db, u("riley")).map((p) => p.id)).toContain(id);
+    archiveLearningPath(db, u("jordan"), id, now);
+    expect(startedLearningPaths(db, u("riley")).map((p) => p.id)).not.toContain(id);
   });
 });
