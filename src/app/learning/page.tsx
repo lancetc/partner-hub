@@ -9,7 +9,11 @@ import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { MyLearningPaths } from "@/components/MyLearningPaths";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 
-export const metadata: Metadata = { title: "Learning" };
+export const metadata: Metadata = {
+  title: "Learning",
+  description: "Short, practical topics and learning paths for Trilogy Care service partners and care coordinators, built around real visits.",
+  alternates: { canonical: "/learning" },
+};
 
 export default function LearningPage() {
   return (

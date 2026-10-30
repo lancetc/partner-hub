@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { whoPhotoFor } from "@/lib/pathPhoto";
 import { useApi } from "@/lib/api";
-import { cx, formatDuration } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
 import { Icon, type IconName } from "./Icon";
 
 type PathData = MyPath & { assigned: boolean; minutes: number };
 
-/* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the lessons. */
+/* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the topics. */
 export function PathPage({ id, preview = false }: { id: string; preview?: boolean }) {
   const { data, error } = useApi<PathData>(`/api/paths/${encodeURIComponent(id)}`);
   return (
@@ -53,7 +54,7 @@ function Overview({ path: p }: { path: PathData }) {
     { icon: "clock", big: formatDuration(p.minutes), small: "in total, at your own pace" },
     {
       icon: "list",
-      big: `${p.steps.length} short ${p.steps.length === 1 ? "lesson" : "lessons"}`,
+      big: `${p.steps.length} short ${p.steps.length === 1 ? "topic" : "topics"}`,
       small: lengths.length ? (shortest === longest ? `${shortest} minutes each` : `${shortest}–${longest} minutes each`) : "",
     },
     ...(chapters
@@ -113,24 +114,17 @@ function Overview({ path: p }: { path: PathData }) {
           {/* Fixed brand colours, so both panels look the same in light and dark mode. */}
           {p.whoFor && (
             <section className="relative isolate overflow-hidden rounded-3xl bg-[linear-gradient(160deg,#36537f_0%,#2d4875_100%)] p-5 text-white ring-1 ring-white/10">
-              {/* The path's own picture behind the panel, under a navy tint so the text stays readable. */}
-              {p.whoPhoto && (
-                <>
-                  {/* Slightly enlarged, so a picture with a thin border or shadow at its edges still fills the panel cleanly. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.whoPhoto} alt="" aria-hidden className="absolute inset-0 -z-20 size-full scale-[1.06] object-cover" />
-                  {/* Light at the top so the picture shows; deeper navy behind the words lower down. */}
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgb(16_42_67/0.05)_0%,rgb(16_42_67/0.35)_45%,rgb(16_42_67/0.75)_100%)]"
-                  />
-                </>
-              )}
-              <svg aria-hidden viewBox="0 0 120 120" className={cx("absolute -right-3 -top-4 -z-10 size-28 opacity-90", p.whoPhoto && "hidden")}>
-                <ellipse cx="78" cy="38" rx="34" ry="18" fill="#0e7c7b" transform="rotate(-30 78 38)" />
-                <ellipse cx="92" cy="78" rx="30" ry="15" fill="#ffc72c" opacity="0.85" transform="rotate(40 92 78)" />
-                <circle cx="40" cy="20" r="7" fill="#f26a36" />
-              </svg>
+              {/* The path's own picture behind the panel (or the default one), under a navy tint so the text stays readable. */}
+              <>
+                {/* Slightly enlarged, so a picture with a thin border or shadow at its edges still fills the panel cleanly. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={whoPhotoFor(p.whoPhoto)} alt="" aria-hidden className="absolute inset-0 -z-20 size-full scale-[1.06] object-cover" />
+                {/* Light at the top so the picture shows; deeper navy behind the words lower down. */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgb(16_42_67/0.05)_0%,rgb(16_42_67/0.35)_45%,rgb(16_42_67/0.75)_100%)]"
+                />
+              </>
               <span className="grid size-11 place-items-center rounded-2xl bg-[#ffc72c] text-[#102a43] shadow-sm">
                 <Icon name="people" className="size-5" />
               </span>

@@ -7,6 +7,9 @@ import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export default function NewsHome() {
   return (

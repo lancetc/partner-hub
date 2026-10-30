@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { SavedList } from "@/components/SavedList";
 
-export const metadata: Metadata = { title: "Saved items" };
+// Personal to the signed-in person, so kept out of search results.
+export const metadata: Metadata = { title: "Saved items", robots: { index: false, follow: false } };
 
 export default function SavedPage() {
   return (

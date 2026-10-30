@@ -18,6 +18,7 @@ import { now } from "@/server/clock";
 import { isLanguage } from "@/lib/languages";
 import { TranslationNotice, TranslationWatch } from "@/components/player/TranslationNotice";
 import { EmbeddedPreview } from "@/components/player/EmbeddedPreview";
+import { topicMetadata } from "@/server/seo";
 
 export function generateStaticParams() {
   return lessons.map((l) => ({ slug: l.slug }));
@@ -26,7 +27,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps<"/learning/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   getDb();
-  return { title: lessonBySlug(slug)?.title ?? "Topic" };
+  return topicMetadata(slug);
 }
 
 export default function LessonPage({ params, searchParams }: PageProps<"/learning/[slug]">) {

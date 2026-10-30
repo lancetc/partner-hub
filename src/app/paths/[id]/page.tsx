@@ -4,8 +4,13 @@ import { connection } from "next/server";
 import { PathPage } from "@/components/PathPage";
 import { getDb } from "@/server/db";
 import { canAuthor, currentUser } from "@/server/auth";
+import { pathMetadata } from "@/server/seo";
 
-export const metadata: Metadata = { title: "Learning path" };
+export async function generateMetadata({ params }: PageProps<"/paths/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  await connection();
+  return pathMetadata(getDb(), id);
+}
 
 /** Where a learning path's QR code leads. */
 export default function LearningPathPage({ params, searchParams }: PageProps<"/paths/[id]">) {

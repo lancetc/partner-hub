@@ -55,30 +55,34 @@
   color-scheme: light;
 }
 
-/* Dark tokens are new product choices built from the brand navy and teal; they need contrast review. */
+/*
+  Dark mode is built on Trilogy's official blue, #2d4875: the page is the official blue and cards a
+  shade deeper, so they still stand apart. Text colours are lightened to keep 4.5:1 contrast on both.
+*/
 :root[data-theme="dark"] {
-  --bg: #0a1a2e;
-  --surface: #102a43;
-  --surface-muted: #15304f;
-  --surface-strong: #1c3a5e;
-  --surface-teal: #0b3a44;
-  --ink: #f2f6fa;
-  --ink-muted: #b9c8db;
-  --action: #4cc3c9;
-  --action-hover: #74d3d8;
-  --on-action: #0a1a2e;
-  /* Navy can't be read on the dark background, so dark mode uses a light navy blue. */
-  --accent: #a9c2e3;
-  --warm: #f08a5d;
-  --orange: #f07a4a;
-  --danger: #f07a68;
-  --success: #6fbf7c;
+  --bg: #2d4875;
+  --surface: #284170;
+  --surface-muted: #34517f;
+  --surface-strong: #3b5987;
+  --surface-teal: #1d5a68;
+  --ink: #f5f8fc;
+  --ink-muted: #d8e2f0;
+  --action: #62d2d7;
+  --action-hover: #86dde1;
+  --on-action: #102a43;
+  /* Navy can't be read on the blue background, so dark mode uses a light blue. */
+  --accent: #c6d8f3;
+  --warm: #ffb492;
+  --orange: #ffa274;
+  --danger: #ffaa9c;
+  --success: #a2e2ac;
   --gold: #ffc72c;
-  --line: rgb(255 255 255 / 0.12);
-  --line-strong: rgb(255 255 255 / 0.26);
-  --focus: #4cc3c9;
-  --overlay: rgb(0 0 0 / 0.6);
-  --hero: #2d4875;
+  --line: rgb(255 255 255 / 0.16);
+  --line-strong: rgb(255 255 255 / 0.32);
+  --focus: #62d2d7;
+  --overlay: rgb(16 42 67 / 0.7);
+  /* A deeper shade of the official blue, so navy blocks (like Policy updates) stand out from the page. */
+  --hero: #203759;
   --on-hero: #f2f6fa;
   color-scheme: dark;
 }

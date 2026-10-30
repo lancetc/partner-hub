@@ -35,6 +35,13 @@ export function useAutoplay() {
 
 export const autoplayEnabled = read;
 
+/** Stops any card audio playing now, recorded or spoken by the browser (the player's mute button). */
+export const STOP_AUDIO = "tc-stop-audio";
+export function stopAudio() {
+  window.dispatchEvent(new Event(STOP_AUDIO));
+  window.speechSynthesis?.cancel();
+}
+
 /*
   Learner preference for following the narration word by word (the word being spoken is
   highlighted in captions and transcripts). Defaults to on; stored per browser.

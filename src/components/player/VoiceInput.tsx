@@ -45,6 +45,8 @@ export function VoiceInput({
   onListening,
   onUnsupported,
   onType,
+  recordLabel = "Record your answer",
+  tinted = false,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -55,6 +57,10 @@ export function VoiceInput({
   onUnsupported?: () => void;
   /** The learner would rather type. */
   onType?: () => void;
+  /** The record button's words, e.g. "Record your idea". */
+  recordLabel?: string;
+  /** On a coloured card: notes outside the white box use the card's text colour. */
+  tinted?: boolean;
 }) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
@@ -155,7 +161,7 @@ export function VoiceInput({
 
   if (supported === false)
     return (
-      <p className="flex items-start gap-2 text-sm text-ink-muted">
+      <p className={cx("flex items-start gap-2 text-sm", tinted ? "opacity-85" : "text-ink-muted")}>
         <Icon name="mic" className="mt-0.5 size-4 shrink-0" />
         Speaking your answer works in Chrome, Edge and Safari. In this browser, type it below.
       </p>
@@ -180,7 +186,7 @@ export function VoiceInput({
           </>
         ) : (
           <>
-            <Icon name="mic" className="size-6" /> Record your answer
+            <Icon name="mic" className="size-6" /> {recordLabel}
           </>
         )}
       </button>
@@ -225,6 +231,10 @@ export function SpokenAnswer({
   placeholder = "Your words appear here as you speak, or type your answer.",
   describedBy,
   after,
+  label = "Your answer",
+  recordLabel,
+  maxLength = 2000,
+  tinted = false,
 }: {
   id: string;
   value: string;
@@ -234,11 +244,17 @@ export function SpokenAnswer({
   placeholder?: string;
   describedBy?: string;
   after?: React.ReactNode;
+  /** The heading over the words once recorded, e.g. "Your post". */
+  label?: string;
+  recordLabel?: string;
+  maxLength?: number;
+  /** On a coloured card (like the insight wall): links and notes use the card's text colour. */
+  tinted?: boolean;
 }) {
   const [listening, setListening] = useState(false);
   const [typing, setTyping] = useState(false);
   const [voiceWorks, setVoiceWorks] = useState(true);
-  const set = (t: string) => onChange(t.slice(0, 2000));
+  const set = (t: string) => onChange(t.slice(0, maxLength));
   const showAnswer = typing || (Boolean(value.trim()) && !listening);
 
   if (!showAnswer && voiceWorks)
@@ -253,6 +269,8 @@ export function SpokenAnswer({
           setTyping(true);
         }}
         onType={() => setTyping(true)}
+        recordLabel={recordLabel}
+        tinted={tinted}
       />
     );
 
@@ -260,7 +278,7 @@ export function SpokenAnswer({
     <>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
         <label htmlFor={id} className="text-sm font-semibold">
-          Your answer
+          {label}
         </label>
         {voiceWorks && (
           <button
@@ -269,7 +287,7 @@ export function SpokenAnswer({
               set("");
               setTyping(false);
             }}
-            className="inline-flex items-center gap-1 text-sm font-semibold text-accent underline underline-offset-2"
+            className={cx("inline-flex items-center gap-1 text-sm font-semibold underline underline-offset-2", tinted ? "text-white" : "text-accent")}
           >
             <Icon name="mic" className="size-4" /> {value.trim() ? "Record again" : "Record instead"}
           </button>
@@ -279,10 +297,10 @@ export function SpokenAnswer({
         id={id}
         rows={rows}
         value={value}
-        maxLength={2000}
+        maxLength={maxLength}
         placeholder={placeholder}
         onChange={(e) => set(e.target.value)}
-        className="rounded-2xl border border-line-strong bg-surface p-3 text-[1.05rem] text-ink"
+        className="rounded-2xl border border-line-strong bg-surface p-3 text-[1.05rem] text-ink [text-shadow:none] placeholder:text-ink-muted/70"
         aria-describedby={describedBy}
       />
       {after}

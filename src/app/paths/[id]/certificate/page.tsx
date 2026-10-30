@@ -8,7 +8,8 @@ import { certificateFor, learnerPath } from "@/server/learningPaths";
 import { Certificate } from "@/components/Certificate";
 import { Icon } from "@/components/Icon";
 
-export const metadata: Metadata = { title: "Certificate" };
+// Personal to the signed-in person, so kept out of search results.
+export const metadata: Metadata = { title: "Certificate", robots: { index: false, follow: false } };
 
 /** A certificate for a finished learning path, to print or save as a PDF. */
 export default function CertificatePage({ params, searchParams }: PageProps<"/paths/[id]/certificate">) {

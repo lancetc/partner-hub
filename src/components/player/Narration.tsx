@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } fro
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon";
 import { cx } from "@/lib/format";
-import { autoplayEnabled, setFollowWords, useFollowWords } from "@/lib/audioPrefs";
+import { autoplayEnabled, setFollowWords, STOP_AUDIO, useFollowWords } from "@/lib/audioPrefs";
 import { wordAround, wordAt, type WordTiming } from "@/lib/wordTimings";
 import { SpokenText, type Span } from "./SpokenText";
 
@@ -202,6 +202,18 @@ export function Narration({
     };
   }, []);
 
+  // The mute button: stop now. Moving the run on stops the browser voice going on to the next sentence.
+  useEffect(() => {
+    const stop = () => {
+      run.current++;
+      window.speechSynthesis?.cancel();
+      audio.current?.pause();
+      setState((st) => (st === "playing" || st === "loading" ? "paused" : st));
+    };
+    window.addEventListener(STOP_AUDIO, stop);
+    return () => window.removeEventListener(STOP_AUDIO, stop);
+  }, []);
+
   // Auto-play once the card has settled. Browsers only allow it after the learner has interacted
   // with the page (for example pressing Continue); otherwise the play button simply waits.
   const autoStarted = useRef(false);
@@ -260,11 +272,12 @@ export function Narration({
       );
       return;
     }
-    if (state === "paused") {
+    if (state === "paused" && window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
       setState("playing");
     } else {
-      speakFrom(0);
+      // After a mute the voice was cancelled, not paused: pick up from the sentence it was on.
+      speakFrom(state === "paused" ? index : 0);
     }
   }
 

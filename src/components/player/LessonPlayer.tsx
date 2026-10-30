@@ -1953,37 +1953,46 @@ function Wall({
       <p className="text-lg font-semibold leading-snug">{card.prompt}</p>
       {showForm ? (
         <>
-          <textarea
+          {/* Speaking is the main way to share; the words then show to check and correct before posting. */}
+          <SpokenAnswer
+            id={`${card.id}-post`}
+            value={text}
+            onChange={setText}
+            disabled={busy}
             rows={3}
             maxLength={600}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={card.placeholder ?? "Share your idea"}
-            aria-label={card.prompt}
-            className="rounded-2xl border border-line-strong bg-surface p-3 text-[1.05rem] text-ink [text-shadow:none] placeholder:text-ink-muted/70"
+            label="Your post"
+            recordLabel="Record your idea"
+            placeholder={card.placeholder ?? "Your words appear here as you speak, or type your idea."}
+            describedBy={`${card.id}-wall-note`}
+            tinted={tinted}
+            after={
+              <>
+                <p id={`${card.id}-wall-note`} className={cx("text-sm", note)}>
+                  Others on this course will see what you post{card.anonymous ? ", without your name" : " with your first name and role"}. Leave out client
+                  names and details. Your voice isn’t saved.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={post}
+                    disabled={busy || text.trim().length < 3}
+                    className={cx(
+                      "inline-flex min-h-11 items-center gap-2 rounded-full px-5 font-semibold disabled:opacity-45",
+                      tinted ? "bg-white text-[#0a1a2e] shadow-md hover:bg-white/90" : "bg-action text-on-action hover:bg-action-hover",
+                    )}
+                  >
+                    <Icon name="chat" className="size-4" /> {busy ? "Posting…" : editing ? "Save" : "Post to the wall"}
+                  </button>
+                  {editing && (
+                    <button type="button" className={cx("min-h-11 px-3 font-medium", note)} onClick={() => setEditing(false)}>
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </>
+            }
           />
-          <p className={cx("text-sm", note)}>
-            Others on this course will see what you post{card.anonymous ? ", without your name" : " with your first name and role"}. Leave out client names and
-            details.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={post}
-              disabled={busy || text.trim().length < 3}
-              className={cx(
-                "inline-flex min-h-11 items-center gap-2 rounded-full px-5 font-semibold disabled:opacity-45",
-                tinted ? "bg-white text-[#0a1a2e] shadow-md hover:bg-white/90" : "bg-action text-on-action hover:bg-action-hover",
-              )}
-            >
-              <Icon name="chat" className="size-4" /> {busy ? "Posting…" : editing ? "Save" : "Post to the wall"}
-            </button>
-            {editing && (
-              <button type="button" className={cx("min-h-11 px-3 font-medium", note)} onClick={() => setEditing(false)}>
-                Cancel
-              </button>
-            )}
-          </div>
           {!mine && wall && wall.total > 0 && (
             <div className="relative overflow-hidden rounded-2xl" aria-hidden>
               <div className="flex flex-col gap-2 blur-[5px] select-none">
@@ -1995,8 +2004,9 @@ function Wall({
               </div>
             </div>
           )}
-          {!mine && wall && (
-            <p className="text-sm font-semibold text-accent">
+          {/* When the wall is open and empty, "What others shared" below already says they're first. */}
+          {!mine && wall && (wall.total > 0 || !wall.open) && (
+            <p className={cx("text-sm font-semibold", tinted ? "text-white" : "text-accent")}>
               {wall.total ? `${wall.total} ${wall.total === 1 ? "person has" : "people have"} shared. Post yours to see theirs.` : "Be the first to share."}
             </p>
           )}

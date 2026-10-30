@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.HUB_PUBLIC_URL ?? "http://localhost:3000"),
   title: { default: "Partner Hub · Trilogy Care", template: "%s · Partner Hub" },
   description: "News, practical learning and onboarding for Trilogy Care service partners and care coordinators.",
+  openGraph: { siteName: "Trilogy Care Partner Hub", locale: "en_AU", type: "website" },
   // Installed on an iPhone home screen, it opens full screen like an app.
   appleWebApp: { capable: true, title: "Partner Hub", statusBarStyle: "default" },
 };
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a1a2e" },
+    { media: "(prefers-color-scheme: dark)", color: "#2d4875" },
   ],
 };
 

@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { FollowUpPlayer } from "@/components/player/FollowUpPlayer";
 
-export const metadata: Metadata = { title: "Follow up" };
+// Personal to the signed-in person, so kept out of search results.
+export const metadata: Metadata = { title: "Follow up", robots: { index: false, follow: false } };
 
 export default function FollowUpPage({ params }: PageProps<"/learning/follow-ups/[id]">) {
   return (

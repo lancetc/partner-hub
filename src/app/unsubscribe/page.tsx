@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Unsubscribe } from "@/components/Unsubscribe";
 
-export const metadata: Metadata = { title: "Email preferences" };
+// Personal to the signed-in person, so kept out of search results.
+export const metadata: Metadata = { title: "Email preferences", robots: { index: false, follow: false } };
 
 /** Where the unsubscribe link in newsletters lands. Nothing changes until the person presses the button. */
 export default function UnsubscribePage({ searchParams }: PageProps<"/unsubscribe">) {

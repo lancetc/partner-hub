@@ -4,7 +4,11 @@ import { SaveButton } from "@/components/SaveButton";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDate } from "@/lib/format";
 
-export const metadata: Metadata = { title: "Resources" };
+export const metadata: Metadata = {
+  title: "Resources",
+  description: "Guides, templates and contacts for Trilogy Care service partners and care coordinators.",
+  alternates: { canonical: "/resources" },
+};
 
 const kindIcon: Record<string, IconName> = { Guide: "book", Template: "doc", Process: "route", Contact: "people" };
 
@@ -15,7 +19,11 @@ export default function ResourcesPage() {
       <p className="mt-2 max-w-2xl text-lg text-ink-muted">Guides, templates and contacts you can come back to. Demonstration content.</p>
       <ul className="mt-8 grid gap-4 md:grid-cols-2">
         {resources.map((r) => (
-          <li key={r.id} id={r.id} className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 target:border-action target:ring-2 target:ring-action/30">
+          <li
+            key={r.id}
+            id={r.id}
+            className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 target:border-action target:ring-2 target:ring-action/30"
+          >
             <div className="flex items-start gap-4">
               <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-tealtint text-accent">
                 <Icon name={kindIcon[r.kind]} />
@@ -36,7 +44,12 @@ export default function ResourcesPage() {
               ))}
             </ul>
             <p className="mt-4 font-mulish text-sm text-ink-muted">
-              {r.audience.includes("partner") && r.audience.includes("coordinator") ? "Partners and coordinators" : r.audience.includes("partner") ? "Service partners" : "Coordinators"} · Updated {formatDate(r.updated)}
+              {r.audience.includes("partner") && r.audience.includes("coordinator")
+                ? "Partners and coordinators"
+                : r.audience.includes("partner")
+                  ? "Service partners"
+                  : "Coordinators"}{" "}
+              · Updated {formatDate(r.updated)}
             </p>
           </li>
         ))}

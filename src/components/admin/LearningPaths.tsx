@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DEFAULT_WHO_PHOTO } from "@/lib/pathPhoto";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
@@ -814,20 +815,27 @@ function WhoPhotoField({ value, onChange }: { value: string; onChange: (src: str
   const [open, setOpen] = useState(false);
   const library = useApi<{ uploads: { src: string; name: string }[] }>(open ? "/api/admin/uploads" : null).data;
   return (
-    <Field label="Picture behind “Who it’s for”" hint="Optional. Shown under a navy tint so the text stays readable.">
+    <Field
+      label="Picture behind “Who it’s for”"
+      hint="Shown under a navy tint so the text stays readable. Without a picture of its own, the path uses the default."
+    >
       <div className="flex flex-wrap items-center gap-3">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={value} alt="" className="h-16 w-24 rounded-xl object-cover ring-1 ring-line" />
         ) : (
-          <span className="grid h-16 w-24 place-items-center rounded-xl border border-dashed border-line-strong text-xs text-ink-muted">None</span>
+          <span className="relative h-16 w-24 overflow-hidden rounded-xl ring-1 ring-line">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={DEFAULT_WHO_PHOTO} alt="" className="size-full object-cover" />
+            <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[0.65rem] font-semibold text-white">Default</span>
+          </span>
         )}
         <button type="button" className={btn.secondary} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          {open ? "Done" : value ? "Change picture" : "Choose a picture"}
+          {open ? "Done" : "Change picture"}
         </button>
         {value && (
           <button type="button" className="font-semibold text-accent hover:underline" onClick={() => onChange("")}>
-            Remove
+            Use the default
           </button>
         )}
       </div>

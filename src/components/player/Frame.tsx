@@ -6,7 +6,7 @@ import { createContext, useContext, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ThemeToggle } from "../ThemeToggle";
-import { setAutoplay, useAutoplay } from "@/lib/audioPrefs";
+import { setAutoplay, stopAudio, useAutoplay } from "@/lib/audioPrefs";
 
 /**
   Set when the player runs inside the lesson editor's preview window: the close button then
@@ -167,11 +167,11 @@ function AutoplayToggle() {
     <button
       type="button"
       aria-pressed={on}
-      aria-label="Play card audio automatically"
-      title={on ? "Auto-play audio is on" : "Auto-play audio is off"}
+      aria-label={on ? "Mute card audio" : "Turn card audio on"}
+      title={on ? "Mute: stop audio and don’t play it automatically" : "Audio off: press to play cards automatically again"}
       onClick={() => {
         setAutoplay(!on);
-        if (on) window.speechSynthesis?.cancel();
+        if (on) stopAudio();
       }}
       className={cx("inline-flex size-11 items-center justify-center rounded-full hover:bg-muted", on ? "text-accent" : "text-ink-muted")}
     >

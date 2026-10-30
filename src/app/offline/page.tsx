@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "You’re offline" };
+// Personal to the signed-in person, so kept out of search results.
+export const metadata: Metadata = { title: "You’re offline", robots: { index: false, follow: false } };
 
 /* Shown by the service worker when a page that hasn't been kept on this device is opened offline. */
 export default function OfflinePage() {
