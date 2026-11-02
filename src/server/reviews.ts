@@ -80,6 +80,11 @@ export function reviewerById(db: Db, id: string | undefined): Reviewer | undefin
 /** Someone opening a review link gives their name and email. Returns the secret kept in their browser. */
 export function joinReview(db: Db, token: string, input: { name?: unknown; email?: unknown }, now: Date) {
   requireLink(db, token);
+  return addReviewer(db, input, now);
+}
+
+/** A new reviewer, once their link has been checked. */
+export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, now: Date) {
   const name = String(input.name ?? "")
     .trim()
     .replace(/\s+/g, " ")

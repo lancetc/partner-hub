@@ -260,7 +260,10 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
                       <div className="h-full rounded-full bg-[#0e7c7b]" style={{ width: `${(doneHere / liveHere.length) * 100}%` }} />
                     </div>
                   )}
-                  <ol className="flex flex-col gap-1 border-t border-line p-2">{steps.map((x) => topic(x, p.steps.indexOf(x)))}</ol>
+                  {/* Topics sit indented under their chapter, on a line down from the chapter's icon. */}
+                  <div className="border-t border-line py-2 pr-2">
+                    <ol className="ml-[33px] flex flex-col gap-1 border-l-2 border-line pl-2 sm:ml-[37px]">{steps.map((x) => topic(x, p.steps.indexOf(x)))}</ol>
+                  </div>
                 </details>
               </div>
             );

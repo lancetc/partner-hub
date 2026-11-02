@@ -21,6 +21,7 @@ export function Frame({
   title,
   beats,
   closeHref = "/learning",
+  closeLabel = "Close and return to Learning",
   saveState,
   onRetry,
   progress,
@@ -34,6 +35,8 @@ export function Frame({
   title: string;
   beats: string[];
   closeHref?: string;
+  /** What the close button says to screen readers, when it goes somewhere other than Learning. */
+  closeLabel?: string;
   saveState: SaveState;
   onRetry?: () => void;
   progress: { beat: number; done: boolean } | null;
@@ -74,11 +77,7 @@ export function Frame({
               <Icon name="close" />
             </button>
           ) : (
-            <Link
-              href={closeHref}
-              aria-label="Close and return to Learning"
-              className="inline-flex size-11 items-center justify-center rounded-full hover:bg-muted"
-            >
+            <Link href={closeHref} aria-label={closeLabel} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-muted">
               <Icon name="close" />
             </Link>
           )}

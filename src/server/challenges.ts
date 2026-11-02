@@ -4,6 +4,7 @@ import { lessons, type Lesson } from "@/content/lessons";
 import { audit, tx, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { catalogueInfo } from "./learningPaths";
+import { thumbnailFor } from "@/lib/pathThumbnail";
 import { addDays, localDate, zonedToUtc, type PlainDate } from "@/lib/schedule";
 import { DEFAULT_POINTS, achievementsFor, displayName, missionScore, rankBy, streakOf, type Points } from "@/lib/challengeScoring";
 
@@ -73,6 +74,11 @@ const membersOf = (db: Db, id: string) =>
     .all(id) as Member[];
 const pointsOf = (r: Row): Points => ({ ...DEFAULT_POINTS, ...(JSON.parse(r.points) as Partial<Points>) });
 const lessonOf = (slug: string) => lessons.find((l) => l.slug === slug);
+/** The challenge's picture: the first mission's cover photo (or its first card photo, or its illustration). */
+const coverOf = (missions: Mission[]) => {
+  const first = missions[0] && lessonOf(missions[0].lesson_slug);
+  return first ? thumbnailFor(first) : null;
+};
 /** "Dot’s Week, Day 1: Welcome, Dot" shows as "Welcome, Dot", since the day is already shown beside it. */
 const shortTitle = (title: string) => title.replace(/^.*?\b(?:Day \d+|Finale):\s*/, "");
 
@@ -239,6 +245,7 @@ export function myChallenges(db: Db, user: User, now: Date) {
         id: c.id,
         name: c.name,
         tagline: c.tagline,
+        cover: coverOf(missions),
         state,
         day: openDays,
         days: missions.length,
@@ -325,6 +332,7 @@ export function challengeView(db: Db, user: User, id: string, now: Date) {
     name: c.name,
     tagline: c.tagline,
     story: c.story,
+    cover: coverOf(missions),
     timezone: c.timezone,
     preview: !member,
     state: now < t.opens[0] ? "upcoming" : now < t.closes ? "live" : "finished",

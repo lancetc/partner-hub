@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDuration } from "./format";
+import { formatDate, formatDuration, formatHoursMinutes } from "./format";
 
 describe("formatDate", () => {
   it("shows a calendar date as that day, in and out of daylight saving", () => {
@@ -20,5 +20,14 @@ describe("formatDuration", () => {
     expect(formatDuration(80)).toBe("About 1½ hours");
     expect(formatDuration(120)).toBe("About 2 hours");
     expect(formatDuration(383)).toBe("About 6½ hours");
+  });
+});
+
+describe("formatHoursMinutes", () => {
+  it("keeps short times in minutes and shows longer ones as hours and minutes", () => {
+    expect(formatHoursMinutes(28)).toBe("28 min");
+    expect(formatHoursMinutes(60)).toBe("1 hr");
+    expect(formatHoursMinutes(120)).toBe("2 hr");
+    expect(formatHoursMinutes(350)).toBe("5 hr 50 min");
   });
 });

@@ -138,7 +138,7 @@ function AboriginalFlag() {
 
 export function SiteFooter() {
   return (
-    <footer className="mt-16 border-t border-line bg-muted/60 pb-24 md:pb-0">
+    <footer className="mt-16 border-t border-line bg-muted/60 pb-24 lg:pb-0">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,15rem)_1fr]">
           <div>

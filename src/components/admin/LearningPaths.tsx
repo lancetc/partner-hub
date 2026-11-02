@@ -7,11 +7,12 @@ import { StoryVisual } from "../StoryVisual";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
-import { cx } from "@/lib/format";
+import { cx, formatHoursMinutes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { confirmAction } from "@/lib/confirm";
 import { QrShare } from "./QrShare";
+import { PathReviewShare } from "./PathReviewShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
 import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft } from "./PathChapters";
 import { AssignDialog, AssignedList } from "./PathPeople";
@@ -229,7 +230,8 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
         </div>
         <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
           {p.chapters.length ? `${p.chapters.length} chapters · ` : ""}
-          {p.lessons.length} {p.lessons.length === 1 ? "topic" : "topics"} · {p.minutes} min{p.inOrder ? " · in order" : ""}
+          {p.lessons.length} {p.lessons.length === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
+          {p.inOrder ? " · in order" : ""}
         </p>
         <h2 className="mt-1 font-serif text-xl font-semibold">
           <Link href={`/admin/learning-paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
@@ -580,7 +582,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <h2 className="font-serif text-xl font-semibold">{canEdit ? (chapters ? "2. Chapters and topics" : "2. Put them in order") : "Topics"}</h2>
               <span className="text-sm text-ink-muted">
                 {chapters ? `${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}
-                {picked.length} {picked.length === 1 ? "topic" : "topics"} · about {minutes} minutes
+                {picked.length} {picked.length === 1 ? "topic" : "topics"} · about {formatHoursMinutes(minutes)}
               </span>
             </div>
             {canEdit && (
@@ -694,6 +696,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <QrShare kind="path" id={id} assigned={detail?.assignments.length ?? 0} className={btn.secondary} />
             </div>
           )}
+          {!isNew && id && me?.canAuthor && <PathReviewShare id={id} />}
           {!canEdit && (
             <p className="text-sm text-ink-muted">Made by another organisation’s administrator or a learning author. You can assign it to your people.</p>
           )}

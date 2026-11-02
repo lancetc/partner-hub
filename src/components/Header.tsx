@@ -31,7 +31,9 @@ export function Header() {
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
           <span aria-hidden className="h-6 w-px bg-line-strong" />
-          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">Topic review</span>
+          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">
+            {pathname.startsWith("/review/path/") ? "Learning path review" : "Topic review"}
+          </span>
         </div>
       </header>
     );
@@ -40,11 +42,14 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
         <Link href="/" translate="no" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
-          <span aria-hidden className="h-6 w-px bg-line-strong" />
-          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">Partner Hub</span>
+          {/* On phones and smaller laptops the buttons and menu need the room, so the logo stands alone. */}
+          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-xl:hidden" />
+          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-xl:sr-only xl:whitespace-nowrap">
+            Partner Hub
+          </span>
         </Link>
 
-        <nav aria-label="Primary" className="ml-6 hidden md:block">
+        <nav aria-label="Primary" className="ml-2 hidden lg:block xl:ml-6">
           <ul className="flex items-center gap-1">
             {navItems.map((item) => {
               const active = isActive(pathname, item.href);
@@ -54,11 +59,19 @@ export function Header() {
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cx(
-                      "inline-flex min-h-11 items-center rounded-full px-4 text-[0.95rem] font-medium transition-colors",
+                      "inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors xl:px-4",
                       active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-muted hover:text-ink",
                     )}
                   >
-                    {item.label}
+                    {item.short ? (
+                      // The short label on smaller laptops, where the full row doesn't fit.
+                      <>
+                        <span className="xl:hidden">{item.short}</span>
+                        <span className="hidden xl:inline">{item.label}</span>
+                      </>
+                    ) : (
+                      item.label
+                    )}
                   </Link>
                 </li>
               );

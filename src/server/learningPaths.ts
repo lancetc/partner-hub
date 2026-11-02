@@ -534,6 +534,46 @@ export function startedLearningPaths(db: Db, user: User) {
 }
 
 /**
+  Every live path a learner can open, for the Learning paths page: theirs first (assigned, then
+  by due date), then the rest by name. Paths with no published topic yet stay out, and so do paths
+  holding challenge missions (`hidden`) unless they're assigned, so missions don't show early.
+*/
+export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = new Set()) {
+  const due = new Map(
+    (
+      db.prepare("SELECT path_id, due_date FROM learning_path_assignments WHERE user_id = ?").all(user.id) as { path_id: string; due_date: string | null }[]
+    ).map((a) => [a.path_id, a.due_date]),
+  );
+  const info = lessonLookup(db);
+  const published = (s: string) => catalogue().some((l) => l.slug === s);
+  const opened = new Set((db.prepare("SELECT slug FROM lesson_progress WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug));
+  const rows = db.prepare("SELECT * FROM learning_paths WHERE archived = 0 ORDER BY name").all() as PathRow[];
+  return rows
+    .map((p) => ({ p, slugs: slugsFor(db, p.id), assigned: due.has(p.id) }))
+    .filter(({ slugs, assigned }) => slugs.some(published) && (assigned || !slugs.some((s) => hidden.has(s))))
+    .map(({ p, slugs, assigned }) => {
+      const { completed, total, done } = progress(db, user.id, slugs, Boolean(p.in_order));
+      const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        audience: p.audience,
+        assigned,
+        dueDate: due.get(p.id) ?? null,
+        topics: slugs.length,
+        minutes: slugs.reduce((n, s) => n + info(s).minutes, 0),
+        completed,
+        total,
+        done,
+        started: completed > 0 || slugs.some((s) => opened.has(s)),
+        thumbnail: first ? thumbnailFor(first) : null,
+      };
+    })
+    .sort((a, b) => Number(b.assigned) - Number(a.assigned) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"));
+}
+
+/**
   One path as a learner sees it, for its own page (where a QR code leads). Anyone signed in can
   open it; it shows their own progress, and their due date if it's assigned to them.
 */

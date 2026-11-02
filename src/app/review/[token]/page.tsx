@@ -10,21 +10,24 @@ import { factValues } from "@/server/facts";
 import { applyFacts } from "@/lib/facts";
 import { linkLesson } from "@/server/reviews";
 import { currentReviewer } from "@/server/reviewSession";
+import { linkPath } from "@/server/pathReviews";
 
 // A private link: keep it out of search engines and away from other sites.
 export const metadata: Metadata = { title: "Topic review", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
-export default function ReviewPage({ params }: PageProps<"/review/[token]">) {
+export default function ReviewPage({ params, searchParams }: PageProps<"/review/[token]">) {
   return (
     <Suspense fallback={<div className="fixed inset-0 z-50 bg-strong" aria-busy="true" />}>
-      <Review params={params} />
+      <Review params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
 /* A lesson opened from its review link: the latest saved draft, with Comments on every card. */
-async function Review({ params }: Pick<PageProps<"/review/[token]">, "params">) {
+async function Review({ params, searchParams }: Pick<PageProps<"/review/[token]">, "params" | "searchParams">) {
   const { token } = await params;
+  // ?path=: opened from a learning path's review page, so closing the topic goes back there.
+  const { path } = await searchParams;
   await connection();
   const db = getDb();
   const slug = linkLesson(db, token);
@@ -44,7 +47,11 @@ async function Review({ params }: Pick<PageProps<"/review/[token]">, "params">) 
       lesson={applyFacts(draft.lesson, factValues(db))}
       preview
       reviewToken={token}
-      backTo={{ href: `/review/${token}`, label: "Back to the start" }}
+      backTo={
+        typeof path === "string" && linkPath(db, path)
+          ? { href: `/review/path/${path}`, label: "Back to the learning path" }
+          : { href: `/review/${token}`, label: "Back to the start" }
+      }
     />
   );
 }

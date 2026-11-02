@@ -39,6 +39,14 @@ export const spacedWhen = (days: number) =>
 /** Running totals of step gaps, so each step knows its day from the start. */
 export const cumulative = (gaps: number[]) => gaps.map((_, i) => gaps.slice(0, i + 1).reduce((a, b) => a + b, 0));
 
+/** A total time in short form for tiles and lists: "28 min", "2 hr", "5 hr 50 min". */
+export function formatHoursMinutes(minutes: number) {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} hr ${m % 60} min` : `${h} hr`;
+}
+
 /**
   A length of time people can picture: "8 minutes", "About 1 hour", "About 6½ hours".
   Under an hour stays in minutes; longer rounds to the nearest half hour.

@@ -40,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-dvh bg-bg pb-20 text-ink md:pb-0">
+      <body className="min-h-dvh bg-bg pb-20 text-ink lg:pb-0">
         <a href="#main" className="sr-only z-50 rounded-lg bg-action px-4 py-2 text-on-action focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
           Skip to content
         </a>

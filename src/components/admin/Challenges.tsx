@@ -309,6 +309,17 @@ function ChallengeForm({
                   aria-label={`Day ${i + 1} story beat`}
                 />
                 {topic(m.slug)?.draft && <p className="text-xs text-ink-muted">This topic is still a draft. Publish it before you publish the challenge.</p>}
+                {/* The topic's content can change at any time, published or not; only which topic is set here is fixed. */}
+                {m.slug && (
+                  <div className="flex flex-wrap gap-1">
+                    <Link href={`/admin/lessons/${encodeURIComponent(m.slug)}/edit`} className={btn.quiet}>
+                      <Icon name="pen" className="size-4" /> Edit topic
+                    </Link>
+                    <Link href={`/learning/${encodeURIComponent(m.slug)}?preview=1`} target="_blank" className={btn.quiet}>
+                      <Icon name="play" className="size-4" /> Preview
+                    </Link>
+                  </div>
+                )}
                 {!published && (
                   <div className="flex gap-1">
                     <button type="button" className={btn.quiet} disabled={i === 0} onClick={() => set("missions", swap(d.missions, i, i - 1))}>

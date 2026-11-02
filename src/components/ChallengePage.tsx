@@ -6,6 +6,8 @@ import { api, formatWhen, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { TEAM_SWATCH } from "@/lib/challengeScoring";
 import { Icon, type IconName } from "./Icon";
+import { StoryVisual } from "./StoryVisual";
+import type { Thumbnail } from "@/lib/pathThumbnail";
 
 /*
   A challenge from the learner's side: today's mission, the days ahead, points, streak and badges,
@@ -17,6 +19,8 @@ type View = {
   name: string;
   tagline: string;
   story: string;
+  /** The first mission's cover photo. */
+  cover: Thumbnail | null;
   timezone: string;
   preview: boolean;
   state: "upcoming" | "live" | "finished";
@@ -82,6 +86,7 @@ export function ChallengePage({ id }: { id: string }) {
 
       {/* The hero: name, and where you stand. */}
       <section className="mt-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white sm:p-6">
+        {data.cover && <StoryVisual {...data.cover} alt="" priority className="-mx-5 -mt-5 mb-5 aspect-[16/7] sm:-mx-6 sm:-mt-6" />}
         <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.16em] text-white/75">Trilogy Challenge</p>
         <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight sm:text-4xl">{data.name}</h1>
         {data.tagline && <p className="mt-1 text-white/85">{data.tagline}</p>}
@@ -315,8 +320,8 @@ export function ChallengePage({ id }: { id: string }) {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:px-6">
-      <Link href="/learning" className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline">
-        <Icon name="arrow-left" className="size-4" /> All learning
+      <Link href="/challenges" className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline">
+        <Icon name="arrow-left" className="size-4" /> All challenges
       </Link>
       {children}
     </div>

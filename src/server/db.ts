@@ -197,6 +197,13 @@ CREATE TABLE IF NOT EXISTS review_links (
   created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
 );
 CREATE INDEX IF NOT EXISTS review_links_lesson ON review_links (lesson_slug);
+-- A review link for a whole learning path: one address that lists the path's topics, each opening
+-- through its own topic review link, so comments land with the topic.
+CREATE TABLE IF NOT EXISTS path_review_links (
+  token TEXT PRIMARY KEY, path_id TEXT NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
+);
+CREATE INDEX IF NOT EXISTS path_review_links_path ON path_review_links (path_id);
 -- People who joined a review with their name and email. id is a secret kept in their browser.
 CREATE TABLE IF NOT EXISTS reviewers (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, created_at TEXT NOT NULL, last_seen_at TEXT

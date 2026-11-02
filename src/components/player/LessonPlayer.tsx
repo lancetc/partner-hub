@@ -325,13 +325,23 @@ export function LessonPlayer({
   }
 
   if (!hydrated) {
-    return <Frame closeHref={backTo?.href} title={`Topic: ${lesson.title}`} beats={lesson.beats} saveState="idle" progress={null} />;
+    return (
+      <Frame
+        closeHref={backTo?.href}
+        closeLabel={backTo && `Close: ${backTo.label.toLowerCase()}`}
+        title={`Topic: ${lesson.title}`}
+        beats={lesson.beats}
+        saveState="idle"
+        progress={null}
+      />
+    );
   }
 
   if (phase === "intro") {
     return (
       <Frame
         closeHref={backTo?.href}
+        closeLabel={backTo && `Close: ${backTo.label.toLowerCase()}`}
         title={`Topic: ${lesson.title}`}
         beats={lesson.beats}
         saveState="idle"
@@ -380,6 +390,7 @@ export function LessonPlayer({
     return (
       <Frame
         closeHref={backTo?.href}
+        closeLabel={backTo && `Close: ${backTo.label.toLowerCase()}`}
         title={`Topic: ${lesson.title}`}
         beats={lesson.beats}
         saveState={saveState}
@@ -549,6 +560,7 @@ export function LessonPlayer({
   return (
     <Frame
       closeHref={backTo?.href}
+      closeLabel={backTo && `Close: ${backTo.label.toLowerCase()}`}
       title={`Topic: ${lesson.title}`}
       beats={lesson.beats}
       saveState={review ? "idle" : saveState}
