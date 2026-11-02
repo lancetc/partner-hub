@@ -4,6 +4,7 @@ import type { QuizQuestion } from "@/content/lessons";
 import { Icon } from "../Icon";
 import { Burst } from "./Burst";
 import { cx } from "@/lib/format";
+import { assessmentOrder, assessmentScore } from "@/lib/assessment";
 
 export function Quiz({
   cardId,
@@ -12,6 +13,8 @@ export function Quiz({
   onAnswer,
   checked,
   onCheckedChange,
+  assessment,
+  seed = "",
 }: {
   cardId: string;
   questions: QuizQuestion[];
@@ -19,10 +22,42 @@ export function Quiz({
   onAnswer: (key: string, value: string) => void;
   checked: boolean;
   onCheckedChange: (c: boolean) => void;
+  /** Assessment mode: shuffled, marked all at once, and no feedback after a fail. */
+  assessment?: { passMark: number };
+  /** Fixes this attempt's shuffled order. */
+  seed?: string;
 }) {
+  const shown = assessment ? assessmentOrder(questions, seed) : questions;
+  const score = assessment ? assessmentScore(cardId, questions, answers, assessment.passMark) : null;
+  // After a failed assessment, don't show which answers were wrong: the retake would just flip them.
+  const showFeedback = checked && (!score || score.passed);
   return (
     <div className="flex flex-col gap-6">
-      {questions.map((q, qi) => {
+      {assessment && !checked && (
+        <p className="rounded-2xl bg-muted px-4 py-3 text-[0.95rem] [text-shadow:none]">
+          <strong>Assessment.</strong> Answer every question, then submit. It’s marked all at once, and you need {assessment.passMark}% to pass.
+        </p>
+      )}
+      {score && checked && (
+        <div
+          role="status"
+          className={cx(
+            "fx-rise flex flex-col gap-1 rounded-2xl px-4 py-4 text-[#102a43] [text-shadow:none]",
+            score.passed ? "bg-[#DDE8D9]" : "border-2 border-danger/60 bg-surface text-ink",
+          )}
+        >
+          <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">{score.passed ? "Passed" : "Not yet passed"}</span>
+          <span className="font-serif text-3xl font-semibold">
+            {score.right} of {score.total} · {score.percent}%
+          </span>
+          <span className="text-[0.95rem]">
+            {score.passed
+              ? "Well done. Read the feedback on each question below, then continue."
+              : `You need ${assessment!.passMark}% to pass. Retake the assessment: the questions and answers will be in a new order.`}
+          </span>
+        </div>
+      )}
+      {shown.map((q, qi) => {
         const key = `${cardId}.${q.id}`;
         const picked = answers[key] as string | undefined;
         const right = picked === q.correct;
@@ -44,7 +79,7 @@ export function Quiz({
                     selected ? "border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line bg-surface hover:border-line-strong",
                     checked && "cursor-default",
                     // Chosen: a springy pop. Checked: a glow and burst if right, a small shake if not.
-                    selected && (checked ? (right ? "fx-correct" : "fx-shake") : "fx-pop"),
+                    selected && (showFeedback ? (right ? "fx-correct" : "fx-shake") : checked ? "" : "fx-pop"),
                   )}
                 >
                   <input
@@ -52,7 +87,7 @@ export function Quiz({
                     name={key}
                     value={o.id}
                     checked={selected}
-                    disabled={checked && right}
+                    disabled={checked && (right || Boolean(assessment))}
                     onChange={() => {
                       onAnswer(key, o.id);
                       if (checked) onCheckedChange(false);
@@ -60,11 +95,11 @@ export function Quiz({
                     className="size-5 shrink-0 accent-[var(--action)]"
                   />
                   <span>{o.label}</span>
-                  {checked && selected && right && <Burst />}
+                  {showFeedback && selected && right && <Burst />}
                 </label>
               );
             })}
-            {checked && picked && (
+            {showFeedback && picked && (
               <p
                 role="status"
                 className={cx(

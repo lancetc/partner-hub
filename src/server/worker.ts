@@ -1,5 +1,6 @@
 import "server-only";
-import { runDueCampaigns } from "./campaigns";
+import { baseUrl, runDueCampaigns } from "./campaigns";
+import { challengeEmailStillDue, queueChallengeEmails } from "./challenges";
 import { runContentReminders } from "./contentReminders";
 import { localDate, nextPermittedSlot, reminderAt, type ScheduleConfig } from "@/lib/schedule";
 import { tx, type Db } from "./db";
@@ -111,7 +112,13 @@ export function queueDigests(db: Db, now: Date) {
       const pv = pathVersion(db, r.path_id, r.path_version)!;
       const step = pv.steps[r.step_index];
       const content = activityInfo(db, r.follow_up_id, r.follow_up_version);
-      const base = { instanceId: r.id, started: Boolean(r.started_at), title: content?.title ?? "Follow up", message: step?.message ?? "", optional: !r.required };
+      const base = {
+        instanceId: r.id,
+        started: Boolean(r.started_at),
+        title: content?.title ?? "Follow up",
+        message: step?.message ?? "",
+        optional: !r.required,
+      };
       if (!r.notified_at) items.push({ ...base, kind: "new" });
       else if (!r.reminded_at && pv.config.reminders.enabled && now >= reminderAt(new Date(r.released_at!), scheduleFor(pv.config, r.tz))) {
         items.push({ ...base, kind: "reminder" });
@@ -146,6 +153,7 @@ export async function dispatch(db: Db, now: Date, adapters?: Partial<Record<"ema
   const queued = db.prepare("SELECT * FROM outbox WHERE status = 'queued' ORDER BY id").all() as {
     id: number;
     user_id: string;
+    kind: string;
     channel: "email" | "sms";
     idempotency_key: string;
     items: string;
@@ -155,28 +163,69 @@ export async function dispatch(db: Db, now: Date, adapters?: Partial<Record<"ema
   const outcomes: Record<string, number> = {};
   let dispatched = 0;
   for (const msg of queued) {
-    const claimed = db.prepare("UPDATE outbox SET status = 'sending', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = 'queued'").run(iso(now), msg.id);
+    const claimed = db
+      .prepare("UPDATE outbox SET status = 'sending', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = 'queued'")
+      .run(iso(now), msg.id);
     if (claimed.changes === 0) continue; // another worker has it
 
+    // Challenge invitations and reminders are written when queued; a reminder is dropped once the mission's done.
+    if (msg.kind.startsWith("challenge_")) {
+      if (!challengeEmailStillDue(db, msg.user_id, msg.kind, msg.items, now)) {
+        db.prepare("UPDATE outbox SET status = 'cancelled', last_error = 'The mission was finished before the reminder went', updated_at = ? WHERE id = ?").run(
+          iso(now),
+          msg.id,
+        );
+        outcomes.cancelled = (outcomes.cancelled ?? 0) + 1;
+        continue;
+      }
+      const to = db.prepare("SELECT name, email FROM users WHERE id = ?").get(msg.user_id) as { name: string; email: string };
+      const sent = await (adapters?.[msg.channel] ?? adapterFor(msg.channel)).send({
+        idempotencyKey: msg.idempotency_key,
+        to,
+        subject: msg.subject,
+        body: msg.body,
+      });
+      dispatched++;
+      outcomes[sent.status] = (outcomes[sent.status] ?? 0) + 1;
+      const tries = (db.prepare("SELECT attempts FROM outbox WHERE id = ?").get(msg.id) as { attempts: number }).attempts;
+      db.prepare("UPDATE outbox SET status = ?, provider_ref = ?, last_error = ?, updated_at = ? WHERE id = ?").run(
+        sent.status === "failed" ? (sent.retryable && tries < 3 ? "queued" : "failed") : sent.status,
+        sent.status === "accepted" ? sent.providerRef : null,
+        "error" in sent ? sent.error : null,
+        iso(now),
+        msg.id,
+      );
+      continue;
+    }
     const items = (JSON.parse(msg.items) as DigestItem[]).filter((it) => {
-      const s = db.prepare("SELECT completed_at, cancelled_at FROM step_instances WHERE id = ?").get(it.instanceId) as { completed_at: string | null; cancelled_at: string | null };
+      const s = db.prepare("SELECT completed_at, cancelled_at FROM step_instances WHERE id = ?").get(it.instanceId) as {
+        completed_at: string | null;
+        cancelled_at: string | null;
+      };
       return !s.completed_at && !s.cancelled_at;
     });
     if (!items.length) {
-      db.prepare("UPDATE outbox SET status = 'cancelled', last_error = 'Every item was finished or withdrawn before sending', updated_at = ? WHERE id = ?").run(iso(now), msg.id);
+      db.prepare("UPDATE outbox SET status = 'cancelled', last_error = 'Every item was finished or withdrawn before sending', updated_at = ? WHERE id = ?").run(
+        iso(now),
+        msg.id,
+      );
       outcomes.cancelled = (outcomes.cancelled ?? 0) + 1;
       continue;
     }
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(msg.user_id) as User;
     const text = digestText(user, items);
     const adapter = adapters?.[msg.channel] ?? adapterFor(msg.channel);
-    const result = await adapter.send({ idempotencyKey: msg.idempotency_key, to: { name: user.name, email: user.email }, subject: text.subject, body: text.body });
+    const result = await adapter.send({
+      idempotencyKey: msg.idempotency_key,
+      to: { name: user.name, email: user.email },
+      subject: text.subject,
+      body: text.body,
+    });
     dispatched++;
     outcomes[result.status] = (outcomes[result.status] ?? 0) + 1;
 
     const attempts = (db.prepare("SELECT attempts FROM outbox WHERE id = ?").get(msg.id) as { attempts: number }).attempts;
-    const status =
-      result.status === "failed" ? (result.retryable && attempts < 3 ? "queued" : "failed") : result.status; // accepted | unknown | not_configured
+    const status = result.status === "failed" ? (result.retryable && attempts < 3 ? "queued" : "failed") : result.status; // accepted | unknown | not_configured
     db.prepare("UPDATE outbox SET status = ?, provider_ref = ?, last_error = ?, items = ?, subject = ?, body = ?, updated_at = ? WHERE id = ?").run(
       status,
       result.status === "accepted" ? result.providerRef : null,
@@ -194,6 +243,8 @@ export async function dispatch(db: Db, now: Date, adapters?: Partial<Record<"ema
 export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"email" | "sms", NotificationAdapter>>): Promise<WorkerResult> {
   const released = releaseDue(db, now);
   const digests = queueDigests(db, now);
+  // Each day's challenge invitation, and an afternoon reminder.
+  queueChallengeEmails(db, now, baseUrl());
   const { dispatched, outcomes } = await dispatch(db, now, adapters);
   // Newsletters scheduled for now or earlier go out too.
   await runDueCampaigns(db, now, adapters?.email);

@@ -40,6 +40,7 @@ import { Widget } from "./Widget";
 import { TopicChat } from "./TopicChat";
 import { SpokenAnswer } from "./VoiceInput";
 import { RichInline, RichText } from "../RichText";
+import { assessmentKeys, assessmentScore, clearForRetake, recordAttempt } from "@/lib/assessment";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
 import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
@@ -440,7 +441,13 @@ export function LessonPlayer({
         : node.narration
           ? {
               text: node.narration,
-              label: node.type === "decision" || node.type === "quiz" ? "Question" : "Listen",
+              // On hands-on cards the script explains the activity, so say so.
+              label:
+                node.type === "decision" || node.type === "quiz"
+                  ? "Question"
+                  : node.type === "widget" || node.type === "calculator"
+                    ? "How to use this"
+                    : "Listen",
             }
           : null;
 
@@ -467,7 +474,15 @@ export function LessonPlayer({
         if (pendingNext) return go(pendingNext);
         const opt = node.options.find((o) => o.id === choice)!;
         const answers = { ...attempt.answers, [node.id]: opt.id };
-        if (opt.correct !== undefined && answers[`first:${node.id}`] === undefined) answers[`first:${node.id}`] = opt.correct ? 1 : 0;
+        // A decision with a better choice marked records whichever option was chosen first, right or not.
+        const firstTime = node.options.some((o) => o.correct !== undefined) && answers[`first:${node.id}`] === undefined;
+        if (firstTime) {
+          answers[`first:${node.id}`] = opt.correct ? 1 : 0;
+          // Which option they chose first, for reports and a challenge's "story so far".
+          answers[`pick:${node.id}`] = opt.id;
+        }
+        // Saved straight away, so a first answer stands even if they reload before moving on.
+        if (firstTime && (opt.stay || !opt.next || opt.feedback)) save({ ...attempt, answers });
         if (opt.next && opt.feedback && !opt.stay) {
           setAttempt({ ...attempt, answers });
           setStayFeedback(opt.feedback);
@@ -489,19 +504,32 @@ export function LessonPlayer({
         if (node.type !== "quiz") return;
         // Keep each question's first answer for reporting and adaptive follow ups.
         const answers = { ...attempt.answers };
+        let firstTime = false;
         node.questions.forEach((q) => {
           const key = `first:${node.id}.${q.id}`;
           if (answers[key] === undefined) {
+            firstTime = true;
             answers[key] = answers[`${node.id}.${q.id}`] === q.correct ? 1 : 0;
             // Which option they chose first, so authors can see common wrong answers.
             answers[`pick:${node.id}.${q.id}`] = answers[`${node.id}.${q.id}`] as string;
           }
         });
-        setAttempt({ ...attempt, answers });
+        // An assessment keeps every attempt's score, the first score, and when they passed.
+        const recorded = node.assessment ? recordAttempt(node.id, node.questions, answers, node.assessment.passMark, new Date().toISOString()) : answers;
+        const next = { ...attempt, answers: recorded };
+        setAttempt(next);
+        // Save first answers (and every assessment attempt) straight away, so they stand even if they leave now.
+        if (node.assessment || firstTime) save(next);
         return;
       }
       case "retry": {
         if (node.type !== "quiz") return;
+        if (node.assessment) {
+          // A full retake: every answer cleared, and a new order for the next attempt.
+          setAttempt({ ...attempt, answers: clearForRetake(node.id, node.questions, attempt.answers) });
+          setQuizChecked(false);
+          return;
+        }
         const answers = { ...attempt.answers };
         node.questions.forEach((q) => {
           if (answers[`${node.id}.${q.id}`] !== q.correct) delete answers[`${node.id}.${q.id}`];
@@ -604,7 +632,8 @@ export function LessonPlayer({
                 // The dedicated audio card shows its own caption and play button.
                 captionTarget={node.type === "listen" ? undefined : "card-caption"}
                 controls={node.type !== "listen"}
-                autoPlay={node.type !== "listen"}
+                // Every card's audio starts by itself when the learner's audio is on, audio cards included.
+                autoPlay
                 ttsKey={`lesson:${lesson.slug}:${node.id}`}
               />
             )}
@@ -632,7 +661,7 @@ export function LessonPlayer({
           <h2 ref={headingRef} tabIndex={-1} className="sr-only">
             {node.heading}
           </h2>
-          <CardVisual visual={node.visual} className="h-full w-full" onComplete={() => markDone(node.id)} />
+          <CardVisual visual={node.visual} className="h-full w-full" onComplete={() => markDone(node.id)} autoPlay />
         </div>
       ) : node.type === "listen" ? (
         <div key={node.id} className="animate-card-in h-full">
@@ -688,6 +717,7 @@ export function LessonPlayer({
             <CardVisual
               visual={node.visual}
               onComplete={() => markDone(node.id)}
+              autoPlay
               // Full bleed: past the card's padding to its top and side edges, square where the text starts.
               className={cx(
                 "-mx-4 -mt-4 rounded-none!",
@@ -832,6 +862,12 @@ function primaryAction(
       return ctx.pendingNext ? { label: "Continue", kind: "choose" } : { label: "Choose", kind: "choose", disabled: !ctx.choice };
     case "quiz": {
       const allAnswered = node.questions.every((q) => ctx.answers[`${node.id}.${q.id}`]);
+      if (node.assessment) {
+        if (!ctx.quizChecked) return { label: "Submit answers", kind: "check", disabled: !allAnswered };
+        if (assessmentScore(node.id, node.questions, ctx.answers, node.assessment.passMark).passed)
+          return node.next ? { label: "Continue", kind: "next" } : { label: "Finish topic", kind: "complete", completes: true };
+        return { label: "Retake assessment", kind: "retry" };
+      }
       const allRight = node.questions.every((q) => ctx.answers[`${node.id}.${q.id}`] === q.correct);
       if (!ctx.quizChecked)
         return {
@@ -1033,6 +1069,9 @@ function CardBody({
           onAnswer={setAnswer}
           checked={quizChecked}
           onCheckedChange={setQuizChecked}
+          assessment={node.assessment}
+          // Each attempt has its own order; once submitted, the order of the attempt just marked.
+          seed={`${attempt.startedAt}:${Number(attempt.answers[assessmentKeys(node.id).attempt] ?? 0) - (quizChecked ? 1 : 0)}`}
         />
       );
     case "summary":

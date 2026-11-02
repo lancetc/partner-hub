@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { DEFAULT_WHO_PHOTO } from "@/lib/pathPhoto";
+import type { Thumbnail } from "@/lib/pathThumbnail";
+import { StoryVisual } from "../StoryVisual";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
@@ -42,6 +44,7 @@ type PathSummary = {
   lessons: LessonInfo[];
   chapters: { id: string; title: string; stage: string; slugs: string[] }[];
   minutes: number;
+  thumbnail: Thumbnail | null;
   assigned: number;
   started: number;
   finished: number;
@@ -176,7 +179,7 @@ export function LearningPathList() {
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">{p.name}</span>
                     <span className="text-sm text-ink-muted">
-                      {p.lessons} {p.lessons === 1 ? "lesson" : "lessons"}
+                      {p.lessons} {p.lessons === 1 ? "topic" : "topics"}
                       {p.assigned ? ` · was assigned to ${p.assigned}` : ""} · deleted{" "}
                       {new Date(p.deletedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
@@ -216,7 +219,8 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
   const notStarted = p.assigned - p.started - p.finished;
 
   return (
-    <li className="relative flex flex-col gap-4 rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
+    <li className="relative flex flex-col gap-4 overflow-hidden rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
+      {p.thumbnail && <StoryVisual {...p.thumbnail} alt="" className="-mx-5 -mt-5 aspect-[16/7]" />}
       <div>
         <div className="flex flex-wrap items-center gap-2">
           {p.audience && <Badge tone="info">{p.audience}</Badge>}
@@ -225,7 +229,7 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
         </div>
         <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
           {p.chapters.length ? `${p.chapters.length} chapters · ` : ""}
-          {p.lessons.length} {p.lessons.length === 1 ? "lesson" : "lessons"} · {p.minutes} min{p.inOrder ? " · in order" : ""}
+          {p.lessons.length} {p.lessons.length === 1 ? "topic" : "topics"} · {p.minutes} min{p.inOrder ? " · in order" : ""}
         </p>
         <h2 className="mt-1 font-serif text-xl font-semibold">
           <Link href={`/admin/learning-paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
@@ -576,7 +580,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <h2 className="font-serif text-xl font-semibold">{canEdit ? (chapters ? "2. Chapters and topics" : "2. Put them in order") : "Topics"}</h2>
               <span className="text-sm text-ink-muted">
                 {chapters ? `${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ` : ""}
-                {picked.length} {picked.length === 1 ? "lesson" : "lessons"} · about {minutes} minutes
+                {picked.length} {picked.length === 1 ? "topic" : "topics"} · about {minutes} minutes
               </span>
             </div>
             {canEdit && (

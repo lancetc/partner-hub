@@ -3095,7 +3095,7 @@ function ReplaceablePicture({
       const next = await replaceImage(photo.src.split("/").pop()!, file);
       // This editor's copy of the lesson changes too, so saving it doesn't put the old picture back.
       update((d) => void Object.assign(d, swapPicture(d, photo.src, next)));
-      setNote(`Picture replaced in ${next.lessons.length || 1} ${next.lessons.length === 1 ? "lesson" : "lessons"}.`);
+      setNote(`Picture replaced in ${next.lessons.length || 1} ${next.lessons.length === 1 ? "topic" : "topics"}.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -3789,6 +3789,43 @@ function QuizFields({ card: c, set }: { card: Extract<Card, { type: "quiz" }>; s
   const q = (i: number, fn: (q: Extract<Card, { type: "quiz" }>["questions"][number]) => void) => set((x) => x.type === "quiz" && fn(x.questions[i]));
   return (
     <div className="flex flex-col gap-3 sm:col-span-2">
+      <div className="flex flex-col gap-2 rounded-2xl border border-line p-3">
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--action)]"
+            checked={Boolean(c.assessment)}
+            onChange={(e) =>
+              set((x) => {
+                if (x.type !== "quiz") return;
+                if (e.target.checked) x.assessment = { passMark: 80 };
+                else delete x.assessment;
+              })
+            }
+          />
+          Assessment mode
+        </label>
+        <p className="text-xs text-ink-muted">
+          For compliance training. Learners answer every question, then it’s marked all at once against a pass mark, with feedback only once they pass.
+          Questions and answers are shuffled for each attempt, and every attempt’s score shows in Completions.
+        </p>
+        {c.assessment && (
+          <label className="flex items-center gap-2 text-sm">
+            Pass mark
+            <input
+              type="number"
+              min={1}
+              max={100}
+              className={cx(input, "max-w-24")}
+              value={c.assessment.passMark}
+              onChange={(e) =>
+                set((x) => x.type === "quiz" && x.assessment && void (x.assessment.passMark = Math.min(100, Math.max(1, Number(e.target.value) || 0))))
+              }
+            />
+            %
+          </label>
+        )}
+      </div>
       {c.questions.map((qu, i) => (
         <fieldset key={qu.id} className="flex flex-col gap-2 rounded-2xl border border-line p-3">
           <legend className="px-1 text-sm font-semibold">Question {i + 1}</legend>
@@ -5503,14 +5540,36 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
       const next = await replaceImage(fileOf(p.src), file);
       // This editor's copy of the lesson changes too, so saving it doesn't put the old picture back.
       if (JSON.stringify(l).includes(p.src)) update((d) => void Object.assign(d, swapPicture(d, p.src, next)));
-      setReplaced(
-        next.lessons.length ? `Picture replaced in ${next.lessons.length} ${next.lessons.length === 1 ? "lesson" : "lessons"}.` : "Picture replaced.",
-      );
+      setReplaced(next.lessons.length ? `Picture replaced in ${next.lessons.length} ${next.lessons.length === 1 ? "topic" : "topics"}.` : "Picture replaced.");
       library.reload();
     } catch (e) {
       setMediaError((e as Error).message);
     } finally {
       setReplacing(null);
+    }
+  }
+  /** Keeps one copy of each picture that's in the library more than once. */
+  async function mergeCopies() {
+    setMediaError(null);
+    setReplaced(null);
+    try {
+      const r = await api<{
+        pictures: number;
+        removed: number;
+        lessons: string[];
+        swaps: { from: string; to: { src: string; width: number; height: number } }[];
+      }>("/api/admin/uploads/duplicates", { body: {} });
+      // This editor's copy of the topic changes too, so saving it doesn't bring a removed copy back.
+      const mine = r.swaps.filter((w) => JSON.stringify(l).includes(w.from));
+      if (mine.length) update((d) => void mine.reduce((acc, w) => Object.assign(acc, swapPicture(acc, w.from, w.to)), d));
+      setReplaced(
+        r.removed
+          ? `Removed ${r.removed} duplicate ${r.removed === 1 ? "copy" : "copies"} of ${r.pictures} ${r.pictures === 1 ? "picture" : "pictures"}. ${r.lessons.length} ${r.lessons.length === 1 ? "topic now uses" : "topics now use"} the copy that was kept.`
+          : "No duplicates found. Each picture is in the library once.",
+      );
+      library.reload();
+    } catch (e) {
+      setMediaError((e as Error).message);
     }
   }
   async function restore(src: string) {
@@ -5653,6 +5712,9 @@ function Media({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
         )}
         <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
           <span>Hover over an image to delete it, or to replace it everywhere it’s used (you can also drop a new file onto it).</span>
+          <button type="button" onClick={mergeCopies} className="font-semibold text-accent hover:underline">
+            Remove duplicate copies
+          </button>
           {library.deleted.length > 0 && (
             <button type="button" aria-expanded={showDeleted} onClick={() => setShowDeleted((s) => !s)} className="font-semibold text-accent hover:underline">
               {showDeleted ? "Hide deleted images" : `Show deleted images (${library.deleted.length})`}

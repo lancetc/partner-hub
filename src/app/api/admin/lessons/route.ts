@@ -3,6 +3,7 @@ import { requireReporter } from "@/server/auth";
 import { spacedOverview } from "@/server/spaced";
 import { GENERATION_MODEL, MAX_INSTRUCTIONS } from "@/server/generate";
 import { createLesson, deletedLessons } from "@/server/authoredLessons";
+import { pathTopicOrder } from "@/server/learningPaths";
 import type { Lesson } from "@/content/lessons";
 
 export async function GET() {
@@ -11,6 +12,7 @@ export async function GET() {
     return {
       lessons: spacedOverview(db),
       deleted: deletedLessons(db),
+      paths: pathTopicOrder(db),
       generator: {
         model: GENERATION_MODEL,
         maxInstructions: MAX_INSTRUCTIONS,

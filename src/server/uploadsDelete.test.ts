@@ -80,7 +80,11 @@ describe("deleting library images", () => {
 describe("pictures converted to WebP", () => {
   it("serves the new file at the old address", async () => {
     const old = await up.saveUpload(db, u("jordan"), png(), { width: 800, height: 600 }, now);
-    const replacement = await up.saveUpload(db, u("jordan"), png(), { width: 800, height: 600 }, now);
+    // A different picture: the same one again would just reuse the library copy.
+    const other = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#2d4875" } })
+      .png()
+      .toBuffer();
+    const replacement = await up.saveUpload(db, u("jordan"), new File([other], "Kitchen.webp.png", { type: "image/png" }), { width: 800, height: 600 }, now);
     const oldName = old.src.split("/").pop()!;
     const newName = replacement.src.split("/").pop()!;
     fs.rmSync(path.join(dir, oldName));

@@ -10,6 +10,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       { href: "/admin/lessons", label: "Topics", icon: "book", description: "Write, edit and publish topics, and their spaced follow ups." },
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
       { href: "/admin/learning-paths", label: "Learning paths", icon: "route", description: "Sets of topics in order, assigned to people." },
+      {
+        href: "/admin/challenges",
+        label: "Challenges",
+        icon: "flag",
+        description: "Multi-day competitions: a mission a day, with points and leaderboards.",
+        authorOnly: true,
+      },
       { href: "/admin/webinars", label: "Webinars", icon: "play", description: "Recordings, their details, and the Webinars page.", authorOnly: true },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       { href: "/admin/content-review", label: "Content review", icon: "eye", description: "What's due for a check, and why.", authorOnly: true },

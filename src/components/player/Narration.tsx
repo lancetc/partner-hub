@@ -217,6 +217,12 @@ export function Narration({
   // Auto-play once the card has settled. Browsers only allow it after the learner has interacted
   // with the page (for example pressing Continue); otherwise the play button simply waits.
   const autoStarted = useRef(false);
+  // The timer below must start whatever source the card has by then: if the recorded voice failed in
+  // the meantime (no credits, say), that's the browser voice, not an audio element that's gone.
+  const playLatest = useRef<() => void>(() => {});
+  useEffect(() => {
+    playLatest.current = play;
+  });
   useEffect(() => {
     if (!ready || autoStarted.current || !autoPlay || !playable || !autoplayEnabled()) return;
     const activated = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ?? true;
@@ -224,7 +230,7 @@ export function Narration({
     // Mark as started only when the timer fires, so a cancelled run (React re-running effects) can retry.
     const t = window.setTimeout(() => {
       autoStarted.current = true;
-      play();
+      playLatest.current();
     }, 450);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

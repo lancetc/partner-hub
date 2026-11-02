@@ -18,6 +18,7 @@ type Row = {
   lastActive: string | null;
   reached: { title: string; step: number; of: number } | null;
   score: { right: number; asked: number } | null;
+  assessment: { attempts: number; firstScore: number; latestScore: number; passedAt: string | null; passMark: number } | null;
 };
 type Person = { id: string; name: string; email: string; org: string; audience: string };
 type LessonSummary = {
@@ -91,6 +92,24 @@ function StateCell({ r }: { r: Row }) {
 }
 
 const Score = ({ s }: { s: Row["score"] }) => (s ? <span>{`${s.right}/${s.asked}`}</span> : <span className="text-ink-muted">—</span>);
+
+/** An assessment result: passed or not, the latest score, and how many attempts it took. */
+function AssessmentResult({ a }: { a: Row["assessment"] }) {
+  if (!a) return <span className="text-ink-muted">Not submitted</span>;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="flex flex-wrap items-center gap-1.5">
+        <Badge tone={a.passedAt ? "good" : "bad"}>{a.passedAt ? "Passed" : "Not passed"}</Badge>
+        <strong>{a.latestScore}%</strong>
+      </span>
+      <span className="text-xs text-ink-muted">
+        {a.attempts} {a.attempts === 1 ? "attempt" : "attempts"}
+        {a.attempts > 1 && ` · first ${a.firstScore}%`}
+        {a.passedAt && ` · passed ${formatDate(a.passedAt)}`} · pass mark {a.passMark}%
+      </span>
+    </span>
+  );
+}
 
 export function CompletionsOverview() {
   const { data, error } = useApi<{ lessons: LessonSummary[]; paths: PathSummary[]; people: PersonSummary[] }>("/api/admin/completions");
@@ -256,7 +275,7 @@ const FILTERS = [
 
 export function LessonCompletions({ slug }: { slug: string }) {
   const { data, error } = useApi<{
-    lesson: { slug: string; title: string; version: string; track: string };
+    lesson: { slug: string; title: string; version: string; track: string; assessment: { passMark: number } | null };
     people: (Row & { person: Person; expected: boolean })[];
     questions: Question[];
   }>(`/api/admin/completions/lessons/${slug}`);
@@ -298,7 +317,7 @@ export function LessonCompletions({ slug }: { slug: string }) {
                   <tr>
                     <th className="px-4 py-3">Person</th>
                     <th className="px-4 py-3">Progress</th>
-                    <th className="px-4 py-3">Quiz first try</th>
+                    <th className="px-4 py-3">{data.lesson.assessment ? "Assessment" : "Quiz first try"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -316,9 +335,7 @@ export function LessonCompletions({ slug }: { slug: string }) {
                       <td className="px-4 py-3">
                         <StateCell r={r} />
                       </td>
-                      <td className="px-4 py-3">
-                        <Score s={r.score} />
-                      </td>
+                      <td className="px-4 py-3">{data.lesson.assessment ? <AssessmentResult a={r.assessment} /> : <Score s={r.score} />}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -400,7 +417,7 @@ export function PersonCompletions({ id }: { id: string }) {
                   <tr>
                     <th className="px-4 py-3">Topic</th>
                     <th className="px-4 py-3">Progress</th>
-                    <th className="px-4 py-3">Quiz first try</th>
+                    <th className="px-4 py-3">Quiz or assessment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -415,9 +432,7 @@ export function PersonCompletions({ id }: { id: string }) {
                       <td className="px-4 py-3">
                         <StateCell r={l} />
                       </td>
-                      <td className="px-4 py-3">
-                        <Score s={l.score} />
-                      </td>
+                      <td className="px-4 py-3">{l.assessment ? <AssessmentResult a={l.assessment} /> : <Score s={l.score} />}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CardVisual as Visual } from "@/content/lessons";
+import { autoplayEnabled, STOP_AUDIO } from "@/lib/audioPrefs";
 import { StoryVisual, toneColours } from "../StoryVisual";
 import { Icon, type IconName } from "../Icon";
 import Image from "next/image";
@@ -11,7 +12,18 @@ import { cx } from "@/lib/format";
   `onComplete` fires when a video has played to the end (or can't report it, so nobody gets stuck).
   It's how "Required completion" knows a video card is done.
 */
-export function CardVisual({ visual, className, onComplete }: { visual: Visual; className?: string; onComplete?: () => void }) {
+/** `autoPlay`: a presenter video starts by itself once the card settles, when the learner's audio is on (the card on screen only). */
+export function CardVisual({
+  visual,
+  className,
+  onComplete,
+  autoPlay = false,
+}: {
+  visual: Visual;
+  className?: string;
+  onComplete?: () => void;
+  autoPlay?: boolean;
+}) {
   if (visual.kind === "none") return null;
 
   if (visual.kind === "illustration") {
@@ -56,6 +68,7 @@ export function CardVisual({ visual, className, onComplete }: { visual: Visual; 
         name={visual.name}
         className={className}
         onComplete={onComplete}
+        autoPlay={autoPlay}
       />
     );
   }
@@ -404,7 +417,8 @@ function CaptionLine({ captions, time }: { captions: Captions; time: number }) {
 
 /**
   A vertical presenter video that fills the card, like a phone story: poster, one big play button,
-  then the browser's own controls once it's playing. Nothing loads until the learner presses play.
+  then the browser's own controls once it's playing. With the learner's audio on, it starts by itself
+  once the card settles, like card audio does; otherwise nothing loads until they press play.
 */
 function PortraitVideo({
   video,
@@ -412,14 +426,31 @@ function PortraitVideo({
   name,
   className,
   onComplete,
+  autoPlay = false,
 }: {
   video: { title: string; src: string; poster?: string; captions?: Captions };
   synthetic: boolean;
   name: string;
   className?: string;
   onComplete?: () => void;
+  autoPlay?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  // Start by itself, the same way card audio does: audio on, and the learner has already used the page
+  // (browsers block sound before that, so the play button waits instead).
+  useEffect(() => {
+    if (!autoPlay || !autoplayEnabled()) return;
+    const activated = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ?? true;
+    if (!activated) return;
+    const t = window.setTimeout(() => ref.current?.play().catch(() => {}), 450);
+    return () => window.clearTimeout(t);
+  }, [autoPlay]);
+  // The mute button stops it, like any other card audio.
+  useEffect(() => {
+    const stop = () => ref.current?.pause();
+    window.addEventListener(STOP_AUDIO, stop);
+    return () => window.removeEventListener(STOP_AUDIO, stop);
+  }, []);
   const [state, setState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
   const [time, setTime] = useState(0);
   const [showCaptions, setShowCaptions] = useState(true);

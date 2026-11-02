@@ -1,4 +1,5 @@
 import "server-only";
+import { assessmentRecord } from "@/lib/assessment";
 import { lessons, type Lesson } from "@/content/lessons";
 import type { Db } from "./db";
 import { HttpError, requireReporter, type User } from "./auth";
@@ -72,6 +73,18 @@ function quizScore(lesson: Lesson, answers: Record<string, unknown> | undefined)
   return asked ? { right, asked } : null;
 }
 
+/** The topic's assessment card, if it has one (a quiz in assessment mode). */
+const assessmentCard = (lesson: Lesson) =>
+  Object.values(lesson.nodes).find((c) => c.type === "quiz" && c.assessment) as Extract<Lesson["nodes"][string], { type: "quiz" }> | undefined;
+
+/** Someone's assessment record for a topic: first and latest score, attempts, and when they passed. */
+function assessmentOf(lesson: Lesson, answers: Record<string, unknown> | undefined) {
+  const card = assessmentCard(lesson);
+  if (!card) return null;
+  const record = assessmentRecord(card.id, answers);
+  return record ? { ...record, passMark: card.assessment!.passMark } : null;
+}
+
 function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: string) {
   const done = f.completions.get(`${userId}|${lesson.slug}`);
   const prog = f.progress.get(`${userId}|${lesson.slug}`);
@@ -88,6 +101,7 @@ function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: string) {
     reached:
       !done && reached ? { title: reached.heading || reached.label || reached.id, step: Math.min(prog?.attempt.route?.length ?? 1, cards), of: cards } : null,
     score: quizScore(lesson, prog?.attempt.answers),
+    assessment: assessmentOf(lesson, prog?.attempt.answers),
   };
 }
 
@@ -163,7 +177,8 @@ export function lessonReport(db: Db, viewer: User, slug: string) {
         })
       : [],
   );
-  return { lesson: { slug: l.slug, title: l.title, version: l.version, track: l.track }, people: rows, questions };
+  const assessment = assessmentCard(l)?.assessment ?? null;
+  return { lesson: { slug: l.slug, title: l.title, version: l.version, track: l.track, assessment }, people: rows, questions };
 }
 
 /** Everyone in scope with a summary of their lessons and paths. */
@@ -253,6 +268,10 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
     "Live version",
     "Needs refresher",
     "Quiz first try",
+    "Assessment first score",
+    "Assessment latest score",
+    "Assessment attempts",
+    "Assessment passed at",
     "Last active",
   ];
   const lines = [header];
@@ -272,6 +291,10 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
         l.version,
         s.needsRefresher ? "Yes" : "",
         s.score ? `${s.score.right}/${s.score.asked}` : "",
+        s.assessment ? `${s.assessment.firstScore}%` : "",
+        s.assessment ? `${s.assessment.latestScore}%` : "",
+        s.assessment ? String(s.assessment.attempts) : "",
+        s.assessment?.passedAt ?? "",
         s.lastActive ?? "",
       ]);
     }

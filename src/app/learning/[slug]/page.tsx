@@ -19,6 +19,8 @@ import { isLanguage } from "@/lib/languages";
 import { TranslationNotice, TranslationWatch } from "@/components/player/TranslationNotice";
 import { EmbeddedPreview } from "@/components/player/EmbeddedPreview";
 import { topicMetadata } from "@/server/seo";
+import { challengeForMission, missionLock, missionSlugs } from "@/server/challenges";
+import Link from "next/link";
 
 export function generateStaticParams() {
   return lessons.map((l) => ({ slug: l.slug }));
@@ -26,7 +28,8 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps<"/learning/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  getDb();
+  // A challenge mission doesn't give itself away before it opens, and isn't indexed.
+  if (missionSlugs(getDb()).has(slug)) return { title: "Trilogy Challenge mission", robots: { index: false } };
   return topicMetadata(slug);
 }
 
@@ -65,6 +68,10 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
   }
   const live = lessonBySlug(slug);
   if (!live) notFound();
+  // A challenge mission opens on its day, for everyone at once.
+  const lock = missionLock(db, user, slug, now(db));
+  if (lock) return <MissionLocked lock={lock} />;
+  const challengeId = challengeForMission(db, user, slug);
   // Shared facts ({{example_rate}} and so on) show their current values.
   const lesson = applyFacts(live, facts);
   // Important changes since the version this person last did, from their progress on the server.
@@ -79,6 +86,7 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
       // ?card=<id> opens a bookmarked card (as a review).
       startAt={typeof query.card === "string" ? query.card : undefined}
       instanceId={typeof instance === "string" && /^\d+$/.test(instance) ? instance : undefined}
+      backTo={challengeId ? { href: `/challenge/${challengeId}`, label: "Back to the challenge" } : undefined}
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
       notice={
         notice || changed ? (
@@ -103,6 +111,25 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
     <div translate={ready ? "no" : undefined} lang={ready ? lang : undefined}>
       {player(ready ? t.lesson : lesson, <TranslationNotice lang={lang} state={t.state} />)}
       <TranslationWatch slug={lesson.slug} lang={lang} state={t.state} />
+    </div>
+  );
+}
+
+/** A challenge mission that hasn't opened yet. */
+function MissionLocked({ lock }: { lock: NonNullable<ReturnType<typeof missionLock>> }) {
+  const when = lock.opensAt
+    ? new Intl.DateTimeFormat("en-AU", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", timeZone: lock.timezone }).format(
+        new Date(lock.opensAt),
+      )
+    : null;
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
+      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">{lock.challenge}</p>
+      <h1 className="mt-2 font-serif text-3xl font-semibold">Day {lock.day} isn’t open yet</h1>
+      <p className="mt-3 text-lg text-ink-muted">{when ? `This mission opens ${when}.` : "This challenge hasn’t started yet."}</p>
+      <Link href={`/challenge/${lock.challengeId}`} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-action px-5 font-semibold text-on-action">
+        Go to the challenge
+      </Link>
     </div>
   );
 }

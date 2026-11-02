@@ -8,8 +8,8 @@ export async function GET() {
 
 /** Save where you're up to in one lesson. The newer save wins. */
 export async function PUT(req: Request) {
-  return handle(async ({ db, user }) => {
+  return handle(async ({ db, user, now }) => {
     const b = await body<{ slug: string; attempt: unknown; savedAt: string }>(req);
-    return saveProgress(db, user, b.slug, b.attempt, b.savedAt);
+    return saveProgress(db, user, b.slug, b.attempt, b.savedAt, now);
   });
 }

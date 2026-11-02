@@ -3,6 +3,7 @@ import { lessons } from "@/content/lessons";
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireReporter, type User } from "./auth";
 import { unpublishedLessons } from "./authoredLessons";
+import { thumbnailFor } from "@/lib/pathThumbnail";
 
 /*
   Learning paths: a named set of lessons in order that an administrator assigns to people.
@@ -250,6 +251,13 @@ function visibleAssignments(db: Db, actor: User, pathId: string) {
   return rows;
 }
 
+/** Learning paths by name, each with its topics in path order, for grouping topics by path. */
+export const pathTopicOrder = (db: Db) =>
+  (db.prepare("SELECT id, name FROM learning_paths WHERE archived = 0 ORDER BY name").all() as { id: string; name: string }[]).map((p) => ({
+    ...p,
+    slugs: slugsFor(db, p.id),
+  }));
+
 export function listLearningPaths(db: Db, actor: User) {
   requireReporter(actor);
   const rows = db.prepare("SELECT * FROM learning_paths WHERE archived = 0 ORDER BY name").all() as PathRow[];
@@ -268,6 +276,11 @@ export function listLearningPaths(db: Db, actor: User) {
       // Chapters (and their stages) for the summary card; empty for a plain list of lessons.
       chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ id: c.id, title: c.title, stage: c.stage, slugs: l })),
       minutes: slugs.reduce((n, s) => n + info(s).minutes, 0),
+      // A picture from the first published topic, for the path's tile.
+      thumbnail: (() => {
+        const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
+        return first ? thumbnailFor(first) : null;
+      })(),
       assigned: people.length,
       started: people.filter((x) => !x.done && x.completed > 0).length,
       finished: people.filter((x) => x.done).length,
@@ -312,7 +325,9 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
-      .slice(0, 40) || "path";
+      .slice(0, 40)
+      // Cut mid-word, the slice can leave a trailing hyphen.
+      .replace(/-+$/, "") || "path";
   let id = `lp-${base}`;
   for (let n = 2; db.prepare("SELECT 1 FROM learning_paths WHERE id = ?").get(id); n++) id = `lp-${base}-${n}`;
   const at = now.toISOString();

@@ -7,6 +7,7 @@ import { plainText } from "@/lib/richText";
 import type { Db } from "./db";
 import type { User } from "./auth";
 import { forLearner, parseWebinar, type Row as WebinarRow } from "./webinars";
+import { missionSlugs } from "./challenges";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -21,9 +22,10 @@ const MAX_RESULTS = 20;
 const clean = (s: string) => plainText(s).replace(/\s+/g, " ").trim();
 
 function documents(db: Db, user: User): Doc[] {
+  const missions = missionSlugs(db);
   const topics: Doc[] = lessons
-    // Follow ups arrive in a sequence, not from the catalogue.
-    .filter((l) => l.track !== "reinforcement")
+    // Follow ups arrive in a sequence, and challenge missions open one a day: neither is in the catalogue.
+    .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
     .map((l) => ({
       id: `lesson:${l.slug}`,
       href: `/learning/${l.slug}`,

@@ -83,6 +83,22 @@ describe("by lesson", () => {
     publishLesson(db, u("jordan"), slug, now, { notes: "The rate changed", kind: "important" });
     expect(row(lessonReport(db, u("jordan"), slug), "sam")).toMatchObject({ state: "completed", needsRefresher: true });
   });
+  it("shows assessment results: pass or not, scores and attempts", () => {
+    const f = editorLesson(db, slug)!;
+    const card = Object.values(f.lesson.nodes).find((c) => c.type === "quiz")!;
+    Object.assign(card, { assessment: { passMark: 80 } });
+    saveDraft(db, u("jordan"), slug, f.lesson, now);
+    publishLesson(db, u("jordan"), slug, now, { notes: "Now an assessment", kind: "minor" });
+    const answers = { [`attempts:${card.id}`]: 2, [`firstScore:${card.id}`]: 60, [`score:${card.id}`]: 100, [`passedAt:${card.id}`]: "2026-10-26T02:00:00Z" };
+    saveProgress(db, u("ash"), slug, { version: lesson().version, nodeId: card.id, route: [card.id], answers, status: "in_progress" }, now.toISOString());
+    const r = lessonReport(db, u("jordan"), slug);
+    expect(r.lesson.assessment).toEqual({ passMark: 80 });
+    expect(row(r, "ash")!.assessment).toEqual({ attempts: 2, firstScore: 60, latestScore: 100, passedAt: "2026-10-26T02:00:00Z", passMark: 80 });
+    expect(row(r, "sam")?.assessment ?? null).toBeNull();
+    const csv = completionsCsv(db, u("jordan"), slug);
+    expect(csv.split("\r\n")[0]).toContain('"Assessment first score","Assessment latest score","Assessment attempts","Assessment passed at"');
+    expect(csv).toContain('"60%","100%","2","2026-10-26T02:00:00Z"');
+  });
 });
 
 describe("by person", () => {

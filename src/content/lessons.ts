@@ -196,7 +196,18 @@ export type Card =
       visibility: string;
       next: string;
     })
-  | (Base & { type: "quiz"; questions: QuizQuestion[]; /** Card after a pass; omit to finish here. */ next?: string })
+  | (Base & {
+      type: "quiz";
+      questions: QuizQuestion[];
+      /** Card after a pass; omit to finish here. */
+      next?: string;
+      /**
+        Assessment mode, for compliance training: marked all at once against a pass mark (a percentage),
+        no feedback until submitted, questions and options shuffled for each attempt, and a full retake
+        after a fail. Scores and attempts are kept for reports.
+      */
+      assessment?: { passMark: number };
+    })
   /**
     An insight wall: learners answer a question, and only after posting do they see what others wrote.
     `anonymous` hides names; otherwise posts show a first name and role.

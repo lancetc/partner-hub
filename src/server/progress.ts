@@ -1,6 +1,7 @@
 import "server-only";
 import type { Db } from "./db";
 import { HttpError, type User } from "./auth";
+import { recordChallengeAnswers } from "./challenges";
 
 /*
   Lesson progress on the server, so it follows people between devices. Each device keeps its own
@@ -19,7 +20,7 @@ export function readProgress(db: Db, user: User) {
 }
 
 /** Keeps the newer of what's stored and what's sent. Returns whether this save was kept. */
-export function saveProgress(db: Db, user: User, slug: string, attempt: unknown, savedAt: string) {
+export function saveProgress(db: Db, user: User, slug: string, attempt: unknown, savedAt: string, now = new Date()) {
   if (!/^[a-z0-9-]{1,80}$/.test(slug ?? "")) throw new HttpError(400, "Which topic?");
   if (!attempt || typeof attempt !== "object") throw new HttpError(400, "Expected topic progress.");
   const when = new Date(savedAt);
@@ -32,5 +33,7 @@ export function saveProgress(db: Db, user: User, slug: string, attempt: unknown,
     `INSERT INTO lesson_progress (user_id, slug, attempt, saved_at) VALUES (?, ?, ?, ?)
      ON CONFLICT(user_id, slug) DO UPDATE SET attempt = excluded.attempt, saved_at = excluded.saved_at`,
   ).run(user.id, slug, json, when.toISOString());
+  // A mission in a running challenge keeps the person's first answers for scoring.
+  recordChallengeAnswers(db, user, slug, attempt, now);
   return { kept: true };
 }

@@ -6,7 +6,7 @@ import { Badge, input } from "./ui";
 import { Icon } from "../Icon";
 
 /*
-  Adding and ordering a learning path's lessons. The picker is search-first, so it stays usable with
+  Adding and ordering a learning path's topics. The picker is search-first, so it stays usable with
   hundreds of lessons: filter by audience and status, then add from the first 20 matches (or more).
   The order list is dragged by its handle (or moved with the arrow keys on the handle).
 */
@@ -116,7 +116,7 @@ export function LessonPicker({
         {toolbar}
       </div>
       <p className="mt-3 text-sm text-ink-muted" role="status">
-        {matches.length ? `Showing ${shown.length} of ${matches.length} ${matches.length === 1 ? "lesson" : "lessons"}` : "No topics match."}
+        {matches.length ? `Showing ${shown.length} of ${matches.length} ${matches.length === 1 ? "topic" : "topics"}` : "No topics match."}
       </p>
       {shown.length > 0 && (
         <ul className="mt-2 flex flex-col divide-y divide-line rounded-2xl border border-line">
@@ -160,7 +160,7 @@ export function LessonPicker({
   );
 }
 
-/** The path's lessons in order. Drag the handle to move one; on the handle, the arrow keys move it too. */
+/** The path's topics in order. Drag the handle to move one; on the handle, the arrow keys move it too. */
 export function OrderedLessons({
   slugs,
   info,

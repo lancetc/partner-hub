@@ -33,7 +33,13 @@ type LessonRow = {
   variations: Variation[];
 };
 type DeletedRow = { slug: string; title: string; cards: number; deletedAt: string; published: boolean };
-type Overview = { lessons: LessonRow[]; deleted?: DeletedRow[]; generator: { model: string; maxInstructions: number; connected: boolean } };
+type PathOrder = { id: string; name: string; slugs: string[] };
+type Overview = {
+  lessons: LessonRow[];
+  deleted?: DeletedRow[];
+  paths?: PathOrder[];
+  generator: { model: string; maxInstructions: number; connected: boolean };
+};
 type ActionName = "enable" | "disable" | "regenerate" | "approve" | "signoff_on" | "signoff_off";
 type Act = (a: ActionName, instructions?: string) => void;
 
@@ -126,7 +132,7 @@ export function LessonsAdmin() {
       {!data.data ? (
         <p className="mt-6 text-ink-muted">Loading topics…</p>
       ) : (
-        <LessonGrid lessons={data.data.lessons}>
+        <LessonGrid lessons={data.data.lessons} paths={data.data.paths ?? []}>
           {(l) => (
             <LessonCard
               key={l.slug}
@@ -178,6 +184,7 @@ const SORTS = {
   az: "Title A–Z",
   za: "Title Z–A",
   audience: "Audience",
+  path: "Learning path",
   shortest: "Shortest first",
   longest: "Longest first",
 } as const;
@@ -193,6 +200,8 @@ const COMPARE: Record<SortId, (a: LessonRow, b: LessonRow) => number> = {
   az: byTitle,
   za: (a, b) => byTitle(b, a),
   audience: (a, b) => (TRACK_LABEL[a.track] ?? a.track).localeCompare(TRACK_LABEL[b.track] ?? b.track) || byTitle(a, b),
+  // Grouped under each path instead (see byPath); titles order the topics in no path.
+  path: byTitle,
   shortest: (a, b) => a.minutes - b.minutes || byTitle(a, b),
   longest: (a, b) => b.minutes - a.minutes || byTitle(a, b),
 };
@@ -220,7 +229,19 @@ function setSort(s: SortId) {
   sortListeners.forEach((l) => l());
 }
 
-function LessonGrid({ lessons, children }: { lessons: LessonRow[]; children: (l: LessonRow) => React.ReactNode }) {
+/**
+  Topics grouped under each learning path, in the path's own order, then the topics in no path.
+  A topic in several paths shows under each of them.
+*/
+function byPath(shown: LessonRow[], paths: PathOrder[]) {
+  const bySlug = new Map(shown.map((l) => [l.slug, l]));
+  const groups = paths.map((p) => ({ id: p.id, name: p.name, lessons: p.slugs.flatMap((s) => bySlug.get(s) ?? []) })).filter((g) => g.lessons.length);
+  const inAPath = new Set(paths.flatMap((p) => p.slugs));
+  const loose = shown.filter((l) => !inAPath.has(l.slug));
+  return loose.length ? [...groups, { id: null, name: "Not in a learning path", lessons: loose }] : groups;
+}
+
+function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths: PathOrder[]; children: (l: LessonRow) => React.ReactNode }) {
   const sort = useSyncExternalStore(subscribeSort, readSort, () => "attention" as SortId);
   const [q, setQ] = useState("");
   const [track, setTrack] = useState("all");
@@ -262,7 +283,25 @@ function LessonGrid({ lessons, children }: { lessons: LessonRow[]; children: (l:
           {shown.length === lessons.length ? `${lessons.length} topics` : `Showing ${shown.length} of ${lessons.length}`}
         </p>
       </div>
-      {shown.length ? (
+      {shown.length && sort === "path" ? (
+        byPath(shown, paths).map((g) => (
+          <section key={g.id ?? "none"} className="mt-8 first:mt-4" aria-labelledby={`path-${g.id ?? "none"}`}>
+            <h2 id={`path-${g.id ?? "none"}`} className="flex flex-wrap items-baseline gap-x-3 font-serif text-xl font-semibold">
+              {g.id ? (
+                <Link href={`/admin/learning-paths/${g.id}`} className="hover:underline">
+                  {g.name}
+                </Link>
+              ) : (
+                g.name
+              )}
+              <span className="font-sans text-sm font-normal text-ink-muted">
+                {g.lessons.length} {g.lessons.length === 1 ? "topic" : "topics"}
+              </span>
+            </h2>
+            <ul className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{g.lessons.map(children)}</ul>
+          </section>
+        ))
+      ) : shown.length ? (
         <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{shown.map(children)}</ul>
       ) : (
         <p className="mt-4 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">

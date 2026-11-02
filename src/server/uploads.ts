@@ -1,5 +1,5 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { Db } from "./db";
@@ -56,6 +56,25 @@ const toItem = (r: UploadRow) => ({
   ...(r.credit ? { credit: JSON.parse(r.credit) as Credit } : {}),
 });
 
+const hashOf = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
+function fileHash(filename: string) {
+  try {
+    return hashOf(fs.readFileSync(path.join(DIR, filename)));
+  } catch {
+    return null;
+  }
+}
+
+/** Pictures in the library (not deleted, not replaced). */
+const libraryImages = (db: Db) =>
+  db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL AND replaced_by IS NULL ORDER BY uploaded_at").all() as UploadRow[];
+
+/** A picture already in the library with exactly these bytes. Only files of the same size are read. */
+function sameUpload(db: Db, buf: Buffer) {
+  const want = hashOf(buf);
+  return libraryImages(db).find((r) => r.bytes === buf.length && fileHash(r.filename) === want);
+}
+
 export async function saveUpload(db: Db, actor: User, file: File, size: { width: number; height: number }, now: Date, credit?: Credit) {
   requireAuthor(actor);
   if (!file || typeof file.arrayBuffer !== "function") throw new HttpError(400, "Choose an image to upload.");
@@ -86,6 +105,14 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
     name = name.replace(/\.(jpe?g|png|webp)$/i, "") + ".webp";
   }
   if (!pdf && !(width > 0 && height > 0 && width < 20000 && height < 20000)) throw new HttpError(400, "Couldn’t read the image size.");
+  // The same picture uploaded again: use the copy already in the library rather than adding another.
+  if (mime.startsWith("image/")) {
+    const same = sameUpload(db, buf);
+    if (same) {
+      if (credit && !same.credit) db.prepare("UPDATE uploads SET credit = ? WHERE filename = ?").run(JSON.stringify(credit), same.filename);
+      return { src: publicUrl(same.filename), width: same.width, height: same.height, name: same.original_name, bytes: same.bytes };
+    }
+  }
   const filename = `${randomUUID()}.${ext}`;
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, filename), buf, { flag: "wx" });
@@ -228,6 +255,35 @@ function swapPicture(value: unknown, from: string, to: { src: string; width: num
 }
 
 /**
+  Every use of the picture at `from` now points at `to`: each lesson's saved draft and live version
+  (without needing a publish), and any other record that names it. Earlier versions in a lesson's
+  history are left as they were; their old address keeps working through `replaced_by`.
+*/
+function pointUsesAt(db: Db, from: string, to: { src: string; width: number; height: number }) {
+  const lessons: string[] = [];
+  const like = `%${from}%`;
+  for (const r of db.prepare("SELECT slug, draft, published FROM authored_lessons WHERE draft LIKE ? OR published LIKE ?").all(like, like) as {
+    slug: string;
+    draft: string;
+    published: string | null;
+  }[]) {
+    const draft = JSON.stringify(swapPicture(JSON.parse(r.draft), from, to));
+    const published = r.published ? JSON.stringify(swapPicture(JSON.parse(r.published), from, to)) : null;
+    db.prepare("UPDATE authored_lessons SET draft = ?, published = ? WHERE slug = ?").run(draft, published, r.slug);
+    lessons.push((JSON.parse(draft) as { title?: string }).title || r.slug);
+  }
+  // Other records that name the picture: the presenter face, AI pictures and videos, translations.
+  const skip = new Set(["uploads", "audit", "idempotency", "authored_lessons", "lesson_versions"]);
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]) {
+    if (skip.has(name)) continue;
+    for (const c of (db.prepare(`PRAGMA table_info("${name}")`).all() as { name: string; type: string }[]).filter((c) => /TEXT/i.test(c.type))) {
+      db.prepare(`UPDATE "${name}" SET "${c.name}" = replace("${c.name}", ?, ?) WHERE "${c.name}" LIKE ?`).run(from, to.src, like);
+    }
+  }
+  return lessons;
+}
+
+/**
   Replaces a picture in the library with a new file, everywhere it's used: every lesson's saved draft
   and live version (without needing a publish), the presenter face and other records. The old address
   keeps working too (it shows the new picture), so nothing that still points at it breaks. Earlier
@@ -251,27 +307,59 @@ export async function replaceUpload(db: Db, actor: User, filename: string, file:
     next,
   );
 
-  const lessons: string[] = [];
-  const like = `%${from}%`;
-  for (const r of db.prepare("SELECT slug, draft, published FROM authored_lessons WHERE draft LIKE ? OR published LIKE ?").all(like, like) as {
-    slug: string;
-    draft: string;
-    published: string | null;
-  }[]) {
-    const draft = JSON.stringify(swapPicture(JSON.parse(r.draft), from, to));
-    const published = r.published ? JSON.stringify(swapPicture(JSON.parse(r.published), from, to)) : null;
-    db.prepare("UPDATE authored_lessons SET draft = ?, published = ? WHERE slug = ?").run(draft, published, r.slug);
-    lessons.push((JSON.parse(draft) as { title?: string }).title || r.slug);
-  }
-  // Other records that name the picture: the presenter face, AI pictures and videos, translations.
-  const skip = new Set(["uploads", "audit", "idempotency", "authored_lessons", "lesson_versions"]);
-  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]) {
-    if (skip.has(name)) continue;
-    for (const c of (db.prepare(`PRAGMA table_info("${name}")`).all() as { name: string; type: string }[]).filter((c) => /TEXT/i.test(c.type))) {
-      db.prepare(`UPDATE "${name}" SET "${c.name}" = replace("${c.name}", ?, ?) WHERE "${c.name}" LIKE ?`).run(from, saved.src, like);
-    }
-  }
+  const lessons = pointUsesAt(db, from, to);
   refreshPublishedLessons(db);
   audit(db, { actor: actor.id, event: "upload.replaced", entity: `upload:${filename}`, next: { by: next, lessons: lessons.length }, at: now });
   return { ...to, name: saved.name, lessons };
+}
+
+/**
+  Identical copies of the same picture: keeps one in the library and points every use of the others at
+  it. The copy kept is the one used most (then the oldest). The others leave the library, but their
+  addresses keep showing the picture, so nothing that still names them breaks.
+*/
+export function mergeDuplicateUploads(db: Db, actor: User, now: Date) {
+  requireAuthor(actor);
+  const groups = new Map<string, UploadRow[]>();
+  for (const r of libraryImages(db)) {
+    const h = fileHash(r.filename);
+    if (h) groups.set(h, [...(groups.get(h) ?? []), r]);
+  }
+  const uses = (r: UploadRow) =>
+    (db.prepare("SELECT COUNT(*) n FROM authored_lessons WHERE draft LIKE ? OR published LIKE ?").get(`%${r.filename}%`, `%${r.filename}%`) as { n: number }).n;
+  let merged = 0;
+  const lessons = new Set<string>();
+  const kept: { name: string; copies: number }[] = [];
+  const swaps: { from: string; to: { src: string; width: number; height: number } }[] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const [keep, ...rest] = group
+      .map((r) => ({ r, n: uses(r) }))
+      .sort((a, b) => b.n - a.n || a.r.uploaded_at.localeCompare(b.r.uploaded_at))
+      .map((x) => x.r);
+    const to = { src: publicUrl(keep.filename), width: keep.width, height: keep.height };
+    for (const dup of rest) {
+      for (const t of pointUsesAt(db, publicUrl(dup.filename), to)) lessons.add(t);
+      swaps.push({ from: publicUrl(dup.filename), to });
+      db.prepare("UPDATE uploads SET replaced_by = ? WHERE filename = ? OR replaced_by = ?").run(keep.filename, dup.filename, dup.filename);
+      // A stock photo's credit travels with the copy that's kept.
+      if (!keep.credit && dup.credit) {
+        db.prepare("UPDATE uploads SET credit = ? WHERE filename = ?").run(dup.credit, keep.filename);
+        keep.credit = dup.credit;
+      }
+      merged++;
+    }
+    kept.push({ name: keep.original_name, copies: group.length });
+  }
+  if (merged) {
+    refreshPublishedLessons(db);
+    audit(db, {
+      actor: actor.id,
+      event: "upload.duplicates_merged",
+      entity: "uploads",
+      next: { pictures: kept.length, copies: merged, lessons: lessons.size },
+      at: now,
+    });
+  }
+  return { pictures: kept.length, removed: merged, lessons: [...lessons].sort(), kept, swaps };
 }

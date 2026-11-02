@@ -313,6 +313,31 @@ CREATE TABLE IF NOT EXISTS webinar_views (
   webinar_id TEXT NOT NULL REFERENCES webinars(id), user_id TEXT NOT NULL REFERENCES users(id),
   watched_at TEXT NOT NULL, PRIMARY KEY (webinar_id, user_id)
 );
+-- Challenge Mode: multi-day competitions built from topics, one mission a day.
+CREATE TABLE IF NOT EXISTS challenges (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, tagline TEXT NOT NULL DEFAULT '', story TEXT NOT NULL DEFAULT '',
+  starts_on TEXT NOT NULL, unlock_time TEXT NOT NULL DEFAULT '08:00', reminder_time TEXT NOT NULL DEFAULT '15:00',
+  timezone TEXT NOT NULL DEFAULT 'Australia/Brisbane', points TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft','published')), archived INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT
+);
+CREATE TABLE IF NOT EXISTS challenge_missions (
+  challenge_id TEXT NOT NULL REFERENCES challenges(id), day INTEGER NOT NULL, lesson_slug TEXT NOT NULL,
+  beat TEXT NOT NULL DEFAULT '', PRIMARY KEY (challenge_id, day)
+);
+CREATE TABLE IF NOT EXISTS challenge_teams (
+  challenge_id TEXT NOT NULL REFERENCES challenges(id), id TEXT NOT NULL, name TEXT NOT NULL, colour TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (challenge_id, id)
+);
+CREATE TABLE IF NOT EXISTS challenge_members (
+  challenge_id TEXT NOT NULL REFERENCES challenges(id), user_id TEXT NOT NULL REFERENCES users(id), team_id TEXT NOT NULL,
+  hide_name INTEGER NOT NULL DEFAULT 0, emails INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (challenge_id, user_id)
+);
+-- Each member's first answer to each decision and question, kept the first time it's saved.
+CREATE TABLE IF NOT EXISTS challenge_answers (
+  challenge_id TEXT NOT NULL REFERENCES challenges(id), user_id TEXT NOT NULL REFERENCES users(id), day INTEGER NOT NULL,
+  key TEXT NOT NULL, right INTEGER NOT NULL, pick TEXT, at TEXT NOT NULL, PRIMARY KEY (challenge_id, user_id, key)
+);
 CREATE TABLE IF NOT EXISTS worker_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, clock TEXT NOT NULL,
   released INTEGER NOT NULL, digests INTEGER NOT NULL, dispatched INTEGER NOT NULL, note TEXT

@@ -7,6 +7,8 @@ import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
+import { ChallengeBanner } from "@/components/ChallengePage";
+import { missionSlugs } from "@/server/challenges";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -23,6 +25,9 @@ export default function NewsHome() {
           <span className="rounded-full bg-muted px-3 py-1">Demonstration content</span>
         </p>
       </header>
+      <div className="max-w-3xl empty:hidden">
+        <ChallengeBanner />
+      </div>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <Learning />
       </Suspense>
@@ -49,7 +54,12 @@ async function Learning() {
   const db = getDb();
   const subjects = topicSubjects(db);
   const dates = topicDates(db);
+  const missions = missionSlugs(db);
   return (
-    <HomeLearning topics={lessons.filter((l) => l.track !== "reinforcement").map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null))} />
+    <HomeLearning
+      topics={lessons
+        .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
+        .map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null))}
+    />
   );
 }
