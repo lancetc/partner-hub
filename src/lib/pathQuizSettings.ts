@@ -41,3 +41,6 @@ export function cleanQuizSettings(v: unknown): PathQuizSettings | null {
 
 /** Roughly how long the quiz takes: about 20 seconds a question. */
 export const quizMinutes = (questions: number) => Math.max(1, Math.round((questions * 20) / 60));
+
+/** "1 minute", "13 minutes". */
+export const minutesLabel = (n: number) => `${n} ${n === 1 ? "minute" : "minutes"}`;

@@ -67,7 +67,16 @@ const catalogue = () => lessons.filter((l) => l.track !== "reinforcement");
 const draftsOf = (db: Db) => new Map(unpublishedLessons(db).map((l) => [l.slug, l]));
 /** Every lesson the path builder can add, published and draft. */
 export const catalogueInfo = (db: Db) => [
-  ...catalogue().map((l) => ({ slug: l.slug, title: l.title, summary: l.summary, minutes: l.minutes, track: l.track, draft: false })),
+  ...catalogue().map((l) => ({
+    slug: l.slug,
+    title: l.title,
+    summary: l.summary,
+    minutes: l.minutes,
+    track: l.track,
+    draft: false,
+    // Quick-check questions, which an upfront quiz draws from.
+    checks: Object.values(l.nodes).reduce((n, c) => n + (c.type === "quiz" ? c.questions.length : 0), 0),
+  })),
   ...[...draftsOf(db).values()].map((l) => ({ slug: l.slug, title: l.title, summary: l.summary, minutes: l.minutes, track: l.track, draft: true })),
 ];
 /** Looks up lessons by slug: published first, then drafts. */

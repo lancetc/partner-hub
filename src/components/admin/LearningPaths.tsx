@@ -28,6 +28,8 @@ type LessonInfo = {
   track: string | null;
   /** Still being written: learners see it as coming soon. */
   draft?: boolean;
+  /** How many quick-check questions it has (published topics), for the upfront quiz. */
+  checks?: number;
 };
 type Person = {
   id: string;
@@ -550,7 +552,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <QuizSettings
                 on={quizOn}
                 value={quiz}
-                topics={picked.length}
+                topics={picked.map(info).filter((l): l is LessonInfo => Boolean(l))}
                 onToggle={(v) => change(() => setQuizOn(v))}
                 onChange={(v) => change(() => setQuiz(v))}
               />
@@ -910,11 +912,17 @@ function QuizSettings({
 }: {
   on: boolean;
   value: PathQuizSettings;
-  topics: number;
+  topics: LessonInfo[];
   onToggle: (on: boolean) => void;
   onChange: (q: PathQuizSettings) => void;
 }) {
   const num = (v: string) => (v === "" ? null : Number(v));
+  // What the quiz can draw on: published topics with a quick check. Drafts aren't asked about until they're published.
+  const live = topics.filter((t) => !t.draft);
+  const tested = live.filter((t) => (t.checks ?? 0) > 0);
+  const untested = live.filter((t) => !t.checks);
+  const pool = tested.reduce((n, t) => n + (t.checks ?? 0), 0);
+  const asked = Math.min(q.questions ?? tested.length, pool);
   return (
     <div className={cx("rounded-2xl border p-4", on ? "border-action/50 bg-tealtint/40" : "border-line")}>
       <label className="flex min-h-11 items-start gap-3">
@@ -929,14 +937,14 @@ function QuizSettings({
       </label>
       {on && (
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Field label="Questions" hint={`Leave empty for one from each topic${topics ? ` (${topics})` : ""}.`}>
+          <Field label="Questions" hint={`Leave empty for one from each topic with a quick check${tested.length ? ` (${tested.length})` : ""}.`}>
             <input
               type="number"
               min={5}
               max={200}
               className={input}
               value={q.questions ?? ""}
-              placeholder={topics ? String(topics) : "One per topic"}
+              placeholder={tested.length ? String(tested.length) : "One per topic"}
               onChange={(e) => onChange({ ...q, questions: num(e.target.value) })}
             />
           </Field>
@@ -953,6 +961,31 @@ function QuizSettings({
           <Field label="Tries" hint="Each person’s attempts. You can allow another from the Assigned list.">
             <input type="number" min={1} max={5} className={input} value={q.attempts} onChange={(e) => onChange({ ...q, attempts: Number(e.target.value) })} />
           </Field>
+          <div className="text-sm sm:col-span-3">
+            {!pool ? (
+              <p className="rounded-xl border border-danger/60 bg-surface p-3">
+                None of this path’s published topics has a quick check yet, so there’s nothing to ask. Learners won’t see the quiz until one does.
+              </p>
+            ) : (
+              <p>
+                <strong>
+                  {asked} {asked === 1 ? "question" : "questions"}
+                </strong>{" "}
+                from {tested.length} {tested.length === 1 ? "topic" : "topics"}, out of {pool} quick-check {pool === 1 ? "question" : "questions"} in the path.
+                {q.questions && q.questions > pool ? ` That’s all of them: ask for ${pool} or fewer.` : ""}
+              </p>
+            )}
+            {pool > 0 && untested.length > 0 && (
+              <p className="mt-2 rounded-xl border border-gold bg-gold/15 p-3">
+                <strong>
+                  {untested.length} {untested.length === 1 ? "topic has" : "topics have"} no quick check
+                </strong>
+                , so the quiz can’t test {untested.length === 1 ? "it" : "them"}, but passing still marks {untested.length === 1 ? "it" : "them"} complete:{" "}
+                {untested.map((t) => `“${t.title}”`).join(", ")}. Add a quick check to {untested.length === 1 ? "it" : "each"} to include{" "}
+                {untested.length === 1 ? "it" : "them"}.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

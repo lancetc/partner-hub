@@ -8,6 +8,7 @@ import { PathCard, type MyPath } from "./MyLearningPaths";
 import { Icon, type IconName } from "./Icon";
 import { btn } from "./admin/ui";
 import type { QuizOffer } from "./PathQuiz";
+import { minutesLabel } from "@/lib/pathQuizSettings";
 
 type PathData = MyPath & { assigned: boolean; minutes: number; done: boolean; quiz: QuizOffer | null };
 
@@ -35,7 +36,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
           )}
           <Overview path={data} />
           {!preview && !data.assigned && <p className="mt-4 text-sm text-ink-muted">This path isn’t assigned to you, but you’re welcome to work through it.</p>}
-          {!preview && data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} />}
+          {data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} preview={preview} />}
           <ul className="mt-6">
             <PathCard path={data} preview={preview} intro={false} />
           </ul>
@@ -189,8 +190,10 @@ function Overview({ path: p }: { path: PathData }) {
   The upfront quiz: an offer for someone who thinks they know it already, or their latest result.
   Hidden once the path is done the usual way, unless they passed the quiz.
 */
-function QuizPanel({ id, quiz: q, done }: { id: string; quiz: QuizOffer; done: boolean }) {
-  const href = `/paths/${encodeURIComponent(id)}/quiz`;
+function QuizPanel({ id, quiz: q, done, preview }: { id: string; quiz: QuizOffer; done: boolean; preview: boolean }) {
+  const href = `/paths/${encodeURIComponent(id)}/quiz${preview ? "?preview=1" : ""}`;
+  // In a preview, the offer as a learner first sees it, whatever the author's own results.
+  if (preview) q = { ...q, available: true, inProgress: false, latest: null, passed: false, left: q.attempts };
   if (q.passed && q.latest)
     return (
       <p className="mt-5 flex items-start gap-3 rounded-2xl bg-[#DDE8D9] p-4 text-[#102a43]">
@@ -223,7 +226,7 @@ function QuizPanel({ id, quiz: q, done }: { id: string; quiz: QuizOffer; done: b
           <p className="mt-1 text-ink-muted">
             {q.latest
               ? `You scored ${q.latest.percent}% last time. You have ${q.left} more ${q.left === 1 ? "try" : "tries"}: score ${q.passMark}% to complete the path.`
-              : `Take the ${q.questions}-question quiz (about ${q.minutes} minutes). Score ${q.passMark}% or more and the whole path is complete.`}
+              : `Take the ${q.questions}-question quiz (about ${minutesLabel(q.minutes)}). Score ${q.passMark}% or more and the whole path is complete.`}
           </p>
         </div>
       </div>

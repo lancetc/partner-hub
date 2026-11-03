@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
+import { minutesLabel } from "@/lib/pathQuizSettings";
 import { btn } from "./admin/ui";
 import { Icon } from "./Icon";
 
@@ -26,7 +27,15 @@ export type QuizOffer = {
 type Focus = { slug: string; title: string };
 type Result = { score: number; total: number; percent: number; passed: boolean; passMark: number; at: string };
 type Question = { key: string; topic: string; prompt: string; options: { id: string; label: string }[] };
-type Started = { attempt: number; path: { id: string; name: string }; passMark: number; left: number; questions: Question[] };
+type Started = {
+  attempt: number;
+  path: { id: string; name: string };
+  passMark: number;
+  left: number;
+  questions: Question[];
+  /** Only in an author's preview: the right answers, so the page can mark them itself. */
+  answers?: Record<string, string>;
+};
 type PathData = { id: string; name: string; quiz: QuizOffer | null };
 
 /** Answers so far, kept on this device so a refresh or a dropped connection doesn't lose them. */
@@ -46,7 +55,8 @@ const keep = (attempt: number, answers: Record<string, string> | null) => {
   }
 };
 
-export function PathQuiz({ id }: { id: string }) {
+/** `preview`: an author trying the quiz from the path preview. Marked on the page; nothing is recorded. */
+export function PathQuiz({ id, preview = false }: { id: string; preview?: boolean }) {
   const { data, error } = useApi<PathData>(`/api/paths/${encodeURIComponent(id)}`);
   const [started, setStarted] = useState<Started | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -54,14 +64,14 @@ export function PathQuiz({ id }: { id: string }) {
   const [result, setResult] = useState<(Result & { focus: Focus[]; left: number }) | null>(null);
   const [busy, setBusy] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
-  const pathLink = `/paths/${encodeURIComponent(id)}`;
+  const pathLink = `/paths/${encodeURIComponent(id)}${preview ? "?preview=1" : ""}`;
 
   async function start() {
     setBusy(true);
     setActError(null);
     try {
-      const s = await api<Started>(`/api/paths/${encodeURIComponent(id)}/quiz`, { body: { action: "start" } });
-      const before = saved(s.attempt);
+      const s = await api<Started>(`/api/paths/${encodeURIComponent(id)}/quiz`, { body: { action: preview ? "preview" : "start" } });
+      const before = preview ? {} : saved(s.attempt);
       setAnswers(before);
       // Pick up at the first question still to answer.
       const first = s.questions.findIndex((q) => !before[q.key]);
@@ -76,6 +86,25 @@ export function PathQuiz({ id }: { id: string }) {
 
   async function submit() {
     if (!started) return;
+    if (preview && started.answers) {
+      // Marked here, the same way the server marks a real attempt.
+      const right = started.answers;
+      const score = started.questions.filter((q) => answers[q.key] === right[q.key]).length;
+      const total = started.questions.length;
+      const missed = started.questions.filter((q) => answers[q.key] !== right[q.key]);
+      setResult({
+        score,
+        total,
+        percent: total ? Math.round((score / total) * 100) : 0,
+        passed: total > 0 && score * 100 >= started.passMark * total,
+        passMark: started.passMark,
+        at: new Date().toISOString(),
+        focus: [...new Map(missed.map((q) => [q.key.split("|")[0], { slug: q.key.split("|")[0], title: q.topic }])).values()],
+        left: started.left,
+      });
+      window.scrollTo({ top: 0 });
+      return;
+    }
     setBusy(true);
     setActError(null);
     try {
@@ -93,20 +122,25 @@ export function PathQuiz({ id }: { id: string }) {
   }
 
   useEffect(() => {
-    if (started) keep(started.attempt, answers);
-  }, [started, answers]);
+    if (started && !preview) keep(started.attempt, answers);
+  }, [started, answers, preview]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-8 sm:px-6">
       <Link href={pathLink} className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline">
         <Icon name="arrow-left" className="size-4" /> {data?.name ?? "Back to the path"}
       </Link>
+      {preview && (
+        <p className="mt-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
+          <strong>Quiz preview.</strong> Questions are drawn the same way as for learners and marked here. Nothing is recorded, and no topics are completed.
+        </p>
+      )}
       {error ? (
         <p className="mt-4 rounded-2xl border border-line p-4 text-ink-muted">This learning path isn’t available. It may have been removed.</p>
       ) : !data ? (
         <p className="mt-4 text-ink-muted">Loading…</p>
       ) : result ? (
-        <Outcome result={result} pathLink={pathLink} />
+        <Outcome result={result} pathLink={pathLink} preview={preview} />
       ) : started ? (
         <Asking
           started={started}
@@ -121,7 +155,15 @@ export function PathQuiz({ id }: { id: string }) {
       ) : !data.quiz ? (
         <p className="mt-4 rounded-2xl border border-line p-4 text-ink-muted">This learning path doesn’t have a quiz.</p>
       ) : (
-        <Intro name={data.name} offer={data.quiz} onStart={start} busy={busy} error={actError} pathLink={pathLink} />
+        <Intro
+          name={data.name}
+          // In a preview, the offer as a learner first sees it, whatever the author's own results.
+          offer={preview ? { ...data.quiz, available: true, inProgress: false, latest: null, passed: false, left: data.quiz.attempts } : data.quiz}
+          onStart={start}
+          busy={busy}
+          error={actError}
+          pathLink={pathLink}
+        />
       )}
     </div>
   );
@@ -154,7 +196,7 @@ function Intro({
       <ul className="mt-5 grid gap-2 sm:grid-cols-3">
         {[
           { icon: "list" as const, big: `${o.questions} questions`, small: "from across the path" },
-          { icon: "clock" as const, big: `About ${o.minutes} minutes`, small: "in one sitting is best" },
+          { icon: "clock" as const, big: `About ${minutesLabel(o.minutes)}`, small: "in one sitting is best" },
           { icon: "star" as const, big: `${o.passMark}% to pass`, small: o.attempts === 1 ? "you have one try" : `${o.left} of ${o.attempts} tries left` },
         ].map((f) => (
           <li key={f.big} className="flex items-start gap-3 rounded-2xl bg-muted p-3">
@@ -294,7 +336,7 @@ function Asking({
   );
 }
 
-function Outcome({ result: r, pathLink }: { result: Result & { focus: Focus[]; left: number }; pathLink: string }) {
+function Outcome({ result: r, pathLink, preview }: { result: Result & { focus: Focus[]; left: number }; pathLink: string; preview: boolean }) {
   return (
     <section className="mt-2" aria-live="polite">
       <div
@@ -309,9 +351,13 @@ function Outcome({ result: r, pathLink }: { result: Result & { focus: Focus[]; l
           {r.score} of {r.total} · {r.percent}%
         </span>
         <span>
-          {r.passed
-            ? "Well done. You know this material, so every topic in the path is now marked complete."
-            : `You needed ${r.passMark}%. Nothing is lost: work through the topics to complete the path.${r.left > 0 ? ` You have ${r.left} more ${r.left === 1 ? "try" : "tries"} at the quiz.` : ""}`}
+          {preview
+            ? r.passed
+              ? "In a real attempt, every topic in the path would now be marked complete, and the certificate would be ready."
+              : `A learner needs ${r.passMark}% to pass. In a real attempt, they'd carry on with the topics, starting with the ones below.`
+            : r.passed
+              ? "Well done. You know this material, so every topic in the path is now marked complete."
+              : `You needed ${r.passMark}%. Nothing is lost: work through the topics to complete the path.${r.left > 0 ? ` You have ${r.left} more ${r.left === 1 ? "try" : "tries"} at the quiz.` : ""}`}
         </span>
       </div>
 
@@ -335,7 +381,7 @@ function Outcome({ result: r, pathLink }: { result: Result & { focus: Focus[]; l
       )}
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {r.passed && (
+        {r.passed && !preview && (
           <Link href={`${pathLink}/certificate`} className={btn.primary}>
             <Icon name="star" className="size-4" /> See your certificate
           </Link>

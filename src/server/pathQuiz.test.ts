@@ -3,7 +3,7 @@ import { lessons } from "@/content/lessons";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { assignLearningPath, certificateFor, createLearningPath, learnerPath, updateLearningPath } from "./learningPaths";
-import { clearQuizAttempts, drawQuestions, quizOffer, quizResults, startQuiz, submitQuiz } from "./pathQuiz";
+import { clearQuizAttempts, drawQuestions, previewQuiz, quizOffer, quizResults, startQuiz, submitQuiz } from "./pathQuiz";
 
 /* The upfront quiz on a learning path: test out of it, and every topic counts as complete. */
 
@@ -104,6 +104,14 @@ describe("upfront path quiz", () => {
     expect(clearQuizAttempts(db, u("jordan"), pathId, "sam", now)).toEqual({ cleared: 2 });
     expect(quizOffer(db, u("sam"), pathId)).toMatchObject({ left: 2, available: true, latest: null });
     expect(db.prepare("SELECT COUNT(*) AS n FROM path_quiz_attempts").get()).toEqual({ n: 2 });
+  });
+
+  it("lets an author preview the quiz, with the answers, without saving anything", () => {
+    const p = previewQuiz(db, u("jordan"), pathId);
+    expect(p.questions).toHaveLength(4);
+    expect(Object.keys(p.answers).sort()).toEqual(p.questions.map((q) => q.key).sort());
+    expect(db.prepare("SELECT COUNT(*) AS n FROM path_quiz_attempts").get()).toEqual({ n: 0 });
+    expect(() => previewQuiz(db, u("sam"), pathId)).toThrow();
   });
 
   it("isn't offered once the quiz is turned off", () => {

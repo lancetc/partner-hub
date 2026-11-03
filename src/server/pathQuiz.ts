@@ -2,7 +2,7 @@ import "server-only";
 import { lessons, type QuizQuestion } from "@/content/lessons";
 import { parseQuizSettings, quizMinutes } from "@/lib/pathQuizSettings";
 import { audit, tx, type Db } from "./db";
-import { HttpError, requireReporter, type User } from "./auth";
+import { HttpError, requireAuthor, requireReporter, type User } from "./auth";
 import { chaptersFor, getRow, inScope, slugsFor } from "./learningPaths";
 
 /*
@@ -181,6 +181,26 @@ function asLearnerSees(asked: AskedQuestion[]) {
       },
     ];
   });
+}
+
+/**
+  For an author previewing the path: a fresh draw of questions, with the answers so the page can
+  mark them itself. Nothing is saved, and it works whether or not they could take the real quiz.
+*/
+export function previewQuiz(db: Db, actor: User, pathId: string, rand: () => number = Math.random) {
+  requireAuthor(actor);
+  const p = getRow(db, pathId);
+  const s = quizSettingsFor(db, pathId);
+  if (!s || !quizOffer(db, actor, pathId)) throw new HttpError(404, "This learning path doesn’t have a quiz.");
+  const asked = drawQuestions(db, pathId, s.questions, rand);
+  return {
+    attempt: 0,
+    path: { id: p.id, name: p.name },
+    passMark: s.passMark,
+    left: s.attempts,
+    questions: asLearnerSees(asked),
+    answers: Object.fromEntries(asked.flatMap((q) => (questionFor(q) ? [[keyOf(q), questionFor(q)!.correct]] : []))),
+  };
 }
 
 /** Starts an attempt, or picks up the one they left part way. */
