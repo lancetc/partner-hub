@@ -9,6 +9,8 @@ import { ADMIN_GROUPS } from "./adminNav";
 /** The admin front page: every area, grouped, with what each one is for. */
 export function AdminOverview() {
   const me = useApi<Me>("/api/me").data;
+  // Open review comments, shown on the Comments card so they're noticed.
+  const open = useApi<{ open: number }>(me?.canAuthor ? "/api/admin/review-comments" : null).data?.open ?? 0;
   return (
     <AdminShell title="Overview">
       <div className="flex flex-col gap-8">
@@ -31,7 +33,12 @@ export function AdminOverview() {
                         <Icon name={l.icon} className="size-5" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block font-semibold">{l.label}</span>
+                        <span className="flex flex-wrap items-center gap-2 font-semibold">
+                          {l.label}
+                          {l.href === "/admin/comments" && open > 0 && (
+                            <span className="rounded-full bg-gold px-2 text-xs font-bold text-[#102a43]">{open} open</span>
+                          )}
+                        </span>
                         <span className="block text-sm text-ink-muted">{l.description}</span>
                       </span>
                     </Link>

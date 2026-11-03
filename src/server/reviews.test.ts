@@ -3,6 +3,8 @@ import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { editorLesson, saveDraft } from "./authoredLessons";
 import {
+  addReviewer,
+  allReviewComments,
   deleteReviewComment,
   joinReview,
   linkLesson,
@@ -52,6 +54,13 @@ describe("review links", () => {
     expect(() => joinReview(db, link!.token, { name: "", email: "pat@example.org" }, now)).toThrow(/name/);
     expect(() => joinReview(db, link!.token, { name: "Pat", email: "not an email" }, now)).toThrow(/email/);
     expect(joinReview(db, link!.token, { name: "  Pat   Lee ", email: "PAT@Example.org" }, now).name).toBe("Pat Lee");
+  });
+
+  it("needs only a name when commenting straight on a topic, but still checks an email that's given", () => {
+    expect(() => addReviewer(db, { name: "P" }, now, { emailOptional: true })).toThrow(/name/);
+    expect(() => addReviewer(db, { name: "Pat", email: "nope" }, now, { emailOptional: true })).toThrow(/email/);
+    const { id } = addReviewer(db, { name: "Pat" }, now, { emailOptional: true });
+    expect(reviewerById(db, id)).toEqual({ kind: "reviewer", id, name: "Pat" });
   });
 });
 
@@ -124,5 +133,21 @@ describe("review comments", () => {
       { name: "Dr Pat Lee", email: "pat@example.org", comments: 2, lastComment: later(1).toISOString() },
     ]);
     expect(() => reviewSharing(db, u("sam"), slug)).toThrow(/authors/);
+  });
+});
+
+describe("all review comments", () => {
+  it("lists topics with comments, latest first, counts open threads, and is for authors only", () => {
+    const { who } = linkAndJoin();
+    const a = postReviewComment(db, who, slug, { card: "kit", text: "First topic, first comment." }, now).comments[0];
+    postReviewComment(db, who, slug, { text: "A reply.", parent: a.id }, later(1));
+    postReviewComment(db, who, slug, { card: "kit", text: "First topic, second comment." }, later(2));
+    resolveReviewComment(db, u("jordan"), slug, a.id, true, later(3));
+    const all = allReviewComments(db, u("jordan"));
+    expect(all.topics.map((t) => t.slug)).toEqual([slug]);
+    expect(all.topics[0].comments).toHaveLength(3);
+    expect(all.topics[0].comments[0].by.email).toBe("pat@example.org");
+    expect(all.open).toBe(1);
+    expect(() => allReviewComments(db, u("sam"))).toThrow();
   });
 });

@@ -19,6 +19,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/webinars", label: "Webinars", icon: "play", description: "Recordings, their details, and the Webinars page.", authorOnly: true },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
+      {
+        href: "/admin/comments",
+        label: "Comments",
+        icon: "chat",
+        description: "What reviewers have said about topic cards, all in one place.",
+        authorOnly: true,
+      },
       { href: "/admin/content-review", label: "Content review", icon: "eye", description: "What's due for a check, and why.", authorOnly: true },
     ],
   },

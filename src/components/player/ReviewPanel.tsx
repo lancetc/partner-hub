@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
+import { input } from "../admin/ui";
 import { Composer, openCounts, threadsOf, ThreadView, type ReviewAction, type ReviewData } from "../ReviewThreads";
 
 /*
@@ -13,9 +14,12 @@ import { Composer, openCounts, threadsOf, ThreadView, type ReviewAction, type Re
   comments, so a reviewer can jump to cards on branches they didn't take.
 */
 
-/** The review's comments, kept fresh while the reviewer works (others may be commenting too). */
-export function useReview(token: string | undefined) {
-  const url = token ? `/api/review/${encodeURIComponent(token)}` : null;
+/**
+  The review's comments, kept fresh while the reviewer works (others may be commenting too). From a
+  review link's token, or (`slug`) straight on a topic, where reviewers add their name in the panel.
+*/
+export function useReview(token: string | undefined, slug?: string) {
+  const url = token ? `/api/review/${encodeURIComponent(token)}` : slug ? `/api/topic-review/${encodeURIComponent(slug)}` : null;
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -54,14 +58,42 @@ export function useReview(token: string | undefined) {
     await api(`${url}/join`, { method: "DELETE" }).catch(() => {});
     window.location.reload();
   }, [url]);
-  return { data, error, act, reload: load, leave };
+  // Commenting straight on a topic: the reviewer's name, kept in this browser.
+  const join = useCallback(
+    async (name: string) => {
+      if (!url) return false;
+      try {
+        await api(`${url}/join`, { body: { name } });
+        load();
+        return true;
+      } catch (e) {
+        setError((e as Error).message);
+        return false;
+      }
+    },
+    [url, load],
+  );
+  return { data, error, act, reload: load, leave, join };
 }
 
 export type Review = ReturnType<typeof useReview>;
 type CardInfo = { id: string; heading: string; label: string };
 
 /** The card header's Comments button, with how many open threads the card has. */
-export function ReviewButton({ review, card, cards, onJump }: { review: Review; card: CardInfo; cards: CardInfo[]; onJump: (id: string) => void }) {
+export function ReviewButton({
+  review,
+  card,
+  cards,
+  onJump,
+  footer = false,
+}: {
+  review: Review;
+  card: CardInfo;
+  cards: CardInfo[];
+  onJump: (id: string) => void;
+  /** In the player's footer, beside Back, rather than the card header. */
+  footer?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const count = review.data ? (openCounts(review.data.comments)[card.id] ?? 0) : 0;
   return (
@@ -74,7 +106,10 @@ export function ReviewButton({ review, card, cards, onJump }: { review: Review; 
         }}
         aria-haspopup="dialog"
         aria-label={count ? `Comments on this card, ${count} open` : "Comment on this card"}
-        className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-gold px-3 text-sm font-bold text-[#102a43] shadow-sm hover:brightness-95"
+        className={cx(
+          "inline-flex items-center gap-1.5 rounded-full bg-gold font-bold text-[#102a43] shadow-sm hover:brightness-95",
+          footer ? "min-h-12 px-4" : "min-h-10 px-3 text-sm",
+        )}
       >
         <Icon name="chat" className="size-4" />
         {count ? count : "Comment"}
@@ -168,6 +203,8 @@ function Panel({
           )}
           {!review.data ? (
             <p className="text-sm text-ink-muted">Loading comments…</p>
+          ) : !review.data.me ? (
+            <NameStep onJoin={review.join} />
           ) : tab === "card" ? (
             <>
               <Composer
@@ -240,5 +277,43 @@ function Panel({
       </section>
     </div>,
     document.body,
+  );
+}
+
+/** The first comment on a topic opened straight from the hub: who's commenting, once per browser. */
+function NameStep({ onJoin }: { onJoin: (name: string) => Promise<boolean> }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        if (!(await onJoin(name))) setBusy(false);
+      }}
+    >
+      <p className="text-sm text-ink-muted">Add your name, so the author knows who each comment is from. You only need to do this once.</p>
+      <label className="flex flex-col gap-1.5 font-semibold">
+        Your name
+        <input
+          className={cx(input, "font-normal")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="name"
+          required
+          minLength={2}
+          maxLength={80}
+          autoFocus
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={busy}
+        className="inline-flex min-h-11 items-center justify-center rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
+      >
+        Continue to comments
+      </button>
+    </form>
   );
 }

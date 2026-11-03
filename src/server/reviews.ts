@@ -83,8 +83,8 @@ export function joinReview(db: Db, token: string, input: { name?: unknown; email
   return addReviewer(db, input, now);
 }
 
-/** A new reviewer, once their link has been checked. */
-export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, now: Date) {
+/** A new reviewer, once their link has been checked. Comments on an open topic ask only for a name. */
+export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, now: Date, { emailOptional = false } = {}) {
   const name = String(input.name ?? "")
     .trim()
     .replace(/\s+/g, " ")
@@ -94,7 +94,7 @@ export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, 
     .toLowerCase()
     .slice(0, 160);
   if (name.length < 2) throw new HttpError(400, "Add your name, so the author knows who the comments are from.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Add an email address the author can reach you on.");
+  if (!(emailOptional && !email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Add an email address the author can reach you on.");
   const id = randomBytes(24).toString("base64url");
   db.prepare("INSERT INTO reviewers (id, name, email, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)").run(
     id,
@@ -249,4 +249,22 @@ export function resolveReviewComment(db: Db, actor: User, slug: string, id: numb
     root,
   );
   return reviewComments(db, { kind: "author", user: actor }, slug);
+}
+
+/**
+  For the admin Comments page: every topic that has review comments, most recent activity first,
+  each with its comments as the editor's Comments tab shows them. Topics deleted since are left out.
+*/
+export function allReviewComments(db: Db, actor: User) {
+  requireAuthor(actor);
+  const slugs = db
+    .prepare("SELECT lesson_slug AS slug, MAX(created_at) AS latest FROM review_comments WHERE deleted_at IS NULL GROUP BY lesson_slug ORDER BY latest DESC")
+    .all() as { slug: string; latest: string }[];
+  const topics = slugs.flatMap(({ slug, latest }) => {
+    const found = editorLesson(db, slug);
+    if (!found) return [];
+    return [{ slug, title: found.lesson.title, latest, comments: reviewComments(db, { kind: "author", user: actor }, slug).comments }];
+  });
+  const open = topics.reduce((n, t) => n + t.comments.filter((c) => !c.parent && !c.resolved).length, 0);
+  return { topics, open };
 }

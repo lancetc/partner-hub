@@ -30,6 +30,13 @@ import { completionGate, LISTEN_GATE } from "@/lib/completionGate";
   Set back to false to restore the hold (each topic's "hold until the audio finishes" setting).
 */
 const SKIP_AUDIO_HOLD = true;
+
+/*
+  For testing: the footer's speech-bubble button opens review comments (a name, then comments on
+  the card, which authors see on the topic's Comments tab) instead of the topic assistant.
+  Set back to false to bring the assistant back.
+*/
+const REVIEW_COMMENTS_IN_FOOTER = true;
 import { CardVisual, PhotoCredit } from "./CardVisual";
 import { WrittenAnswer } from "./WrittenAnswer";
 import { Hotspots } from "./Hotspots";
@@ -107,7 +114,7 @@ export function LessonPlayer({
   const [quizChecked, setQuizChecked] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const reviewing = useReview(reviewToken);
+  const reviewing = useReview(reviewToken, REVIEW_COMMENTS_IN_FOOTER ? lesson.slug : undefined);
   const seq = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
 
@@ -629,7 +636,12 @@ export function LessonPlayer({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
-              {!reviewToken && <TopicChat slug={lesson.slug} title={lesson.title} card={{ id: node.id, heading: node.heading }} preview={preview} />}
+              {!reviewToken &&
+                (REVIEW_COMMENTS_IN_FOOTER ? (
+                  <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
+                ) : (
+                  <TopicChat slug={lesson.slug} title={lesson.title} card={{ id: node.id, heading: node.heading }} preview={preview} />
+                ))}
               {attempt.route.length > 1 ? (
                 <button
                   type="button"
