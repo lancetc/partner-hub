@@ -24,6 +24,12 @@ import { WaitingSurveys } from "../WaitingSurveys";
 import { ListenCard } from "./AudioStage";
 import { VideoBubbles } from "./VideoBubbles";
 import { completionGate, LISTEN_GATE } from "@/lib/completionGate";
+
+/*
+  TEMPORARY, for testing: learners can move on before a card's audio finishes, on every topic.
+  Set back to false to restore the hold (each topic's "hold until the audio finishes" setting).
+*/
+const SKIP_AUDIO_HOLD = true;
 import { CardVisual, PhotoCredit } from "./CardVisual";
 import { WrittenAnswer } from "./WrittenAnswer";
 import { Hotspots } from "./Hotspots";
@@ -474,6 +480,7 @@ export function LessonPlayer({
     narration: narration ? { playable: narration.playable, state: narration.state } : null,
     speaks: Boolean(dock && dock.speech !== false),
     holdForAudio: lesson.holdForAudio,
+    skipAudio: SKIP_AUDIO_HOLD,
   });
   const locked = Boolean(gate) && !primary.disabled;
 

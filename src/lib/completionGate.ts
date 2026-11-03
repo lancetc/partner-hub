@@ -25,6 +25,8 @@ export function completionGate(
     speaks: boolean;
     /** The lesson's "hold until the audio finishes" setting (on unless turned off). */
     holdForAudio?: boolean;
+    /** Never wait for audio, whatever the topic says. Video, reading and activity holds still apply. */
+    skipAudio?: boolean;
   },
 ): string | null {
   if (ctx.exempt || ctx.finished.has(node.id) || ctx.answers[`done:${node.id}`]) return null;
@@ -51,6 +53,7 @@ export function completionGate(
   // Cards you answer (quiz, decision, poll, rating, wall, written, hotspot) already hold you until you answer; with
   // audio on hold, they also wait for their question to be read out.
   const answerCard = ["quiz", "decision", "poll", "rating", "wall", "written", "hotspot"].includes(node.type);
+  if (ctx.skipAudio) return null;
   if (!(ctx.holdForAudio !== false || (node.requireComplete && !answerCard))) return null;
   // If the audio can't play at all, don't trap anyone.
   if (ctx.speaks && ctx.narration?.playable !== false && ctx.narration?.state !== "ended") return LISTEN_GATE;

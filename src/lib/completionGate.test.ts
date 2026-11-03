@@ -27,6 +27,10 @@ const ctx = (over: Partial<Parameters<typeof completionGate>[1]> = {}) => ({
 });
 
 describe("required completion", () => {
+  it("never waits for audio when skipAudio is on, but still holds for video", () => {
+    expect(completionGate(listen, ctx({ skipAudio: true }))).toBeNull();
+    expect(completionGate(video, ctx({ skipAudio: true, speaks: false }))).toBe("Watch the video to continue");
+  });
   it("holds an audio card until the audio ends", () => {
     expect(completionGate(listen, ctx())).toMatch(/Listen to the end/);
     expect(completionGate(listen, ctx({ narration: { playable: true, state: "ended" } }))).toBeNull();
