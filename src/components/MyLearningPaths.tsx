@@ -26,6 +26,8 @@ export type MyPath = {
   whoPhoto?: string;
   outcomes?: string[];
   reward?: string;
+  /** The upfront quiz, when the path has one: whether they can take (or carry on with) it now. */
+  quiz?: { available: boolean; inProgress: boolean } | null;
 };
 
 /** Learning paths assigned to the signed-in person: progress, what's next and the due date. */
@@ -162,10 +164,15 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
               <p className="font-mulish text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">Your learning path</p>
               <h3 className="mt-1 text-xl font-semibold leading-snug">{p.name}</h3>
               {p.description && <p className="mt-1 text-sm text-ink-muted">{p.description}</p>}
-              <p className="mt-1 text-sm">
+              <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <Link href={`/paths/${encodeURIComponent(p.id)}`} className="font-semibold text-accent hover:underline">
                   About this path
                 </Link>
+                {!preview && (p.quiz?.available || p.quiz?.inProgress) && (
+                  <Link href={`/paths/${encodeURIComponent(p.id)}/quiz`} className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
+                    <Icon name="target" className="size-4" /> {p.quiz.inProgress ? "Finish your upfront quiz" : "Already know this? Take the quiz"}
+                  </Link>
+                )}
               </p>
             </>
           )}

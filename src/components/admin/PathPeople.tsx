@@ -22,6 +22,8 @@ export type AssignedPerson = {
   total: number;
   done: boolean;
   nextTitle: string | null;
+  /** Their upfront quiz result, if the path has a quiz and they've taken it. */
+  quiz?: { tries: number; passed: boolean; best: { score: number; total: number; percent: number } } | null;
 };
 
 const roleOf = (p: Person) => p.service_role ?? p.audience;
@@ -231,7 +233,18 @@ const statusOf = (a: AssignedPerson, today: string): Exclude<FilterId, "all"> =>
   a.done ? "finished" : a.dueDate && a.dueDate < today ? "overdue" : a.completed > 0 ? "progress" : "notstarted";
 
 /** Everyone on the path: search, filter by progress, and page through. */
-export function AssignedList({ assigned, busy, onRemove }: { assigned: AssignedPerson[]; busy: boolean; onRemove: (a: AssignedPerson) => void }) {
+export function AssignedList({
+  assigned,
+  busy,
+  onRemove,
+  onClearQuiz,
+}: {
+  assigned: AssignedPerson[];
+  busy: boolean;
+  onRemove: (a: AssignedPerson) => void;
+  /** Gives someone another try at the upfront quiz. */
+  onClearQuiz?: (a: AssignedPerson) => void;
+}) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const [limit, setLimit] = useState(10);
@@ -321,6 +334,19 @@ export function AssignedList({ assigned, busy, onRemove }: { assigned: AssignedP
                 </span>
               </div>
               {a.nextTitle && <p className="mt-1 text-xs text-ink-muted">Next: {a.nextTitle}</p>}
+              {a.quiz && (
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
+                  <span>
+                    Upfront quiz: {a.quiz.passed ? "passed" : "not passed"}, best {a.quiz.best.score}/{a.quiz.best.total} ({a.quiz.best.percent}%)
+                    {a.quiz.tries > 1 && ` · ${a.quiz.tries} tries`}
+                  </span>
+                  {!a.quiz.passed && onClearQuiz && (
+                    <button type="button" className="font-semibold text-accent hover:underline" disabled={busy} onClick={() => onClearQuiz(a)}>
+                      Allow another try
+                    </button>
+                  )}
+                </p>
+              )}
             </li>
           );
         })}

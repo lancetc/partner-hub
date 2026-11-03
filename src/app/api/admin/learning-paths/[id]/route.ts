@@ -1,10 +1,16 @@
 import { body, handle } from "@/server/http";
 import { HttpError } from "@/server/auth";
 import { archiveLearningPath, learningPathDetail, restoreLearningPath, updateLearningPath, type PathInput } from "@/server/learningPaths";
+import { quizResults } from "@/server/pathQuiz";
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/admin/learning-paths/[id]">) {
   const { id } = await ctx.params;
-  return handle(({ db, user }) => learningPathDetail(db, user, id));
+  return handle(({ db, user }) => {
+    const detail = learningPathDetail(db, user, id);
+    // Each person's upfront quiz result, when the path has had one.
+    const quiz = quizResults(db, id);
+    return { ...detail, assignments: detail.assignments.map((a) => ({ ...a, quiz: quiz.get(a.userId) ?? null })) };
+  });
 }
 
 export async function PUT(req: Request, ctx: RouteContext<"/api/admin/learning-paths/[id]">) {

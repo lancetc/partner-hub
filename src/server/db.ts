@@ -126,6 +126,14 @@ CREATE TABLE IF NOT EXISTS learning_path_assignments (
   due_date TEXT, assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL,
   UNIQUE (path_id, user_id)
 );
+-- Upfront quiz attempts: someone tests out of a learning path. Questions (JSON) are drawn from the
+-- path's topic quick checks when the attempt starts; a cleared attempt (an admin allowed another try) no longer counts.
+CREATE TABLE IF NOT EXISTS path_quiz_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  path_id TEXT NOT NULL REFERENCES learning_paths(id), user_id TEXT NOT NULL REFERENCES users(id),
+  questions TEXT NOT NULL, answers TEXT, score INTEGER, total INTEGER NOT NULL, pass_mark INTEGER NOT NULL, passed INTEGER,
+  started_at TEXT NOT NULL, submitted_at TEXT, cleared_at TEXT, cleared_by TEXT
+);
 CREATE TABLE IF NOT EXISTS surveys (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
   anonymous INTEGER NOT NULL DEFAULT 1, required INTEGER NOT NULL DEFAULT 0,
@@ -429,6 +437,11 @@ export function migrate(db: Db) {
   if (!cols.includes("outcomes")) db.exec("ALTER TABLE learning_paths ADD COLUMN outcomes TEXT NOT NULL DEFAULT '[]'");
   if (!cols.includes("reward")) db.exec("ALTER TABLE learning_paths ADD COLUMN reward TEXT NOT NULL DEFAULT ''");
   if (!cols.includes("who_photo")) db.exec("ALTER TABLE learning_paths ADD COLUMN who_photo TEXT");
+  // The upfront quiz (JSON settings: questions, pass mark, attempts); null when the path has none.
+  if (!cols.includes("quiz")) db.exec("ALTER TABLE learning_paths ADD COLUMN quiz TEXT");
+  const completionCols = (db.prepare("PRAGMA table_info(lesson_completions)").all() as { name: string }[]).map((c) => c.name);
+  // How a topic was completed when it wasn't worked through, e.g. "path-quiz:lp-care-coordination" for passing a path's upfront quiz.
+  if (!completionCols.includes("via")) db.exec("ALTER TABLE lesson_completions ADD COLUMN via TEXT");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.

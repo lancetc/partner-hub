@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { whoPhotoFor } from "@/lib/pathPhoto";
 import { useApi } from "@/lib/api";
-import { formatDuration } from "@/lib/format";
+import { cx, formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
 import { Icon, type IconName } from "./Icon";
+import { btn } from "./admin/ui";
+import type { QuizOffer } from "./PathQuiz";
 
-type PathData = MyPath & { assigned: boolean; minutes: number };
+type PathData = MyPath & { assigned: boolean; minutes: number; done: boolean; quiz: QuizOffer | null };
 
 /* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the topics. */
 export function PathPage({ id, preview = false }: { id: string; preview?: boolean }) {
@@ -33,6 +35,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
           )}
           <Overview path={data} />
           {!preview && !data.assigned && <p className="mt-4 text-sm text-ink-muted">This path isn’t assigned to you, but you’re welcome to work through it.</p>}
+          {!preview && data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} />}
           <ul className="mt-6">
             <PathCard path={data} preview={preview} intro={false} />
           </ul>
@@ -179,6 +182,55 @@ function Overview({ path: p }: { path: PathData }) {
         </ul>
       </details>
     </header>
+  );
+}
+
+/**
+  The upfront quiz: an offer for someone who thinks they know it already, or their latest result.
+  Hidden once the path is done the usual way, unless they passed the quiz.
+*/
+function QuizPanel({ id, quiz: q, done }: { id: string; quiz: QuizOffer; done: boolean }) {
+  const href = `/paths/${encodeURIComponent(id)}/quiz`;
+  if (q.passed && q.latest)
+    return (
+      <p className="mt-5 flex items-start gap-3 rounded-2xl bg-[#DDE8D9] p-4 text-[#102a43]">
+        <Icon name="circle-check" className="mt-0.5 size-5 shrink-0" />
+        <span>
+          <strong>You passed the upfront quiz</strong> with {q.latest.percent}%, so every topic is complete. They’re still here whenever you want a refresher.
+        </span>
+      </p>
+    );
+  if (!q.available && !q.inProgress) {
+    if (!q.latest || done) return null;
+    return (
+      <p className="mt-5 flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
+        <Icon name="info" className="mt-0.5 size-5 shrink-0 text-accent" />
+        <span>
+          You scored {q.latest.percent}% on the upfront quiz ({q.latest.passMark}% needed). Work through the topics below to complete the path
+          {q.latest.focus.length ? ", starting with the ones you missed questions on." : "."}
+        </span>
+      </p>
+    );
+  }
+  return (
+    <section className="mt-5 flex flex-col gap-3 rounded-3xl border-2 border-action/40 bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-tealtint text-accent">
+          <Icon name="target" className="size-5" />
+        </span>
+        <div>
+          <h2 className="font-serif text-xl font-semibold leading-snug">{q.inProgress ? "Finish your upfront quiz" : "Already know this?"}</h2>
+          <p className="mt-1 text-ink-muted">
+            {q.latest
+              ? `You scored ${q.latest.percent}% last time. You have ${q.left} more ${q.left === 1 ? "try" : "tries"}: score ${q.passMark}% to complete the path.`
+              : `Take the ${q.questions}-question quiz (about ${q.minutes} minutes). Score ${q.passMark}% or more and the whole path is complete.`}
+          </p>
+        </div>
+      </div>
+      <Link href={href} className={cx(btn.primary, "shrink-0")}>
+        {q.inProgress ? "Carry on" : "Take the quiz"} <Icon name="arrow-right" className="size-4" />
+      </Link>
+    </section>
   );
 }
 

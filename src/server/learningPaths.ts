@@ -4,6 +4,7 @@ import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireReporter, type User } from "./auth";
 import { unpublishedLessons } from "./authoredLessons";
 import { thumbnailFor } from "@/lib/pathThumbnail";
+import { cleanQuizSettings, parseQuizSettings, type PathQuizSettings } from "@/lib/pathQuizSettings";
 
 /*
   Learning paths: a named set of lessons in order that an administrator assigns to people.
@@ -23,6 +24,8 @@ type PathRow = {
   /** JSON list of strings. */
   outcomes: string;
   reward: string;
+  /** The upfront quiz's settings (JSON), or null for none. */
+  quiz?: string | null;
   archived: number;
   created_by: string;
   created_at: string;
@@ -45,6 +48,8 @@ export type PathInput = {
   outcomes?: string[];
   /** What they get when they finish, e.g. a certificate. */
   reward?: string;
+  /** An upfront quiz people can take to test out of the path; null or missing for none. */
+  quiz?: PathQuizSettings | null;
   /** Lessons in order. With chapters, these are ignored and the chapters' lessons are used. */
   lessons: string[];
   /** Optional grouping: chapters in order, each with its lessons (topics) in order, and an optional stage heading. */
@@ -77,7 +82,7 @@ const lessonLookup = (db: Db) => {
   };
 };
 
-const slugsFor = (db: Db, pathId: string) =>
+export const slugsFor = (db: Db, pathId: string) =>
   (db.prepare("SELECT lesson_slug FROM learning_path_lessons WHERE path_id = ? ORDER BY position").all(pathId) as { lesson_slug: string }[]).map(
     (r) => r.lesson_slug,
   );
@@ -121,7 +126,7 @@ export function assignableUsers(db: Db, actor: User) {
   return rows;
 }
 
-const inScope = (db: Db, actor: User, userId: string) => assignableUsers(db, actor).some((u) => u.id === userId);
+export const inScope = (db: Db, actor: User, userId: string) => assignableUsers(db, actor).some((u) => u.id === userId);
 
 export function getRow(db: Db, id: string) {
   const row = db.prepare("SELECT * FROM learning_paths WHERE id = ? AND archived = 0").get(id) as PathRow | undefined;
@@ -185,6 +190,7 @@ function validate(db: Db, input: PathInput) {
       .filter(Boolean)
       .slice(0, 8),
     reward: (input.reward ?? "").trim().slice(0, 300),
+    quiz: cleanQuizSettings(input.quiz),
     lessons: input.lessons,
     chapters,
   };
@@ -208,7 +214,7 @@ const overview = (p: PathRow) => {
   } catch {
     // A damaged value shows no outcomes rather than breaking the page.
   }
-  return { whoFor: p.who_for ?? "", whoPhoto: p.who_photo ?? "", outcomes, reward: p.reward ?? "" };
+  return { whoFor: p.who_for ?? "", whoPhoto: p.who_photo ?? "", outcomes, reward: p.reward ?? "", quiz: parseQuizSettings(p.quiz) };
 };
 
 /** Replaces a path's lessons (and chapters, if it has them). */
@@ -272,6 +278,7 @@ export function listLearningPaths(db: Db, actor: User) {
       audience: p.audience,
       inOrder: Boolean(p.in_order),
       allowSkip: Boolean(p.allow_skip),
+      quiz: Boolean(parseQuizSettings(p.quiz)),
       lessons: slugs.map(info),
       // Chapters (and their stages) for the summary card; empty for a plain list of lessons.
       chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ id: c.id, title: c.title, stage: c.stage, slugs: l })),
@@ -333,8 +340,8 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
   const at = now.toISOString();
   tx(db, () => {
     db.prepare(
-      `INSERT INTO learning_paths (id, name, description, audience, in_order, allow_skip, who_for, who_photo, outcomes, reward, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO learning_paths (id, name, description, audience, in_order, allow_skip, who_for, who_photo, outcomes, reward, quiz, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       v.name,
@@ -346,6 +353,7 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
       v.whoPhoto || null,
       JSON.stringify(v.outcomes),
       v.reward,
+      v.quiz ? JSON.stringify(v.quiz) : null,
       actor.id,
       at,
       at,
@@ -399,7 +407,7 @@ export function updateLearningPath(db: Db, actor: User, id: string, input: PathI
   };
   tx(db, () => {
     db.prepare(
-      "UPDATE learning_paths SET name = ?, description = ?, audience = ?, in_order = ?, allow_skip = ?, who_for = ?, who_photo = ?, outcomes = ?, reward = ?, updated_at = ? WHERE id = ?",
+      "UPDATE learning_paths SET name = ?, description = ?, audience = ?, in_order = ?, allow_skip = ?, who_for = ?, who_photo = ?, outcomes = ?, reward = ?, quiz = ?, updated_at = ? WHERE id = ?",
     ).run(
       v.name,
       v.description,
@@ -410,6 +418,7 @@ export function updateLearningPath(db: Db, actor: User, id: string, input: PathI
       v.whoPhoto || null,
       JSON.stringify(v.outcomes),
       v.reward,
+      v.quiz ? JSON.stringify(v.quiz) : null,
       now.toISOString(),
       id,
     );

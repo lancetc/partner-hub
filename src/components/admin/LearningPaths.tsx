@@ -15,7 +15,8 @@ import { QrShare } from "./QrShare";
 import { PathReviewShare } from "./PathReviewShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
 import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft } from "./PathChapters";
-import { AssignDialog, AssignedList } from "./PathPeople";
+import { AssignDialog, AssignedList, type AssignedPerson } from "./PathPeople";
+import { QUIZ_DEFAULTS, type PathQuizSettings } from "@/lib/pathQuizSettings";
 
 /* Learning paths: a named set of lessons, in order, that an administrator assigns to people. */
 
@@ -42,6 +43,7 @@ type PathSummary = {
   audience: string;
   inOrder: boolean;
   allowSkip: boolean;
+  quiz: boolean;
   lessons: LessonInfo[];
   chapters: { id: string; title: string; stage: string; slugs: string[] }[];
   minutes: number;
@@ -81,6 +83,7 @@ type Assignment = {
   total: number;
   nextSlug: string | null;
   done: boolean;
+  quiz: AssignedPerson["quiz"];
 };
 type Detail = {
   id: string;
@@ -93,6 +96,7 @@ type Detail = {
   whoPhoto?: string;
   outcomes: string[];
   reward: string;
+  quiz: PathQuizSettings | null;
   lessons: string[];
   chapters: ChapterDraft[];
   canEdit: boolean;
@@ -227,6 +231,7 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
           {p.audience && <Badge tone="info">{p.audience}</Badge>}
           {!p.lessons.length && <Badge tone="warn">Planned: no topics yet</Badge>}
           {p.allowSkip && <Badge tone="warn">Testing: skipping allowed</Badge>}
+          {p.quiz && <Badge tone="neutral">Upfront quiz</Badge>}
         </div>
         <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
           {p.chapters.length ? `${p.chapters.length} chapters · ` : ""}
@@ -372,6 +377,8 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   const [audience, setAudience] = useState(detail?.audience ?? "");
   const [inOrder, setInOrder] = useState(detail?.inOrder ?? true);
   const [allowSkip, setAllowSkip] = useState(detail?.allowSkip ?? false);
+  const [quizOn, setQuizOn] = useState(Boolean(detail?.quiz));
+  const [quiz, setQuiz] = useState<PathQuizSettings>(detail?.quiz ?? QUIZ_DEFAULTS);
   const [whoFor, setWhoFor] = useState(detail?.whoFor ?? "");
   // One outcome per line while editing.
   const [outcomes, setOutcomes] = useState((detail?.outcomes ?? []).join("\n"));
@@ -417,6 +424,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
         audience,
         inOrder,
         allowSkip,
+        quiz: quizOn ? quiz : null,
         whoFor,
         whoPhoto,
         outcomes: outcomes
@@ -539,6 +547,13 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   </span>
                 </span>
               </label>
+              <QuizSettings
+                on={quizOn}
+                value={quiz}
+                topics={picked.length}
+                onToggle={(v) => change(() => setQuizOn(v))}
+                onChange={(v) => change(() => setQuiz(v))}
+              />
             </fieldset>
           </section>
 
@@ -764,7 +779,17 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
             total: a.total,
             done: a.done,
             nextTitle: a.steps.find((s) => s.slug === a.nextSlug)?.title ?? null,
+            quiz: a.quiz,
           }))}
+          onClearQuiz={async (a) => {
+            if (
+              await confirmAction(`${a.name} can take the upfront quiz again, with the full number of tries. Their earlier results stay on record.`, {
+                title: `Give ${a.name} another try?`,
+                confirmLabel: "Allow another try",
+              })
+            )
+              await send({ action: "clear-quiz", userId: a.userId });
+          }}
           busy={busy}
           onRemove={async (a) => {
             if (
@@ -872,5 +897,64 @@ function WhoPhotoField({ value, onChange }: { value: string; onChange: (src: str
         </ul>
       )}
     </Field>
+  );
+}
+
+/** The upfront quiz: on or off, and when on, how many questions, the pass mark and the number of tries. */
+function QuizSettings({
+  on,
+  value: q,
+  topics,
+  onToggle,
+  onChange,
+}: {
+  on: boolean;
+  value: PathQuizSettings;
+  topics: number;
+  onToggle: (on: boolean) => void;
+  onChange: (q: PathQuizSettings) => void;
+}) {
+  const num = (v: string) => (v === "" ? null : Number(v));
+  return (
+    <div className={cx("rounded-2xl border p-4", on ? "border-action/50 bg-tealtint/40" : "border-line")}>
+      <label className="flex min-h-11 items-start gap-3">
+        <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={on} onChange={(e) => onToggle(e.target.checked)} />
+        <span>
+          <span className="font-semibold">Offer an upfront quiz</span>
+          <span className="block text-sm text-ink-muted">
+            For people who think they know it already. Pass it and every topic in the path is complete, certificate included. Questions are drawn from the
+            topics’ quick checks, shuffled for each person.
+          </span>
+        </span>
+      </label>
+      {on && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <Field label="Questions" hint={`Leave empty for one from each topic${topics ? ` (${topics})` : ""}.`}>
+            <input
+              type="number"
+              min={5}
+              max={200}
+              className={input}
+              value={q.questions ?? ""}
+              placeholder={topics ? String(topics) : "One per topic"}
+              onChange={(e) => onChange({ ...q, questions: num(e.target.value) })}
+            />
+          </Field>
+          <Field label="Pass mark (%)" hint="Between 50 and 100.">
+            <input
+              type="number"
+              min={50}
+              max={100}
+              className={input}
+              value={q.passMark}
+              onChange={(e) => onChange({ ...q, passMark: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Tries" hint="Each person’s attempts. You can allow another from the Assigned list.">
+            <input type="number" min={1} max={5} className={input} value={q.attempts} onChange={(e) => onChange({ ...q, attempts: Number(e.target.value) })} />
+          </Field>
+        </div>
+      )}
+    </div>
   );
 }
