@@ -490,6 +490,17 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
 
   return (
     <AdminShell title={isNew ? "New learning path" : name || "Learning path"} back={{ href: "/admin/learning-paths", label: "Learning paths" }}>
+      {me?.canAuthor && canEdit && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
+          <Icon name="spark" className="size-4 text-accent" />
+          <span className="min-w-0 flex-1">
+            Start from a brief and Claude drafts the path: who it’s for, the outcomes, and chapters of topics, using your existing topics where they fit.
+          </span>
+          <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
+            <Icon name="spark" className="size-4" /> Generate with Claude
+          </button>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-6">
           <section className="rounded-3xl border border-line bg-surface p-5">
@@ -626,11 +637,6 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                     onClick={() => setChaptered([{ id: newChapterId(), title: "", description: "", stage: "", lessons: flat }])}
                   >
                     <Icon name="list" className="size-4" /> Organise into chapters
-                  </button>
-                )}
-                {me?.canAuthor && (
-                  <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
-                    <Icon name="spark" className="size-4" /> Generate with Claude
                   </button>
                 )}
                 <button type="button" className={btn.secondary} onClick={() => setImporting(true)}>
