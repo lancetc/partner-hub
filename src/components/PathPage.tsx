@@ -199,7 +199,10 @@ function QuizPanel({ id, quiz: q, done, preview }: { id: string; quiz: QuizOffer
       <p className="mt-5 flex items-start gap-3 rounded-2xl bg-[#DDE8D9] p-4 text-[#102a43]">
         <Icon name="circle-check" className="mt-0.5 size-5 shrink-0" />
         <span>
-          <strong>You passed the upfront quiz</strong> with {q.latest.percent}%, so every topic is complete. They’re still here whenever you want a refresher.
+          <strong>You passed the upfront quiz</strong> with {q.latest.percent}%
+          {done
+            ? ", so every topic is complete. They’re still here whenever you want a refresher."
+            : ". Some compliance topics still need to be worked through, or are waiting for the compliance team to approve your result."}
         </span>
       </p>
     );

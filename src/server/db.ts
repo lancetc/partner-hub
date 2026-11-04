@@ -126,6 +126,26 @@ CREATE TABLE IF NOT EXISTS learning_path_assignments (
   due_date TEXT, assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL,
   UNIQUE (path_id, user_id)
 );
+-- The compliance register: one row per topic on it, with its settings (JSON, see lib/complianceRegister).
+CREATE TABLE IF NOT EXISTS compliance_register (
+  lesson_slug TEXT PRIMARY KEY, settings TEXT NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- A pass of a path's upfront quiz that covers a register topic needing approval: the topic only
+-- counts as complete once the competency owner approves it.
+CREATE TABLE IF NOT EXISTS compliance_testouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL REFERENCES users(id), lesson_slug TEXT NOT NULL, path_id TEXT NOT NULL, attempt_id INTEGER NOT NULL,
+  score INTEGER NOT NULL, total INTEGER NOT NULL, lesson_version TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined')),
+  requested_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, note TEXT NOT NULL DEFAULT '',
+  UNIQUE (user_id, lesson_slug, attempt_id)
+);
+-- Reminders already queued for a register topic: each stage ("due", "expired") once per training cycle.
+CREATE TABLE IF NOT EXISTS compliance_reminders (
+  user_id TEXT NOT NULL REFERENCES users(id), lesson_slug TEXT NOT NULL, stage TEXT NOT NULL, expires_at TEXT NOT NULL, queued_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, lesson_slug, stage, expires_at)
+);
 -- Upfront quiz attempts: someone tests out of a learning path. Questions (JSON) are drawn from the
 -- path's topic quick checks when the attempt starts; a cleared attempt (an admin allowed another try) no longer counts.
 CREATE TABLE IF NOT EXISTS path_quiz_attempts (
@@ -442,6 +462,8 @@ export function migrate(db: Db) {
   const completionCols = (db.prepare("PRAGMA table_info(lesson_completions)").all() as { name: string }[]).map((c) => c.name);
   // How a topic was completed when it wasn't worked through, e.g. "path-quiz:lp-care-coordination" for passing a path's upfront quiz.
   if (!completionCols.includes("via")) db.exec("ALTER TABLE lesson_completions ADD COLUMN via TEXT");
+  // First-try results and assessment scores when they finished (JSON), so a later attempt can't erase them.
+  if (!completionCols.includes("evidence")) db.exec("ALTER TABLE lesson_completions ADD COLUMN evidence TEXT");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.

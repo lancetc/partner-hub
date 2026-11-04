@@ -7,7 +7,11 @@ import type { QuizQuestion } from "@/content/lessons";
   can show their first score, latest score, attempts and when they passed.
 */
 
-export type Assessment = { passMark: number };
+export type Assessment = {
+  passMark: number;
+  /** Ask this many questions, drawn afresh from the card's pool for each attempt; all of them when unset. */
+  draw?: number;
+};
 
 type Answers = Record<string, string | number | string[]>;
 
@@ -46,9 +50,27 @@ export function shuffled<T>(items: T[], seed: string): T[] {
   return out;
 }
 
-/** Questions, and each question's options, in this attempt's order. */
-export function assessmentOrder(questions: QuizQuestion[], seed: string): QuizQuestion[] {
-  return shuffled(questions, `${seed}:q`).map((q) => ({ ...q, options: shuffled(q.options, `${seed}:${q.id}`) }));
+/** This attempt's questions, and each question's options, in order: a fresh draw of `draw` from the pool when set. */
+export function assessmentOrder(questions: QuizQuestion[], seed: string, draw?: number): QuizQuestion[] {
+  const order = shuffled(questions, `${seed}:q`);
+  return (draw && draw > 0 && draw < order.length ? order.slice(0, draw) : order).map((q) => ({ ...q, options: shuffled(q.options, `${seed}:${q.id}`) }));
+}
+
+/**
+  What fixes an attempt's order (and draw): when the topic was started, and which attempt this is.
+  Once an attempt is submitted (`checked`), the count has moved on, so step back to the one just marked.
+*/
+export const attemptSeed = (startedAt: string, cardId: string, answers: Answers, checked: boolean) =>
+  `${startedAt}:${Number(answers[assessmentKeys(cardId).attempt] ?? 0) - (checked ? 1 : 0)}`;
+
+/** The questions asked in this attempt of a quiz card: an assessment's shuffled draw, or every question otherwise. */
+export function attemptQuestions(
+  card: { id: string; questions: QuizQuestion[]; assessment?: Assessment },
+  startedAt: string,
+  answers: Answers,
+  checked: boolean,
+) {
+  return card.assessment ? assessmentOrder(card.questions, attemptSeed(startedAt, card.id, answers, checked), card.assessment.draw) : card.questions;
 }
 
 /** This attempt's number (1 for the first), from the learner's saved answers. */
@@ -94,4 +116,20 @@ export function assessmentRecord(cardId: string, answers: Record<string, unknown
     latestScore: Number(answers[k.latest] ?? 0),
     passedAt: typeof answers[k.passed] === "string" ? (answers[k.passed] as string) : null,
   };
+}
+
+/**
+  The results worth keeping with a completion, from a learner's answers: first-try quiz and scenario
+  results, and assessment scores. Kept so a later attempt (starting again, or a refresh) can't erase
+  what they demonstrated when they finished.
+*/
+export function completionEvidence(answers: unknown) {
+  const out: Record<string, number | string> = {};
+  if (!answers || typeof answers !== "object") return out;
+  for (const [k, v] of Object.entries(answers as Record<string, unknown>).slice(0, 500)) {
+    if (!/^(first|attempts|firstScore|score|passedAt):[\w.-]{1,120}$/.test(k)) continue;
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    else if (typeof v === "string" && v.length <= 40) out[k] = v;
+  }
+  return out;
 }

@@ -3825,6 +3825,28 @@ function QuizFields({ card: c, set }: { card: Extract<Card, { type: "quiz" }>; s
             %
           </label>
         )}
+        {c.assessment && (
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            Questions per attempt
+            <input
+              type="number"
+              min={1}
+              max={c.questions.length}
+              className={cx(input, "max-w-24")}
+              value={c.assessment.draw ?? ""}
+              placeholder={String(c.questions.length)}
+              onChange={(e) =>
+                set((x) => {
+                  if (x.type !== "quiz" || !x.assessment) return;
+                  const n = Math.round(Number(e.target.value));
+                  if (e.target.value && n > 0) x.assessment.draw = n;
+                  else delete x.assessment.draw;
+                })
+              }
+            />
+            <span className="text-xs text-ink-muted">of {c.questions.length} in the pool. Each attempt draws a fresh set; leave empty to ask them all.</span>
+          </label>
+        )}
       </div>
       {c.questions.map((qu, i) => (
         <fieldset key={qu.id} className="flex flex-col gap-2 rounded-2xl border border-line p-3">

@@ -20,6 +20,7 @@ import { TranslationNotice, TranslationWatch } from "@/components/player/Transla
 import { EmbeddedPreview } from "@/components/player/EmbeddedPreview";
 import { topicMetadata } from "@/server/seo";
 import { challengeForMission, missionLock, missionSlugs } from "@/server/challenges";
+import { refreshDue } from "@/server/complianceRegister";
 import Link from "next/link";
 
 export function generateStaticParams() {
@@ -88,6 +89,7 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
       instanceId={typeof instance === "string" && /^\d+$/.test(instance) ? instance : undefined}
       backTo={challengeId ? { href: `/challenge/${challengeId}`, label: "Back to the challenge" } : undefined}
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
+      refresh={refreshDue(db, user, lesson.slug, now(db))}
       notice={
         notice || changed ? (
           <div className="flex flex-col gap-2">

@@ -22,7 +22,7 @@ const catalogue = () => lessons.filter((l) => l.track !== "reinforcement");
 /** Who a lesson is for: partner and coordinator lessons for that audience, everything else for both. */
 export const isFor = (l: Pick<Lesson, "track">, audience: string) => (l.track === "partner" || l.track === "coordinator" ? l.track === audience : true);
 
-function people(db: Db, viewer: User): Person[] {
+export function people(db: Db, viewer: User): Person[] {
   const ids = new Set(assignableUsers(db, viewer).map((u) => u.id));
   return (
     db.prepare("SELECT u.id, u.name, u.email, u.audience, o.name AS org FROM users u JOIN orgs o ON o.id = u.org_id ORDER BY u.name").all() as Person[]
@@ -30,7 +30,7 @@ function people(db: Db, viewer: User): Person[] {
 }
 
 /** Everything known about who did what, read once per report. */
-function facts(db: Db) {
+export function facts(db: Db) {
   const completions = new Map<string, { version: string; at: string }>();
   for (const r of db.prepare("SELECT user_id, lesson_slug, lesson_version, completed_at FROM lesson_completions ORDER BY completed_at").all() as {
     user_id: string;
@@ -58,7 +58,7 @@ function facts(db: Db) {
 }
 
 /** First-try quiz score from someone's saved answers, e.g. 1 of 2. */
-function quizScore(lesson: Lesson, answers: Record<string, unknown> | undefined) {
+export function quizScore(lesson: Lesson, answers: Record<string, unknown> | undefined) {
   if (!answers) return null;
   let right = 0;
   let asked = 0;
@@ -78,14 +78,14 @@ const assessmentCard = (lesson: Lesson) =>
   Object.values(lesson.nodes).find((c) => c.type === "quiz" && c.assessment) as Extract<Lesson["nodes"][string], { type: "quiz" }> | undefined;
 
 /** Someone's assessment record for a topic: first and latest score, attempts, and when they passed. */
-function assessmentOf(lesson: Lesson, answers: Record<string, unknown> | undefined) {
+export function assessmentOf(lesson: Lesson, answers: Record<string, unknown> | undefined) {
   const card = assessmentCard(lesson);
   if (!card) return null;
   const record = assessmentRecord(card.id, answers);
   return record ? { ...record, passMark: card.assessment!.passMark } : null;
 }
 
-function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: string) {
+export function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: string) {
   const done = f.completions.get(`${userId}|${lesson.slug}`);
   const prog = f.progress.get(`${userId}|${lesson.slug}`);
   const state: LessonState = done ? "completed" : prog ? "in_progress" : "not_started";
@@ -245,7 +245,7 @@ export function personReport(db: Db, viewer: User, userId: string) {
   return { person, lessons: lessonRows, paths: pathsFor(db, userId, f), signoffs };
 }
 
-const csvCell = (v: unknown) => {
+export const csvCell = (v: unknown) => {
   const s = v === null || v === undefined ? "" : String(v);
   // Quote everything, and stop spreadsheet formulas.
   return `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;

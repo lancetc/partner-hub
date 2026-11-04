@@ -23,12 +23,13 @@ export function Quiz({
   checked: boolean;
   onCheckedChange: (c: boolean) => void;
   /** Assessment mode: shuffled, marked all at once, and no feedback after a fail. */
-  assessment?: { passMark: number };
+  assessment?: { passMark: number; draw?: number };
   /** Fixes this attempt's shuffled order. */
   seed?: string;
 }) {
-  const shown = assessment ? assessmentOrder(questions, seed) : questions;
-  const score = assessment ? assessmentScore(cardId, questions, answers, assessment.passMark) : null;
+  // An assessment asks this attempt's draw, in this attempt's order, and is marked on those questions.
+  const shown = assessment ? assessmentOrder(questions, seed, assessment.draw) : questions;
+  const score = assessment ? assessmentScore(cardId, shown, answers, assessment.passMark) : null;
   // After a failed assessment, don't show which answers were wrong: the retake would just flip them.
   const showFeedback = checked && (!score || score.passed);
   return (
@@ -53,7 +54,7 @@ export function Quiz({
           <span className="text-[0.95rem]">
             {score.passed
               ? "Well done. Read the feedback on each question below, then continue."
-              : `You need ${assessment!.passMark}% to pass. Retake the assessment: the questions and answers will be in a new order.`}
+              : `You need ${assessment!.passMark}% to pass. Retake the assessment: ${assessment!.draw ? "you’ll get a new set of questions" : "the questions and answers will be in a new order"}.`}
           </span>
         </div>
       )}
@@ -65,7 +66,7 @@ export function Quiz({
           <fieldset key={q.id} className="flex flex-col gap-2">
             <legend className="mb-2 font-semibold leading-snug">
               <span className="text-ink-muted">
-                Question {qi + 1} of {questions.length}.{" "}
+                Question {qi + 1} of {shown.length}.{" "}
               </span>
               {q.prompt}
             </legend>

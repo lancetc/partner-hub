@@ -7,6 +7,7 @@ import { LessonList } from "@/components/LessonList";
 import { topicSummary } from "@/lib/topicSummary";
 import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { MyLearningPaths } from "@/components/MyLearningPaths";
+import { RequiredTraining } from "@/components/RequiredTraining";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { missionSlugs } from "@/server/challenges";
@@ -27,6 +28,9 @@ export default function LearningPage() {
       </div>
       <div className="mt-8 max-w-2xl empty:hidden">
         <WaitingSurveys heading="Survey waiting for you" />
+      </div>
+      <div className="mt-8 max-w-2xl empty:hidden">
+        <RequiredTraining />
       </div>
       <MyLearningPaths />
       {/* Reinforcement lessons arrive as follow ups in a learning sequence, not from the catalogue. */}

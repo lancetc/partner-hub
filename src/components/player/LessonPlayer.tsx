@@ -53,7 +53,7 @@ import { Widget } from "./Widget";
 import { TopicChat } from "./TopicChat";
 import { SpokenAnswer } from "./VoiceInput";
 import { RichInline, RichText } from "../RichText";
-import { assessmentKeys, assessmentScore, clearForRetake, recordAttempt } from "@/lib/assessment";
+import { assessmentScore, attemptQuestions, attemptSeed, clearForRetake, completionEvidence, recordAttempt } from "@/lib/assessment";
 import { Quiz } from "./Quiz";
 import { confirmAction } from "@/lib/confirm";
 import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
@@ -82,6 +82,7 @@ export function LessonPlayer({
   startAt,
   backTo,
   reviewToken,
+  refresh,
 }: {
   lesson: Lesson;
   instanceId?: string;
@@ -96,6 +97,8 @@ export function LessonPlayer({
   backTo?: { href: string; label: string };
   /** Opened from a review link (with `preview`): every card gets a Comments button for review comments. */
   reviewToken?: string;
+  /** Required training that's due soon or has expired: doing the topic again refreshes it. */
+  refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
 }) {
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
@@ -321,7 +324,12 @@ export function LessonPlayer({
       const label = `Topic completed: “${lesson.title}”`;
       const sent = instanceId
         ? await sendOrQueue<{ completedAt: string }>(`/api/follow-ups/${instanceId}`, { action: "complete_lesson", results }, { label })
-        : await sendOrQueue<CompletionResult>("/api/lessons/complete", { slug: lesson.slug, version: lesson.version }, { label });
+        : await sendOrQueue<CompletionResult>(
+            "/api/lessons/complete",
+            // First-try results go with the completion, so starting again later can't erase them.
+            { slug: lesson.slug, version: lesson.version, evidence: completionEvidence(attempt.answers) },
+            { label },
+          );
       const server: Pick<CompletionResult, "completedAt" | "followUps"> = sent.queued
         ? { completedAt: done.completedAt!, followUps: [] }
         : { completedAt: (sent.data as { completedAt?: string }).completedAt ?? nowIso(), followUps: (sent.data as Partial<CompletionResult>).followUps ?? [] };
@@ -367,6 +375,7 @@ export function LessonPlayer({
             onStart={() => begin(true, preview)}
             onResume={() => begin(false)}
             onReview={() => begin(true, true)}
+            refresh={preview ? null : refresh}
           />
         }
       >
@@ -392,6 +401,7 @@ export function LessonPlayer({
           onStart={() => begin(true, preview)}
           onResume={() => begin(false)}
           onReview={() => begin(true, true)}
+          refresh={preview ? null : refresh}
         />
         {!preview && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
         {!preview && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
@@ -430,6 +440,7 @@ export function LessonPlayer({
     choice,
     quizChecked,
     answers: attempt.answers,
+    startedAt: attempt.startedAt,
     pendingNext,
   });
 
@@ -530,7 +541,9 @@ export function LessonPlayer({
         // Keep each question's first answer for reporting and adaptive follow ups.
         const answers = { ...attempt.answers };
         let firstTime = false;
-        node.questions.forEach((q) => {
+        // Only the questions asked this attempt (an assessment may draw some of its pool).
+        const asked = attemptQuestions(node, attempt.startedAt, attempt.answers, false);
+        asked.forEach((q) => {
           const key = `first:${node.id}.${q.id}`;
           if (answers[key] === undefined) {
             firstTime = true;
@@ -540,7 +553,7 @@ export function LessonPlayer({
           }
         });
         // An assessment keeps every attempt's score, the first score, and when they passed.
-        const recorded = node.assessment ? recordAttempt(node.id, node.questions, answers, node.assessment.passMark, new Date().toISOString()) : answers;
+        const recorded = node.assessment ? recordAttempt(node.id, asked, answers, node.assessment.passMark, new Date().toISOString()) : answers;
         const next = { ...attempt, answers: recorded };
         setAttempt(next);
         // Save first answers (and every assessment attempt) straight away, so they stand even if they leave now.
@@ -880,6 +893,7 @@ function primaryAction(
     choice: string | null;
     quizChecked: boolean;
     answers: LessonAttempt["answers"];
+    startedAt: string;
     pendingNext: string | null;
   },
 ): {
@@ -892,10 +906,11 @@ function primaryAction(
     case "decision":
       return ctx.pendingNext ? { label: "Continue", kind: "choose" } : { label: "Choose", kind: "choose", disabled: !ctx.choice };
     case "quiz": {
-      const allAnswered = node.questions.every((q) => ctx.answers[`${node.id}.${q.id}`]);
+      const asked = attemptQuestions(node, ctx.startedAt, ctx.answers, ctx.quizChecked);
+      const allAnswered = asked.every((q) => ctx.answers[`${node.id}.${q.id}`]);
       if (node.assessment) {
         if (!ctx.quizChecked) return { label: "Submit answers", kind: "check", disabled: !allAnswered };
-        if (assessmentScore(node.id, node.questions, ctx.answers, node.assessment.passMark).passed)
+        if (assessmentScore(node.id, asked, ctx.answers, node.assessment.passMark).passed)
           return node.next ? { label: "Continue", kind: "next" } : { label: "Finish topic", kind: "complete", completes: true };
         return { label: "Retake assessment", kind: "retry" };
       }
@@ -1101,8 +1116,8 @@ function CardBody({
           checked={quizChecked}
           onCheckedChange={setQuizChecked}
           assessment={node.assessment}
-          // Each attempt has its own order; once submitted, the order of the attempt just marked.
-          seed={`${attempt.startedAt}:${Number(attempt.answers[assessmentKeys(node.id).attempt] ?? 0) - (quizChecked ? 1 : 0)}`}
+          // Each attempt has its own order (and draw); once submitted, those of the attempt just marked.
+          seed={attemptSeed(attempt.startedAt, node.id, attempt.answers, quizChecked)}
         />
       );
     case "summary":
@@ -1320,6 +1335,7 @@ function Intro({
   onStart,
   onResume,
   onReview,
+  refresh,
 }: {
   part: "body" | "actions";
   lesson: Lesson;
@@ -1327,6 +1343,7 @@ function Intro({
   onStart: () => void;
   onResume: () => void;
   onReview: () => void;
+  refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
 }) {
   const sameVersion = stored?.version === lesson.version;
   const inProgress = stored?.status === "in_progress" && sameVersion;
@@ -1336,7 +1353,28 @@ function Intro({
   if (part === "actions") {
     return (
       <div className="flex flex-col gap-2">
-        {completed ? (
+        {refresh && !inProgress ? (
+          <>
+            <p className="flex items-start gap-2 rounded-2xl border-2 border-gold bg-gold/15 px-4 py-3 font-medium">
+              <Icon name="shield" className="mt-0.5 size-5 shrink-0" />
+              <span>
+                {refresh.status === "evidence"
+                  ? "This is required training, and there’s no quiz result on record for when you finished it. Work through it again to record one."
+                  : `${
+                      refresh.status === "expired"
+                        ? `Your training in this topic expired${refresh.expiresAt ? ` on ${formatDate(refresh.expiresAt)}` : ""}.`
+                        : `Your training in this topic is due for a refresh${refresh.expiresAt ? ` by ${formatDate(refresh.expiresAt)}` : ""}.`
+                    } Work through it again to keep your record up to date.`}
+              </span>
+            </p>
+            <button type="button" onClick={onStart} className="min-h-12 rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover">
+              {refresh.status === "evidence" ? "Do it again to record your result" : "Refresh your training"}
+            </button>
+            <button type="button" onClick={onReview} className="min-h-11 rounded-full font-medium text-ink-muted hover:bg-muted">
+              Just review it
+            </button>
+          </>
+        ) : completed ? (
           <>
             <p className="flex items-center gap-2 rounded-2xl bg-tealtint px-4 py-3 font-medium">
               <Icon name="check" className="size-5 text-accent" />
@@ -1353,6 +1391,18 @@ function Intro({
           </>
         ) : inProgress ? (
           <>
+            {refresh && (
+              <p className="flex items-start gap-2 rounded-2xl border-2 border-gold bg-gold/15 px-4 py-3 text-sm font-medium">
+                <Icon name="shield" className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  {refresh.status === "evidence"
+                    ? "Required training: finishing it records your quiz result."
+                    : refresh.status === "expired"
+                      ? "Required training that has expired: finishing it refreshes your record."
+                      : "Required training that’s due soon: finishing it refreshes your record."}
+                </span>
+              </p>
+            )}
             <button
               type="button"
               onClick={onResume}
@@ -1578,7 +1628,10 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
   const box = onColour ? "bg-white text-[#102a43] shadow-sm [text-shadow:none]" : "bg-muted";
   return (
     <div className="mt-4 flex flex-col gap-3">
-      {points.title && <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">{points.title}</p>}
+      {/* On a coloured card, the card's own text colour (softened), so it reads on navy as well as on light colours. */}
+      {points.title && (
+        <p className={cx("font-mulish text-xs font-extrabold uppercase tracking-[0.12em]", onColour ? "opacity-85" : "text-ink-muted")}>{points.title}</p>
+      )}
       {points.style === "chips" ? (
         <ul className="flex flex-wrap gap-2">
           {points.items.map((p, i) => (

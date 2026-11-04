@@ -206,7 +206,7 @@ export type Card =
         no feedback until submitted, questions and options shuffled for each attempt, and a full retake
         after a fail. Scores and attempts are kept for reports.
       */
-      assessment?: { passMark: number };
+      assessment?: { passMark: number; draw?: number };
     })
   /**
     An insight wall: learners answer a question, and only after posting do they see what others wrote.

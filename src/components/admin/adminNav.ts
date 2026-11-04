@@ -33,6 +33,12 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
     title: "People & progress",
     links: [
       { href: "/admin/completions", label: "Completions", icon: "circle-check", description: "Who has finished each topic and path, by topic or by person." },
+      {
+        href: "/admin/compliance",
+        label: "Compliance register",
+        icon: "shield",
+        description: "Mandatory topics: who is trained, what they showed, and when they need refreshing.",
+      },
       { href: "/admin/signoffs", label: "Sign-offs", icon: "pen", description: "Managers confirming people put learning into practice." },
       { href: "/admin/surveys", label: "Surveys", icon: "chat", description: "Feedback after topics and learning paths, and the results." },
     ],

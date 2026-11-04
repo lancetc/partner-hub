@@ -2,6 +2,7 @@ import "server-only";
 import { baseUrl, runDueCampaigns } from "./campaigns";
 import { challengeEmailStillDue, queueChallengeEmails } from "./challenges";
 import { runContentReminders } from "./contentReminders";
+import { queueComplianceReminders, reminderText, remindersStillDue, type ReminderItem } from "./complianceRegister";
 import { localDate, nextPermittedSlot, reminderAt, type ScheduleConfig } from "@/lib/schedule";
 import { tx, type Db } from "./db";
 import { activityInfo, pathVersion, scheduleFor, type EnrolmentRow, type InstanceRow } from "./learning";
@@ -168,6 +169,39 @@ export async function dispatch(db: Db, now: Date, adapters?: Partial<Record<"ema
       .run(iso(now), msg.id);
     if (claimed.changes === 0) continue; // another worker has it
 
+    // Compliance reminders: topics refreshed since queuing are dropped, and the email rewritten for the rest.
+    if (msg.kind === "compliance_reminder") {
+      const items = remindersStillDue(db, msg.user_id, JSON.parse(msg.items) as ReminderItem[], now);
+      if (!items.length) {
+        db.prepare(
+          "UPDATE outbox SET status = 'cancelled', last_error = 'The training was refreshed before the reminder went', updated_at = ? WHERE id = ?",
+        ).run(iso(now), msg.id);
+        outcomes.cancelled = (outcomes.cancelled ?? 0) + 1;
+        continue;
+      }
+      const to = db.prepare("SELECT name, email FROM users WHERE id = ?").get(msg.user_id) as { name: string; email: string };
+      const text = reminderText(to, items, baseUrl());
+      const sent = await (adapters?.[msg.channel] ?? adapterFor(msg.channel)).send({
+        idempotencyKey: msg.idempotency_key,
+        to,
+        subject: text.subject,
+        body: text.body,
+      });
+      dispatched++;
+      outcomes[sent.status] = (outcomes[sent.status] ?? 0) + 1;
+      const tries = (db.prepare("SELECT attempts FROM outbox WHERE id = ?").get(msg.id) as { attempts: number }).attempts;
+      db.prepare("UPDATE outbox SET status = ?, provider_ref = ?, last_error = ?, items = ?, subject = ?, body = ?, updated_at = ? WHERE id = ?").run(
+        sent.status === "failed" ? (sent.retryable && tries < 3 ? "queued" : "failed") : sent.status,
+        sent.status === "accepted" ? sent.providerRef : null,
+        "error" in sent ? sent.error : null,
+        JSON.stringify(items),
+        text.subject,
+        text.body,
+        iso(now),
+        msg.id,
+      );
+      continue;
+    }
     // Challenge invitations and reminders are written when queued; a reminder is dropped once the mission's done.
     if (msg.kind.startsWith("challenge_")) {
       if (!challengeEmailStillDue(db, msg.user_id, msg.kind, msg.items, now)) {
@@ -245,6 +279,8 @@ export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"em
   const digests = queueDigests(db, now);
   // Each day's challenge invitation, and an afternoon reminder.
   queueChallengeEmails(db, now, baseUrl());
+  // Required training that's just become due soon, or has expired.
+  queueComplianceReminders(db, now, baseUrl());
   const { dispatched, outcomes } = await dispatch(db, now, adapters);
   // Newsletters scheduled for now or earlier go out too.
   await runDueCampaigns(db, now, adapters?.email);

@@ -6,6 +6,7 @@ import { getLesson, isSpaced } from "./lessonStore";
 import { addWeekdays, localDate, projectSchedule, releaseAfter, zonedToUtc, type ScheduleConfig } from "@/lib/schedule";
 import { audit, tx, type Db } from "./db";
 import { HttpError, type User } from "./auth";
+import { refreshDue } from "./complianceRegister";
 
 export type PathVersionRow = {
   path_id: string;
@@ -169,14 +170,39 @@ export function enrol(db: Db, user: User, pathId: string, version: number, trigg
   Records a server-confirmed lesson completion. The completion row is unique per person and
   lesson version, so replaying the same event returns the original record and enrolment.
 */
-export function recordLessonCompletion(db: Db, user: User, lesson: { slug: string; version: string }, now: Date) {
+export function recordLessonCompletion(
+  db: Db,
+  user: User,
+  lesson: { slug: string; version: string },
+  now: Date,
+  /** First-try results and assessment scores (see completionEvidence). */
+  evidence: Record<string, number | string> = {},
+) {
+  const results = Object.keys(evidence).length ? JSON.stringify(evidence) : null;
   return tx(db, () => {
-    db.prepare("INSERT OR IGNORE INTO lesson_completions (user_id, lesson_slug, lesson_version, completed_at) VALUES (?, ?, ?, ?)").run(
-      user.id,
-      lesson.slug,
-      lesson.version,
-      now.toISOString(),
-    );
+    const inserted = db
+      .prepare("INSERT OR IGNORE INTO lesson_completions (user_id, lesson_slug, lesson_version, completed_at, evidence) VALUES (?, ?, ?, ?, ?)")
+      .run(user.id, lesson.slug, lesson.version, now.toISOString(), results);
+    // Doing a register topic again when it's due or expired refreshes the training: the completion
+    // date moves to now, and the cycle starts again. (Otherwise the first completion of a version stands.)
+    const due = inserted.changes ? null : refreshDue(db, user, lesson.slug, now);
+    // A missing result is only put right by finishing with one.
+    if (due && (due.status !== "evidence" || results))
+      db.prepare("UPDATE lesson_completions SET completed_at = ?, via = NULL, evidence = ? WHERE user_id = ? AND lesson_slug = ? AND lesson_version = ?").run(
+        now.toISOString(),
+        results,
+        user.id,
+        lesson.slug,
+        lesson.version,
+      );
+    // Finished again without it being due: the first completion stands, but it gets results it didn't have.
+    else if (!inserted.changes && results)
+      db.prepare("UPDATE lesson_completions SET evidence = ? WHERE user_id = ? AND lesson_slug = ? AND lesson_version = ? AND evidence IS NULL").run(
+        results,
+        user.id,
+        lesson.slug,
+        lesson.version,
+      );
     const completion = db
       .prepare("SELECT * FROM lesson_completions WHERE user_id = ? AND lesson_slug = ? AND lesson_version = ?")
       .get(user.id, lesson.slug, lesson.version) as { id: number; completed_at: string };

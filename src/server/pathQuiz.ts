@@ -4,6 +4,7 @@ import { parseQuizSettings, quizMinutes } from "@/lib/pathQuizSettings";
 import { audit, tx, type Db } from "./db";
 import { HttpError, requireAuthor, requireReporter, type User } from "./auth";
 import { chaptersFor, getRow, inScope, slugsFor } from "./learningPaths";
+import { requestTestOut, testOutRule } from "./complianceRegister";
 
 /*
   The upfront quiz on a learning path. Its questions are drawn from the path's topics' own quick
@@ -108,6 +109,22 @@ const resultOf = (a: AttemptRow) => ({
   at: a.submitted_at!,
 });
 
+/**
+  Topics in the path the compliance register doesn't let a quiz pass complete on its own: those
+  needing the competency owner's approval, and those that have to be worked through.
+*/
+export function heldTopics(db: Db, pathId: string) {
+  const held = { approval: [] as { slug: string; title: string }[], notAllowed: [] as { slug: string; title: string }[] };
+  for (const slug of slugsFor(db, pathId)) {
+    const l = published(slug);
+    if (!l) continue;
+    const rule = testOutRule(db, slug);
+    if (rule === "approval") held.approval.push({ slug, title: l.title });
+    if (rule === "not_allowed") held.notAllowed.push({ slug, title: l.title });
+  }
+  return held;
+}
+
 /** True when every published topic in the path is already complete. */
 function pathDone(db: Db, userId: string, pathId: string) {
   const live = slugsFor(db, pathId).filter((s) => published(s));
@@ -146,6 +163,7 @@ export function quizOffer(db: Db, user: User, pathId: string) {
     passed,
     // Open until they pass, run out of tries, or finish the path the usual way.
     available: !passed && !done && left > 0,
+    held: heldTopics(db, pathId),
   };
 }
 
@@ -237,7 +255,7 @@ export function submitQuiz(db: Db, user: User, pathId: string, attemptId: number
     .prepare("SELECT * FROM path_quiz_attempts WHERE id = ? AND path_id = ? AND user_id = ? AND cleared_at IS NULL")
     .get(attemptId, pathId, user.id) as AttemptRow | undefined;
   if (!row) throw new HttpError(404, "That quiz attempt isn’t here any more. Start the quiz again.");
-  if (row.submitted_at) return { ...resultOf(row), focus: focusOf(row), left: quizOffer(db, user, pathId)?.left ?? 0 };
+  if (row.submitted_at) return { ...resultOf(row), focus: focusOf(row), left: quizOffer(db, user, pathId)?.left ?? 0, held: heldTopics(db, pathId) };
   if (!answers || typeof answers !== "object") throw new HttpError(400, "Send your answers.");
   const asked = (JSON.parse(row.questions) as AskedQuestion[]).filter((q) => questionFor(q));
   const missing = asked.filter((q) => typeof answers[keyOf(q)] !== "string").length;
@@ -257,10 +275,18 @@ export function submitQuiz(db: Db, user: User, pathId: string, attemptId: number
       at,
       row.id,
     );
-    if (passed)
+    if (passed) {
+      const already = new Set(
+        (db.prepare("SELECT DISTINCT lesson_slug FROM lesson_completions WHERE user_id = ?").all(user.id) as { lesson_slug: string }[]).map(
+          (r) => r.lesson_slug,
+        ),
+      );
       for (const slug of slugsFor(db, pathId)) {
         const l = published(slug);
-        if (l)
+        if (!l) continue;
+        // The compliance register decides: complete it, wait for the competency owner, or have them work through it.
+        const rule = testOutRule(db, slug);
+        if (rule === "allowed")
           db.prepare("INSERT OR IGNORE INTO lesson_completions (user_id, lesson_slug, lesson_version, completed_at, via) VALUES (?, ?, ?, ?, ?)").run(
             user.id,
             slug,
@@ -268,7 +294,9 @@ export function submitQuiz(db: Db, user: User, pathId: string, attemptId: number
             at,
             VIA(pathId),
           );
+        if (rule === "approval" && !already.has(slug)) requestTestOut(db, user, slug, pathId, { id: row.id, score, total }, now);
       }
+    }
     audit(db, {
       actor: user.id,
       event: passed ? "path_quiz.passed" : "path_quiz.not_passed",
@@ -278,7 +306,7 @@ export function submitQuiz(db: Db, user: User, pathId: string, attemptId: number
     });
   });
   const done = db.prepare("SELECT * FROM path_quiz_attempts WHERE id = ?").get(row.id) as AttemptRow;
-  return { ...resultOf(done), focus: focusOf(done), left: quizOffer(db, user, pathId)?.left ?? 0 };
+  return { ...resultOf(done), focus: focusOf(done), left: quizOffer(db, user, pathId)?.left ?? 0, held: heldTopics(db, pathId) };
 }
 
 /** For the path editor: each person's quiz result, by user id. */

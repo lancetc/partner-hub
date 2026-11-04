@@ -23,8 +23,12 @@ export type QuizOffer = {
   latest: (Result & { focus: Focus[] }) | null;
   passed: boolean;
   available: boolean;
+  held?: Held;
 };
 type Focus = { slug: string; title: string };
+/** Compliance register topics a pass doesn't complete on its own. */
+type Held = { approval: Focus[]; notAllowed: Focus[] };
+type QuizOutcome = Result & { focus: Focus[]; left: number; held?: Held };
 type Result = { score: number; total: number; percent: number; passed: boolean; passMark: number; at: string };
 type Question = { key: string; topic: string; prompt: string; options: { id: string; label: string }[] };
 type Started = {
@@ -61,7 +65,7 @@ export function PathQuiz({ id, preview = false }: { id: string; preview?: boolea
   const [started, setStarted] = useState<Started | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState(0);
-  const [result, setResult] = useState<(Result & { focus: Focus[]; left: number }) | null>(null);
+  const [result, setResult] = useState<QuizOutcome | null>(null);
   const [busy, setBusy] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
   const pathLink = `/paths/${encodeURIComponent(id)}${preview ? "?preview=1" : ""}`;
@@ -101,6 +105,7 @@ export function PathQuiz({ id, preview = false }: { id: string; preview?: boolea
         at: new Date().toISOString(),
         focus: [...new Map(missed.map((q) => [q.key.split("|")[0], { slug: q.key.split("|")[0], title: q.topic }])).values()],
         left: started.left,
+        held: data?.quiz?.held,
       });
       window.scrollTo({ top: 0 });
       return;
@@ -108,7 +113,7 @@ export function PathQuiz({ id, preview = false }: { id: string; preview?: boolea
     setBusy(true);
     setActError(null);
     try {
-      const r = await api<Result & { focus: Focus[]; left: number }>(`/api/paths/${encodeURIComponent(id)}/quiz`, {
+      const r = await api<QuizOutcome>(`/api/paths/${encodeURIComponent(id)}/quiz`, {
         body: { action: "submit", attempt: started.attempt, answers },
       });
       keep(started.attempt, null);
@@ -193,6 +198,18 @@ function Intro({
         Test what you know. Score {o.passMark}% or more and the whole path is complete, certificate included. If you don’t pass, nothing is lost: carry on with
         the topics, and you’ll see which ones to focus on.
       </p>
+      {o.held && (o.held.approval.length > 0 || o.held.notAllowed.length > 0) && (
+        <p className="mt-3 flex items-start gap-3 rounded-2xl border border-gold bg-gold/15 p-3">
+          <Icon name="shield" className="mt-0.5 size-5 shrink-0" />
+          <span>
+            Some topics here are compliance training.
+            {o.held.approval.length > 0 &&
+              ` If you pass, ${o.held.approval.length === 1 ? "one topic is" : `${o.held.approval.length} topics are`} completed once the compliance team approves your result.`}
+            {o.held.notAllowed.length > 0 &&
+              ` ${o.held.notAllowed.length === 1 ? "One topic has" : `${o.held.notAllowed.length} topics have`} to be worked through either way.`}
+          </span>
+        </p>
+      )}
       <ul className="mt-5 grid gap-2 sm:grid-cols-3">
         {[
           { icon: "list" as const, big: `${o.questions} questions`, small: "from across the path" },
@@ -336,7 +353,9 @@ function Asking({
   );
 }
 
-function Outcome({ result: r, pathLink, preview }: { result: Result & { focus: Focus[]; left: number }; pathLink: string; preview: boolean }) {
+function Outcome({ result: r, pathLink, preview }: { result: QuizOutcome; pathLink: string; preview: boolean }) {
+  // On a pass, any compliance topics it doesn't complete straight away.
+  const held = r.passed && r.held && (r.held.approval.length || r.held.notAllowed.length) ? r.held : null;
   return (
     <section className="mt-2" aria-live="polite">
       <div
@@ -353,13 +372,39 @@ function Outcome({ result: r, pathLink, preview }: { result: Result & { focus: F
         <span>
           {preview
             ? r.passed
-              ? "In a real attempt, every topic in the path would now be marked complete, and the certificate would be ready."
+              ? held
+                ? "In a real attempt, the other topics in the path would now be marked complete."
+                : "In a real attempt, every topic in the path would now be marked complete, and the certificate would be ready."
               : `A learner needs ${r.passMark}% to pass. In a real attempt, they'd carry on with the topics, starting with the ones below.`
             : r.passed
-              ? "Well done. You know this material, so every topic in the path is now marked complete."
+              ? held
+                ? "Well done. You know this material, so the other topics in the path are now marked complete."
+                : "Well done. You know this material, so every topic in the path is now marked complete."
               : `You needed ${r.passMark}%. Nothing is lost: work through the topics to complete the path.${r.left > 0 ? ` You have ${r.left} more ${r.left === 1 ? "try" : "tries"} at the quiz.` : ""}`}
         </span>
       </div>
+
+      {held && (
+        <section className="mt-6 flex flex-col gap-4">
+          {held.approval.length > 0 && (
+            <div>
+              <h2 className="font-serif text-xl font-semibold">Waiting for compliance approval</h2>
+              <p className="mt-1 text-ink-muted">
+                {preview ? "A learner’s" : "Your"} result goes to the compliance team. Once they approve it,{" "}
+                {held.approval.length === 1 ? "this topic is" : "these topics are"} complete, from today.
+              </p>
+              <HeldList topics={held.approval} />
+            </div>
+          )}
+          {held.notAllowed.length > 0 && (
+            <div>
+              <h2 className="font-serif text-xl font-semibold">Still to work through</h2>
+              <p className="mt-1 text-ink-muted">Compliance training that everyone completes in full, whatever their quiz result.</p>
+              <HeldList topics={held.notAllowed} />
+            </div>
+          )}
+        </section>
+      )}
 
       {r.focus.length > 0 && (
         <section className="mt-6">
@@ -381,7 +426,7 @@ function Outcome({ result: r, pathLink, preview }: { result: Result & { focus: F
       )}
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {r.passed && !preview && (
+        {r.passed && !held && !preview && (
           <Link href={`${pathLink}/certificate`} className={btn.primary}>
             <Icon name="star" className="size-4" /> See your certificate
           </Link>
@@ -391,5 +436,25 @@ function Outcome({ result: r, pathLink, preview }: { result: Result & { focus: F
         </Link>
       </div>
     </section>
+  );
+}
+
+function HeldList({ topics }: { topics: Focus[] }) {
+  return (
+    <ul className="mt-3 flex flex-col gap-2">
+      {topics.map((f) => (
+        <li key={f.slug}>
+          <Link
+            href={`/learning/${encodeURIComponent(f.slug)}`}
+            className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-gold bg-surface px-4 py-2 font-semibold hover:border-line-strong"
+          >
+            <span className="flex items-center gap-2">
+              <Icon name="shield" className="size-4 shrink-0 text-accent" /> {f.title}
+            </span>
+            <Icon name="arrow-right" className="size-4 shrink-0 text-accent" />
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

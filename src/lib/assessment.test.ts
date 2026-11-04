@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QuizQuestion } from "@/content/lessons";
-import { assessmentOrder, assessmentRecord, assessmentScore, clearForRetake, recordAttempt, shuffled } from "./assessment";
+import { assessmentOrder, assessmentRecord, assessmentScore, attemptQuestions, clearForRetake, recordAttempt, shuffled } from "./assessment";
 
 /* Assessment mode: marked all at once, shuffled per attempt, every attempt recorded. */
 
@@ -45,5 +45,40 @@ describe("assessment mode", () => {
     a = recordAttempt("exam", qs, a, 80, "2026-10-31T00:00:00Z");
     expect(assessmentRecord("exam", a)?.passedAt).toBe("2026-10-30T02:00:00Z");
     expect(assessmentRecord("exam", {})).toBeNull();
+  });
+});
+
+describe("an assessment drawing from a question pool", () => {
+  const pool: QuizQuestion[] = Array.from({ length: 50 }, (_, i) => ({
+    id: `p${i + 1}`,
+    prompt: `Question ${i + 1}`,
+    options: [
+      { id: "a", label: "A" },
+      { id: "b", label: "B" },
+    ],
+    correct: "a",
+    feedback: { correct: "", incorrect: "" },
+  }));
+  const card = { id: "exam", questions: pool, assessment: { passMark: 80, draw: 25 } };
+
+  it("asks 25 different questions, the same ones whenever that attempt is shown", () => {
+    const first = attemptQuestions(card, "2026-11-04T00:00:00Z", {}, false);
+    expect(first).toHaveLength(25);
+    expect(new Set(first.map((q) => q.id)).size).toBe(25);
+    expect(attemptQuestions(card, "2026-11-04T00:00:00Z", {}, false).map((q) => q.id)).toEqual(first.map((q) => q.id));
+    expect(assessmentOrder(pool, "x", 0)).toHaveLength(50);
+  });
+
+  it("marks only the questions asked, and draws a fresh set for a retake", () => {
+    const at = "2026-11-04T00:00:00Z";
+    const asked = attemptQuestions(card, at, {}, false);
+    let a: Record<string, string | number | string[]> = Object.fromEntries(asked.map((q) => [`exam.${q.id}`, "a"]));
+    expect(assessmentScore("exam", asked, a, 80)).toMatchObject({ right: 25, total: 25, percent: 100 });
+    a = recordAttempt("exam", asked, a, 80, at);
+    // Straight after submitting, it's still the attempt just marked.
+    expect(attemptQuestions(card, at, a, true).map((q) => q.id)).toEqual(asked.map((q) => q.id));
+    const retake = attemptQuestions(card, at, clearForRetake("exam", pool, a), false).map((q) => q.id);
+    expect(retake).toHaveLength(25);
+    expect(retake).not.toEqual(asked.map((q) => q.id));
   });
 });
