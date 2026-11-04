@@ -14,7 +14,9 @@ import { confirmAction } from "@/lib/confirm";
 import { QrShare } from "./QrShare";
 import { PathReviewShare } from "./PathReviewShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
-import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft } from "./PathChapters";
+import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft, type OutlinePlan } from "./PathChapters";
+import { ClaudeDraftDialog } from "./ClaudeDraft";
+import { PATH_STEPS } from "@/lib/buildSequence";
 import { AssignDialog, AssignedList, type AssignedPerson } from "./PathPeople";
 import { QUIZ_DEFAULTS, type PathQuizSettings } from "@/lib/pathQuizSettings";
 
@@ -54,6 +56,15 @@ type PathSummary = {
   started: number;
   finished: number;
   canEdit: boolean;
+};
+/** Claude's draft of a path, from Generate with Claude. */
+type PathDraftResult = {
+  name: string;
+  description: string;
+  audience: string;
+  whoFor: string;
+  outcomes: string[];
+  chapters: { title: string; description: string; stage: string; topics: ({ slug: string } | { newTopic: string })[] }[];
 };
 type DeletedPath = { id: string; name: string; deletedAt: string; lessons: number; assigned: number; canEdit: boolean };
 type ListData = {
@@ -391,6 +402,10 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   const [chapters, setChapters] = useState<ChapterDraft[] | null>(detail?.chapters?.length ? detail.chapters : null);
   const [addTo, setAddTo] = useState(-1);
   const [importing, setImporting] = useState(false);
+  // Generate with Claude: the brief dialog, then Claude's outline to review (with its overview).
+  const [generating, setGenerating] = useState(false);
+  const [claudeOutline, setClaudeOutline] = useState<{ plan: OutlinePlan[]; draft: PathDraftResult } | null>(null);
+  const [genAudience, setGenAudience] = useState("core");
   // Draft lessons created here, so they show before the catalogue reloads.
   const [created, setCreated] = useState<LessonInfo[]>([]);
   const me = useApi<Me>("/api/me").data;
@@ -613,6 +628,11 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                     <Icon name="list" className="size-4" /> Organise into chapters
                   </button>
                 )}
+                {me?.canAuthor && (
+                  <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
+                    <Icon name="spark" className="size-4" /> Generate with Claude
+                  </button>
+                )}
                 <button type="button" className={btn.secondary} onClick={() => setImporting(true)}>
                   <Icon name="doc" className="size-4" /> Import an outline
                 </button>
@@ -636,6 +656,71 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   </button>
                 )}
               </div>
+            )}
+            {generating && (
+              <ClaudeDraftDialog<{ draft: PathDraftResult }>
+                title="Generate the path with Claude"
+                intro="Describe the path, and attach a policy or course outline if you have one. Claude plans it using your existing topics where they fit, and names any new ones to write. You review the outline before anything changes."
+                steps={PATH_STEPS}
+                endpoint="/api/admin/learning-paths/draft"
+                placeholder="For example: New care coordinators in their first month. They need to know who to contact, the rules that protect clients, and how to manage budgets and incidents."
+                extra={
+                  <label className="flex flex-col gap-1 text-sm font-semibold">
+                    Who it’s for
+                    <select className={cx(input, "font-normal")} value={genAudience} onChange={(e) => setGenAudience(e.target.value)}>
+                      <option value="core">Everyone</option>
+                      <option value="partner">Service partners</option>
+                      <option value="coordinator">Care coordinators</option>
+                    </select>
+                  </label>
+                }
+                addFields={(form) => form.append("audience", genAudience)}
+                onClose={() => setGenerating(false)}
+                onDone={({ draft }) => {
+                  setGenerating(false);
+                  setClaudeOutline({
+                    draft,
+                    plan: draft.chapters.map((c, i) => ({
+                      number: String(i + 1).padStart(2, "0"),
+                      title: c.title,
+                      description: c.description,
+                      stage: c.stage,
+                      topics: c.topics.map((t) => ("slug" in t ? (info(t.slug)?.title ?? t.slug) : t.newTopic)),
+                      picks: c.topics.map((t) => ("slug" in t ? t.slug : "new")),
+                    })),
+                  });
+                }}
+              />
+            )}
+            {claudeOutline && (
+              <OutlineImport
+                catalogue={allLessons}
+                canCreate={Boolean(me?.canAuthor)}
+                replacing={picked.length > 0}
+                createDrafts={createDrafts}
+                initialPlan={claudeOutline.plan}
+                heading="Claude’s outline"
+                blurb={
+                  <>
+                    <strong>{claudeOutline.draft.name}</strong>. Check each topic: change any link, or make it a new draft. Applying also fills in any empty
+                    overview fields (name, description, who it’s for and outcomes) with Claude’s wording.
+                  </>
+                }
+                onClose={() => setClaudeOutline(null)}
+                onApply={(next) => {
+                  const d = claudeOutline.draft;
+                  setClaudeOutline(null);
+                  change(() => {
+                    if (!name.trim()) setName(d.name);
+                    if (!description.trim()) setDescription(d.description);
+                    if (!audience.trim()) setAudience(d.audience);
+                    if (!whoFor.trim()) setWhoFor(d.whoFor);
+                    if (!outcomes.trim()) setOutcomes(d.outcomes.join("\n"));
+                  });
+                  setChaptered(next);
+                  setNotice("Claude’s outline is in. Check the topics and the overview, then save.");
+                }}
+              />
             )}
             {importing && (
               <OutlineImport

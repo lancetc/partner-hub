@@ -30,6 +30,8 @@ import { confirmAction } from "@/lib/confirm";
 import { CardComments, ReviewComments, type EditorReview } from "./ReviewComments";
 import { openCounts } from "../ReviewThreads";
 import { ImageGenerator } from "./ImageGenerator";
+import { BuildProgress, readEvents, type BuildPhase } from "./BuildProgress";
+import { BUILD_STAGES, cardsByStage } from "@/lib/buildSequence";
 import { AvatarField, MakePresenterCard } from "./AvatarField";
 import { WidgetBuilder, WidgetFields } from "./WidgetBuilder";
 import { RichEditable } from "./RichEditable";
@@ -923,6 +925,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             </button>
           </div>
         )}
+        {step === "cards" && !showDraft && draftNote && <BuiltSequence lesson={lesson} selected={selected} onSelect={setSelected} />}
         {step === "cards" && !showDraft && (
           <Cards
             key={round}
@@ -5332,9 +5335,66 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
   );
 }
 
+/** What Claude built, stage by stage: each stage's cards, to jump to on the canvas. */
+function BuiltSequence({ lesson: l, selected, onSelect }: { lesson: Lesson; selected: string | null; onSelect: (id: string) => void }) {
+  const stages = cardsByStage(ordered(l));
+  if (!stages.some((s) => s.cards.length)) return null;
+  return (
+    <section aria-labelledby="built-sequence" className="mb-4 rounded-2xl border border-line bg-surface p-4">
+      <h2 id="built-sequence" className="flex items-center gap-2 text-sm font-semibold">
+        <Icon name="route" className="size-4 text-accent" /> How Claude built it
+      </h2>
+      <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {stages.map((s, i) => (
+          <li
+            key={s.key}
+            className={cx("flex flex-col gap-1.5 rounded-xl border p-3", s.cards.length ? "border-action/30 bg-tealtint/40" : "border-dashed border-line")}
+          >
+            <span className="flex items-center gap-2 font-semibold leading-tight">
+              <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-action font-mulish text-xs font-bold text-on-action">
+                {i + 1}
+              </span>
+              {s.label}
+            </span>
+            <span className="text-xs text-ink-muted">{s.makes}</span>
+            {s.cards.length ? (
+              <ul className="flex flex-col gap-1">
+                {s.cards.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(c.id)}
+                      aria-pressed={selected === c.id}
+                      className={cx(
+                        "w-full rounded-lg px-2 py-1 text-left text-xs font-medium hover:bg-surface",
+                        selected === c.id ? "bg-surface ring-2 ring-action" : "bg-surface/60",
+                      )}
+                    >
+                      {c.heading || c.label || c.id}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-xs text-ink-muted">No card yet</span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+type DraftEvent =
+  | { type: "phase"; phase: "reading" | "writing" | "checking" | "fixing"; issues?: number }
+  | { type: "stages"; counts: Record<string, number> }
+  | { type: "done"; lesson: Lesson; source: string | null }
+  | { type: "error"; error: string };
+
 /*
   Claude drafts the cards. The author writes a brief and can attach the source document; the
-  document is the only source of facts. The result lands on the canvas to be edited.
+  document is the only source of facts. The build is shown stage by stage as Claude writes, and the
+  result lands on the canvas to be edited.
 */
 function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: (draft: Lesson, source: string | null) => void; onClose: () => void }) {
   const generator = useApi<{ generator: { connected: boolean; model: string } }>("/api/admin/lessons").data?.generator;
@@ -5345,6 +5405,10 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  // The build, live: which part of the job Claude is on, and how many cards of each stage it has written.
+  const [phase, setPhase] = useState<BuildPhase>("idle");
+  const [counts, setCounts] = useState<Partial<Record<string, number>>>({});
+  const [issues, setIssues] = useState<number | undefined>();
   const ready = brief.trim().length >= 10 || Boolean(file);
 
   const pick = (f: File | undefined | null) => {
@@ -5364,12 +5428,29 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       form.append("audience", audience);
       form.append("minutes", String(minutes));
       if (file) form.append("file", file);
-      const res = await fetch("/api/admin/lessons/draft", { method: "POST", body: form });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Claude couldn’t draft the topic.");
-      onDraft(data.lesson as Lesson, data.source ?? null);
+      setCounts({});
+      setPhase(file ? "reading" : "writing");
+      const res = await fetch("/api/admin/lessons/draft?stream=1", { method: "POST", body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Claude couldn’t draft the topic.");
+      }
+      let finished: { lesson: Lesson; source: string | null } | null = null;
+      await readEvents<DraftEvent>(res, (e) => {
+        if (e.type === "phase") {
+          setPhase(e.phase);
+          setIssues(e.issues);
+        } else if (e.type === "stages") setCounts(e.counts);
+        else if (e.type === "done") finished = { lesson: e.lesson, source: e.source };
+        else if (e.type === "error") throw new Error(e.error);
+      });
+      if (!finished) throw new Error("Claude stopped before the draft was finished. Try again.");
+      const done: { lesson: Lesson; source: string | null } = finished;
+      setPhase("done");
+      onDraft(done.lesson, done.source);
     } catch (e) {
       setError((e as Error).message);
+      setPhase("idle");
     } finally {
       setBusy(false);
     }
@@ -5383,8 +5464,8 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             <Icon name="spark" className="size-5 text-accent" /> Generate the cards with Claude
           </h2>
           <p className="mt-1 max-w-2xl text-ink-muted">
-            Describe the topic, and attach a policy, procedure or guide if you have one. Claude drafts the cards: a scenario, a decision, a quick check and a
-            summary. You then edit everything on the canvas.
+            Describe the topic, and attach a policy, procedure or guide if you have one. Claude builds the cards in seven stages, in order: Hook, Show, Explain,
+            Choose, Feedback, Apply and Recap. You see each stage as it’s written, then edit everything on the canvas.
           </p>
         </div>
         <button type="button" className={btn.quiet} onClick={onClose} disabled={busy}>
@@ -5479,6 +5560,10 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
         </div>
       </div>
 
+      <div className="mt-5">
+        <BuildProgress steps={BUILD_STAGES} phase={phase} counts={counts} issues={issues} title="How Claude builds the cards" />
+      </div>
+
       {error && (
         <div className="mt-4">
           <ErrorNote text={error} />
@@ -5489,9 +5574,8 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
           <Icon name="spark" className="size-4" /> {busy ? "Claude is writing the cards…" : "Generate cards"}
         </button>
         {busy ? (
-          <span className="flex items-center gap-2 text-sm text-ink-muted" role="status">
-            <span className="size-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden />
-            This usually takes a minute or two{file ? " with a document" : ""}.
+          <span className="text-sm text-ink-muted">
+            This usually takes a minute or two{file ? " with a document" : ""}. Each stage ticks off as it’s written.
           </span>
         ) : (
           <span className="text-sm text-ink-muted">Claude only uses facts from your document. Nothing is published until you review it.</span>

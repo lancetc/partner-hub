@@ -16,10 +16,40 @@ import { getLesson } from "./lessonStore";
 export const GENERATION_MODEL = "claude-opus-5-5";
 
 export const STAGES = [
-  { key: "recall", stage: "Recall", gap: 14, when: "Week 2", cards: "3 to 4", purpose: "Test what they remember. Ask from memory before explaining: one short intro card, one or two quiz cards, then a summary." },
-  { key: "apply", stage: "Apply", gap: 46, when: "Month 2", cards: "4 to 6", purpose: "Apply the knowledge to a new, realistic workplace situation: an intro card setting the scene, a decision with two or three clearly different options, a consequence card for each option (poorer choices offer a way to recover or try again), then a summary." },
-  { key: "refresh", stage: "Refresh", gap: 38, when: "Week 14", cards: "2", purpose: "Reinforce the most critical decision with one short decision card (with feedback on each option) and a summary." },
-  { key: "refreshSupport", stage: "Refresh support", gap: 0, when: "Week 14 (for learners who struggled)", cards: "3 to 4", purpose: "For learners who missed an earlier first attempt: a short reminder card with key points, one practice quiz, the same critical decision, then a summary." },
+  {
+    key: "recall",
+    stage: "Recall",
+    gap: 14,
+    when: "Week 2",
+    cards: "3 to 4",
+    purpose: "Test what they remember. Ask from memory before explaining: one short intro card, one or two quiz cards, then a summary.",
+  },
+  {
+    key: "apply",
+    stage: "Apply",
+    gap: 46,
+    when: "Month 2",
+    cards: "4 to 6",
+    purpose:
+      "Apply the knowledge to a new, realistic workplace situation: an intro card setting the scene, a decision with two or three clearly different options, a consequence card for each option (poorer choices offer a way to recover or try again), then a summary.",
+  },
+  {
+    key: "refresh",
+    stage: "Refresh",
+    gap: 38,
+    when: "Week 14",
+    cards: "2",
+    purpose: "Reinforce the most critical decision with one short decision card (with feedback on each option) and a summary.",
+  },
+  {
+    key: "refreshSupport",
+    stage: "Refresh support",
+    gap: 0,
+    when: "Week 14 (for learners who struggled)",
+    cards: "3 to 4",
+    purpose:
+      "For learners who missed an earlier first attempt: a short reminder card with key points, one practice quiz, the same critical decision, then a summary.",
+  },
 ] as const;
 
 type StageKey = (typeof STAGES)[number]["key"];
@@ -131,7 +161,8 @@ export function validateLesson(l: Lesson): string[] {
     const v = c.visual as { kind?: string; icon?: string; variant?: string; tone?: string; alt?: string; words?: unknown };
     if (!v || !["none", "words", "illustration"].includes(v.kind ?? "")) issues.push(`${id}: invalid visual`);
     else if (v.kind !== "none" && !v.alt) issues.push(`${id}: visual needs alt text`);
-    else if (v.kind === "illustration" && (!ICONS.includes(v.icon ?? "") || !VARIANTS.includes(v.variant ?? "") || !TONES.includes(v.tone ?? ""))) issues.push(`${id}: invalid illustration`);
+    else if (v.kind === "illustration" && (!ICONS.includes(v.icon ?? "") || !VARIANTS.includes(v.variant ?? "") || !TONES.includes(v.tone ?? "")))
+      issues.push(`${id}: invalid illustration`);
     else if (v.kind === "words" && (!Array.isArray(v.words) || !TONES.includes(v.tone ?? ""))) issues.push(`${id}: invalid words visual`);
     switch (c.type) {
       case "image":
@@ -155,6 +186,16 @@ export function validateLesson(l: Lesson): string[] {
             if (o.stay && !o.feedback) issues.push(`${id}: option "${o.id}" stays but has no feedback`);
             ref(id, o.next);
           }
+        break;
+      case "presenter":
+        if (typeof c.transcript !== "string" || !c.transcript.trim()) issues.push(`${id}: presenter card needs a transcript (the spoken script)`);
+        if (!c.next) issues.push(`${id}: presenter card needs next`);
+        ref(id, c.next as string);
+        break;
+      case "response":
+        if (!c.prompt || !c.modelResponse) issues.push(`${id}: response card needs a prompt and a modelResponse`);
+        if (!c.next) issues.push(`${id}: response card needs next`);
+        ref(id, c.next as string);
         break;
       case "summary":
         summaries++;
@@ -281,13 +322,34 @@ export async function generateVariations(db: Db, actor: User, masterSlug: string
       reminders: { enabled: true, afterWeekdays: 2 },
     };
     const steps: PathStep[] = [
-      { key: "recall", stage: "Recall", followUpId: `lesson:${drafts.recall.slug}`, variants: {}, gap: 14, message: drafts.recall.summary, required: false, completionRule: "response_and_feedback" },
-      { key: "apply", stage: "Apply", followUpId: `lesson:${drafts.apply.slug}`, variants: {}, gap: 46, message: drafts.apply.summary, required: false, completionRule: "response_and_feedback" },
+      {
+        key: "recall",
+        stage: "Recall",
+        followUpId: `lesson:${drafts.recall.slug}`,
+        variants: {},
+        gap: 14,
+        message: drafts.recall.summary,
+        required: false,
+        completionRule: "response_and_feedback",
+      },
+      {
+        key: "apply",
+        stage: "Apply",
+        followUpId: `lesson:${drafts.apply.slug}`,
+        variants: {},
+        gap: 46,
+        message: drafts.apply.summary,
+        required: false,
+        completionRule: "response_and_feedback",
+      },
       {
         key: "refresh",
         stage: "Refresh",
         followUpId: `lesson:${drafts.refresh.slug}`,
-        adaptive: { ifStruggled: `lesson:${drafts.refreshSupport.slug}`, note: "Anyone who missed a first attempt earlier gets a reminder and extra practice." },
+        adaptive: {
+          ifStruggled: `lesson:${drafts.refreshSupport.slug}`,
+          note: "Anyone who missed a first attempt earlier gets a reminder and extra practice.",
+        },
         variants: {},
         gap: 38,
         message: drafts.refresh.summary,
@@ -298,9 +360,16 @@ export async function generateVariations(db: Db, actor: User, masterSlug: string
     const at = now.toISOString();
     db.prepare("INSERT OR IGNORE INTO paths VALUES (?, ?, ?)").run(pathId, at, actor.id);
     const latest = db.prepare("SELECT MAX(version) AS v FROM path_versions WHERE path_id = ?").get(pathId) as { v: number | null };
-    const editable = db.prepare("SELECT version FROM path_versions WHERE path_id = ? AND status IN ('draft','in_review')").get(pathId) as { version: number } | undefined;
+    const editable = db.prepare("SELECT version FROM path_versions WHERE path_id = ? AND status IN ('draft','in_review')").get(pathId) as
+      { version: number } | undefined;
     if (editable) {
-      db.prepare("UPDATE path_versions SET config = ?, steps = ?, status = 'draft', updated_at = ? WHERE path_id = ? AND version = ?").run(JSON.stringify(config), JSON.stringify(steps), at, pathId, editable.version);
+      db.prepare("UPDATE path_versions SET config = ?, steps = ?, status = 'draft', updated_at = ? WHERE path_id = ? AND version = ?").run(
+        JSON.stringify(config),
+        JSON.stringify(steps),
+        at,
+        pathId,
+        editable.version,
+      );
     } else {
       db.prepare("INSERT INTO path_versions (path_id, version, status, config, steps, created_at, updated_at) VALUES (?, ?, 'draft', ?, ?, ?, ?)").run(
         pathId,
@@ -314,7 +383,13 @@ export async function generateVariations(db: Db, actor: User, masterSlug: string
     db.prepare(
       "INSERT INTO lesson_settings (slug, spaced, path_id, updated_at, updated_by) VALUES (?, 0, ?, ?, ?) ON CONFLICT(slug) DO UPDATE SET path_id = excluded.path_id, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
     ).run(master.slug, pathId, at, actor.id);
-    audit(db, { actor: actor.id, event: "spaced.generated", entity: `lesson:${master.slug}`, next: { model: GENERATION_MODEL, usage, instructions: instructions ?? null }, at: now });
+    audit(db, {
+      actor: actor.id,
+      event: "spaced.generated",
+      entity: `lesson:${master.slug}`,
+      next: { model: GENERATION_MODEL, usage, instructions: instructions ?? null },
+      at: now,
+    });
   });
   return { pathId, slugs: STAGES.map((s) => drafts[s.key].slug), usage };
 }

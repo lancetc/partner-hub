@@ -54,3 +54,25 @@ export const intParam = (v: string) => {
   if (!Number.isInteger(n) || n <= 0) throw new HttpError(404, "Not found.");
   return n;
 };
+
+/**
+  A streamed reply of JSON lines: progress events as `run` sends them, then {"type":"done", ...result}
+  or {"type":"error", error}. For long Claude drafts, so the editor can show what's happening.
+*/
+export function eventStream(run: (send: (event: unknown) => void) => Promise<object>) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    async start(controller) {
+      const send = (event: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      try {
+        send({ type: "done", ...(await run(send)) });
+      } catch (e) {
+        send({ type: "error", error: e instanceof HttpError ? e.message : "Something went wrong while Claude was drafting." });
+        if (!(e instanceof HttpError)) console.error(e);
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(body, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+}

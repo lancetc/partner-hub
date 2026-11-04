@@ -1,3 +1,4 @@
+import type { BuildStage } from "@/lib/buildSequence";
 import type { IconName, VisualVariant } from "./stories";
 import type { IconName as AnyIcon } from "@/components/Icon";
 import type { GradientId } from "./gradients";
@@ -72,6 +73,8 @@ type Base = {
   id: string;
   /** Main learning beat this card belongs to; consequence cards share their beat. */
   beat: number;
+  /** For a topic Claude generated: which stage of the build the card is (Hook, Show, Explain, Choose, Feedback, Apply, Recap). */
+  stage?: BuildStage;
   label: string;
   heading: string;
   body: string;

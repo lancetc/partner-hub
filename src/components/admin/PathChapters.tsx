@@ -369,7 +369,9 @@ function AddTopic({
   );
 }
 
-type Plan = OutlineChapter & { picks: (string | "new")[] };
+/** An outline being reviewed: each topic linked to an existing topic (its slug) or "new" for a new draft. */
+export type OutlinePlan = OutlineChapter & { picks: (string | "new")[] };
+type Plan = OutlinePlan;
 
 /** Paste a course outline: preview the chapters and which topics match existing lessons, then apply. */
 export function OutlineImport({
@@ -379,6 +381,9 @@ export function OutlineImport({
   createDrafts,
   onApply,
   onClose,
+  initialPlan,
+  heading = "Import an outline",
+  blurb,
 }: {
   catalogue: PathLesson[];
   canCreate: boolean;
@@ -386,9 +391,13 @@ export function OutlineImport({
   createDrafts: (titles: string[], track: string) => Promise<PathLesson[]>;
   onApply: (chapters: ChapterDraft[]) => void;
   onClose: () => void;
+  /** Opens straight on the review, e.g. Claude's outline. */
+  initialPlan?: Plan[];
+  heading?: string;
+  blurb?: React.ReactNode;
 }) {
   const [text, setText] = useState("");
-  const [plan, setPlan] = useState<Plan[] | null>(null);
+  const [plan, setPlan] = useState<Plan[] | null>(initialPlan ?? null);
   const [track, setTrack] = useState("core");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -440,11 +449,15 @@ export function OutlineImport({
         <header className="flex items-start justify-between gap-3 border-b border-line p-5">
           <div>
             <h2 id="outline-title" className="font-serif text-2xl font-semibold">
-              Import an outline
+              {heading}
             </h2>
             <p className="text-sm text-ink-muted">
-              Paste chapters and topics. Topics that match a topic are linked; the rest{" "}
-              {canCreate ? "become empty draft topics" : "are left out (only learning authors can create topics)"}.
+              {blurb ?? (
+                <>
+                  Paste chapters and topics. Topics that match a topic are linked; the rest{" "}
+                  {canCreate ? "become empty draft topics" : "are left out (only learning authors can create topics)"}.
+                </>
+              )}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="grid size-10 shrink-0 place-items-center rounded-full hover:bg-muted">
@@ -475,7 +488,10 @@ export function OutlineImport({
                 {canCreate ? (
                   <>
                     {" "}
-                    · <strong>{newCount} new drafts</strong>
+                    ·{" "}
+                    <strong>
+                      {newCount} new {newCount === 1 ? "draft" : "drafts"}
+                    </strong>
                   </>
                 ) : null}
               </p>
@@ -541,7 +557,7 @@ export function OutlineImport({
               </select>
             </label>
           )}
-          {plan && (
+          {plan && !initialPlan && (
             <button type="button" className={btn.secondary} onClick={() => setPlan(null)} disabled={busy}>
               Back
             </button>
@@ -554,7 +570,7 @@ export function OutlineImport({
             <button type="button" className={btn.primary} onClick={apply} disabled={busy}>
               {busy
                 ? "Creating drafts…"
-                : `${replacing ? "Replace the path’s topics" : "Use this outline"}${newCount && canCreate ? ` and create ${newCount} drafts` : ""}`}
+                : `${replacing ? "Replace the path’s topics" : "Use this outline"}${newCount && canCreate ? ` and create ${newCount} ${newCount === 1 ? "draft" : "drafts"}` : ""}`}
             </button>
           )}
         </footer>

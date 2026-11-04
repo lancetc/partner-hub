@@ -3,12 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api, formatWhen, useApi } from "@/lib/api";
+import { api, formatWhen, useApi, type Me } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
 import { DEFAULT_POINTS, POINT_LABELS, type Points } from "@/lib/challengeScoring";
 import { AdminShell, Badge, btn, ErrorNote, Field, input, timezones } from "./ui";
 import { Icon } from "../Icon";
+import { createPortal } from "react-dom";
+import { ClaudeDraftDialog } from "./ClaudeDraft";
+import { CHALLENGE_STEPS } from "@/lib/buildSequence";
+
+/** Claude's draft of a challenge, from Generate with Claude. */
+type ChallengeDraftResult = {
+  name: string;
+  tagline: string;
+  story: string;
+  missions: ({ day: number; beat: string } & ({ slug: string } | { newTopic: string }))[];
+};
 
 /*
   Challenge Mode for authors: create a multi-day challenge from existing topics, put people in
@@ -155,6 +166,11 @@ function ChallengeForm({
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+  const me = useApi<Me>("/api/me").data;
+  // Generate with Claude: the brief dialog, then Claude's challenge to review before it's applied.
+  const [generating, setGenerating] = useState(false);
+  const [genDays, setGenDays] = useState(Math.max(3, d.missions.length || 5));
+  const [claudeDraft, setClaudeDraft] = useState<ChallengeDraftResult | null>(null);
   const published = status === "published";
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const topic = (slug: string) => topics.find((t) => t.slug === slug);
@@ -232,6 +248,76 @@ function ChallengeForm({
         <Badge tone={published ? "good" : "neutral"}>{published ? "Published" : "Draft"}</Badge>
         {published && <span className="text-sm text-ink-muted">Dates, missions and points are fixed while it’s published.</span>}
       </div>
+
+      {me?.canAuthor && !published && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
+          <Icon name="spark" className="size-4 text-accent" />
+          <span className="min-w-0 flex-1">
+            Start from a brief and Claude drafts the challenge: a theme, the week’s story, and a mission and story beat each day.
+          </span>
+          <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
+            <Icon name="spark" className="size-4" /> Generate with Claude
+          </button>
+        </div>
+      )}
+      {generating && (
+        <ClaudeDraftDialog<{ draft: ChallengeDraftResult }>
+          title="Generate the challenge with Claude"
+          intro="Describe the challenge, and attach a document if you have one. Claude designs the week using your existing topics as missions where they fit, and names any new ones to write. You review it before anything changes."
+          steps={CHALLENGE_STEPS}
+          endpoint="/api/admin/challenges/draft"
+          placeholder="For example: A five-day challenge for service partners on spotting and reporting changes in a client, building to a SIRS scenario on Friday."
+          extra={
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              How many days
+              <select className={cx(input, "font-normal")} value={genDays} onChange={(e) => setGenDays(Number(e.target.value))}>
+                {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option key={n} value={n}>
+                    {n} days
+                  </option>
+                ))}
+              </select>
+            </label>
+          }
+          addFields={(form) => form.append("days", String(genDays))}
+          onClose={() => setGenerating(false)}
+          onDone={({ draft }) => {
+            setGenerating(false);
+            setClaudeDraft(draft);
+          }}
+        />
+      )}
+      {claudeDraft && (
+        <ChallengeReview
+          draft={claudeDraft}
+          topics={topics}
+          replacing={Boolean(d.name || d.missions.some((m) => m.slug))}
+          onClose={() => setClaudeDraft(null)}
+          onApply={async () => {
+            const news = claudeDraft.missions.filter((m) => "newTopic" in m) as { newTopic: string }[];
+            const made = news.length
+              ? (
+                  await api<{ lessons: { slug: string }[] }>("/api/admin/lessons/placeholders", {
+                    body: { titles: news.map((m) => m.newTopic), track: "core" },
+                  })
+                ).lessons
+              : [];
+            let k = 0;
+            setD((x) => ({
+              ...x,
+              name: claudeDraft.name,
+              tagline: claudeDraft.tagline,
+              story: claudeDraft.story,
+              missions: claudeDraft.missions.map((m) => ({ day: m.day, beat: m.beat, slug: "slug" in m ? m.slug : made[k++].slug })),
+            }));
+            setClaudeDraft(null);
+            setMessage({
+              tone: "good",
+              text: `Claude’s challenge is in${made.length ? `, with ${made.length} new draft ${made.length === 1 ? "topic" : "topics"} to write` : ""}. Check it, then save.`,
+            });
+          }}
+        />
+      )}
 
       <section className="grid gap-4 rounded-3xl border border-line bg-surface p-5 sm:grid-cols-2">
         <h2 className="font-serif text-xl font-semibold sm:col-span-2">The challenge</h2>
@@ -547,6 +633,103 @@ type Report = {
   gaps: { day: number; kind: string; label: string; answered: number; right: number; commonWrong: { label: string; count: number } | null }[];
   people: { id: string; name: string; team: string; total: number; completed: number; streak: number; achievements: number }[];
 };
+
+/** Claude's challenge, day by day, to check before it replaces what's in the form. */
+function ChallengeReview({
+  draft,
+  topics,
+  replacing,
+  onApply,
+  onClose,
+}: {
+  draft: ChallengeDraftResult;
+  topics: Topic[];
+  replacing: boolean;
+  onApply: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const news = draft.missions.filter((m) => "newTopic" in m).length;
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="challenge-review-title"
+      className="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_26_46/0.55)] p-3 sm:p-6"
+    >
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-[min(48rem,100%)] flex-col overflow-hidden rounded-3xl bg-surface text-ink shadow-2xl">
+        <header className="flex items-start justify-between gap-3 border-b border-line p-5">
+          <div>
+            <h2 id="challenge-review-title" className="font-serif text-2xl font-semibold">
+              Claude’s challenge
+            </h2>
+            <p className="text-sm text-ink-muted">
+              {draft.missions.length} days · {draft.missions.length - news} existing {draft.missions.length - news === 1 ? "topic" : "topics"}
+              {news ? ` · ${news} new draft ${news === 1 ? "topic" : "topics"} to write` : ""}. You can change any of it in the form afterwards.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+            className="grid size-10 shrink-0 place-items-center rounded-full hover:bg-muted"
+          >
+            <Icon name="close" className="size-5" />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <p className="font-serif text-xl font-semibold">{draft.name}</p>
+          {draft.tagline && <p className="text-ink-muted">{draft.tagline}</p>}
+          <p className="mt-3 leading-relaxed">{draft.story}</p>
+          <ol className="mt-4 flex flex-col gap-2">
+            {draft.missions.map((m) => (
+              <li key={m.day} className="rounded-2xl border border-line p-3">
+                <p className="flex flex-wrap items-center gap-2 font-semibold">
+                  <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Day {m.day}</span>
+                  {"slug" in m ? (topics.find((t) => t.slug === m.slug)?.title ?? m.slug) : m.newTopic}
+                  {"newTopic" in m && <Badge tone="warn">New draft topic</Badge>}
+                </p>
+                <p className="mt-1 text-sm text-ink-muted">{m.beat}</p>
+              </li>
+            ))}
+          </ol>
+          {error && (
+            <div className="mt-3">
+              <ErrorNote text={error} />
+            </div>
+          )}
+        </div>
+        <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line p-5">
+          <button type="button" className={btn.secondary} onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={btn.primary}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await onApply();
+              } catch (e) {
+                setError((e as Error).message);
+                setBusy(false);
+              }
+            }}
+          >
+            {busy
+              ? "Applying…"
+              : `${replacing ? "Replace the form with this" : "Use this challenge"}${news ? ` and create ${news} draft ${news === 1 ? "topic" : "topics"}` : ""}`}
+          </button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 function ChallengeReport({ id }: { id: string }) {
   const { data, error } = useApi<Report>(`/api/admin/challenges/${id}/report`);
