@@ -16,7 +16,8 @@ export default function ChallengesPage() {
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
       <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Challenges</h1>
       <p className="mt-2 max-w-2xl text-lg text-ink-muted">
-        A short story told over a few days. A new mission opens each morning: make the calls, earn points, keep your streak and help your team.
+        A five-day team competition where Care Coordinators tackle real-world client scenarios, make decisions and put their knowledge to the test. Each day
+        unlocks a new challenge, with points, streaks and leaderboards encouraging teams to collaborate, solve problems and compete for the top spot.
       </p>
       <Suspense>
         <Challenges />
