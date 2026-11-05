@@ -6,10 +6,11 @@ import { Icon } from "./Icon";
 import { isActive, navItems } from "./nav";
 import { cx } from "@/lib/format";
 
-/** Phone and tablet navigation within thumb reach. Hidden inside the lesson player, which has its own controls. */
+/** Phone and tablet navigation within thumb reach. Hidden inside the lesson player, which has its own controls, and on public links. */
 export function BottomNav() {
   const pathname = usePathname();
-  if (/^\/(learning|review)\/[^/]+/.test(pathname)) return null;
+  const ownControls = /^\/(learning|review|open)\/[^/]+/.test(pathname);
+  if (ownControls) return null;
   return (
     <nav
       aria-label="Primary"

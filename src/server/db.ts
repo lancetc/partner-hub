@@ -232,6 +232,18 @@ CREATE TABLE IF NOT EXISTS path_review_links (
   created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
 );
 CREATE INDEX IF NOT EXISTS path_review_links_path ON path_review_links (path_id);
+-- A learning path anyone can open without signing in, e.g. from a QR code given to clients.
+CREATE TABLE IF NOT EXISTS public_path_links (
+  token TEXT PRIMARY KEY, path_id TEXT NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
+);
+CREATE INDEX IF NOT EXISTS public_path_links_path ON public_path_links (path_id);
+-- Anonymous counts from public links: opened, a topic finished, the whole path finished. Nothing about the person.
+CREATE TABLE IF NOT EXISTS public_path_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, path_id TEXT NOT NULL, token TEXT NOT NULL,
+  kind TEXT NOT NULL, lesson_slug TEXT, at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS public_path_events_path ON public_path_events (path_id, kind);
 -- People who joined a review with their name and email. id is a secret kept in their browser.
 CREATE TABLE IF NOT EXISTS reviewers (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, created_at TEXT NOT NULL, last_seen_at TEXT

@@ -215,7 +215,7 @@ function photoAddress(src: unknown) {
 }
 
 /** The overview fields, as stored. */
-const overview = (p: PathRow) => {
+export const overview = (p: PathRow) => {
   let outcomes: string[] = [];
   try {
     const o = JSON.parse(p.outcomes || "[]");

@@ -24,15 +24,15 @@ export function Header() {
   const pathname = usePathname();
   const me = useApi<Me>("/api/me").data;
   const inAdmin = pathname.startsWith("/admin");
-  // Someone outside the hub reviewing a lesson sees the brand only, not the hub's menus.
-  if (pathname.startsWith("/review/"))
+  // Someone outside the hub (reviewing a lesson, or opening a public learning path) sees the brand only, not the hub's menus.
+  if (pathname.startsWith("/review/") || pathname.startsWith("/open/"))
     return (
       <header className="border-b border-line bg-bg">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
           <span aria-hidden className="h-6 w-px bg-line-strong" />
           <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">
-            {pathname.startsWith("/review/path/") ? "Learning path review" : "Topic review"}
+            {pathname.startsWith("/open/") ? "Learning" : pathname.startsWith("/review/path/") ? "Learning path review" : "Topic review"}
           </span>
         </div>
       </header>

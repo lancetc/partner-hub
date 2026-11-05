@@ -13,7 +13,7 @@ import { Icon } from "../Icon";
   and for a path emails the code to everyone assigned to it.
 */
 
-type Info = { url: string; title: string; kind: string; localOnly: boolean };
+type Info = { url: string; title: string; kind: string; localOnly: boolean; network?: boolean };
 
 export function QrShare({
   kind,
@@ -21,7 +21,8 @@ export function QrShare({
   assigned,
   className,
 }: {
-  kind: "path" | "lesson";
+  /** "open": a path's public link, which anyone can open without signing in. */
+  kind: "path" | "lesson" | "open";
   id: string;
   /** People assigned to the path, for "Email it to them". */
   assigned?: number;
@@ -38,7 +39,7 @@ export function QrShare({
   );
 }
 
-function QrDialog({ kind, id, assigned, onClose }: { kind: "path" | "lesson"; id: string; assigned?: number; onClose: () => void }) {
+function QrDialog({ kind, id, assigned, onClose }: { kind: "path" | "lesson" | "open"; id: string; assigned?: number; onClose: () => void }) {
   const q = `${kind}=${encodeURIComponent(id)}`;
   const { data: info, error } = useApi<Info>(`/api/admin/qr?${q}`);
   const [copied, setCopied] = useState(false);
@@ -65,7 +66,7 @@ function QrDialog({ kind, id, assigned, onClose }: { kind: "path" | "lesson"; id
 </style></head><body>
 <div class="kind">${esc(info.kind)}</div><h1>${esc(info.title)}</h1>
 <img src="${location.origin}/api/qr?${q}&format=svg" alt="">
-<p>Scan with your phone’s camera to start.</p><div class="url">${esc(info.url)}</div>
+<p>Scan with your phone’s camera to start.${kind === "open" ? " No sign in needed." : ""}</p><div class="url">${esc(info.url)}</div>
 <div class="brand">Trilogy Care Partner Hub</div>
 <script>document.querySelector("img").addEventListener("load", () => { window.print(); });</script>
 </body></html>`);
@@ -119,7 +120,18 @@ function QrDialog({ kind, id, assigned, onClose }: { kind: "path" | "lesson"; id
               alt={`QR code that opens ${info.title}`}
               className="mx-auto size-56 rounded-2xl border border-line bg-white p-2"
             />
-            <p className="text-center text-sm text-ink-muted">Scan with a phone camera to open it.</p>
+            <p className="text-center text-sm text-ink-muted">
+              Scan with a phone camera to open it.{kind === "open" && " Anyone with the code can open it, without signing in."}
+            </p>
+            {info.network && (
+              <p className="flex gap-2 rounded-2xl bg-gold/15 p-3 text-sm">
+                <Icon name="info" className="mt-0.5 size-4 shrink-0 text-warm" />
+                <span>
+                  For now this code uses <strong>this computer’s network address</strong> ({new URL(info.url).host}), so it only opens on phones on the same
+                  network, while this computer is running the hub. Once the hub has its web address, set HUB_PUBLIC_URL and the code will use it.
+                </span>
+              </p>
+            )}
             {info.localOnly && (
               <p className="flex gap-2 rounded-2xl bg-gold/15 p-3 text-sm">
                 <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-warm" />

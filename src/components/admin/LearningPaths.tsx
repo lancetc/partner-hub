@@ -13,6 +13,7 @@ import { Icon } from "../Icon";
 import { confirmAction } from "@/lib/confirm";
 import { QrShare } from "./QrShare";
 import { PathReviewShare } from "./PathReviewShare";
+import { PathPublicShare } from "./PathPublicShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
 import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft, type OutlinePlan } from "./PathChapters";
 import { ClaudeDraftDialog } from "./ClaudeDraft";
@@ -805,6 +806,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
             </div>
           )}
           {!isNew && id && me?.canAuthor && <PathReviewShare id={id} />}
+          {!isNew && id && me?.canAuthor && <PathPublicShare id={id} />}
           {!canEdit && (
             <p className="text-sm text-ink-muted">Made by another organisation’s administrator or a learning author. You can assign it to your people.</p>
           )}

@@ -60,6 +60,7 @@ import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
 // Press, pop, burst and other feedback on interactive cards.
 import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
+import { finishOpenTopic } from "@/lib/openProgress";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -83,6 +84,7 @@ export function LessonPlayer({
   backTo,
   reviewToken,
   refresh,
+  publicLink,
 }: {
   lesson: Lesson;
   instanceId?: string;
@@ -99,7 +101,11 @@ export function LessonPlayer({
   reviewToken?: string;
   /** Required training that's due soon or has expired: doing the topic again refreshes it. */
   refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
+  /** Opened from a learning path's public link, without signing in: nothing is saved to the hub, only an anonymous count when it's finished. */
+  publicLink?: { token: string; topics: string[] };
 }) {
+  // Not signed in: no saved progress, bookmarks, comments or votes.
+  const anonymous = Boolean(publicLink);
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
   const [phase, setPhase] = useState<Phase>("intro");
@@ -159,7 +165,8 @@ export function LessonPlayer({
     const mine = ++seq.current;
     pending.current = a;
     // Author previews record nothing, not even on this device, so the author's own progress is untouched.
-    if (preview) {
+    // Public visitors aren't signed in, so their progress stays out of the hub too.
+    if (preview || anonymous) {
       setSaveState("saved");
       return Promise.resolve();
     }
@@ -313,6 +320,13 @@ export function LessonPlayer({
       setPhase("complete");
       return;
     }
+    if (publicLink) {
+      // Remembered on this device; the hub only counts it, anonymously.
+      finishOpenTopic(publicLink.token, lesson.slug, publicLink.topics).catch(() => {});
+      setAttempt(done);
+      setPhase("complete");
+      return;
+    }
     setCompleting("saving");
     try {
       // The server records the confirmed completion time and any follow up enrolment. In a learning
@@ -371,11 +385,11 @@ export function LessonPlayer({
           <Intro
             part="actions"
             lesson={lesson}
-            stored={preview ? undefined : stored}
+            stored={preview || anonymous ? undefined : stored}
             onStart={() => begin(true, preview)}
             onResume={() => begin(false)}
             onReview={() => begin(true, true)}
-            refresh={preview ? null : refresh}
+            refresh={preview || anonymous ? null : refresh}
           />
         }
       >
@@ -397,14 +411,14 @@ export function LessonPlayer({
         <Intro
           part="body"
           lesson={lesson}
-          stored={preview ? undefined : stored}
+          stored={preview || anonymous ? undefined : stored}
           onStart={() => begin(true, preview)}
           onResume={() => begin(false)}
           onReview={() => begin(true, true)}
-          refresh={preview ? null : refresh}
+          refresh={preview || anonymous ? null : refresh}
         />
-        {!preview && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
-        {!preview && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
+        {!preview && !anonymous && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
+        {!preview && !anonymous && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
   }
@@ -425,6 +439,7 @@ export function LessonPlayer({
           review={review || preview}
           preview={preview}
           reviewLink={Boolean(reviewToken)}
+          anonymous={anonymous}
           headingRef={headingRef}
           followUps={followUps}
           queued={completionQueued}
@@ -594,7 +609,7 @@ export function LessonPlayer({
       headerAction={
         reviewToken ? (
           <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} />
-        ) : preview ? undefined : (
+        ) : preview || anonymous ? undefined : (
           <CardBookmark lesson={lesson.slug} lessonTitle={lesson.title} card={node.id} label={node.label} heading={node.heading} />
         )
       }
@@ -650,6 +665,7 @@ export function LessonPlayer({
             <div className="flex items-center gap-2">
               {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
               {!reviewToken &&
+                !anonymous &&
                 (REVIEW_COMMENTS_IN_FOOTER ? (
                   <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
                 ) : (
@@ -665,7 +681,7 @@ export function LessonPlayer({
                   <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
                 </button>
               ) : (
-                dock && reviewToken && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
+                dock && (reviewToken || anonymous) && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
               )}
             </div>
             {dock && (
@@ -867,15 +883,15 @@ export function LessonPlayer({
               lessonSlug={lesson.slug}
               lessonInfo={{ title: lesson.title, outcome: lesson.outcome }}
               authorPreview={preview}
-              countVotes={!preview && !review}
+              countVotes={!preview && !review && !anonymous}
               tinted={Boolean(onColour)}
             />
           </div>
           {/* Reviewers comment through the Comment button instead. */}
-          {!reviewToken && (
+          {!reviewToken && !anonymous && (
             <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
           )}
-          {!reviewToken && commentsOn(node) && (
+          {!reviewToken && !anonymous && commentsOn(node) && (
             <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />
           )}
           {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
@@ -1491,6 +1507,7 @@ function Complete({
   review,
   preview,
   reviewLink = false,
+  anonymous = false,
   headingRef,
   followUps,
   queued = false,
@@ -1502,6 +1519,8 @@ function Complete({
   preview: boolean;
   /** Reached the end from a review link. */
   reviewLink?: boolean;
+  /** Reached the end from a public link, not signed in. */
+  anonymous?: boolean;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   followUps: CompletionResult["followUps"];
   /** Finished while offline: recorded on this device, syncing later. */
@@ -1517,7 +1536,7 @@ function Complete({
           You’re offline, so this is saved on your device. It will be recorded as complete as soon as you’re back online.
         </p>
       )}
-      {!preview && !review && !queued && <PathCelebration lessonSlug={lesson.slug} />}
+      {!preview && !review && !queued && !anonymous && <PathCelebration lessonSlug={lesson.slug} />}
       <span className="inline-flex size-16 items-center justify-center rounded-full bg-tealtint text-accent">
         <Icon name="check" className="size-8" />
       </span>
@@ -1542,12 +1561,14 @@ function Complete({
               ? "Nothing was recorded. Approve the variations when you’re happy with them."
               : review
                 ? "Your original completion record is unchanged."
-                : "Your result is saved. You can come back to this topic at any time."}
+                : anonymous
+                  ? "Well done. This phone or computer remembers that you’ve finished it, so you can see your progress on the learning path."
+                  : "Your result is saved. You can come back to this topic at any time."}
         </p>
         {lesson.completionMessage && <p className="mt-4 font-serif text-2xl font-semibold leading-snug text-accent">{lesson.completionMessage}</p>}
       </div>
       {/* Surveys this completion triggered: the lesson's own, or the module survey if it finished a learning path. */}
-      {!review && !preview && lesson.track !== "reinforcement" && <WaitingSurveys lesson={lesson.slug} />}
+      {!review && !preview && !anonymous && lesson.track !== "reinforcement" && <WaitingSurveys lesson={lesson.slug} />}
       {!review &&
         followUps.map((f) => (
           <div key={f.pathName} className="rounded-2xl bg-tealtint p-4">
@@ -1560,7 +1581,7 @@ function Complete({
             </p>
           </div>
         ))}
-      {!review && attempt.completedAt && (
+      {!review && !anonymous && attempt.completedAt && (
         <dl className="rounded-2xl border border-line p-4 text-[0.95rem]">
           <div className="flex justify-between gap-3 py-1">
             <dt className="text-ink-muted">Completed</dt>
@@ -1583,9 +1604,11 @@ function Complete({
         >
           {backTo?.label ?? "Back to learning"}
         </Link>
-        <Link href="/onboarding" className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted">
-          Go to my onboarding
-        </Link>
+        {!anonymous && (
+          <Link href="/onboarding" className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted">
+            Go to my onboarding
+          </Link>
+        )}
       </div>
     </div>
   );
