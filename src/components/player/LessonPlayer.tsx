@@ -1198,13 +1198,13 @@ function CardBody({
               })}
             </ul>
           )}
-          {node.references && <OfficialResources items={node.references} />}
+          {node.references && <OfficialResources items={node.references} tinted={tinted} />}
           {node.reference && (
-            <a href={node.reference.url} rel="noreferrer" className="flex min-h-14 items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-muted">
-              <Icon name="doc" className="size-5 shrink-0 text-accent" />
+            <a href={node.reference.url} rel="noreferrer" className={cx("flex min-h-14 items-center gap-3 rounded-2xl px-4 py-3", resourceTile(tinted))}>
+              <Icon name="doc" className={cx("size-5 shrink-0", tinted ? "text-[#2d4875]" : "text-accent")} />
               <span className="flex-1">
                 <span className="block font-semibold">{node.reference.title}</span>
-                <span className="block text-sm text-ink-muted">{node.reference.issuer}</span>
+                <span className={cx("block text-sm", tinted ? "text-[#3d5068]" : "text-ink-muted")}>{node.reference.issuer}</span>
               </span>
               <Icon name="external" className="size-4 shrink-0" />
               <span className="sr-only">(opens in a new tab)</span>
@@ -1656,15 +1656,23 @@ function Complete({
   );
 }
 
-function OfficialResources({ items }: { items: { title: string; url: string; issuer: string }[] }) {
+/**
+  A link to an official resource. On a coloured card (navy, a theme or a photo) it sits on a light blue
+  tile with navy text, so it reads on any colour and on hover; on a plain card, the card's own colours.
+*/
+const resourceTile = (tinted: boolean) =>
+  tinted ? "bg-[#dde7f2] text-[#102a43] shadow-sm [text-shadow:none] hover:bg-white" : "border border-line hover:bg-muted";
+
+function OfficialResources({ items, tinted = false }: { items: { title: string; url: string; issuer: string }[]; tinted?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
+      {/* Brand cyan with navy text: it stands out, and reads the same on white, navy and in dark mode. */}
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-medium hover:bg-muted"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#4cc3c9] px-4 font-semibold text-[#102a43] shadow-sm [text-shadow:none] hover:bg-[#7fd5d9]"
       >
         <Icon name="doc" className="size-4" /> {open ? "Hide official resources" : "View official resources"}
       </button>
@@ -1672,10 +1680,10 @@ function OfficialResources({ items }: { items: { title: string; url: string; iss
         <ul className="mt-2 flex flex-col gap-2">
           {items.map((r) => (
             <li key={r.url}>
-              <a href={r.url} rel="noreferrer" className="flex min-h-12 items-center gap-3 rounded-2xl border border-line px-4 py-2 hover:bg-muted">
+              <a href={r.url} rel="noreferrer" className={cx("flex min-h-12 items-center gap-3 rounded-2xl px-4 py-2", resourceTile(tinted))}>
                 <span className="flex-1">
                   <span className="block font-semibold leading-snug">{r.title}</span>
-                  <span className="block text-sm text-ink-muted">{r.issuer}</span>
+                  <span className={cx("block text-sm", tinted ? "text-[#3d5068]" : "text-ink-muted")}>{r.issuer}</span>
                 </span>
                 <Icon name="external" className="size-4 shrink-0" />
                 <span className="sr-only">(opens in a new tab)</span>
