@@ -60,6 +60,7 @@ import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
 // Press, pop, burst and other feedback on interactive cards.
 import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
+import { Confetti } from "../Confetti";
 import { finishOpenTopic, readOpen } from "@/lib/openProgress";
 
 type Phase = "intro" | "playing" | "complete";
@@ -768,7 +769,7 @@ export function LessonPlayer({
                   textPosition === "top" ? "justify-start pt-16" : textPosition === "center" ? "justify-center" : "justify-end pt-24",
                   tone.text,
                 )
-              : textPosition !== "top" && "min-h-full",
+              : (textPosition !== "top" || node.type === "wall") && "min-h-full",
           )}
         >
           {bgPhoto && (
@@ -820,7 +821,8 @@ export function LessonPlayer({
           {node.bubbles && node.bubbles.length > 0 && <VideoBubbles key={node.id} bubbles={node.bubbles} onComplete={() => markDone(node.id)} />}
           {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
           {!bgPhoto && textPosition !== "top" && <div aria-hidden className="-my-2 flex-1" />}
-          <div>
+          {/* A wall card is mainly about speaking: its prompt is the heading, centred over the mic. */}
+          <div className={cx(node.type === "wall" && "text-center")}>
             <p
               className={cx(
                 "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
@@ -833,12 +835,15 @@ export function LessonPlayer({
             <h2
               ref={headingRef}
               tabIndex={-1}
-              className="mt-2 font-serif text-[1.85rem] font-semibold leading-[1.12] tracking-tight outline-none focus-visible:outline-none sm:text-[2.1rem]"
+              className={cx(
+                "mt-2 font-serif font-semibold tracking-tight outline-none focus-visible:outline-none",
+                node.type === "wall" ? "text-balance text-[1.6rem] leading-[1.18] sm:text-[1.8rem]" : "text-[1.85rem] leading-[1.12] sm:text-[2.1rem]",
+              )}
             >
-              {node.heading}
+              {node.type === "wall" ? node.prompt : node.heading}
             </h2>
             {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
-            {node.body && <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />}
+            {node.body && node.type !== "wall" && <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />}
             {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.pdf && (
               <CardDocument
@@ -888,7 +893,7 @@ export function LessonPlayer({
           </div>
 
           {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
-          <div className={cx(onColour && panelledOnColour(node.type) && onColour.panel)}>
+          <div className={cx(onColour && panelledOnColour(node.type) && onColour.panel, node.type === "wall" && "flex flex-1 flex-col")}>
             <CardBody
               node={node}
               attempt={attempt}
@@ -911,11 +916,20 @@ export function LessonPlayer({
             />
           </div>
           {/* Reviewers comment through the Comment button instead. */}
-          {!reviewToken && !anonymous && (
-            <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
-          )}
-          {!reviewToken && !anonymous && commentsOn(node) && (
-            <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />
+          {!reviewToken && !anonymous && node.type === "wall" ? (
+            // Wall cards: comments and reporting share one quiet row at the foot of the card.
+            <div className={cx("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-1", onColour ? "border-white/20" : "border-line")}>
+              {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} quiet />}
+              <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} quiet />
+            </div>
+          ) : (
+            !reviewToken &&
+            !anonymous && (
+              <>
+                <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
+                {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />}
+              </>
+            )
           )}
           {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
         </div>
@@ -1161,43 +1175,55 @@ function CardBody({
       );
     case "summary":
       return (
-        <div className="flex flex-col gap-3">
-          {/* Fixed colours, sage for the action and ivory for the points, so they read the same on any card and in dark mode. */}
-          <div className="fx-stagger rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] [text-shadow:none]" style={{ ["--i" as string]: 0 }}>
-            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#0e7c7b]">Your next action</p>
+        <div className="flex flex-col gap-4">
+          {node.points && (
+            // A numbered timeline straight on the card, in the card's own text colour so it reads on any theme.
+            <ol className="flex flex-col">
+              {node.points.map((p, i, all) => {
+                const [term, rest] = p.split(/:\s*/, 2);
+                const titled = Boolean(rest) && !/\*\*|\]\(/.test(p);
+                const last = i === all.length - 1;
+                return (
+                  <li key={p} className="fx-stagger flex gap-3.5" style={{ ["--i" as string]: i }}>
+                    <div className="flex w-8 shrink-0 flex-col items-center" aria-hidden>
+                      {/* Fixed colours, so the number reads the same on any card and in dark mode. */}
+                      <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#4EC3C9] font-mulish text-[0.95rem] font-bold text-[#1C2B4A] [text-shadow:none]">
+                        {i + 1}
+                      </span>
+                      {!last && <span className="my-1 w-0.5 flex-1 rounded-full bg-current opacity-30" />}
+                    </div>
+                    <div className={cx("flex flex-col gap-1 pt-1", last ? "pb-1" : "pb-5")}>
+                      {/* "Term: explanation" points show the term as a bold title above the explanation. */}
+                      {titled ? (
+                        <>
+                          <p className="text-[1.0625rem] font-bold leading-snug">
+                            <RichInline text={term} />
+                          </p>
+                          <p className="leading-relaxed opacity-85">
+                            <RichInline text={rest} />
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[1.0625rem] font-medium leading-snug">
+                          <RichInline text={p} />
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          {/* Fixed sage colours, so the action reads the same on any card and in dark mode. */}
+          <div
+            className="fx-stagger rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] [text-shadow:none]"
+            style={{ ["--i" as string]: node.points?.length ?? 0 }}
+          >
+            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#0e7c7b]">Now try this</p>
             <p className="mt-1 text-lg font-semibold leading-snug">
               <RichInline text={node.action} />
             </p>
           </div>
-          {node.points && (
-            <ul className="flex flex-col gap-2">
-              {node.points.map((p, i) => {
-                const [term, rest] = p.split(/:\s*/, 2);
-                return (
-                  <li
-                    key={p}
-                    className="fx-stagger flex gap-3 rounded-2xl bg-[#F5F0E6] px-4 py-3 text-[#102a43] [text-shadow:none]"
-                    style={{ ["--i" as string]: i + 1 }}
-                  >
-                    <Icon name="check" className="mt-1 size-4 shrink-0 text-[#0e7c7b]" />
-                    <span>
-                      {/* "Term: explanation" points show the term in bold; any other formatting comes from the text. */}
-                      {rest && !/\*\*|\]\(/.test(p) ? (
-                        <>
-                          <strong>
-                            <RichInline text={term} />:
-                          </strong>{" "}
-                          <RichInline text={rest} />
-                        </>
-                      ) : (
-                        <RichInline text={p} />
-                      )}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
           {node.references && <OfficialResources items={node.references} tinted={tinted} />}
           {node.reference && (
             <a href={node.reference.url} rel="noreferrer" className={cx("flex min-h-14 items-center gap-3 rounded-2xl px-4 py-3", resourceTile(tinted))}>
@@ -1567,7 +1593,9 @@ function Complete({
           You’re offline, so this is saved on your device. It will be recorded as complete as soon as you’re back online.
         </p>
       )}
-      {!preview && !review && !queued && !anonymous && <PathCelebration lessonSlug={lesson.slug} />}
+      {/* The same confetti as finishing a learning path, for every topic finished (not previews or reviews). */}
+      {!preview && !review && <Confetti />}
+      {!preview && !review && !queued && !anonymous && <PathCelebration lessonSlug={lesson.slug} confetti={false} />}
       <span className="inline-flex size-16 items-center justify-center rounded-full bg-tealtint text-accent">
         <Icon name="check" className="size-8" />
       </span>
@@ -1696,40 +1724,18 @@ function OfficialResources({ items, tinted = false }: { items: { title: string; 
   );
 }
 
-/** Key points as chips or tiles. On a coloured card (a theme, colour or photo) they sit on white so they stand out from it. */
+/** Key points as steps or tiles. On a coloured card (a theme, colour or photo) they sit on white so they stand out from it. */
 function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["keyPoints"]>; onColour?: boolean }) {
   const box = onColour ? "bg-white text-[#102a43] shadow-sm [text-shadow:none]" : "bg-muted";
+  // The old numbered "chips" (pills) are retired: lists saved with that style show as steps.
+  if (points.style === "steps" || points.style === "chips") return <KeyPointSteps points={points} box={box} onColour={onColour} />;
   return (
     <div className="mt-4 flex flex-col gap-3">
       {/* On a coloured card, the card's own text colour (softened), so it reads on navy as well as on light colours. */}
       {points.title && (
         <p className={cx("font-mulish text-xs font-extrabold uppercase tracking-[0.12em]", onColour ? "opacity-85" : "text-ink-muted")}>{points.title}</p>
       )}
-      {points.style === "chips" ? (
-        <ul className="flex flex-wrap gap-2">
-          {points.items.map((p, i) => (
-            <li
-              key={p.text}
-              className={cx("fx-stagger inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-[0.95rem]", box)}
-              style={{ ["--i" as string]: i }}
-            >
-              <span
-                aria-hidden
-                className={cx(
-                  "inline-flex size-6 items-center justify-center rounded-full font-mulish text-xs font-bold",
-                  onColour ? "bg-[#ddf2f3] text-[#2d4875]" : "bg-surface text-accent",
-                )}
-              >
-                {p.icon ? <Icon name={p.icon} className="size-3.5" /> : i + 1}
-              </span>
-              <span>
-                <RichInline text={p.text} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <ul className="grid grid-cols-2 gap-2">
+      <ul className="grid grid-cols-2 gap-2">
           {/* One after another, like the summary card's points. */}
           {points.items.map((p, i) => (
             <li key={p.text} className={cx("fx-stagger flex flex-col gap-2 rounded-2xl p-3", box)} style={{ ["--i" as string]: i }}>
@@ -1747,8 +1753,7 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
               </span>
             </li>
           ))}
-        </ul>
-      )}
+      </ul>
       {points.tip && (
         <p
           className={cx(
@@ -1756,6 +1761,54 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
             onColour ? "bg-white py-2 pr-3 text-[#102a43] [text-shadow:none]" : "bg-surface",
           )}
         >
+          <span>
+            <strong>In practice:</strong> {points.tip}
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Key points as a numbered timeline in one panel: a bold step title with its detail beneath, joined by a line. */
+function KeyPointSteps({ points, box, onColour }: { points: NonNullable<Card["keyPoints"]>; box: string; onColour: boolean }) {
+  return (
+    <div className={cx("mt-4 rounded-2xl px-4 pb-1 pt-4", box)}>
+      {points.title && (
+        <p className={cx("mb-3 font-mulish text-xs font-extrabold uppercase tracking-[0.12em]", onColour ? "text-[#486581]" : "text-ink-muted")}>
+          {points.title}
+        </p>
+      )}
+      <ol>
+        {points.items.map((p, i) => (
+          <li key={p.text} className="fx-stagger grid grid-cols-[2rem_1fr] gap-x-3.5" style={{ ["--i" as string]: i }}>
+            <div className="flex flex-col items-center">
+              {/* Solid brand teal with a white number, the same on any card colour and in dark mode, like the tiles' icons. */}
+              <span
+                aria-hidden
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#0e7c7b] font-mulish text-sm font-extrabold text-white"
+              >
+                {p.icon ? <Icon name={p.icon} className="size-4" /> : i + 1}
+              </span>
+              {i < points.items.length - 1 && (
+                <span aria-hidden className={cx("my-1 w-0.5 flex-1 rounded-full", onColour ? "bg-[#b9e0e0]" : "bg-line")} />
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5 pb-4 pt-1">
+              {p.title && (
+                <p className="font-bold leading-snug">
+                  <RichInline text={p.title} />
+                </p>
+              )}
+              <p className={cx("text-[0.95rem] leading-snug", p.title && (onColour ? "text-[#334e68]" : "text-ink-muted"))}>
+                <RichInline text={p.text} />
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {points.tip && (
+        <p className="mb-3 flex gap-2 rounded-2xl border-l-4 border-action bg-surface py-2 pl-3 pr-3 text-[0.95rem]">
           <span>
             <strong>In practice:</strong> {points.tip}
           </span>
@@ -2144,9 +2197,9 @@ function Wall({
   const showForm = !mine || editing;
   const others = wall?.posts ?? [];
 
+  // The prompt is the card's heading, so it isn't repeated here.
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-lg font-semibold leading-snug">{card.prompt}</p>
+    <div className="flex flex-1 flex-col gap-3">
       {showForm ? (
         <>
           {/* Speaking is the main way to share; the words then show to check and correct before posting. */}
@@ -2159,6 +2212,8 @@ function Wall({
             maxLength={600}
             label="Your post"
             recordLabel="Record your idea"
+            variant="hero"
+            chips={["About 30 seconds", "No wrong answers", "Re-record anytime"]}
             placeholder={card.placeholder ?? "Your words appear here as you speak, or type your idea."}
             describedBy={`${card.id}-wall-note`}
             tinted={tinted}
@@ -2200,10 +2255,9 @@ function Wall({
               </div>
             </div>
           )}
-          {/* When the wall is open and empty, "What others shared" below already says they're first. */}
-          {!mine && wall && (wall.total > 0 || !wall.open) && (
-            <p className={cx("text-sm font-semibold", tinted ? "text-white" : "text-accent")}>
-              {wall.total ? `${wall.total} ${wall.total === 1 ? "person has" : "people have"} shared. Post yours to see theirs.` : "Be the first to share."}
+          {!mine && wall && wall.total > 0 && (
+            <p className={cx("text-center text-sm font-semibold", tinted ? "text-white" : "text-accent")}>
+              {wall.total} {wall.total === 1 ? "person has" : "people have"} shared. Post yours to see theirs.
             </p>
           )}
         </>

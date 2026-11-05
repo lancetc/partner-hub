@@ -6,7 +6,20 @@ import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 
 /* "Report a problem" under a card: a learner flags something that looks wrong or out of date. Works offline (sent later). */
-export function ReportProblem({ slug, cardId, preview, onColour }: { slug: string; cardId: string; preview: boolean; onColour: boolean }) {
+export function ReportProblem({
+  slug,
+  cardId,
+  preview,
+  onColour,
+  quiet = false,
+}: {
+  slug: string;
+  cardId: string;
+  preview: boolean;
+  onColour: boolean;
+  /** In a footer row: a plain link at the right, and the form opens full width below the row. */
+  quiet?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "queued">("idle");
@@ -14,7 +27,7 @@ export function ReportProblem({ slug, cardId, preview, onColour }: { slug: strin
 
   if (state === "sent" || state === "queued")
     return (
-      <p role="status" className={cx("text-xs", onColour ? "opacity-85" : "text-ink-muted")}>
+      <p role="status" className={cx("text-xs", onColour ? "opacity-85" : "text-ink-muted", quiet && "ml-auto")}>
         {state === "sent" ? "Thanks. The learning team will take a look." : "Thanks. Your report is saved and will be sent when you’re back online."}
       </p>
     );
@@ -25,17 +38,18 @@ export function ReportProblem({ slug, cardId, preview, onColour }: { slug: strin
         type="button"
         onClick={() => setOpen(true)}
         className={cx(
-          "inline-flex items-center gap-1 self-start text-xs underline-offset-4 hover:underline [text-shadow:none]",
-          onColour ? "opacity-80" : "text-ink-muted",
+          "inline-flex items-center gap-1 underline-offset-4 hover:underline [text-shadow:none]",
+          quiet ? "ml-auto min-h-11 text-sm" : "self-start text-xs",
+          onColour ? (quiet ? "opacity-90" : "opacity-80") : "text-ink-muted",
         )}
       >
-        <Icon name="alert" className="size-3.5" /> Report a problem
+        {!quiet && <Icon name="alert" className="size-3.5" />} Report a problem
       </button>
     );
 
   return (
     <form
-      className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-3 text-ink [text-shadow:none]"
+      className={cx("flex flex-col gap-2 rounded-2xl border border-line bg-surface p-3 text-ink [text-shadow:none]", quiet && "order-last basis-full")}
       onSubmit={async (e) => {
         e.preventDefault();
         if (preview) {

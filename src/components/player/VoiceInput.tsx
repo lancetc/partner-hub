@@ -38,6 +38,8 @@ function join(before: string, said: string) {
   return before.trim() ? `${before.replace(/\s+$/, "")} ${spoken}` : spoken;
 }
 
+type VoiceVariant = "box" | "hero";
+
 export function VoiceInput({
   value,
   onChange,
@@ -47,6 +49,8 @@ export function VoiceInput({
   onType,
   recordLabel = "Record your answer",
   tinted = false,
+  variant = "box",
+  chips,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -61,6 +65,10 @@ export function VoiceInput({
   recordLabel?: string;
   /** On a coloured card: notes outside the white box use the card's text colour. */
   tinted?: boolean;
+  /** "box": a record button in a white box. "hero": a big round mic in the middle of the card, for cards that are mainly about speaking. */
+  variant?: VoiceVariant;
+  /** Hero only: short reassurances under the mic, e.g. "No wrong answers". */
+  chips?: string[];
 }) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
@@ -168,6 +176,70 @@ export function VoiceInput({
     );
 
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+  if (variant === "hero")
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 py-2 text-center">
+        {/* The mic sits in two soft rings, which pulse while it's listening. */}
+        <div className={cx("grid size-56 place-items-center rounded-full", tinted ? "bg-white/[0.07]" : "bg-tealtint/60", listening && "animate-pulse")}>
+          <div className={cx("grid size-44 place-items-center rounded-full", tinted ? "bg-white/[0.13]" : "bg-tealtint")}>
+            <button
+              type="button"
+              onClick={listening ? stop : start}
+              disabled={disabled || supported === null}
+              aria-pressed={listening}
+              aria-label={listening ? "Stop recording" : recordLabel}
+              className={cx(
+                "fx-press grid size-32 place-items-center rounded-full shadow-[0_10px_30px_rgba(4,40,40,0.35)] disabled:opacity-60",
+                tinted ? "bg-white text-[#0b6564] hover:bg-white/95" : "bg-action text-on-action hover:bg-action-hover",
+              )}
+            >
+              {listening ? <span aria-hidden className="size-8 rounded-md bg-danger" /> : <Icon name="mic" className="size-12" />}
+            </button>
+          </div>
+        </div>
+        <p role="status" aria-live="polite" className="text-xl font-semibold leading-snug">
+          {listening ? (
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden className="size-2.5 animate-pulse rounded-full bg-orange" /> Listening · {time}
+            </span>
+          ) : (
+            "Tap and say it out loud"
+          )}
+        </p>
+        {listening ? (
+          <>
+            <p className={cx("text-sm", tinted ? "opacity-85" : "text-ink-muted")}>Tap stop when you’ve finished. You can check the words before sharing.</p>
+            {value.trim() && (
+              <p className={cx("w-full rounded-2xl px-4 py-3 text-left text-[0.98rem] italic", tinted ? "bg-white/10" : "bg-muted text-ink")}>{value}</p>
+            )}
+          </>
+        ) : (
+          <>
+            {chips && chips.length > 0 && (
+              <ul className="flex flex-wrap justify-center gap-2" aria-label="Good to know">
+                {chips.map((c) => (
+                  <li key={c} className={cx("rounded-full px-3 py-1 text-sm", tinted ? "bg-white/15" : "bg-tealtint text-ink")}>
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {onType && (
+              <button type="button" onClick={onType} className={cx("min-h-11 text-sm font-semibold underline underline-offset-4", tinted ? "text-white" : "text-accent")}>
+                Can’t talk right now? Type it instead
+              </button>
+            )}
+          </>
+        )}
+        {problem && (
+          <p role="alert" className="flex items-start gap-2 rounded-2xl bg-surface p-3 text-left text-sm text-ink [text-shadow:none]">
+            <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" /> {problem}
+          </p>
+        )}
+      </div>
+    );
+
   return (
     <div className="flex flex-col items-center gap-2 rounded-2xl bg-surface p-4 text-ink ring-1 ring-line">
       <button
@@ -235,6 +307,8 @@ export function SpokenAnswer({
   recordLabel,
   maxLength = 2000,
   tinted = false,
+  variant,
+  chips,
 }: {
   id: string;
   value: string;
@@ -250,6 +324,8 @@ export function SpokenAnswer({
   maxLength?: number;
   /** On a coloured card (like the insight wall): links and notes use the card's text colour. */
   tinted?: boolean;
+  variant?: VoiceVariant;
+  chips?: string[];
 }) {
   const [listening, setListening] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -271,6 +347,8 @@ export function SpokenAnswer({
         onType={() => setTyping(true)}
         recordLabel={recordLabel}
         tinted={tinted}
+        variant={variant}
+        chips={chips}
       />
     );
 

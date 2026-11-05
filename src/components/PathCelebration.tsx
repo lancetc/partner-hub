@@ -13,7 +13,8 @@ type Path = { id: string; name: string; done: boolean; steps: { slug: string; dr
   On the topic-complete screen: if finishing this topic completed one of the learner's paths, rain
   confetti, say so, and offer the certificate. Each path is celebrated once on this device.
 */
-export function PathCelebration({ lessonSlug }: { lessonSlug: string }) {
+/** `confetti={false}` when the topic-complete screen is already raining its own. */
+export function PathCelebration({ lessonSlug, confetti = true }: { lessonSlug: string; confetti?: boolean }) {
   const { data } = useApi<{ paths: Path[] }>("/api/learning-paths");
   const [path, setPath] = useState<Path | null>(null);
   useEffect(() => {
@@ -30,7 +31,7 @@ export function PathCelebration({ lessonSlug }: { lessonSlug: string }) {
   if (!path) return null;
   return (
     <>
-      <Confetti />
+      {confetti && <Confetti />}
       <div role="status" className="fx-pop flex items-start gap-3 rounded-2xl bg-gold/20 p-4 ring-1 ring-gold">
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-gold text-ink">
           <Icon name="star" className="size-5" />

@@ -77,7 +77,7 @@ Card fields shared by all types:
      {"kind":"words","words":[2-4 short phrases],"tone":${JSON.stringify(TONES)},"alt":string}
      {"kind":"illustration","variant":${JSON.stringify(VARIANTS)},"tone":...,"icon":${JSON.stringify(ICONS)},"alt":string}
   optional "narration": a separate spoken script (30-60 words) that adds context and never reads out answers before the learner chooses
-  optional "keyPoints": {"title"?: string, "style":"chips"|"tiles", "items":[{"text":string,"icon"?:<icon>}], "tip"?: string}
+  optional "keyPoints": {"title"?: string, "style":"steps"|"tiles", "items":[{"text":string,"title"?:string,"icon"?:<icon>}], "tip"?: string}
   optional "emphasis": "consequence" | "recovery" (for consequence cards)
 
 Card types:

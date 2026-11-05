@@ -35,7 +35,8 @@ export function Quiz({
   return (
     <div className="flex flex-col gap-6">
       {assessment && !checked && (
-        <p className="rounded-2xl bg-muted px-4 py-3 text-[0.95rem] [text-shadow:none]">
+        // Soft gold, like the app's other notices: it sits on the quiz's warm cream panel, where the cool grey clashed.
+        <p className="rounded-2xl bg-gold/15 px-4 py-3 text-[0.95rem] ring-1 ring-gold/60 [text-shadow:none]">
           <strong>Assessment.</strong> Answer every question, then submit. It’s marked all at once, and you need {assessment.passMark}% to pass.
         </p>
       )}

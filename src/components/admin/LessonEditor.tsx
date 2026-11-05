@@ -2225,7 +2225,25 @@ function CanvasCard({
                 {c.pdf.required && <span className="shrink-0 rounded-full bg-gold/40 px-1.5 py-0.5 text-[0.6rem] font-bold">Required</span>}
               </button>
             )}
-            {c.keyPoints && (
+            {(c.keyPoints?.style === "steps" || c.keyPoints?.style === "chips") && (
+              // As in the player: a numbered timeline, on white over a coloured card. Old "chips" lists show as steps too.
+              <ol className={cx("flex flex-col gap-2 rounded-xl p-2.5 text-xs", surf ? "bg-white text-[#102a43] shadow-sm" : "bg-muted text-ink")}>
+                {c.keyPoints.items.map((k, i) => (
+                  <li key={i} className="grid grid-cols-[1.25rem_1fr] gap-x-2">
+                    <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#0e7c7b] text-[0.65rem] font-bold text-white">
+                      {i + 1}
+                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-bold">
+                        <RichEditable inline value={k.title ?? ""} onChange={(t) => set((x) => void (x.keyPoints!.items[i].title = t || undefined))} placeholder="Step title" />
+                      </span>
+                      <RichEditable inline value={k.text} onChange={(t) => set((x) => void (x.keyPoints!.items[i].text = t))} placeholder="What happens" />
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {c.keyPoints?.style === "tiles" && (
               <ul className={cx("gap-1.5", c.keyPoints.style === "tiles" ? "grid grid-cols-2" : "flex flex-wrap")}>
                 {c.keyPoints.items.map((k, i) => (
                   <li
@@ -4856,20 +4874,22 @@ function DocumentField({ card: c, set }: { card: Card; set: (fn: (c: Card) => vo
 
 function KeyPointsField({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
   const kp = c.keyPoints;
+  // The old "chips" style is retired and shows as steps, so it's picked as Steps here.
+  const style = kp?.style === "chips" ? "steps" : (kp?.style ?? "none");
   return (
     <div className="sm:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold">Key points</p>
         <div className="flex gap-1" role="group" aria-label="Key points style">
-          {(["none", "chips", "tiles"] as const).map((s) => (
+          {(["none", "steps", "tiles"] as const).map((s) => (
             <button
               key={s}
               type="button"
-              aria-pressed={(kp?.style ?? "none") === s}
-              className={cx("min-h-9 rounded-full px-3 text-sm", (kp?.style ?? "none") === s ? "bg-action text-on-action" : "hover:bg-muted")}
+              aria-pressed={style === s}
+              className={cx("min-h-9 rounded-full px-3 text-sm", style === s ? "bg-action text-on-action" : "hover:bg-muted")}
               onClick={() => set((x) => void (x.keyPoints = s === "none" ? undefined : { ...(x.keyPoints ?? { items: [{ text: "" }] }), style: s }))}
             >
-              {s === "none" ? "None" : s === "chips" ? "Chips" : "Tiles"}
+              {s === "none" ? "None" : s === "tiles" ? "Tiles" : "Steps"}
             </button>
           ))}
         </div>
@@ -4878,7 +4898,23 @@ function KeyPointsField({ card: c, set }: { card: Card; set: (fn: (c: Card) => v
         <div className="mt-2 flex flex-col gap-2">
           {kp.items.map((it, i) => (
             <div key={i} className="flex items-center gap-2">
-              <IconPick value={it.icon} onChange={(icon) => set((x) => void (x.keyPoints!.items[i].icon = icon))} />
+              {style === "steps" ? (
+                <>
+                  {/* Steps are numbered, so a title takes the icon's place. */}
+                  <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-[#0e7c7b] text-sm font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <input
+                    className={cx(input, "max-w-[12rem] font-semibold")}
+                    value={it.title ?? ""}
+                    placeholder="Step title"
+                    aria-label={`Step ${i + 1} title`}
+                    onChange={(e) => set((x) => void (x.keyPoints!.items[i].title = e.target.value || undefined))}
+                  />
+                </>
+              ) : (
+                <IconPick value={it.icon} onChange={(icon) => set((x) => void (x.keyPoints!.items[i].icon = icon))} />
+              )}
               <input
                 className={input}
                 value={it.text}

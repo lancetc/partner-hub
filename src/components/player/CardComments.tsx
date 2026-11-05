@@ -34,7 +34,20 @@ function ago(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function CardComments({ slug, cardId, onColour, readOnly }: { slug: string; cardId: string; onColour: boolean; readOnly: boolean }) {
+export function CardComments({
+  slug,
+  cardId,
+  onColour,
+  readOnly,
+  quiet = false,
+}: {
+  slug: string;
+  cardId: string;
+  onColour: boolean;
+  readOnly: boolean;
+  /** A plain text toggle for a footer row; the panel opens full width below the row. */
+  quiet?: boolean;
+}) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [open, setOpen] = useState(false);
@@ -78,15 +91,20 @@ export function CardComments({ slug, cardId, onColour, readOnly }: { slug: strin
   const count = thread?.comments.length ?? 0;
   const panel = `${cardId}-comments`;
   return (
-    <div className="flex flex-col gap-2">
+    // Quiet: the toggle and panel join the footer row's own layout.
+    <div className={quiet ? "contents" : "flex flex-col gap-2"}>
       <button
         type="button"
         aria-expanded={open}
         aria-controls={panel}
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          "inline-flex min-h-10 items-center gap-2 self-start rounded-full px-3.5 text-sm font-semibold shadow-sm ring-1 [text-shadow:none]",
-          onColour ? "bg-white/90 text-[#0a1a2e] ring-white/40 hover:bg-white" : "bg-surface text-ink ring-line hover:bg-muted",
+          quiet
+            ? cx("inline-flex min-h-11 items-center gap-2 text-sm font-semibold underline-offset-4 hover:underline", onColour ? "text-white" : "text-ink")
+            : cx(
+                "inline-flex min-h-10 items-center gap-2 self-start rounded-full px-3.5 text-sm font-semibold shadow-sm ring-1 [text-shadow:none]",
+                onColour ? "bg-white/90 text-[#0a1a2e] ring-white/40 hover:bg-white" : "bg-surface text-ink ring-line hover:bg-muted",
+              ),
         )}
       >
         <Icon name="chat" className="size-4" />
@@ -94,14 +112,17 @@ export function CardComments({ slug, cardId, onColour, readOnly }: { slug: strin
         {thread?.comments.some((c) => c.pinned) && !open && (
           <span className="rounded-full bg-gold px-1.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-[#0a1a2e]">Tip</span>
         )}
-        <Icon name="chevron-down" className={cx("size-4 transition-transform", open && "rotate-180")} />
+        {!quiet && <Icon name="chevron-down" className={cx("size-4 transition-transform", open && "rotate-180")} />}
       </button>
 
       <section
         id={panel}
         hidden={!open}
         aria-label="Comments on this card"
-        className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-3 text-ink shadow-sm [text-shadow:none]"
+        className={cx(
+          "flex flex-col gap-3 rounded-2xl border border-line bg-surface p-3 text-ink shadow-sm [text-shadow:none]",
+          quiet && "order-last basis-full",
+        )}
       >
         {unavailable ? (
           <p className="text-sm text-ink-muted">Comments appear here once the topic is published.</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import "./player/fx.css";
 
 /*
@@ -42,8 +43,12 @@ export function Confetti({ pieces = 140, onDone }: { pieces?: number; onDone?: (
     }, 5600);
     return () => window.clearTimeout(t);
   }, [onDone]);
-  if (!on) return null;
-  return (
+  // Rendered on <body>, not where it's used: a parent with a transform (like the topic-complete
+  // card's entry animation) would otherwise shrink the fixed layer to that parent and clip it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!on || !mounted) return null;
+  return createPortal(
     <div aria-hidden className="confetti-layer pointer-events-none fixed inset-0 z-[80] overflow-hidden">
       {bits.map((b, i) => (
         <span
@@ -66,6 +71,7 @@ export function Confetti({ pieces = 140, onDone }: { pieces?: number; onDone?: (
           <span style={{ background: b.colour, borderRadius: b.round ? "999px" : "2px" }} />
         </span>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

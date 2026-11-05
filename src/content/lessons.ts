@@ -113,7 +113,8 @@ type Base = {
   pdf?: { src: string; title: string; bytes?: number; pages?: number; placement?: "below" | "above"; required?: "open" | "end" };
   /** Short on-screen points: `chips` for an overview list, `tiles` for a few key ideas with icons. */
   /** Item text may use **bold**, *italic* and [links](https://…) (lib/richText). */
-  keyPoints?: { title?: string; style: "chips" | "tiles"; items: { text: string; icon?: AnyIcon }[]; tip?: string };
+  /** Chips for short phrases, tiles for a grid of ideas, steps for a numbered sequence (each step's `title` in bold, `text` beneath). */
+  keyPoints?: { title?: string; style: "chips" | "tiles" | "steps"; items: { text: string; title?: string; icon?: AnyIcon }[]; tip?: string };
   /** Consequence styling for cards that show the result of a poorer choice. */
   emphasis?: "consequence" | "recovery";
   /** Learners can read and add comments on this card (tips, local know-how, questions). On unless set to false. */
