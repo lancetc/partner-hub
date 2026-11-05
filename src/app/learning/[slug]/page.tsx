@@ -7,7 +7,7 @@ import { LessonPlayer } from "@/components/player/LessonPlayer";
 import { getDb } from "@/server/db";
 import { canAuthor, currentUser } from "@/server/auth";
 import { editorLesson } from "@/server/authoredLessons";
-import { canSkipHolds } from "@/server/learningPaths";
+import { canSkipHolds, nextTopicAfter } from "@/server/learningPaths";
 import { factValues } from "@/server/facts";
 import { applyFacts } from "@/lib/facts";
 import { readProgress } from "@/server/progress";
@@ -89,6 +89,8 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
       instanceId={typeof instance === "string" && /^\d+$/.test(instance) ? instance : undefined}
       backTo={challengeId ? { href: `/challenge/${challengeId}`, label: "Back to the challenge" } : undefined}
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
+      // On finishing, the next topic in their learning path (not for a challenge mission or a follow-up step).
+      nextTopic={challengeId || typeof instance === "string" ? null : nextTopicAfter(db, user, lesson.slug)}
       refresh={refreshDue(db, user, lesson.slug, now(db))}
       notice={
         notice || changed ? (

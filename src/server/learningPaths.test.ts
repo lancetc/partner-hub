@@ -19,6 +19,7 @@ import {
   certificateFor,
   myCertificates,
   startedLearningPaths,
+  nextTopicAfter,
 } from "./learningPaths";
 
 /* Learning paths: named sets of lessons, in order, assigned to people. */
@@ -246,5 +247,31 @@ describe("paths someone has started on their own", () => {
     expect(myLearningPaths(db, u("riley")).map((p) => p.id)).toContain(id);
     archiveLearningPath(db, u("jordan"), id, now);
     expect(startedLearningPaths(db, u("riley")).map((p) => p.id)).not.toContain(id);
+  });
+});
+
+describe("the next topic after finishing one", () => {
+  const topics = ["legislative-framework", "noticing-a-change", "our-mission-and-model"];
+  // A learner with no paths or progress from the demo data.
+  beforeEach(() => {
+    for (const t of ["learning_path_assignments", "lesson_completions", "lesson_progress"]) db.prepare(`DELETE FROM ${t} WHERE user_id = 'ash'`).run();
+  });
+
+  it("goes on to the next unfinished topic in the learner's path, then back to one they skipped", () => {
+    const id = createLearningPath(db, u("jordan"), { name: "Next topic", lessons: topics }, now).id;
+    assignLearningPath(db, u("jordan"), id, ["ash"], null, now);
+    expect(nextTopicAfter(db, u("ash"), topics[0])).toEqual({ href: `/learning/${topics[1]}`, title: expect.any(String) });
+    // Skipping one already done.
+    recordLessonCompletion(db, u("ash"), { slug: topics[1], version: "1.0" }, now);
+    expect(nextTopicAfter(db, u("ash"), topics[0])?.href).toBe(`/learning/${topics[2]}`);
+    // From the last topic, back to the first one they haven't done.
+    expect(nextTopicAfter(db, u("ash"), topics[2])?.href).toBe(`/learning/${topics[0]}`);
+    // Nothing left once the rest are done.
+    recordLessonCompletion(db, u("ash"), { slug: topics[0], version: "1.0" }, now);
+    expect(nextTopicAfter(db, u("ash"), topics[2])).toBeNull();
+  });
+
+  it("is null for a topic that isn't in any of their paths", () => {
+    expect(nextTopicAfter(db, u("ash"), "legislative-framework")).toBeNull();
   });
 });

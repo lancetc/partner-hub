@@ -23,6 +23,8 @@ async function Player({ params }: Pick<PageProps<"/open/[token]/[slug]">, "param
   const db = getDb();
   const lesson = publicTopic(db, token, slug);
   if (!lesson) return <LinkOff />;
-  const topics = publicPath(db, token).topics.map((t) => t.slug);
-  return <LessonPlayer lesson={lesson} publicLink={{ token, topics }} backTo={{ href: `/open/${token}`, label: "Back to the learning path" }} />;
+  const all = publicPath(db, token).topics;
+  const topics = all.map((t) => t.slug);
+  const titles = Object.fromEntries(all.map((t) => [t.slug, t.title]));
+  return <LessonPlayer lesson={lesson} publicLink={{ token, topics, titles }} backTo={{ href: `/open/${token}`, label: "Back to the learning path" }} />;
 }

@@ -675,3 +675,17 @@ export function myCertificates(db: Db, user: User) {
     .filter((c): c is PathCertificate => Boolean(c))
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 }
+
+/**
+  The topic to go on to after finishing this one: the next unfinished, published topic in the
+  learner's path that holds it (assigned paths first, then ones they've started), or an earlier one
+  they skipped. Null when the topic isn't in any of their paths, or that path is now finished.
+*/
+export function nextTopicAfter(db: Db, user: User, slug: string) {
+  const path = [...myLearningPaths(db, user), ...startedLearningPaths(db, user)].find((p) => p.steps.some((s) => s.slug === slug));
+  if (!path) return null;
+  const at = path.steps.findIndex((s) => s.slug === slug);
+  const open = (s: (typeof path.steps)[number]) => s.slug !== slug && !s.draft && !s.completedAt && catalogue().some((l) => l.slug === s.slug);
+  const next = path.steps.slice(at + 1).find(open) ?? path.steps.slice(0, at).find(open);
+  return next ? { href: `/learning/${encodeURIComponent(next.slug)}`, title: next.title } : null;
+}

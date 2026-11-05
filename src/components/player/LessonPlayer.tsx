@@ -60,7 +60,7 @@ import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
 // Press, pop, burst and other feedback on interactive cards.
 import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
-import { finishOpenTopic } from "@/lib/openProgress";
+import { finishOpenTopic, readOpen } from "@/lib/openProgress";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -85,6 +85,7 @@ export function LessonPlayer({
   reviewToken,
   refresh,
   publicLink,
+  nextTopic,
 }: {
   lesson: Lesson;
   instanceId?: string;
@@ -102,7 +103,9 @@ export function LessonPlayer({
   /** Required training that's due soon or has expired: doing the topic again refreshes it. */
   refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
   /** Opened from a learning path's public link, without signing in: nothing is saved to the hub, only an anonymous count when it's finished. */
-  publicLink?: { token: string; topics: string[] };
+  publicLink?: { token: string; topics: string[]; titles?: Record<string, string> };
+  /** Where "Continue" leads when it's finished: the next topic in the learner's path. */
+  nextTopic?: { href: string; title: string } | null;
 }) {
   // Not signed in: no saved progress, bookmarks, comments or votes.
   const anonymous = Boolean(publicLink);
@@ -116,6 +119,8 @@ export function LessonPlayer({
   // Completed offline: recorded on this device, waiting to sync.
   const [completionQueued, setCompletionQueued] = useState(false);
   const [followUps, setFollowUps] = useState<CompletionResult["followUps"]>([]);
+  // On a public path, the next topic this device hasn't finished, worked out when this one is done.
+  const [publicNext, setPublicNext] = useState<string | null>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const [stayFeedback, setStayFeedback] = useState<string | null>(null);
   // A good choice can show its feedback first; the next press continues.
@@ -323,6 +328,10 @@ export function LessonPlayer({
     if (publicLink) {
       // Remembered on this device; the hub only counts it, anonymously.
       finishOpenTopic(publicLink.token, lesson.slug, publicLink.topics).catch(() => {});
+      const finished = new Set([...readOpen(publicLink.token).done, lesson.slug]);
+      const at = publicLink.topics.indexOf(lesson.slug);
+      const left = (t: string) => !finished.has(t);
+      setPublicNext(publicLink.topics.slice(at + 1).find(left) ?? publicLink.topics.slice(0, Math.max(at, 0)).find(left) ?? null);
       setAttempt(done);
       setPhase("complete");
       return;
@@ -440,6 +449,13 @@ export function LessonPlayer({
           preview={preview}
           reviewLink={Boolean(reviewToken)}
           anonymous={anonymous}
+          next={
+            publicLink && publicNext
+              ? { href: `/open/${publicLink.token}/${encodeURIComponent(publicNext)}`, title: publicLink.titles?.[publicNext] ?? null }
+              : publicLink
+                ? null
+                : (nextTopic ?? null)
+          }
           headingRef={headingRef}
           followUps={followUps}
           queued={completionQueued}
@@ -1508,6 +1524,7 @@ function Complete({
   preview,
   reviewLink = false,
   anonymous = false,
+  next,
   headingRef,
   followUps,
   queued = false,
@@ -1521,6 +1538,8 @@ function Complete({
   reviewLink?: boolean;
   /** Reached the end from a public link, not signed in. */
   anonymous?: boolean;
+  /** The next topic to go on to, if there is one. Its title, when known, goes on the button. */
+  next?: { href: string; title: string | null } | null;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   followUps: CompletionResult["followUps"];
   /** Finished while offline: recorded on this device, syncing later. */
@@ -1598,15 +1617,28 @@ function Complete({
         </dl>
       )}
       <div className="flex flex-col gap-2">
-        <Link
-          href={backTo?.href ?? "/learning"}
-          className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover"
-        >
-          {backTo?.label ?? "Back to learning"}
-        </Link>
-        {!anonymous && (
-          <Link href="/onboarding" className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted">
-            Go to my onboarding
+        {/* Straight on to the next topic; back to the path or Learning when there isn't one (or in a preview or review). */}
+        {next && !review && !preview ? (
+          <>
+            <Link
+              href={next.href}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-6 py-2 text-center text-lg font-semibold leading-snug text-on-action hover:bg-action-hover"
+            >
+              {next.title ? `Continue: ${next.title}` : "Continue to the next topic"} <Icon name="arrow-right" className="size-5 shrink-0" />
+            </Link>
+            <Link
+              href={backTo?.href ?? "/learning"}
+              className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted"
+            >
+              {backTo?.label ?? "Back to learning"}
+            </Link>
+          </>
+        ) : (
+          <Link
+            href={backTo?.href ?? "/learning"}
+            className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover"
+          >
+            {backTo?.label ?? "Back to learning"}
           </Link>
         )}
       </div>
