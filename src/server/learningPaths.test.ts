@@ -260,15 +260,25 @@ describe("the next topic after finishing one", () => {
   it("goes on to the next unfinished topic in the learner's path, then back to one they skipped", () => {
     const id = createLearningPath(db, u("jordan"), { name: "Next topic", lessons: topics }, now).id;
     assignLearningPath(db, u("jordan"), id, ["ash"], null, now);
-    expect(nextTopicAfter(db, u("ash"), topics[0])).toEqual({ href: `/learning/${topics[1]}`, title: expect.any(String) });
+    const after = nextTopicAfter(db, u("ash"), topics[0])!;
+    expect(after.next).toEqual({ href: `/learning/${topics[1]}`, title: expect.any(String), done: false });
+    expect(after.path).toEqual({ href: `/paths/${id}`, name: "Next topic" });
     // Skipping one already done.
     recordLessonCompletion(db, u("ash"), { slug: topics[1], version: "1.0" }, now);
-    expect(nextTopicAfter(db, u("ash"), topics[0])?.href).toBe(`/learning/${topics[2]}`);
+    expect(nextTopicAfter(db, u("ash"), topics[0])?.next?.href).toBe(`/learning/${topics[2]}`);
     // From the last topic, back to the first one they haven't done.
-    expect(nextTopicAfter(db, u("ash"), topics[2])?.href).toBe(`/learning/${topics[0]}`);
-    // Nothing left once the rest are done.
-    recordLessonCompletion(db, u("ash"), { slug: topics[0], version: "1.0" }, now);
-    expect(nextTopicAfter(db, u("ash"), topics[2])).toBeNull();
+    expect(nextTopicAfter(db, u("ash"), topics[2])?.next?.href).toBe(`/learning/${topics[0]}`);
+  });
+
+  it("with everything done (say, after passing the upfront quiz), still goes on to the next topic in order", () => {
+    const id = createLearningPath(db, u("jordan"), { name: "Next topic", lessons: topics }, now).id;
+    assignLearningPath(db, u("jordan"), id, ["ash"], null, now);
+    for (const t of topics) recordLessonCompletion(db, u("ash"), { slug: t, version: "1.0" }, now);
+    expect(nextTopicAfter(db, u("ash"), topics[0])?.next).toEqual({ href: `/learning/${topics[1]}`, title: expect.any(String), done: true });
+    // The last topic of a finished path: back to the path.
+    const end = nextTopicAfter(db, u("ash"), topics[2])!;
+    expect(end.next).toBeNull();
+    expect(end.path.href).toBe(`/paths/${id}`);
   });
 
   it("is null for a topic that isn't in any of their paths", () => {

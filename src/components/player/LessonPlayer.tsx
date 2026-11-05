@@ -104,8 +104,8 @@ export function LessonPlayer({
   refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
   /** Opened from a learning path's public link, without signing in: nothing is saved to the hub, only an anonymous count when it's finished. */
   publicLink?: { token: string; topics: string[]; titles?: Record<string, string> };
-  /** Where "Continue" leads when it's finished: the next topic in the learner's path. */
-  nextTopic?: { href: string; title: string } | null;
+  /** A topic in the learner's learning path: the next topic to go on to when it's finished, and the path itself. */
+  nextTopic?: { next: { href: string; title: string; done: boolean } | null; path: { href: string; name: string } } | null;
 }) {
   // Not signed in: no saved progress, bookmarks, comments or votes.
   const anonymous = Boolean(publicLink);
@@ -331,7 +331,8 @@ export function LessonPlayer({
       const finished = new Set([...readOpen(publicLink.token).done, lesson.slug]);
       const at = publicLink.topics.indexOf(lesson.slug);
       const left = (t: string) => !finished.has(t);
-      setPublicNext(publicLink.topics.slice(at + 1).find(left) ?? publicLink.topics.slice(0, Math.max(at, 0)).find(left) ?? null);
+      // The next topic not done yet (or one skipped earlier), else simply the next one in order.
+      setPublicNext(publicLink.topics.slice(at + 1).find(left) ?? publicLink.topics.slice(0, Math.max(at, 0)).find(left) ?? publicLink.topics[at + 1] ?? null);
       setAttempt(done);
       setPhase("complete");
       return;
@@ -451,11 +452,17 @@ export function LessonPlayer({
           anonymous={anonymous}
           next={
             publicLink && publicNext
-              ? { href: `/open/${publicLink.token}/${encodeURIComponent(publicNext)}`, title: publicLink.titles?.[publicNext] ?? null }
+              ? {
+                  href: `/open/${publicLink.token}/${encodeURIComponent(publicNext)}`,
+                  title: publicLink.titles?.[publicNext] ?? null,
+                  done: readOpen(publicLink.token).done.includes(publicNext),
+                }
               : publicLink
                 ? null
-                : (nextTopic ?? null)
+                : (nextTopic?.next ?? null)
           }
+          // A topic in the learner's path goes back to that path, not the Learning page.
+          pathBack={nextTopic ? { href: nextTopic.path.href, label: "Back to the learning path" } : undefined}
           headingRef={headingRef}
           followUps={followUps}
           queued={completionQueued}
@@ -1525,6 +1532,7 @@ function Complete({
   reviewLink = false,
   anonymous = false,
   next,
+  pathBack,
   headingRef,
   followUps,
   queued = false,
@@ -1539,7 +1547,9 @@ function Complete({
   /** Reached the end from a public link, not signed in. */
   anonymous?: boolean;
   /** The next topic to go on to, if there is one. Its title, when known, goes on the button. */
-  next?: { href: string; title: string | null } | null;
+  next?: { href: string; title: string | null; done?: boolean } | null;
+  /** The learning path this topic belongs to, for going back to it. */
+  pathBack?: { href: string; label: string };
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   followUps: CompletionResult["followUps"];
   /** Finished while offline: recorded on this device, syncing later. */
@@ -1547,6 +1557,8 @@ function Complete({
   backTo?: { href: string; label: string };
 }) {
   const ack = lesson.completion.type === "acknowledge";
+  // Previews and reviews go back where they came from; a learner's topic goes back to its path.
+  const back = (!review && !preview && pathBack) || backTo || { href: "/learning", label: "Back to learning" };
   return (
     <div className="animate-card-in flex flex-col gap-5 py-6">
       {queued && (
@@ -1624,21 +1636,19 @@ function Complete({
               href={next.href}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-6 py-2 text-center text-lg font-semibold leading-snug text-on-action hover:bg-action-hover"
             >
-              {next.title ? `Continue: ${next.title}` : "Continue to the next topic"} <Icon name="arrow-right" className="size-5 shrink-0" />
+              {next.title ? `${next.done ? "Next topic" : "Continue"}: ${next.title}` : "Continue to the next topic"}{" "}
+              <Icon name="arrow-right" className="size-5 shrink-0" />
             </Link>
-            <Link
-              href={backTo?.href ?? "/learning"}
-              className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted"
-            >
-              {backTo?.label ?? "Back to learning"}
+            <Link href={back.href} className="inline-flex min-h-11 items-center justify-center rounded-full font-medium text-ink-muted hover:bg-muted">
+              {back.label}
             </Link>
           </>
         ) : (
           <Link
-            href={backTo?.href ?? "/learning"}
+            href={back.href}
             className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action hover:bg-action-hover"
           >
-            {backTo?.label ?? "Back to learning"}
+            {back.label}
           </Link>
         )}
       </div>
