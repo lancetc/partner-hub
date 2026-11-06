@@ -20,7 +20,7 @@ import { StoryVisual } from "../StoryVisual";
 import { CardVisual } from "../player/CardVisual";
 import { VideoBubbles } from "../player/VideoBubbles";
 import { WrittenFeedback, type WrittenResult } from "../player/WrittenAnswer";
-import { fileSize, RESOURCE_KINDS } from "../player/Resources";
+import { fileSize, RESOURCE_KINDS, ResourceTileBody, resourceTile } from "../player/Resources";
 import { VideoRecorder } from "./VideoRecorder";
 import { panelledOnColour, toneClasses, useTextTone } from "@/lib/imageTone";
 import { parseVideoLink, videoLinkFor } from "@/lib/videoLinks";
@@ -2051,6 +2051,8 @@ function CanvasCard({
   const gradient = !background ? cardSurface(l, c) : null;
   const surf = background ? tc : gradient ? toneClasses(gradient.text) : null;
   const ph = surf ? surf.placeholder : undefined;
+  // A written answer is spoken first, as in the player: centred text over a mic, straight on the card colour.
+  const speaking = c.type === "written" || c.type === "response";
   // Where the text sits (content cards): the top by default, or the bottom over a full-background photo.
   const position = c.textPosition ?? (background ? "bottom" : "top");
   const [dragging, setDragging] = useState(false);
@@ -2181,6 +2183,7 @@ function CanvasCard({
               className={cx(
                 "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em]",
                 surf ? (gradient?.accent ?? surf.soft) : c.emphasis === "consequence" ? "text-warm" : "text-accent",
+                speaking && "text-center",
               )}
               placeholderClass={ph}
             />
@@ -2188,7 +2191,7 @@ function CanvasCard({
               value={c.heading}
               onChange={(t) => set((x) => void (x.heading = t))}
               placeholder="Add a title"
-              className="font-serif text-[1.35rem] font-semibold leading-tight"
+              className={cx("font-serif text-[1.35rem] font-semibold leading-tight", speaking && "text-balance text-center")}
               placeholderClass={ph}
             />
             {c.figure && c.figure.placement === "above" && <CanvasFigure figure={c.figure} onEdit={onSettings} />}
@@ -2206,7 +2209,7 @@ function CanvasCard({
                   value={c.body}
                   onChange={(t) => set((x) => void (x.body = t))}
                   placeholder="Add some text"
-                  className="text-[0.95rem] leading-relaxed"
+                  className={cx("text-[0.95rem] leading-relaxed", speaking && "text-center")}
                   multiline
                   placeholderClass={ph}
                 />
@@ -2264,7 +2267,8 @@ function CanvasCard({
               </ul>
             )}
             {/* As in the player: over a gradient or photo, questions and choices sit on a frosted panel so they stay readable. */}
-            {surf && panelledOnColour(c.type) ? (
+            {/* Written answers skip it, as in the player: the mic sits on the card colour. */}
+            {surf && panelledOnColour(c.type) && !speaking ? (
               <div className={cx(surf.panel, "p-2.5")}>
                 <InlineBody card={c} lesson={l} set={set} onSettings={onSettings} />
               </div>
@@ -2312,6 +2316,35 @@ function MediaPill({ label, onClick, className }: { label: string; onClick: () =
 }
 
 /** The interactive part of a card, edited in place: quiz answers, decision choices, summary points. */
+/** A picture of the player's big mic, for speaking cards: soft rings, reassurances, and typing as the other way in. */
+function MicPreview({ onColour, chips }: { onColour: boolean; chips: string[] }) {
+  return (
+    <div aria-hidden className="flex flex-col items-center gap-1.5 py-1 text-center">
+      <div className={cx("grid size-24 place-items-center rounded-full", onColour ? "bg-white/[0.07]" : "bg-tealtint/60")}>
+        <div className={cx("grid size-[4.5rem] place-items-center rounded-full", onColour ? "bg-white/[0.13]" : "bg-tealtint")}>
+          <span
+            className={cx(
+              "grid size-12 place-items-center rounded-full shadow-[0_6px_16px_rgba(4,40,40,0.3)]",
+              onColour ? "bg-white text-[#0b6564]" : "bg-action text-on-action",
+            )}
+          >
+            <Icon name="mic" className="size-5" />
+          </span>
+        </div>
+      </div>
+      <p className="text-xs font-semibold">Tap and say it out loud</p>
+      <div className="flex flex-wrap justify-center gap-1">
+        {chips.map((t) => (
+          <span key={t} className={cx("rounded-full px-2 py-0.5 text-[0.65rem]", onColour ? "bg-white/15" : "bg-tealtint text-ink")}>
+            {t}
+          </span>
+        ))}
+      </div>
+      <p className={cx("text-[0.65rem] font-semibold underline underline-offset-2", onColour ? "" : "text-accent")}>Can’t talk right now? Type it instead</p>
+    </div>
+  );
+}
+
 function InlineBody({
   card: c,
   lesson: l,
@@ -2713,18 +2746,9 @@ function InlineBody({
           <ul className="flex flex-col gap-1.5">
             {items.map((i) => (
               <li key={i.id}>
-                <button
-                  type="button"
-                  onClick={onSettings}
-                  className="flex w-full items-start gap-2 rounded-xl border border-line bg-surface p-2 text-left text-ink shadow-sm hover:border-line-strong"
-                >
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-tealtint text-accent">
-                    <Icon name={RESOURCE_KINDS[i.kind].icon} className="size-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold leading-snug">{i.title}</span>
-                    <span className="block text-[0.7rem] text-ink-muted">{[RESOURCE_KINDS[i.kind].label, fileSize(i.bytes)].filter(Boolean).join(" · ")}</span>
-                  </span>
+                {/* The same tile learners see, a little smaller; clicking it edits the list. */}
+                <button type="button" onClick={onSettings} className={resourceTile(true)} aria-label={`${i.title}. Edit resources`}>
+                  <ResourceTileBody item={i} compact />
                 </button>
               </li>
             ))}
@@ -2796,12 +2820,12 @@ function InlineBody({
         <Editable
           value={c.prompt}
           onChange={(t) => set((x) => x.type === "written" && void (x.prompt = t))}
-          placeholder="Ask a question they answer in writing"
-          className="font-semibold"
+          placeholder="Ask a question they answer out loud or in writing"
+          className="text-center font-medium leading-snug"
           multiline
         />
-        <div className="rounded-xl border border-dashed border-line-strong p-2 text-xs text-ink-muted">Learner writes here, then checks it with AI</div>
-        <div className="rounded-xl bg-muted p-2 text-ink">
+        <MicPreview onColour={onColour} chips={["Your own words", "AI feedback", "Re-record anytime"]} />
+        <div className="rounded-xl bg-muted p-2 text-ink [text-shadow:none]">
           <p className="flex items-center gap-1 text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">
             <Icon name="spark" className="size-3" /> A good answer covers
           </p>
@@ -2846,7 +2870,7 @@ function InlineBody({
             </button>
           )}
         </div>
-        <button type="button" onClick={onSettings} className="self-start text-xs font-semibold text-accent hover:underline">
+        <button type="button" onClick={onSettings} className={cx("self-start text-xs font-semibold hover:underline", onColour ? "underline" : "text-accent")}>
           {c.mustPass ? "Must cover all to continue · " : ""}AI notes and Try it
         </button>
       </div>
@@ -2858,12 +2882,12 @@ function InlineBody({
         <Editable
           value={c.prompt}
           onChange={(t) => set((x) => x.type === "response" && void (x.prompt = t))}
-          placeholder="Ask them to write something"
-          className="font-semibold"
+          placeholder="Ask a question they answer out loud or in writing"
+          className="text-center font-medium leading-snug"
           multiline
         />
-        <div className="rounded-xl border border-dashed border-line-strong p-2 text-xs text-ink-muted">Learner writes here</div>
-        <div className="rounded-xl bg-muted p-2 text-ink">
+        <MicPreview onColour={onColour} chips={["No wrong answers", "AI feedback", "Re-record anytime"]} />
+        <div className="rounded-xl bg-muted p-2 text-ink [text-shadow:none]">
           <p className="text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">Example answer</p>
           <Editable
             value={c.modelResponse}

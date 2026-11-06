@@ -769,7 +769,7 @@ export function LessonPlayer({
                   textPosition === "top" ? "justify-start pt-16" : textPosition === "center" ? "justify-center" : "justify-end pt-24",
                   tone.text,
                 )
-              : (textPosition !== "top" || node.type === "wall") && "min-h-full",
+              : (textPosition !== "top" || speaksFirst(node.type)) && "min-h-full",
           )}
         >
           {bgPhoto && (
@@ -821,8 +821,8 @@ export function LessonPlayer({
           {node.bubbles && node.bubbles.length > 0 && <VideoBubbles key={node.id} bubbles={node.bubbles} onComplete={() => markDone(node.id)} />}
           {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
           {!bgPhoto && textPosition !== "top" && <div aria-hidden className="-my-2 flex-1" />}
-          {/* A wall card is mainly about speaking: its prompt is the heading, centred over the mic. */}
-          <div className={cx(node.type === "wall" && "text-center")}>
+          {/* Wall and written-answer cards are mainly about speaking: the heading is centred over the mic. */}
+          <div className={cx(speaksFirst(node.type) && "text-center")}>
             <p
               className={cx(
                 "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
@@ -837,7 +837,7 @@ export function LessonPlayer({
               tabIndex={-1}
               className={cx(
                 "mt-2 font-serif font-semibold tracking-tight outline-none focus-visible:outline-none",
-                node.type === "wall" ? "text-balance text-[1.6rem] leading-[1.18] sm:text-[1.8rem]" : "text-[1.85rem] leading-[1.12] sm:text-[2.1rem]",
+                speaksFirst(node.type) ? "text-balance text-[1.6rem] leading-[1.18] sm:text-[1.8rem]" : "text-[1.85rem] leading-[1.12] sm:text-[2.1rem]",
               )}
             >
               {node.type === "wall" ? node.prompt : node.heading}
@@ -893,7 +893,8 @@ export function LessonPlayer({
           </div>
 
           {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
-          <div className={cx(onColour && panelledOnColour(node.type) && onColour.panel, node.type === "wall" && "flex flex-1 flex-col")}>
+          {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}
+          <div className={cx(onColour && panelledOnColour(node.type) && !speaksFirst(node.type) && onColour.panel, speaksFirst(node.type) && "flex flex-1 flex-col")}>
             <CardBody
               node={node}
               attempt={attempt}
@@ -916,8 +917,8 @@ export function LessonPlayer({
             />
           </div>
           {/* Reviewers comment through the Comment button instead. */}
-          {!reviewToken && !anonymous && node.type === "wall" ? (
-            // Wall cards: comments and reporting share one quiet row at the foot of the card.
+          {!reviewToken && !anonymous && speaksFirst(node.type) ? (
+            // Speaking cards: comments and reporting share one quiet row at the foot of the card.
             <div className={cx("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-1", onColour ? "border-white/20" : "border-line")}>
               {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} quiet />}
               <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} quiet />
@@ -1068,6 +1069,7 @@ function CardBody({
           preview={authorPreview}
           answers={attempt.answers}
           setAnswer={setAnswer}
+          tinted={tinted}
         />
       );
     case "resources":
@@ -1118,47 +1120,78 @@ function CardBody({
           <legend className="mb-2 font-semibold">
             <RichInline text={node.prompt} />
           </legend>
-          {node.options.map((o) => (
-            <label
-              key={o.id}
-              className={cx(
-                "fx-press flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
-                choice === o.id ? "fx-pop border-action bg-[#DDE8D9] dark:bg-tealtint" : "border-line bg-surface hover:border-line-strong",
-              )}
-            >
-              <input
-                type="radio"
-                name={node.id}
-                value={o.id}
-                checked={choice === o.id}
-                onChange={() => setChoice(o.id)}
-                className="size-5 shrink-0 accent-[var(--action)]"
-              />
-              <span className="leading-snug">
-                <RichInline text={o.label} />
-              </span>
-            </label>
-          ))}
-          {stayFeedback && (
-            <p
-              id="stay-feedback"
-              role="status"
-              className={cx(
-                "fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]",
-                positive ? "bg-[#DDE8D9] dark:bg-tealtint" : "border border-warm/60",
-              )}
-            >
-              <Icon name={positive ? "check" : "info"} className={cx("fx-tick mt-0.5 size-5 shrink-0", positive ? "text-accent" : "text-warm")} />
+          {node.options.map((o) => {
+            // Once a pick has been judged wrong it turns coral, to match the "Not quite" note, not the green of a selection.
+            const wrong = choice === o.id && Boolean(stayFeedback) && !positive;
+            return (
+              <label
+                key={o.id}
+                className={cx(
+                  "fx-press flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors",
+                  wrong
+                    ? "border-[#b33d17] bg-[#fff1eb] dark:border-warm dark:bg-warm/15"
+                    : choice === o.id
+                      ? "fx-pop border-action bg-[#DDE8D9] dark:bg-tealtint"
+                      : "border-line bg-surface hover:border-line-strong",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={node.id}
+                  value={o.id}
+                  checked={choice === o.id}
+                  onChange={() => setChoice(o.id)}
+                  className={cx("size-5 shrink-0", wrong ? "accent-[#b33d17]" : "accent-[var(--action)]")}
+                />
+                <span className="leading-snug">
+                  <RichInline text={o.label} />
+                </span>
+                {wrong && (
+                  <span className="fx-tick ml-auto grid size-7 shrink-0 place-items-center rounded-full bg-[#b33d17] text-white dark:bg-warm dark:text-[#102a43]">
+                    <Icon name="close" className="size-4" />
+                    <span className="sr-only">Not quite</span>
+                  </span>
+                )}
+              </label>
+            );
+          })}
+          {stayFeedback && positive && (
+            <p id="stay-feedback" role="status" className="fx-rise mt-1 flex gap-2 rounded-2xl bg-[#DDE8D9] px-4 py-3 text-[0.95rem] dark:bg-tealtint">
+              <Icon name="check" className="fx-tick mt-0.5 size-5 shrink-0 text-accent" />
               <span>
                 <RichInline text={stayFeedback} />
-                {!positive && <strong className="mt-1 block font-semibold">Try again.</strong>}
               </span>
             </p>
+          )}
+          {stayFeedback && !positive && (
+            // A warm "not quite" panel that stands out on the cream: coral wash, solid badge, a nudge as it
+            // appears. Keyed on the choice so each new wrong pick nudges again.
+            <div
+              key={choice}
+              id="stay-feedback"
+              role="status"
+              className="fx-nudge mt-1 flex gap-3 rounded-2xl border border-[#f4b8a1] bg-[#fff1eb] p-4 text-[#102a43] shadow-[0_6px_18px_rgb(179_61_23/0.14)] [text-shadow:none] dark:border-warm/40 dark:bg-warm/15 dark:text-ink"
+            >
+              <span aria-hidden className="fx-tick grid size-9 shrink-0 place-items-center rounded-full bg-[#b33d17] text-white dark:bg-warm dark:text-[#102a43]">
+                <Icon name="bulb" className="size-5" />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#b33d17] dark:text-warm">Not quite</p>
+                <p className="text-[0.95rem] leading-snug">
+                  <RichInline text={stayFeedback} />
+                </p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-[#b33d17] dark:text-warm">
+                  <Icon name="refresh" className="size-4" /> Try another answer
+                </p>
+              </div>
+            </div>
           )}
         </fieldset>
       );
     case "response":
-      return <ResponseCard node={node} slug={lessonSlug} value={(attempt.answers[node.id] as string) ?? ""} onChange={(v) => setAnswer(node.id, v)} />;
+      return (
+        <ResponseCard node={node} slug={lessonSlug} value={(attempt.answers[node.id] as string) ?? ""} onChange={(v) => setAnswer(node.id, v)} tinted={tinted} />
+      );
     case "quiz":
       return (
         <Quiz
@@ -1264,12 +1297,16 @@ function ResponseCard({
   slug,
   value,
   onChange,
+  tinted = false,
 }: {
   node: Extract<Card, { type: "response" }>;
   slug: string;
   value: string;
   onChange: (v: string) => void;
+  /** On a coloured card: the mic sits on the colour, notes take the card's text colour, and buttons are white. */
+  tinted?: boolean;
 }) {
+  const note = tinted ? "opacity-85" : "text-ink-muted";
   const [showModel, setShowModel] = useState(false);
   const [feedback, setFeedback] = useState<{ for: string; fb: Feedback } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1292,11 +1329,12 @@ function ResponseCard({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <p id={`${node.id}-prompt`} className="font-semibold">
+    <div className="flex flex-1 flex-col gap-3">
+      {/* The question, centred under the heading like the rest of a speaking card. */}
+      <p id={`${node.id}-prompt`} className="text-center text-[1.05rem] font-medium leading-relaxed">
         {node.prompt}
       </p>
-      {/* Say it or type it, as on the Answer card. */}
+      {/* Say it or type it, as on the Answer card: a big mic first, then the words to check. */}
       <SpokenAnswer
         id={`${node.id}-text`}
         value={value}
@@ -1304,9 +1342,12 @@ function ResponseCard({
         disabled={busy}
         rows={4}
         describedBy={`${node.id}-prompt ${node.id}-vis`}
+        variant="hero"
+        chips={["No wrong answers", "AI feedback", "Re-record anytime"]}
+        tinted={tinted}
         after={
           <>
-            <p id={`${node.id}-vis`} className="text-sm text-ink-muted">
+            <p id={`${node.id}-vis`} className={cx("text-sm", note)}>
               {node.visibility} Avoid client names or details. Your voice isn’t saved.
             </p>
             <div className="flex flex-wrap items-center gap-2">
@@ -1314,7 +1355,10 @@ function ResponseCard({
                 type="button"
                 onClick={ask}
                 disabled={!enough || busy}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
+                className={cx(
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-semibold disabled:opacity-45",
+                  tinted ? "bg-white text-[#0a1a2e] shadow-md hover:bg-white/90" : "bg-action text-on-action hover:bg-action-hover",
+                )}
               >
                 {busy ? (
                   <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -1323,7 +1367,12 @@ function ResponseCard({
                 )}
                 {busy ? "Reading your answer…" : feedback ? "Get feedback again" : "Get feedback"}
               </button>
-              <button type="button" aria-expanded={showModel} onClick={() => setShowModel((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
+              <button
+                type="button"
+                aria-expanded={showModel}
+                onClick={() => setShowModel((s) => !s)}
+                className={cx("min-h-11 px-2 font-semibold underline-offset-4", tinted ? "text-white underline" : "text-accent")}
+              >
                 {showModel ? "Hide example answer" : "See an example answer"}
               </button>
             </div>
@@ -1331,7 +1380,7 @@ function ResponseCard({
         }
       />
       {error && (
-        <p role="alert" className="rounded-2xl bg-orange/10 p-3 text-sm">
+        <p role="alert" className={cx("rounded-2xl p-3 text-sm text-ink [text-shadow:none]", tinted ? "bg-surface" : "bg-orange/10")}>
           {error}
         </p>
       )}
@@ -1339,7 +1388,7 @@ function ResponseCard({
         <section
           aria-live="polite"
           aria-label="Feedback on your answer"
-          className={cx("flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4", stale && "opacity-60")}
+          className={cx("flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 text-ink [text-shadow:none]", stale && "opacity-60")}
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className={cx("rounded-full px-3 py-1 font-mulish text-xs font-extrabold", VERDICT[feedback.fb.verdict].className)}>
@@ -1388,7 +1437,7 @@ function ResponseCard({
           {stale && <p className="text-xs text-ink-muted">You’ve changed your answer since. Ask again for fresh feedback.</p>}
         </section>
       )}
-      {showModel && <p className="rounded-2xl bg-muted p-4 italic">{node.modelResponse}</p>}
+      {showModel && <p className={cx("rounded-2xl p-4 italic text-ink [text-shadow:none]", tinted ? "bg-surface" : "bg-muted")}>{node.modelResponse}</p>}
     </div>
   );
 }
@@ -1723,6 +1772,9 @@ function OfficialResources({ items, tinted = false }: { items: { title: string; 
     </div>
   );
 }
+
+/** Cards that are mainly about speaking an answer: a centred heading over a big mic, on the card colour. */
+const speaksFirst = (type: string) => type === "wall" || type === "written" || type === "response";
 
 /** Key points as steps or tiles. On a coloured card (a theme, colour or photo) they sit on white so they stand out from it. */
 function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["keyPoints"]>; onColour?: boolean }) {

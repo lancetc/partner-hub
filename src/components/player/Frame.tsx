@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ThemeToggle } from "../ThemeToggle";
@@ -197,6 +197,17 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
 
   const resist = (mx: number) => ((mx < 0 && !deck.onNext) || (mx > 0 && !deck.onBack) ? mx * 0.2 : mx);
 
+  // The card box stays the same element from card to card, so it would keep the last card's scroll
+  // and open the next one part way down. Each new card starts at its top, before it's drawn, along
+  // with any scroll area inside it (a full-photo card scrolls within itself).
+  const cardRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    el.querySelectorAll<HTMLElement>(".overflow-y-auto").forEach((s) => (s.scrollTop = 0));
+  }, [deck.id]);
+
   return (
     <div className="relative min-h-0 flex-1 bg-strong/60 py-3 pl-3 pr-7">
       {/* Cards waiting behind this one. */}
@@ -211,6 +222,7 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
         ) : null,
       )}
       <div
+        ref={cardRef}
         className={cx(
           "deck-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative h-full touch-pan-y overflow-y-auto overscroll-contain rounded-[1.75rem] bg-surface shadow-xl ring-1 ring-line",
           fill ? "overflow-hidden" : "px-4 pb-6 pt-4",

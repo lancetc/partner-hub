@@ -92,6 +92,7 @@ export function WrittenAnswer({
   preview,
   answers,
   setAnswer,
+  tinted = false,
 }: {
   card: WrittenCard;
   slug: string;
@@ -100,7 +101,10 @@ export function WrittenAnswer({
   preview: boolean;
   answers: Record<string, unknown>;
   setAnswer: (key: string, value: string | number) => void;
+  /** On a coloured card: the mic sits on the colour, notes take the card's text colour, and buttons are white. */
+  tinted?: boolean;
 }) {
+  const note = tinted ? "opacity-85" : "text-ink-muted";
   const text = String(answers[`${card.id}.text`] ?? "");
   const tries = Number(answers[`${card.id}.tries`] ?? 0);
   const [result, setResult] = useState<{ for: string; r: WrittenResult } | null>(null);
@@ -137,11 +141,12 @@ export function WrittenAnswer({
   const fb = result && !result.r.unavailable ? result.r : null;
   const outOfTries = card.mustPass && state === "tried" && tries >= max;
   return (
-    <div className="flex flex-col gap-2">
-      <p id={`${card.id}-prompt`} className="text-lg font-semibold">
+    <div className="flex flex-1 flex-col gap-3">
+      {/* The question, centred under the heading like the rest of a speaking card. */}
+      <p id={`${card.id}-prompt`} className="text-center text-[1.05rem] font-medium leading-relaxed">
         {card.prompt}
       </p>
-      {/* Speaking is the main way to answer; the words then show in the answer box to check and correct. */}
+      {/* Speaking is the main way to answer: a big mic first, then the words in the answer box to check and correct. */}
       <SpokenAnswer
         id={`${card.id}-answer`}
         value={text}
@@ -149,9 +154,12 @@ export function WrittenAnswer({
         disabled={busy}
         placeholder={card.placeholder || undefined}
         describedBy={`${card.id}-prompt ${card.id}-hint`}
+        variant="hero"
+        chips={["Your own words", "AI feedback", "Re-record anytime"]}
+        tinted={tinted}
         after={
           <>
-            <p id={`${card.id}-hint`} className="flex flex-wrap justify-between gap-2 text-sm text-ink-muted">
+            <p id={`${card.id}-hint`} className={cx("flex flex-wrap justify-between gap-2 text-sm", note)}>
               <span>Leave out client names and details. Your answer and voice aren’t saved.</span>
               <span className={cx(count < min && "font-semibold")}>{count < min ? `${count} of at least ${min} words` : `${count} words`}</span>
             </p>
@@ -160,7 +168,10 @@ export function WrittenAnswer({
                 type="button"
                 onClick={check}
                 disabled={count < min || busy || state === "unavailable"}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
+                className={cx(
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-semibold disabled:opacity-45",
+                  tinted ? "bg-white text-[#0a1a2e] shadow-md hover:bg-white/90" : "bg-action text-on-action hover:bg-action-hover",
+                )}
               >
                 {busy ? (
                   <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -170,7 +181,12 @@ export function WrittenAnswer({
                 {busy ? "Checking your answer…" : fb ? "Check again" : "Check my answer"}
               </button>
               {card.example && card.showExample && fb && (
-                <button type="button" aria-expanded={showExample} onClick={() => setShowExample((s) => !s)} className="min-h-11 px-2 font-semibold text-accent">
+                <button
+                  type="button"
+                  aria-expanded={showExample}
+                  onClick={() => setShowExample((s) => !s)}
+                  className={cx("min-h-11 px-2 font-semibold underline-offset-4", tinted ? "text-white underline" : "text-accent")}
+                >
                   {showExample ? "Hide example answer" : "See an example answer"}
                 </button>
               )}
@@ -179,25 +195,25 @@ export function WrittenAnswer({
         }
       />
       {error && (
-        <p role="alert" className="rounded-2xl bg-orange/10 p-3 text-sm text-ink">
+        <p role="alert" className={cx("rounded-2xl p-3 text-sm text-ink [text-shadow:none]", tinted ? "bg-surface" : "bg-orange/10")}>
           {error}
         </p>
       )}
       {result?.r.unavailable && (
-        <p role="status" className="rounded-2xl bg-muted p-3 text-sm text-ink">
+        <p role="status" className={cx("rounded-2xl p-3 text-sm text-ink [text-shadow:none]", tinted ? "bg-surface" : "bg-muted")}>
           {result.r.message}
         </p>
       )}
       {fb && <WrittenFeedback result={fb} criteria={card.criteria} stale={Boolean(stale)} />}
       {fb && card.mustPass && !fb.passed && (
-        <p className="text-sm text-ink-muted" role="status">
+        <p className={cx("text-sm", note)} role="status">
           {outOfTries
             ? "You can carry on now. Have another look at this later."
             : `Improve your answer and check again to continue. ${Math.max(0, max - tries)} ${max - tries === 1 ? "try" : "tries"} left before you can move on anyway.`}
         </p>
       )}
       {showExample && card.example && (
-        <div className="rounded-2xl bg-muted p-3 text-ink">
+        <div className={cx("rounded-2xl p-3 text-ink [text-shadow:none]", tinted ? "bg-surface" : "bg-muted")}>
           <p className="text-sm font-semibold">An example answer</p>
           <p className="mt-1">{card.example}</p>
         </div>
