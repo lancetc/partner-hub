@@ -5,16 +5,17 @@ import { whoPhotoFor } from "@/lib/pathPhoto";
 import { useApi } from "@/lib/api";
 import { cx, formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
+import { EnrolButton } from "./EnrolButton";
 import { Icon, type IconName } from "./Icon";
 import { btn } from "./admin/ui";
 import type { QuizOffer } from "./PathQuiz";
 import { minutesLabel } from "@/lib/pathQuizSettings";
 
-type PathData = MyPath & { assigned: boolean; minutes: number; done: boolean; quiz: QuizOffer | null };
+type PathData = MyPath & { assigned: boolean; selfEnrolled: boolean; minutes: number; done: boolean; quiz: QuizOffer | null };
 
 /* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the topics. */
 export function PathPage({ id, preview = false }: { id: string; preview?: boolean }) {
-  const { data, error } = useApi<PathData>(`/api/paths/${encodeURIComponent(id)}`);
+  const { data, error, setData } = useApi<PathData>(`/api/paths/${encodeURIComponent(id)}`);
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-8 sm:px-6">
       <Link
@@ -35,7 +36,22 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
             </p>
           )}
           <Overview path={data} />
-          {!preview && !data.assigned && <p className="mt-4 text-sm text-ink-muted">This path isn’t assigned to you, but you’re welcome to work through it.</p>}
+          {!preview && !data.assigned && (
+            <section className="mt-5 rounded-2xl border border-line bg-surface p-4">
+              <p className="text-ink-muted">
+                {data.selfEnrolled
+                  ? "You enrolled in this path, so it’s on your Learning page and your progress is tracked there."
+                  : "This path isn’t assigned to you, but you’re welcome to work through it. Enrol to keep it on your Learning page and track your progress."}
+              </p>
+              <EnrolButton
+                kind="path"
+                id={id}
+                enrolled={data.selfEnrolled}
+                onChange={(on) => setData({ ...data, selfEnrolled: on })}
+                className="mt-3"
+              />
+            </section>
+          )}
           {data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} preview={preview} />}
           <ul className="mt-6">
             <PathCard path={data} preview={preview} intro={false} />
@@ -78,7 +94,8 @@ function Overview({ path: p }: { path: PathData }) {
     { icon: "check", text: "Download the path to keep working when you're offline. Progress syncs when you're back online." },
     {
       icon: "home",
-      text: p.assigned
+      text:
+        p.assigned || p.selfEnrolled
         ? "Sign in on any device and you'll find this path on your Learning page, right where you left it."
         : "Sign in on any device and come back to this page: your progress comes with you.",
     },

@@ -91,6 +91,8 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
       // On finishing, the next topic in their learning path (not for a challenge mission or a follow-up step).
       nextTopic={challengeId || typeof instance === "string" ? null : nextTopicAfter(db, user, lesson.slug)}
+      // Catalogue topics can be enrolled in; challenge missions and follow-up steps can't.
+      enrol={!challengeId && typeof instance !== "string"}
       refresh={refreshDue(db, user, lesson.slug, now(db))}
       notice={
         notice || changed ? (

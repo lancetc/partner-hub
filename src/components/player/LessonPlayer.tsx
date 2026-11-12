@@ -46,6 +46,7 @@ import { checklistDone, tickedFrom } from "@/lib/checklist";
 import { CardComments } from "./CardComments";
 import { ReportProblem } from "./ReportProblem";
 import { OfflineButton } from "../OfflineButton";
+import { EnrolButton } from "../EnrolButton";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
@@ -87,8 +88,11 @@ export function LessonPlayer({
   refresh,
   publicLink,
   nextTopic,
+  enrol = false,
 }: {
   lesson: Lesson;
+  /** Offer "Enrol in this topic" on the start screen (a catalogue topic opened by someone signed in). */
+  enrol?: boolean;
   instanceId?: string;
   preview?: boolean;
   /** On a learning path that allows skipping (testers): never wait for audio, video or activities. */
@@ -429,6 +433,7 @@ export function LessonPlayer({
           refresh={preview || anonymous ? null : refresh}
         />
         {!preview && !anonymous && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
+        {enrol && !preview && !anonymous && lesson.track !== "reinforcement" && <TopicEnrol slug={lesson.slug} />}
         {!preview && !anonymous && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
@@ -1871,6 +1876,24 @@ function KeyPointSteps({ points, box, onColour }: { points: NonNullable<Card["ke
 }
 
 /** Tells the learner up front when a lesson comes back as spaced follow ups. */
+/** Enrol in this topic from its start screen, or leave it. Shown once their enrolments have loaded. */
+function TopicEnrol({ slug }: { slug: string }) {
+  const { data, setData } = useApi<{ topics: { slug: string; enrolledAt: string }[] }>("/api/enrolments");
+  if (!data) return null;
+  const enrolled = data.topics.some((t) => t.slug === slug);
+  return (
+    <EnrolButton
+      kind="topic"
+      id={slug}
+      enrolled={enrolled}
+      onChange={(on) =>
+        setData({ topics: on ? [{ slug, enrolledAt: new Date().toISOString() }, ...data.topics] : data.topics.filter((t) => t.slug !== slug) })
+      }
+      className="mt-4"
+    />
+  );
+}
+
 function SpacedNote({ slug }: { slug: string }) {
   const data = useApi<{
     lessons: Record<string, { stage: string; gap: number }[]>;

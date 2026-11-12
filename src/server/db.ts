@@ -126,6 +126,11 @@ CREATE TABLE IF NOT EXISTS learning_path_assignments (
   due_date TEXT, assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL,
   UNIQUE (path_id, user_id)
 );
+-- Topics someone has enrolled in themselves, so they show on their Learning page and in reports.
+CREATE TABLE IF NOT EXISTS topic_enrolments (
+  user_id TEXT NOT NULL REFERENCES users(id), lesson_slug TEXT NOT NULL, enrolled_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, lesson_slug)
+);
 -- The compliance register: one row per topic on it, with its settings (JSON, see lib/complianceRegister).
 CREATE TABLE IF NOT EXISTS compliance_register (
   lesson_slug TEXT PRIMARY KEY, settings TEXT NOT NULL,
@@ -471,6 +476,9 @@ export function migrate(db: Db) {
   if (!cols.includes("who_photo")) db.exec("ALTER TABLE learning_paths ADD COLUMN who_photo TEXT");
   // The upfront quiz (JSON settings: questions, pass mark, attempts); null when the path has none.
   if (!cols.includes("quiz")) db.exec("ALTER TABLE learning_paths ADD COLUMN quiz TEXT");
+  const assignmentCols = (db.prepare("PRAGMA table_info(learning_path_assignments)").all() as { name: string }[]).map((c) => c.name);
+  // 1 when the learner enrolled themselves; an administrator assigning them turns it into an assignment (0).
+  if (!assignmentCols.includes("self")) db.exec("ALTER TABLE learning_path_assignments ADD COLUMN self INTEGER NOT NULL DEFAULT 0");
   const completionCols = (db.prepare("PRAGMA table_info(lesson_completions)").all() as { name: string }[]).map((c) => c.name);
   // How a topic was completed when it wasn't worked through, e.g. "path-quiz:lp-care-coordination" for passing a path's upfront quiz.
   if (!completionCols.includes("via")) db.exec("ALTER TABLE lesson_completions ADD COLUMN via TEXT");

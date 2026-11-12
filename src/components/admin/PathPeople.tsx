@@ -18,6 +18,8 @@ export type AssignedPerson = {
   name: string;
   org: string;
   dueDate: string | null;
+  /** They enrolled themselves rather than being assigned. */
+  selfEnrolled?: boolean;
   completed: number;
   total: number;
   done: boolean;
@@ -316,6 +318,7 @@ export function AssignedList({
                   <p className="font-semibold">{a.name}</p>
                   <p className="text-xs text-ink-muted">{a.org}</p>
                 </div>
+                {a.selfEnrolled && <Badge tone="neutral">Self-enrolled</Badge>}
                 {st === "finished" ? (
                   <Badge tone="good">Finished</Badge>
                 ) : (

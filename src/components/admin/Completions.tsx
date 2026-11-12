@@ -12,6 +12,8 @@ import { Icon } from "../Icon";
 type State = "completed" | "in_progress" | "not_started";
 type Row = {
   state: State;
+  /** They enrolled in the topic themselves. */
+  enrolled: boolean;
   completedAt: string | null;
   version: string | null;
   needsRefresher: boolean;
@@ -42,7 +44,7 @@ type PersonSummary = Person & {
   lastActive: string | null;
 };
 type Question = { cardId: string; id: string; prompt: string; answered: number; right: number; wrongPicks: { label: string; count: number }[] };
-type PathRow = { id: string; name: string; dueDate: string | null; completed: number; total: number; done: boolean };
+type PathRow = { id: string; name: string; dueDate: string | null; selfEnrolled: boolean; completed: number; total: number; done: boolean };
 
 const stateLabel: Record<State, string> = { completed: "Completed", in_progress: "In progress", not_started: "Not started" };
 const stateTone = { completed: "good", in_progress: "info", not_started: "neutral" } as const;
@@ -330,6 +332,7 @@ export function LessonCompletions({ slug }: { slug: string }) {
                         <span className="block text-xs text-ink-muted">
                           {r.person.org} · {audienceLabel(r.person.audience)}
                           {!r.expected && " · not their audience"}
+                          {r.enrolled && " · self-enrolled"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -451,6 +454,7 @@ export function PersonCompletions({ id }: { id: string }) {
                     <Bar completed={p.completed} inProgress={0} total={p.total} />
                     <p className="flex flex-wrap items-center gap-2 text-sm">
                       {p.completed} of {p.total} topics
+                      {p.selfEnrolled && <Badge tone="neutral">Self-enrolled</Badge>}
                       {p.done ? (
                         <Badge tone="good">Finished</Badge>
                       ) : (
@@ -465,7 +469,7 @@ export function PersonCompletions({ id }: { id: string }) {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-ink-muted">Not assigned to any learning paths.</p>
+              <p className="mt-2 text-sm text-ink-muted">Not assigned to or enrolled in any learning paths.</p>
             )}
           </section>
           <section>
@@ -502,6 +506,7 @@ type PathPersonRow = {
   total: number;
   state: "completed" | "in_progress" | "not_started";
   dueDate: string | null;
+  selfEnrolled: boolean;
   overdue: boolean;
   lastActive: string | null;
   next: { slug: string; title: string } | null;
@@ -570,7 +575,10 @@ export function PathCompletions({ id }: { id: string }) {
                         <Link href={`/admin/completions/people/${r.person.id}`} className="font-semibold hover:underline">
                           {r.person.name}
                         </Link>
-                        <span className="block text-xs text-ink-muted">{r.person.org}</span>
+                        <span className="block text-xs text-ink-muted">
+                          {r.person.org}
+                          {r.selfEnrolled && " · self-enrolled"}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

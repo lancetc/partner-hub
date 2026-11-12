@@ -36,12 +36,14 @@ async function Paths() {
   const db = getDb();
   // Paths holding challenge missions stay out unless assigned: missions open one a day, from the challenge page.
   const paths = browseLearningPaths(db, await currentUser(db), missionSlugs(db));
-  const mine = paths.filter((p) => p.assigned);
-  const rest = paths.filter((p) => !p.assigned);
+  const mine = paths.filter((p) => p.assigned || p.selfEnrolled);
+  const rest = paths.filter((p) => !p.assigned && !p.selfEnrolled);
   if (!paths.length) return <p className="mt-10 text-ink-muted">There are no learning paths yet. New ones will appear here.</p>;
   return (
     <>
-      {mine.length > 0 && <PathGrid id="assigned" heading="Assigned to you" paths={mine} />}
+      {mine.length > 0 && (
+        <PathGrid id="assigned" heading={mine.some((p) => p.selfEnrolled) ? "Your paths" : "Assigned to you"} paths={mine} />
+      )}
       {rest.length > 0 && <PathGrid id="explore" heading={mine.length ? "More paths" : "All paths"} paths={rest} />}
     </>
   );
@@ -76,6 +78,7 @@ function PathTile({ path: p }: { path: Path }) {
         {p.topics} {p.topics === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
         {p.audience && ` · ${p.audience}`}
       </p>
+      {p.selfEnrolled && <p className="-mt-1 font-mulish text-sm font-bold text-success">Enrolled</p>}
       <h3 className="font-serif text-xl font-semibold leading-snug">
         <Link href={`/paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
           {p.name}

@@ -35,6 +35,7 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
   const paths = useApi<{ paths: (MyPath & { done?: boolean; assigned?: boolean })[] }>("/api/learning-paths?started=1").data?.paths ?? [];
   const followUps = useApi<{ items: FollowUpListItem[] }>("/api/follow-ups").data?.items ?? [];
   const certificates = useApi<{ certificates: { id: string }[] }>("/api/me/certificates").data?.certificates.length ?? 0;
+  const enrolments = useApi<{ topics: { slug: string }[] }>("/api/enrolments").data?.topics ?? [];
   const [open, setOpen] = useState(() => typeof window !== "undefined" && readOpen());
   const toggle = () => {
     setOpen(!open);
@@ -52,6 +53,10 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
   const completed = Object.values(attempts).filter((a) => a.status === "completed").length;
   const ready = followUps.filter((f) => f.status === "available" || f.status === "in_progress");
   const due = topics.filter((t) => t.assignment?.required && attempts[t.slug]?.status !== "completed");
+  // Topics they enrolled in and haven't opened yet (ones under way show as in progress).
+  const enrolled = enrolments
+    .map((e) => bySlug.get(e.slug))
+    .filter((t): t is TopicSummary => Boolean(t) && !attempts[t!.slug] && !t!.assignment?.required);
   const mine = me?.user.audience === "coordinator" ? "coordinator" : "partner";
   const starters = topics
     .filter((t) => !attempts[t.slug] && (t.track === "core" || t.track === mine))
@@ -65,8 +70,8 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
     ? `Continue: ${inProgress[0].topic.title}`
     : paths[0]
       ? `${paths[0].name} learning path`
-      : ready.length + due.length
-        ? `${ready.length + due.length} ready for you`
+      : ready.length + due.length + enrolled.length
+        ? `${ready.length + due.length + enrolled.length} ready for you`
         : null;
 
   return (
@@ -128,7 +133,7 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
                     <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                      {p.assigned === false ? "Learning path you’ve started" : "Learning path"}
+                      {p.selfEnrolled ? "Learning path you enrolled in" : p.assigned === false ? "Learning path you’ve started" : "Learning path"}
                     </span>
                     <Link href={`/paths/${encodeURIComponent(p.id)}`} className="font-serif text-lg font-semibold leading-snug hover:underline">
                       {p.name}
@@ -162,8 +167,8 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
             );
           })}
 
-          {/* Ready now: spaced follow ups, and topics assigned with a due date. */}
-          {(ready.length > 0 || due.length > 0) && (
+          {/* Ready now: spaced follow ups, topics assigned with a due date, and topics they've enrolled in. */}
+          {(ready.length > 0 || due.length > 0 || enrolled.length > 0) && (
             <div className="flex flex-col gap-2 rounded-2xl border border-line p-4">
               <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ready for you</span>
               <ul className="flex flex-col gap-1">
@@ -186,6 +191,18 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold leading-snug">{t.title}</span>
                         <span className="block text-xs text-ink-muted">Required{t.assignment?.due ? ` · due ${formatDate(t.assignment.due)}` : ""}</span>
+                      </span>
+                      <Icon name="arrow-right" className="size-4 shrink-0 text-ink-muted" />
+                    </Link>
+                  </li>
+                ))}
+                {enrolled.slice(0, 3).map((t) => (
+                  <li key={t.slug}>
+                    <Link href={`/learning/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
+                      <Icon name="plus" className="size-4 shrink-0 text-action" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold leading-snug">{t.title}</span>
+                        <span className="block text-xs text-ink-muted">You enrolled · {t.minutes} min</span>
                       </span>
                       <Icon name="arrow-right" className="size-4 shrink-0 text-ink-muted" />
                     </Link>

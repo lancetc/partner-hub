@@ -21,6 +21,8 @@ export type MyPath = {
   dueDate: string | null;
   steps: Step[];
   chapters?: PathChapter[];
+  /** They enrolled in it themselves rather than being assigned it. */
+  selfEnrolled?: boolean;
   /** The overview on the path's own page. */
   whoFor?: string;
   whoPhoto?: string;
@@ -30,7 +32,7 @@ export type MyPath = {
   quiz?: { available: boolean; inProgress: boolean } | null;
 };
 
-/** Learning paths assigned to the signed-in person: progress, what's next and the due date. */
+/** Learning paths assigned to the signed-in person, or that they've enrolled in: progress, what's next and the due date. */
 export function MyLearningPaths() {
   const { data } = useApi<{ paths: MyPath[] }>("/api/learning-paths");
   if (!data?.paths.length) return null;
@@ -161,7 +163,9 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
           {!intro && !preview && <h2 className="text-xl font-semibold leading-snug">Your progress</h2>}
           {intro && (
             <>
-              <p className="font-mulish text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">Your learning path</p>
+              <p className="font-mulish text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">
+                {p.selfEnrolled ? "Learning path · you enrolled" : "Your learning path"}
+              </p>
               <h3 className="mt-1 text-xl font-semibold leading-snug">{p.name}</h3>
               {p.description && <p className="mt-1 text-sm text-ink-muted">{p.description}</p>}
               <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">

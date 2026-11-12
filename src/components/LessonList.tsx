@@ -88,6 +88,14 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
   };
 
   const assigned = topics.filter((t) => t.assignment?.required);
+  // Topics they enrolled in themselves (newest first), apart from ones already shown as assigned.
+  const enrolments = useApi<{ topics: { slug: string }[] }>("/api/enrolments").data?.topics ?? [];
+  const enrolledSlugs = new Set(enrolments.map((e) => e.slug));
+  const enrolled = enrolments
+    .map((e) => topics.find((t) => t.slug === e.slug))
+    .filter((t): t is TopicSummary => Boolean(t) && !t!.assignment?.required)
+    // Finished ones move to the end.
+    .sort((a, b) => Number(stateOf(a) === "completed") - Number(stateOf(b) === "completed"));
   const spaced = useApi<{ lessons: Record<string, { stage: string; gap: number }[]> }>("/api/lessons/spaced").data?.lessons ?? {};
   const followUps = useApi<{ items: FollowUpListItem[] }>("/api/follow-ups").data?.items ?? [];
   const stepsFor = (slug: string) => followUps.filter((f) => f.base?.slug === slug);
@@ -157,6 +165,41 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
                       </Link>
                     </h3>
                     <p className="text-sm text-ink-muted">{s?.text ?? " "}</p>
+                    <span className="mt-auto inline-flex items-center gap-1 font-semibold text-accent">
+                      {s?.cta ?? "Open"} <Icon name="arrow-right" className="size-4" />
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {enrolled.length > 0 && (
+        <section aria-labelledby="enrolled">
+          <h2 id="enrolled" className="mb-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">
+            Your topics
+          </h2>
+          <ul className="grid gap-4 md:grid-cols-2">
+            {enrolled.map((l) => {
+              const s = label(l);
+              return (
+                <li key={l.slug} className="relative flex gap-4 rounded-3xl border border-line bg-surface p-4">
+                  <StoryVisual {...l.visual} alt="" className="size-24 shrink-0 rounded-2xl" iconSize="size-6" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p className="font-mulish text-xs font-bold text-accent">
+                      Enrolled · {subjectLabel(l.subject)} · {l.minutes} min
+                    </p>
+                    <h3 className="font-serif text-xl font-semibold leading-snug">
+                      <Link href={`/learning/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
+                        {l.title}
+                      </Link>
+                    </h3>
+                    <p className="flex items-center gap-1.5 text-sm text-ink-muted">
+                      {s?.done && <Icon name="check" className="size-4 text-accent" />}
+                      {s?.text ?? " "}
+                    </p>
                     <span className="mt-auto inline-flex items-center gap-1 font-semibold text-accent">
                       {s?.cta ?? "Open"} <Icon name="arrow-right" className="size-4" />
                     </span>
@@ -305,7 +348,7 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
                   <StoryVisual {...l.visual} alt="" className="aspect-[16/10] rounded-2xl" />
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                      {subjectLabel(l.subject)} · {l.minutes} min
+                      {subjectLabel(l.subject)} · {l.minutes} min{enrolledSlugs.has(l.slug) && " · Enrolled"}
                     </p>
                     <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-3" />
                   </div>
@@ -337,6 +380,7 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
                   <div className="min-w-0 flex-1">
                     <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">
                       {subjectLabel(l.subject)} · {l.minutes} min · {trackLabel[l.track]}
+                      {enrolledSlugs.has(l.slug) && " · Enrolled"}
                     </p>
                     <h3 className="font-semibold leading-snug">
                       <Link

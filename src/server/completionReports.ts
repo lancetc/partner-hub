@@ -48,13 +48,19 @@ export function facts(db: Db) {
     saved_at: string;
   }[])
     progress.set(`${r.user_id}|${r.slug}`, { attempt: JSON.parse(r.attempt) as Attempt, savedAt: r.saved_at });
+  // Topics people enrolled in themselves: they always show on that topic's report.
+  const enrolled = new Set(
+    (db.prepare("SELECT user_id, lesson_slug FROM topic_enrolments").all() as { user_id: string; lesson_slug: string }[]).map(
+      (r) => `${r.user_id}|${r.lesson_slug}`,
+    ),
+  );
   const refresher = new Map<string, boolean>();
   const needsRefresher = (slug: string, version: string) => {
     const k = `${slug}|${version}`;
     if (!refresher.has(k)) refresher.set(k, importantChangesSince(db, slug, version).length > 0);
     return refresher.get(k)!;
   };
-  return { completions, progress, needsRefresher };
+  return { completions, progress, enrolled, needsRefresher };
 }
 
 /** First-try quiz score from someone's saved answers, e.g. 1 of 2. */
@@ -93,6 +99,8 @@ export function stateOf(f: ReturnType<typeof facts>, lesson: Lesson, userId: str
   const reached = prog?.attempt.nodeId ? lesson.nodes[prog.attempt.nodeId] : undefined;
   return {
     state,
+    /** They enrolled in this topic themselves. */
+    enrolled: f.enrolled.has(`${userId}|${lesson.slug}`),
     completedAt: done?.at ?? null,
     version: done?.version ?? null,
     needsRefresher: done ? f.needsRefresher(lesson.slug, done.version) : false,
@@ -117,8 +125,10 @@ export function lessonsOverview(db: Db, viewer: User) {
   const ps = people(db, viewer);
   const f = facts(db);
   return catalogue().map((l) => {
-    // The people it's for, plus anyone else who has opened it (as on the lesson's own page).
-    const rows = ps.map((p) => ({ expected: isFor(l, p.audience), ...stateOf(f, l, p.id) })).filter((r) => r.expected || r.state !== "not_started");
+    // The people it's for, plus anyone else who has opened it or enrolled in it (as on the lesson's own page).
+    const rows = ps
+      .map((p) => ({ expected: isFor(l, p.audience), ...stateOf(f, l, p.id) }))
+      .filter((r) => r.expected || r.enrolled || r.state !== "not_started");
     const scored = rows.filter((r) => r.score);
     return {
       slug: l.slug,
@@ -143,8 +153,8 @@ export function lessonReport(db: Db, viewer: User, slug: string) {
   const ps = people(db, viewer);
   const rows = ps
     .map((p) => ({ person: p, expected: isFor(l, p.audience), ...stateOf(f, l, p.id) }))
-    // People it isn't meant for only show if they've opened it.
-    .filter((r) => r.expected || r.state !== "not_started");
+    // People it isn't meant for only show if they've opened it or enrolled in it.
+    .filter((r) => r.expected || r.enrolled || r.state !== "not_started");
 
   const inScope = new Set(ps.map((p) => p.id));
   const questions = Object.values(l.nodes).flatMap((card) =>
@@ -211,9 +221,9 @@ export function peopleOverview(db: Db, viewer: User, now: Date) {
 function pathsFor(db: Db, userId: string, f: ReturnType<typeof facts>) {
   const rows = db
     .prepare(
-      "SELECT p.id, p.name, a.due_date FROM learning_path_assignments a JOIN learning_paths p ON p.id = a.path_id WHERE a.user_id = ? AND p.archived = 0 ORDER BY a.assigned_at",
+      "SELECT p.id, p.name, a.due_date, a.self FROM learning_path_assignments a JOIN learning_paths p ON p.id = a.path_id WHERE a.user_id = ? AND p.archived = 0 ORDER BY a.assigned_at",
     )
-    .all(userId) as { id: string; name: string; due_date: string | null }[];
+    .all(userId) as { id: string; name: string; due_date: string | null; self: number }[];
   return rows.map((r) => {
     const slugs = (db.prepare("SELECT lesson_slug FROM learning_path_lessons WHERE path_id = ? ORDER BY position").all(r.id) as { lesson_slug: string }[]).map(
       (x) => x.lesson_slug,
@@ -221,7 +231,15 @@ function pathsFor(db: Db, userId: string, f: ReturnType<typeof facts>) {
     // Draft lessons in a path are "coming soon" and don't count yet.
     const live = slugs.filter((s) => catalogue().some((l) => l.slug === s));
     const completed = live.filter((s) => f.completions.has(`${userId}|${s}`)).length;
-    return { id: r.id, name: r.name, dueDate: r.due_date, completed, total: live.length, done: live.length > 0 && completed === live.length };
+    return {
+      id: r.id,
+      name: r.name,
+      dueDate: r.due_date,
+      selfEnrolled: Boolean(r.self),
+      completed,
+      total: live.length,
+      done: live.length > 0 && completed === live.length,
+    };
   });
 }
 
@@ -233,7 +251,7 @@ export function personReport(db: Db, viewer: User, userId: string) {
   const f = facts(db);
   const lessonRows = catalogue()
     .map((l) => ({ slug: l.slug, title: l.title, track: l.track, liveVersion: l.version, expected: isFor(l, person.audience), ...stateOf(f, l, userId) }))
-    .filter((r) => r.expected || r.state !== "not_started");
+    .filter((r) => r.expected || r.enrolled || r.state !== "not_started");
   const titles = new Map(lessons.map((l) => [l.slug, l.title]));
   const signoffs = (
     db
@@ -273,12 +291,13 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
     "Assessment attempts",
     "Assessment passed at",
     "Last active",
+    "Self-enrolled",
   ];
   const lines = [header];
   for (const p of people(db, viewer))
     for (const l of ls) {
       const s = stateOf(f, l, p.id);
-      if (!isFor(l, p.audience) && s.state === "not_started") continue;
+      if (!isFor(l, p.audience) && !s.enrolled && s.state === "not_started") continue;
       lines.push([
         p.name,
         p.email,
@@ -296,6 +315,7 @@ export function completionsCsv(db: Db, viewer: User, slug?: string) {
         s.assessment ? String(s.assessment.attempts) : "",
         s.assessment?.passedAt ?? "",
         s.lastActive ?? "",
+        s.enrolled ? "Yes" : "",
       ]);
     }
   return lines.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
@@ -309,6 +329,8 @@ type PathPerson = {
   total: number;
   state: "completed" | "in_progress" | "not_started";
   dueDate: string | null;
+  /** They enrolled themselves rather than being assigned. */
+  selfEnrolled: boolean;
   overdue: boolean;
   lastActive: string | null;
   next: { slug: string; title: string } | null;
@@ -317,9 +339,10 @@ type PathPerson = {
 function pathPeople(db: Db, viewer: User, pathId: string, slugs: string[], f: ReturnType<typeof facts>, today: string): PathPerson[] {
   const inScope = new Map(people(db, viewer).map((p) => [p.id, p]));
   const live = slugs.filter((s) => catalogue().some((l) => l.slug === s));
-  const rows = db.prepare("SELECT user_id, due_date FROM learning_path_assignments WHERE path_id = ? ORDER BY assigned_at").all(pathId) as {
+  const rows = db.prepare("SELECT user_id, due_date, self FROM learning_path_assignments WHERE path_id = ? ORDER BY assigned_at").all(pathId) as {
     user_id: string;
     due_date: string | null;
+    self: number;
   }[];
   return rows
     .filter((r) => inScope.has(r.user_id))
@@ -338,6 +361,7 @@ function pathPeople(db: Db, viewer: User, pathId: string, slugs: string[], f: Re
         total: live.length,
         state: complete ? "completed" : started ? "in_progress" : "not_started",
         dueDate: r.due_date,
+        selfEnrolled: Boolean(r.self),
         overdue: !complete && Boolean(r.due_date && r.due_date < today),
         lastActive: times.sort().at(-1) ?? null,
         next: next ? { slug: next.slug, title: next.title } : null,

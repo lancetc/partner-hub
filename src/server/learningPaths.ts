@@ -31,7 +31,8 @@ type PathRow = {
   created_at: string;
   updated_at: string;
 };
-type AssignmentRow = { id: number; path_id: string; user_id: string; due_date: string | null; assigned_by: string; assigned_at: string };
+/** `self` is 1 when the learner enrolled themselves rather than being assigned by an administrator. */
+type AssignmentRow = { id: number; path_id: string; user_id: string; due_date: string | null; assigned_by: string; assigned_at: string; self: number };
 
 export type PathInput = {
   name: string;
@@ -326,6 +327,7 @@ export function learningPathDetail(db: Db, actor: User, id: string) {
       org: a.org,
       dueDate: a.due_date,
       assignedAt: a.assigned_at,
+      selfEnrolled: Boolean(a.self),
       ...progress(db, a.user_id, slugs, Boolean(p.in_order)),
     })),
     people: assignableUsers(db, actor),
@@ -478,9 +480,10 @@ export function assignLearningPath(db: Db, actor: User, id: string, userIds: str
   const at = now.toISOString();
   tx(db, () => {
     for (const u of userIds) {
+      // Assigning someone who enrolled themselves turns their enrolment into an assignment.
       db.prepare(
-        `INSERT INTO learning_path_assignments (path_id, user_id, due_date, assigned_by, assigned_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(path_id, user_id) DO UPDATE SET due_date = excluded.due_date`,
+        `INSERT INTO learning_path_assignments (path_id, user_id, due_date, assigned_by, assigned_at, self) VALUES (?, ?, ?, ?, ?, 0)
+         ON CONFLICT(path_id, user_id) DO UPDATE SET due_date = excluded.due_date, assigned_by = excluded.assigned_by, self = 0`,
       ).run(id, u, dueDate, actor.id, at);
     }
     audit(db, { actor: actor.id, event: "learning_path.assigned", entity: `learning_path:${id}`, next: { userIds, dueDate }, at: now });
@@ -502,13 +505,45 @@ export function unassignLearningPath(db: Db, actor: User, id: string, userId: st
   });
 }
 
-/** The learner's own assigned paths with progress, the next lesson and any due date. */
+/**
+  The learner enrols themselves in a path: it goes on their Learning page like an assigned one, with
+  no due date, and administrators see them on the path marked as self-enrolled. Paths with no
+  published topic yet, and paths holding challenge missions (`hidden`), can't be enrolled in.
+*/
+export function enrolInPath(db: Db, user: User, id: string, hidden: Set<string>, now: Date) {
+  const p = getRow(db, id);
+  const slugs = slugsFor(db, id);
+  if (!slugs.some((s) => catalogue().some((l) => l.slug === s)) || slugs.some((s) => hidden.has(s))) throw new HttpError(404, "Learning path not found.");
+  const existing = db.prepare("SELECT self FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as { self: number } | undefined;
+  if (existing) return { enrolled: true, selfEnrolled: Boolean(existing.self) };
+  db.prepare("INSERT INTO learning_path_assignments (path_id, user_id, due_date, assigned_by, assigned_at, self) VALUES (?, ?, NULL, ?, ?, 1)").run(
+    p.id,
+    user.id,
+    user.id,
+    now.toISOString(),
+  );
+  audit(db, { actor: user.id, event: "learning_path.self_enrolled", entity: `learning_path:${id}`, at: now });
+  return { enrolled: true, selfEnrolled: true };
+}
+
+/** Takes a path the learner enrolled in themselves off their list. One an administrator assigned stays. */
+export function leavePath(db: Db, user: User, id: string, now: Date) {
+  getRow(db, id);
+  const a = db.prepare("SELECT self FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as { self: number } | undefined;
+  if (!a) return { enrolled: false, selfEnrolled: false };
+  if (!a.self) throw new HttpError(409, "This path was assigned to you, so it stays on your list. Ask your administrator if it shouldn’t be.");
+  db.prepare("DELETE FROM learning_path_assignments WHERE path_id = ? AND user_id = ? AND self = 1").run(id, user.id);
+  audit(db, { actor: user.id, event: "learning_path.self_unenrolled", entity: `learning_path:${id}`, reason: "Left by the learner; completions are kept.", at: now });
+  return { enrolled: false, selfEnrolled: false };
+}
+
+/** The learner's own paths (assigned, or enrolled in themselves) with progress, the next lesson and any due date. */
 export function myLearningPaths(db: Db, user: User) {
   const rows = db
     .prepare(
-      "SELECT a.due_date, p.* FROM learning_path_assignments a JOIN learning_paths p ON p.id = a.path_id WHERE a.user_id = ? AND p.archived = 0 ORDER BY a.due_date IS NULL, a.due_date, p.name",
+      "SELECT a.due_date, a.self, p.* FROM learning_path_assignments a JOIN learning_paths p ON p.id = a.path_id WHERE a.user_id = ? AND p.archived = 0 ORDER BY a.self, a.due_date IS NULL, a.due_date, p.name",
     )
-    .all(user.id) as (PathRow & { due_date: string | null })[];
+    .all(user.id) as (PathRow & { due_date: string | null; self: number })[];
   // Paths still being planned (no lessons yet) stay out of the learner's view.
   return rows
     .filter((p) => slugsFor(db, p.id).length)
@@ -518,6 +553,8 @@ export function myLearningPaths(db: Db, user: User) {
       description: p.description,
       inOrder: Boolean(p.in_order),
       dueDate: p.due_date,
+      assigned: !p.self,
+      selfEnrolled: Boolean(p.self),
       chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
       ...progress(db, user.id, slugsFor(db, p.id), Boolean(p.in_order)),
     }));
@@ -546,6 +583,7 @@ export function startedLearningPaths(db: Db, user: User) {
       inOrder: Boolean(p.in_order),
       dueDate: null,
       assigned: false,
+      selfEnrolled: false,
       chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
       ...progress(db, user.id, slugsFor(db, p.id), Boolean(p.in_order)),
     }));
@@ -557,19 +595,23 @@ export function startedLearningPaths(db: Db, user: User) {
   holding challenge missions (`hidden`) unless they're assigned, so missions don't show early.
 */
 export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = new Set()) {
-  const due = new Map(
+  const mine = new Map(
     (
-      db.prepare("SELECT path_id, due_date FROM learning_path_assignments WHERE user_id = ?").all(user.id) as { path_id: string; due_date: string | null }[]
-    ).map((a) => [a.path_id, a.due_date]),
+      db.prepare("SELECT path_id, due_date, self FROM learning_path_assignments WHERE user_id = ?").all(user.id) as {
+        path_id: string;
+        due_date: string | null;
+        self: number;
+      }[]
+    ).map((a) => [a.path_id, a]),
   );
   const info = lessonLookup(db);
   const published = (s: string) => catalogue().some((l) => l.slug === s);
   const opened = new Set((db.prepare("SELECT slug FROM lesson_progress WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug));
   const rows = db.prepare("SELECT * FROM learning_paths WHERE archived = 0 ORDER BY name").all() as PathRow[];
   return rows
-    .map((p) => ({ p, slugs: slugsFor(db, p.id), assigned: due.has(p.id) }))
-    .filter(({ slugs, assigned }) => slugs.some(published) && (assigned || !slugs.some((s) => hidden.has(s))))
-    .map(({ p, slugs, assigned }) => {
+    .map((p) => ({ p, slugs: slugsFor(db, p.id), a: mine.get(p.id) }))
+    .filter(({ slugs, a }) => slugs.some(published) && (a || !slugs.some((s) => hidden.has(s))))
+    .map(({ p, slugs, a }) => {
       const { completed, total, done } = progress(db, user.id, slugs, Boolean(p.in_order));
       const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
       return {
@@ -577,8 +619,9 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
         name: p.name,
         description: p.description,
         audience: p.audience,
-        assigned,
-        dueDate: due.get(p.id) ?? null,
+        assigned: Boolean(a && !a.self),
+        selfEnrolled: Boolean(a?.self),
+        dueDate: a?.due_date ?? null,
         topics: slugs.length,
         minutes: slugs.reduce((n, s) => n + info(s).minutes, 0),
         completed,
@@ -588,7 +631,11 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
         thumbnail: first ? thumbnailFor(first) : null,
       };
     })
-    .sort((a, b) => Number(b.assigned) - Number(a.assigned) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"));
+    // Assigned first, then ones they enrolled in themselves, then the rest.
+    .sort(
+      (a, b) =>
+        Number(b.assigned) - Number(a.assigned) || Number(b.selfEnrolled) - Number(a.selfEnrolled) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"),
+    );
 }
 
 /**
@@ -599,15 +646,16 @@ export function learnerPath(db: Db, user: User, id: string) {
   const p = getRow(db, id);
   const slugs = slugsFor(db, id);
   if (!slugs.length) throw new HttpError(404, "Learning path not found.");
-  const a = db.prepare("SELECT due_date FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as
-    { due_date: string | null } | undefined;
+  const a = db.prepare("SELECT due_date, self FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as
+    { due_date: string | null; self: number } | undefined;
   return {
     id: p.id,
     name: p.name,
     description: p.description,
     inOrder: Boolean(p.in_order),
     ...overview(p),
-    assigned: Boolean(a),
+    assigned: Boolean(a && !a.self),
+    selfEnrolled: Boolean(a?.self),
     dueDate: a?.due_date ?? null,
     minutes: slugs.reduce((n, s) => n + lessonLookup(db)(s).minutes, 0),
     chapters: chaptersFor(db, id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
@@ -617,7 +665,8 @@ export function learnerPath(db: Db, user: User, id: string) {
 
 /**
   True when the person is assigned a live learning path that includes this lesson and allows
-  skipping: they can move on before audio, video or a required activity is finished.
+  skipping: they can move on before audio, video or a required activity is finished. Enrolling
+  yourself doesn't count: skipping is for testers an administrator has chosen.
 */
 export function canSkipHolds(db: Db, userId: string, lessonSlug: string) {
   return Boolean(
@@ -626,7 +675,7 @@ export function canSkipHolds(db: Db, userId: string, lessonSlug: string) {
         `SELECT 1 FROM learning_path_assignments a
          JOIN learning_paths p ON p.id = a.path_id AND p.archived = 0 AND p.allow_skip = 1
          JOIN learning_path_lessons l ON l.path_id = p.id AND l.lesson_slug = ?
-         WHERE a.user_id = ? LIMIT 1`,
+         WHERE a.user_id = ? AND a.self = 0 LIMIT 1`,
       )
       .get(lessonSlug, userId),
   );

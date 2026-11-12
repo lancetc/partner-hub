@@ -92,6 +92,7 @@ type Assignment = {
   org: string;
   dueDate: string | null;
   assignedAt: string;
+  selfEnrolled: boolean;
   steps: Step[];
   completed: number;
   total: number;
@@ -839,8 +840,10 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
   const [assigning, setAssigning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const assignedIds = new Set(detail.assignments.map((a) => a.userId));
+  // People who enrolled themselves can still be assigned (with a due date), which makes it an assignment.
+  const assignedIds = new Set(detail.assignments.filter((a) => !a.selfEnrolled).map((a) => a.userId));
   const available = detail.people.filter((p) => !assignedIds.has(p.id));
+  const selfCount = detail.assignments.filter((a) => a.selfEnrolled).length;
 
   async function send(body: Record<string, unknown>) {
     setBusy(true);
@@ -862,7 +865,10 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
       <section className="rounded-3xl border border-line bg-surface p-5">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="font-serif text-xl font-semibold">Assigned</h2>
-          <span className="text-sm text-ink-muted">{detail.assignments.length}</span>
+          <span className="text-sm text-ink-muted">
+            {detail.assignments.length}
+            {selfCount > 0 && ` · ${selfCount} self-enrolled`}
+          </span>
         </div>
         <AssignedList
           assigned={detail.assignments.map((a) => ({
@@ -870,6 +876,7 @@ function People({ detail, onChange }: { detail: Detail; onChange: () => void }) 
             name: a.name,
             org: a.org,
             dueDate: a.dueDate,
+            selfEnrolled: a.selfEnrolled,
             completed: a.completed,
             total: a.total,
             done: a.done,
