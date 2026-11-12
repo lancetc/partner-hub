@@ -7,26 +7,34 @@ import { cx } from "@/lib/format";
 import { cardSounds } from "@/lib/sfx";
 import { badges, LEVEL_SIZE, POINTS, quests, STEP_LABEL, type Quest } from "@/content/explorer";
 import { Icon, type IconName } from "../Icon";
+import { Effects } from "./effects";
 import {
+  cameraFor,
   drawMinimap,
   drawWorld,
   gate,
   houseAt,
   houses,
-  markerSpot,
+  questHouses,
+  roofTop,
   route,
-  spot,
+  screenOf,
+  SIGN,
+  START,
   toWorld,
   VIEW,
   walkable,
+  type Cam,
+  type Look,
   type PlayerState,
   type Tile,
 } from "./world";
 
 /*
-  Neighbourhood Explorer: walk a pixel-art suburb, knock on doors and help each client with a
-  short quest (what's in scope, the risks, what to do). Points and badges for good reasoning.
-  Progress is kept in this browser for each person, like lesson progress.
+  Neighbourhood Explorer: walk a pixel-art street, knock on doors and help each client with a short
+  quest (what's in scope, the risks, what to do). Points, levels and badges for good reasoning.
+  The street, the scores, the menu, the quest panel and the minimap share one 16:9 game screen;
+  on phones the menu and panel sit below it. Progress is kept in this browser for each person.
 */
 
 type Progress = { quests: Record<string, { points: number; perfect: boolean; at: string }>; badges: string[] };
@@ -47,6 +55,7 @@ function save(userId: string, p: Progress) {
 }
 
 const totalPoints = (p: Progress) => Object.values(p.quests).reduce((n, q) => n + q.points, 0);
+const levelOf = (points: number) => Math.floor(points / LEVEL_SIZE) + 1;
 
 type Tab = "map" | "quests" | "progress" | "badges";
 type Dialog = {
@@ -62,14 +71,17 @@ type Dialog = {
   replay: boolean;
 };
 
-const START: Tile = { x: 6, y: 10 };
-const SPEED = 3.6;
+const SPEED = 3.4;
+const LOOKS: Record<string, Look> = Object.fromEntries(quests.map((q) => [q.id, q.look]));
+const PLAYER_LOOK = { skin: "#f0c3a0", hair: "#5b3a24", shirt: "#1e3a5c", style: "pony" as const };
+
+/* The game's own look: navy panels with a lighter edge, the same in light and dark. */
+const panel = "rounded-2xl bg-[#1d2b4f]/95 text-white shadow-lg ring-2 ring-[#3d5288]";
 
 export function Explorer() {
   const me = useApi<Me>("/api/me").data;
   const userId = me?.user.id ?? null;
-  // Each person has their own progress: read from this browser once we know who's signed in, and
-  // held here once they've played (so it doesn't need reading again).
+  // Each person's progress: read from this browser once we know who's signed in, held here once played.
   const [played, setPlayed] = useState<Record<string, Progress>>({});
   const progress = userId ? (played[userId] ?? (typeof window === "undefined" ? EMPTY : load(userId))) : EMPTY;
   const setProgress = (p: Progress) => userId && setPlayed((all) => ({ ...all, [userId]: p }));
@@ -81,37 +93,62 @@ export function Explorer() {
 
   const done = new Set(Object.keys(progress.quests));
   const points = totalPoints(progress);
-  const level = Math.floor(points / LEVEL_SIZE) + 1;
+  const level = levelOf(points);
   const toNext = (points % LEVEL_SIZE) / LEVEL_SIZE;
   const unlocked = done.size === quests.length;
   const next = quests.find((q) => !done.has(q.id)) ?? null;
 
-  /* The world loop: the player walks the route, the canvas and minimap are redrawn every frame. */
+  /* The world loop: the player walks, the camera follows, everything is redrawn each frame. */
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const player = useRef<PlayerState>({ x: START.x + 0.5, y: START.y + 0.5, facing: "right", walking: false, t: 0 });
+  const cam = useRef<Cam>(cameraFor(START.x + 0.5, START.y + 0.5));
   const path = useRef<Tile[]>([]);
   const hover = useRef<Tile | null>(null);
   /** A quest to open when the player reaches its door. */
   const heading = useRef<string | null>(null);
-  // What the drawing loop needs from React, kept current after each render.
-  const stateForLoop = useRef({ unlocked, done });
-  const openRef = useRef<(id: string) => void>(() => {});
-  useEffect(() => {
-    stateForLoop.current = { unlocked, done };
-  });
   const atDoorRef = useRef<string | null>(null);
+  const markers = useRef<Record<string, HTMLElement | null>>({});
+  const signLabel = useRef<HTMLSpanElement>(null);
+  const gateLabel = useRef<HTMLButtonElement>(null);
+  const effects = useRef<Effects | null>(null);
+  // What the drawing loop needs from React, kept current after each render.
+  const loopState = useRef({ unlocked, done });
+  const openRef = useRef<(id: string) => void>(() => {});
+  /** Celebrations to play once the quest window closes. */
+  const celebrate = useRef<{ house: string; points: number; levelUp: number | null; badge: boolean } | null>(null);
+  useEffect(() => {
+    loopState.current = { unlocked, done };
+  });
 
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
-    const mctx = mini.current?.getContext("2d");
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    effects.current = new Effects(reduced);
+    const mctx = mini.current?.getContext("2d");
     let last = performance.now();
     let frame = 0;
+    let time = 0;
+    // Lay a DOM element over a canvas position (in canvas pixels), hiding it when it's off screen.
+    // With `keepIn`, a marker whose roof is just above the screen slides down to stay in view.
+    const lay = (el: HTMLElement | null, x: number, y: number, keepIn = false) => {
+      if (!el) return;
+      const off = x < -40 || x > VIEW.w + 40 || y < (keepIn ? -110 : -10) || y > VIEW.h + 60;
+      el.style.visibility = off ? "hidden" : "visible";
+      if (keepIn && el.parentElement) {
+        const tall = ((el.offsetHeight + 6) / el.parentElement.clientHeight) * VIEW.h;
+        y = Math.max(y, tall);
+      }
+      el.style.left = `${(x / VIEW.w) * 100}%`;
+      el.style.top = `${(y / VIEW.h) * 100}%`;
+    };
     const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      // Walking keeps its speed on a slow device; effects step at most a tenth of a second at a time.
+      const dt = Math.min(0.3, (now - last) / 1000);
       last = now;
+      time += dt;
       const p = player.current;
       p.t += dt;
       const nextTile = path.current[0];
@@ -133,12 +170,17 @@ export function Explorer() {
           p.y += (dy / dist) * step;
         }
         p.walking = true;
-      } else {
-        p.walking = false;
-      }
+      } else p.walking = false;
+
+      // The camera eases after the player, staying within the street.
+      const want = cameraFor(p.x, p.y);
+      const k = reduced ? 1 : Math.min(1, dt * 5);
+      cam.current = { x: cam.current.x + (want.x - cam.current.x) * k, y: cam.current.y + (want.y - cam.current.y) * k };
+      const c = { x: Math.round(cam.current.x), y: Math.round(cam.current.y) };
+
       // Standing on a doorstep: offer to knock, or open the quest we were heading for.
       const here = { x: Math.floor(p.x), y: Math.floor(p.y) };
-      const door = !p.walking ? houses.find((h) => h.door.x === here.x && h.door.y === here.y)?.id ?? null : null;
+      const door = !p.walking ? questHouses.find((h) => h.door.x === here.x && h.door.y === here.y)?.id ?? null : null;
       if (door !== atDoorRef.current) {
         atDoorRef.current = door;
         setAtDoor(door);
@@ -147,8 +189,19 @@ export function Explorer() {
         heading.current = null;
         openRef.current(door);
       }
-      drawWorld(ctx, { player: p, route: path.current, hover: hover.current, unlocked: stateForLoop.current.unlocked });
-      if (mctx && frame++ % 4 === 0) drawMinimap(mctx, mini.current!.width, p, stateForLoop.current.done);
+
+      const st = loopState.current;
+      drawWorld(ctx, { cam: c, player: p, route: path.current, hover: hover.current, unlocked: st.unlocked, looks: LOOKS, done: st.done, time });
+      effects.current?.draw(ctx, c, Math.min(0.1, dt));
+      for (const h of questHouses) {
+        const s = roofTop(c, h);
+        lay(markers.current[h.id], s.x, s.y, true);
+      }
+      const sg = screenOf(c, SIGN.x + 0.5, SIGN.y + 0.5, 24);
+      lay(signLabel.current, sg.x, sg.y);
+      const gt = screenOf(c, gate.x + 0.5, gate.y + 0.5, 50);
+      lay(gateLabel.current, gt.x, gt.y);
+      if (mctx && frame++ % 4 === 0) drawMinimap(mctx, mini.current!.width, p, st.done);
       raf = requestAnimationFrame(tick);
     };
     let raf = requestAnimationFrame(tick);
@@ -190,15 +243,14 @@ export function Explorer() {
     openRef.current = openQuest;
   });
 
-  /** A click or tap on the world: walk there, or to the door of the house that was clicked. */
+  /** A click or tap on the street: walk there, or to the door of the house that was clicked. */
   const onWorldClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const sx = ((e.clientX - r.left) / r.width) * VIEW.w;
-    const sy = ((e.clientY - r.top) / r.height) * VIEW.h;
-    const w = toWorld(sx, sy);
+    const w = toWorld(((e.clientX - r.left) / r.width) * VIEW.w + cam.current.x, ((e.clientY - r.top) / r.height) * VIEW.h + cam.current.y);
     const t = { x: Math.floor(w.x), y: Math.floor(w.y) };
     const h = houseAt(t);
-    if (h) return goToQuest(h.id);
+    if (h?.quest) return goToQuest(h.id);
+    if (h) return setNotice("Nobody needs a visit at this house today.");
     if (t.x === gate.x && t.y === gate.y) return showGate();
     heading.current = null;
     if (!walkTo(t)) setNotice("You can’t walk there. Try the footpath or the grass.");
@@ -207,9 +259,9 @@ export function Explorer() {
   const onWorldMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType !== "mouse") return;
     const r = e.currentTarget.getBoundingClientRect();
-    const w = toWorld(((e.clientX - r.left) / r.width) * VIEW.w, ((e.clientY - r.top) / r.height) * VIEW.h);
+    const w = toWorld(((e.clientX - r.left) / r.width) * VIEW.w + cam.current.x, ((e.clientY - r.top) / r.height) * VIEW.h + cam.current.y);
     const t = { x: Math.floor(w.x), y: Math.floor(w.y) };
-    hover.current = walkable(t) || houseAt(t) ? t : null;
+    hover.current = walkable(t) || houseAt(t)?.quest ? t : null;
   };
 
   const showGate = () =>
@@ -261,6 +313,7 @@ export function Explorer() {
     // Finished: points and badges are kept the first time a quest is done.
     cardSounds.swipe("next");
     if (dialog.replay || !userId) {
+      celebrate.current = { house: dialog.quest.id, points: 0, levelUp: null, badge: false };
       setDialog({ ...dialog, phase: "done" });
       return;
     }
@@ -276,9 +329,25 @@ export function Explorer() {
     award("first-try", Object.values(quests_).some((q) => q.perfect));
     award("local", quests.every((q) => quests_[q.id]));
     const next_: Progress = { quests: quests_, badges: [...earned] };
+    const newBadges = [...earned].filter((b) => !progress.badges.includes(b));
+    const newLevel = levelOf(totalPoints(next_));
+    celebrate.current = { house: dialog.quest.id, points: total, levelUp: newLevel > level ? newLevel : null, badge: newBadges.length > 0 };
     save(userId, next_);
     setProgress(next_);
-    setDialog({ ...dialog, earned: total, phase: "done", newBadges: [...earned].filter((b) => !progress.badges.includes(b)) });
+    setDialog({ ...dialog, earned: total, phase: "done", newBadges });
+  };
+  /** Closing the quest window: back on the street, the celebrations play. */
+  const closeDialog = (d: Dialog | null) => {
+    setDialog(d);
+    if (d) return;
+    const cel = celebrate.current;
+    celebrate.current = null;
+    if (!cel || !effects.current) return;
+    const h = houses.find((x) => x.id === cel.house)!;
+    effects.current.questComplete();
+    if (cel.points) effects.current.coins(h.door.x + 0.5, h.door.y + 0.5, cel.points);
+    if (cel.levelUp) effects.current.levelUp(cel.levelUp);
+    else if (cel.badge) effects.current.badge();
   };
 
   const tabs: { id: Tab; label: string; icon: IconName; count?: number }[] = [
@@ -288,270 +357,290 @@ export function Explorer() {
     { id: "badges", label: "Badges", icon: "star" },
   ];
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 pb-14 pt-6 sm:px-6 lg:pt-8">
-      {/* Title, points and level. Fixed game colours, the same in light and dark. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 rounded-2xl bg-[#1d2b4f] px-4 py-2.5 text-white shadow-md ring-2 ring-[#33467a]">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#f26a36]">
-            <Icon name="home" className="size-6" />
-          </span>
-          <div>
-            <h1 className="font-mulish text-xl font-extrabold leading-tight sm:text-2xl">Neighbourhood Explorer</h1>
-            <p className="text-xs text-white/75">Visit clients, make the call, earn points. Demonstration content.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[#1d2b4f] px-4 font-mulish text-lg font-extrabold text-white ring-2 ring-[#33467a]">
-            <Icon name="star" className="size-5 text-[#ffc72c]" /> {points} pts
-          </span>
-          <span className="inline-flex min-h-11 items-center gap-3 rounded-2xl bg-[#1d2b4f] px-4 font-mulish font-extrabold text-white ring-2 ring-[#33467a]">
-            Lv {level}
-            <span
-              className="flex h-3 w-24 overflow-hidden rounded-full bg-white/15"
-              role="img"
-              aria-label={`${Math.round(toNext * 100)}% of the way to level ${level + 1}`}
-            >
-              <span className="h-full rounded-full bg-[#4cc3c9]" style={{ width: `${toNext * 100}%` }} />
-            </span>
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[10.5rem_minmax(0,1fr)_19rem]">
-        {/* Menu. */}
-        <nav aria-label="Game" className="order-2 lg:order-none">
-          <ul className="flex gap-2 overflow-x-auto rounded-2xl bg-[#1d2b4f] p-2 ring-2 ring-[#33467a] lg:flex-col">
-            {tabs.map((t) => (
-              <li key={t.id} className="shrink-0">
-                <button
-                  type="button"
-                  aria-pressed={tab === t.id}
-                  onClick={() => setTab(t.id)}
-                  className={cx(
-                    "flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 font-semibold",
-                    tab === t.id ? "bg-[#cdeffa] text-[#102a43]" : "text-white hover:bg-white/10",
-                  )}
-                >
-                  <Icon name={t.icon} className="size-5" />
-                  {t.label}
-                  {t.count ? (
-                    <span className="ml-auto grid size-6 place-items-center rounded-full bg-[#e5484d] text-xs font-bold text-white">{t.count}</span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* The world. */}
-        <div className="order-1 lg:order-none">
-          <div
-            className="relative overflow-hidden rounded-3xl shadow-lg ring-2 ring-[#33467a] outline-none focus-visible:ring-4 focus-visible:ring-focus"
-            tabIndex={0}
-            role="application"
-            aria-label="The neighbourhood. Click or tap to walk, or use the arrow keys. Press Enter at a door to knock."
-            onKeyDown={onKey}
-          >
-            <canvas
-              ref={canvas}
-              width={VIEW.w}
-              height={VIEW.h}
-              onClick={onWorldClick}
-              onPointerMove={onWorldMove}
-              onPointerLeave={() => (hover.current = null)}
-              className="block h-auto w-full cursor-pointer"
-              style={{ imageRendering: "pixelated" }}
-            />
-            {/* Who lives where: a portrait over each house. */}
-            {houses.map((h) => {
-              const q = quests.find((x) => x.id === h.id)!;
-              const s = markerSpot(h);
-              const isDone = done.has(h.id);
-              return (
-                <button
-                  key={h.id}
-                  type="button"
-                  onClick={() => goToQuest(h.id)}
-                  aria-label={`${q.client}’s house: ${q.title}${isDone ? ", done" : ""}. Walk there`}
-                  className="explorer-marker absolute -translate-x-1/2 -translate-y-full"
-                  style={{ left: `${s.left * 100}%`, top: `${s.top * 100}%` }}
-                >
-                  <span className="relative block rounded-full bg-white p-0.5 shadow-lg ring-2 ring-[#1d2b4f]">
-                    <Portrait look={q.look} className="size-9 sm:size-12" />
-                    <span
-                      className={cx(
-                        "absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full text-xs font-black ring-2 ring-white sm:size-6",
-                        isDone ? "bg-[#2e9e4f] text-white" : "bg-[#ffc72c] text-[#102a43]",
-                      )}
-                    >
-                      {isDone ? <Icon name="check" className="size-3.5" /> : "!"}
-                    </span>
-                  </span>
-                  <span className="mx-auto block h-2 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-white" />
-                </button>
-              );
-            })}
-            {/* The sign and the locked gate. */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-[#c98f55] px-1.5 py-0.5 font-mulish text-[0.55rem] font-extrabold text-[#3d2614] shadow sm:text-xs"
-              style={{ left: `${spot({ x: 5, y: 11 }, 22).left * 100}%`, top: `${spot({ x: 5, y: 11 }, 22).top * 100}%` }}
-            >
-              Welcome to the neighbourhood
-            </span>
+  const menu = (
+    <nav aria-label="Game" className={cx(panel, "p-2")}>
+      <ul className="grid grid-cols-4 gap-1.5 lg:flex lg:flex-col">
+        {tabs.map((t) => (
+          <li key={t.id}>
             <button
               type="button"
-              onClick={showGate}
-              className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#1d2b4f]/90 px-2 py-1 text-[0.6rem] font-bold text-white shadow sm:text-xs"
-              style={{ left: `${spot(gate, 26).left * 100}%`, top: `${spot(gate, 26).top * 100}%` }}
+              aria-pressed={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cx(
+                "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 font-mulish text-sm font-extrabold sm:flex-row sm:gap-2.5 sm:px-3 sm:text-base lg:min-h-11 lg:justify-start",
+                tab === t.id ? "bg-[#cdeffa] text-[#102a43]" : "text-white hover:bg-white/10",
+              )}
             >
-              {unlocked ? "Next neighbourhood" : "🔒 Next neighbourhood"}
+              <Icon name={t.icon} className="size-5" />
+              {t.label}
+              {t.count ? (
+                <span className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-[#e5484d] text-xs font-bold text-white sm:static sm:ml-auto sm:size-6">{t.count}</span>
+              ) : null}
             </button>
-            {/* Minimap. */}
-            <canvas
-              ref={mini}
-              width={96}
-              height={96}
-              aria-hidden
-              className="absolute bottom-3 right-3 hidden size-24 rounded-xl bg-[#2f6b3a] shadow-lg ring-2 ring-white sm:block"
-            />
-            {/* Knocking, and notes. */}
-            {atDoor && !dialog && (
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+
+  const side = (
+    <>
+      {tab === "map" &&
+        (next ? (
+          <section className="overflow-hidden rounded-2xl bg-white text-[#102a43] shadow-lg ring-2 ring-[#3d5288]">
+            <div className="flex items-center gap-3 bg-[#2a2350] p-3.5 text-white">
+              <Portrait look={next.look} className="size-14 shrink-0 rounded-xl bg-white/10" />
+              <div>
+                <p className="text-sm text-white/80">Next quest</p>
+                <h2 className="font-mulish text-xl font-extrabold leading-tight">{next.title}</h2>
+              </div>
+            </div>
+            <div className="p-3.5">
+              <p className="leading-snug">{next.teaser}</p>
+              <ul className="mt-3 flex flex-col gap-1.5">
+                {next.steps.map((s) => (
+                  <li key={s.kind} className="flex min-h-10 items-center gap-2.5 rounded-xl border border-[#d6dde8] px-3 text-sm font-semibold">
+                    <Icon name={s.kind === "scope" ? "target" : s.kind === "risk" ? "shield" : "chat"} className="size-4 text-[#2d4875]" />
+                    {STEP_LABEL[s.kind]}
+                  </li>
+                ))}
+              </ul>
               <button
                 type="button"
-                onClick={() => openQuest(atDoor)}
-                className="absolute bottom-3 left-1/2 inline-flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[#2e9e4f] px-5 font-bold text-white shadow-lg"
+                onClick={() => goToQuest(next.id)}
+                className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2e7d32] font-mulish text-lg font-extrabold text-white hover:bg-[#276b2b]"
               >
-                Knock on {quests.find((q) => q.id === atDoor)!.client}’s door
+                Start quest <Icon name="arrow-right" className="size-5" />
               </button>
-            )}
-            {notice && !atDoor && (
-              <p role="status" className="absolute bottom-3 left-3 right-3 rounded-xl bg-[#1d2b4f]/95 px-3 py-2 text-sm text-white shadow sm:right-32">
-                {notice}
-              </p>
-            )}
-          </div>
-          <p className="mt-2 text-sm text-ink-muted">Click or tap to walk. Arrow keys work too. Visit a house with a ! to start its quest.</p>
-        </div>
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-2xl bg-white p-4 text-[#102a43] shadow-lg ring-2 ring-[#3d5288]">
+            <h2 className="font-mulish text-xl font-extrabold">Street done!</h2>
+            <p className="mt-1 text-[#3d5068]">You’ve helped everyone here. Replay any house from Quests, or check your badges.</p>
+          </section>
+        ))}
 
-        {/* The side panel for the chosen menu item. */}
-        <aside className="order-3 lg:order-none">
-          {tab === "map" &&
-            (next ? (
-              <section className="overflow-hidden rounded-2xl bg-surface shadow-md ring-2 ring-[#33467a]">
-                <div className="flex items-center gap-3 bg-[#2a2350] p-4 text-white">
-                  <Portrait look={next.look} className="size-14 shrink-0 rounded-xl bg-white/10" />
-                  <div>
-                    <p className="text-sm text-white/80">Next quest</p>
-                    <h2 className="font-mulish text-xl font-extrabold leading-tight">{next.title}</h2>
-                  </div>
+      {tab === "quests" && (
+        <ul className="flex flex-col gap-2">
+          {quests.map((q) => {
+            const r = progress.quests[q.id];
+            return (
+              <li key={q.id} className="flex items-center gap-3 rounded-2xl bg-white p-2.5 text-[#102a43] shadow ring-2 ring-[#3d5288]">
+                <Portrait look={q.look} className="size-11 shrink-0 rounded-xl bg-[#e8eef6]" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold leading-snug">{q.title}</p>
+                  <p className="text-xs text-[#3d5068]">{r ? `Done · ${r.points} pts${r.perfect ? " · all right first time" : ""}` : "Not started"}</p>
                 </div>
-                <div className="p-4">
-                  <p>{next.teaser}</p>
-                  <ul className="mt-3 flex flex-col gap-2">
-                    {next.steps.map((s) => (
-                      <li key={s.kind} className="flex min-h-11 items-center gap-2.5 rounded-xl border border-line px-3 text-sm font-semibold">
-                        <Icon name={s.kind === "scope" ? "target" : s.kind === "risk" ? "shield" : "chat"} className="size-4 text-accent" />
-                        {STEP_LABEL[s.kind]}
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => goToQuest(next.id)}
-                    className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2e7d32] text-lg font-bold text-white hover:bg-[#276b2b]"
-                  >
-                    Start quest <Icon name="arrow-right" className="size-5" />
-                  </button>
-                </div>
-              </section>
-            ) : (
-              <section className="rounded-2xl bg-surface p-5 shadow-md ring-2 ring-[#33467a]">
-                <h2 className="font-mulish text-xl font-extrabold">Neighbourhood done!</h2>
-                <p className="mt-1 text-ink-muted">You’ve helped everyone on this street. Replay any house from Quests, or check your badges.</p>
-              </section>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => goToQuest(q.id)}
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-[#9fb0c8] px-3 text-sm font-semibold hover:bg-[#e8eef6]"
+                >
+                  {r ? "Replay" : "Go"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-          {tab === "quests" && (
-            <ul className="flex flex-col gap-2">
-              {quests.map((q) => {
-                const r = progress.quests[q.id];
-                return (
-                  <li key={q.id} className="flex items-center gap-3 rounded-2xl bg-surface p-3 shadow-sm ring-1 ring-line">
-                    <Portrait look={q.look} className="size-12 shrink-0 rounded-xl bg-muted" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-snug">{q.title}</p>
-                      <p className="text-xs text-ink-muted">{r ? `Done · ${r.points} pts${r.perfect ? " · all right first time" : ""}` : "Not started"}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => goToQuest(q.id)}
-                      className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-line-strong px-3 text-sm font-semibold hover:bg-muted"
-                    >
-                      {r ? "Replay" : "Go"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {tab === "progress" && (
-            <section className="rounded-2xl bg-surface p-5 shadow-md ring-2 ring-[#33467a]">
-              <h2 className="font-mulish text-xl font-extrabold">Your progress</h2>
-              <p className="mt-1 text-ink-muted">
-                Level {level} · {points} points · {LEVEL_SIZE - (points % LEVEL_SIZE)} to the next level
-              </p>
-              <ul className="mt-4 flex flex-col gap-3">
-                {quests.map((q) => {
-                  const r = progress.quests[q.id];
-                  const max = q.steps.length * POINTS.first + POINTS.questBonus;
-                  return (
-                    <li key={q.id}>
-                      <p className="flex justify-between text-sm font-semibold">
-                        <span>{q.client}</span>
-                        <span className="tabular-nums text-ink-muted">
-                          {r?.points ?? 0}/{max}
-                        </span>
-                      </p>
-                      <span className="mt-1 block h-2 overflow-hidden rounded-full bg-muted">
-                        <span className="block h-full rounded-full bg-action" style={{ width: `${((r?.points ?? 0) / max) * 100}%` }} />
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-4 text-xs text-ink-muted">Saved in this browser. Getting a step right first time earns the most points.</p>
-            </section>
-          )}
-
-          {tab === "badges" && (
-            <ul className="grid grid-cols-2 gap-2">
-              {badges.map((b) => {
-                const has = progress.badges.includes(b.id);
-                return (
-                  <li key={b.id} className={cx("rounded-2xl p-3 text-center ring-1", has ? "bg-[#fff6d6] text-[#102a43] ring-[#ffc72c]" : "bg-surface ring-line")}>
-                    <span className={cx("mx-auto grid size-10 place-items-center rounded-full", has ? "bg-[#ffc72c]" : "bg-muted text-ink-muted")}>
-                      <Icon name={has ? "star" : "lock"} className="size-5" />
+      {tab === "progress" && (
+        <section className="rounded-2xl bg-white p-4 text-[#102a43] shadow-lg ring-2 ring-[#3d5288]">
+          <h2 className="font-mulish text-xl font-extrabold">Your progress</h2>
+          <p className="mt-1 text-[#3d5068]">
+            Level {level} · {points} points · {LEVEL_SIZE - (points % LEVEL_SIZE)} to the next level
+          </p>
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {quests.map((q) => {
+              const r = progress.quests[q.id];
+              const max = q.steps.length * POINTS.first + POINTS.questBonus;
+              return (
+                <li key={q.id}>
+                  <p className="flex justify-between text-sm font-semibold">
+                    <span>{q.client}</span>
+                    <span className="tabular-nums text-[#3d5068]">
+                      {r?.points ?? 0}/{max}
                     </span>
-                    <p className="mt-1.5 text-sm font-bold leading-tight">{b.name}</p>
-                    <p className={cx("mt-0.5 text-xs", has ? "text-[#3d5068]" : "text-ink-muted")}>{b.description}</p>
-                  </li>
-                );
-              })}
-            </ul>
+                  </p>
+                  <span className="mt-1 block h-2 overflow-hidden rounded-full bg-[#e8eef6]">
+                    <span className="block h-full rounded-full bg-[#0e7c7b]" style={{ width: `${((r?.points ?? 0) / max) * 100}%` }} />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-xs text-[#3d5068]">Saved in this browser. Getting a step right first time earns the most points.</p>
+        </section>
+      )}
+
+      {tab === "badges" && (
+        <ul className="grid grid-cols-2 gap-2">
+          {badges.map((b) => {
+            const has = progress.badges.includes(b.id);
+            return (
+              <li key={b.id} className={cx("rounded-2xl p-2.5 text-center shadow ring-2", has ? "bg-[#fff6d6] text-[#102a43] ring-[#ffc72c]" : "bg-white text-[#102a43] ring-[#3d5288]")}>
+                <span className={cx("mx-auto grid size-9 place-items-center rounded-full", has ? "bg-[#ffc72c]" : "bg-[#e8eef6] text-[#5a6b85]")}>
+                  <Icon name={has ? "star" : "lock"} className="size-5" />
+                </span>
+                <p className="mt-1 text-sm font-bold leading-tight">{b.name}</p>
+                <p className="mt-0.5 text-xs text-[#3d5068]">{b.description}</p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-[1600px] px-3 pb-10 pt-4 sm:px-6 lg:pt-6">
+      {/* The game screen: as wide as the page allows, but never taller than the window. */}
+      <div className="mx-auto w-full max-w-[calc((100dvh-6.5rem)*16/9)]">
+        {/* On phones the title sits above the game, leaving the small screen for the street. */}
+        <h1 className="mb-2 font-mulish text-2xl font-black text-ink sm:hidden">Neighbourhood Explorer</h1>
+        <div
+          className="relative aspect-video w-full overflow-clip rounded-3xl bg-[#5aa64c] shadow-xl ring-4 ring-[#1d2b4f] outline-none focus-visible:ring-focus"
+          tabIndex={0}
+          role="application"
+          aria-label="The neighbourhood. Click or tap to walk, or use the arrow keys. Press Enter at a door to knock."
+          onKeyDown={onKey}
+        >
+          <canvas
+            ref={canvas}
+            width={VIEW.w}
+            height={VIEW.h}
+            onClick={onWorldClick}
+            onPointerMove={onWorldMove}
+            onPointerLeave={() => (hover.current = null)}
+            className="absolute inset-0 size-full cursor-pointer"
+            style={{ imageRendering: "pixelated" }}
+          />
+
+          {/* Who lives where: a portrait over each house, moving with the street. */}
+          {questHouses.map((h) => {
+            const q = quests.find((x) => x.id === h.id)!;
+            const isDone = done.has(h.id);
+            return (
+              <button
+                key={h.id}
+                ref={(el) => {
+                  markers.current[h.id] = el;
+                }}
+                type="button"
+                onClick={() => goToQuest(h.id)}
+                aria-label={`${q.client}’s house: ${q.title}${isDone ? ", done" : ""}. Walk there`}
+                className="explorer-marker invisible absolute -translate-x-1/2 -translate-y-full"
+              >
+                <span className="relative block rounded-full bg-white p-1 shadow-lg ring-[3px] ring-[#1d2b4f]">
+                  <Portrait look={q.look} className="size-10 sm:size-14 lg:size-16" />
+                  <span
+                    className={cx(
+                      "absolute -right-2 -top-2 grid size-6 place-items-center rounded-full font-mulish text-sm font-black ring-[3px] ring-white sm:size-8 sm:text-lg",
+                      isDone ? "bg-[#2e9e4f] text-white" : "bg-[#ffc72c] text-[#102a43]",
+                    )}
+                  >
+                    {isDone ? <Icon name="check" className="size-4" /> : "!"}
+                  </span>
+                </span>
+                <span className="mx-auto block h-2.5 w-0 border-x-[8px] border-t-[9px] border-x-transparent border-t-white" />
+              </button>
+            );
+          })}
+          <span
+            ref={signLabel}
+            aria-hidden
+            className="pointer-events-none invisible absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-center font-mulish text-[0.55rem] font-black leading-tight text-[#3d2614] sm:text-sm lg:text-base"
+          >
+            Welcome to
+            <br />
+            the Neighbourhood
+          </span>
+          <button
+            ref={gateLabel}
+            type="button"
+            onClick={showGate}
+            className="invisible absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#1d2b4f]/90 px-2.5 py-1 text-[0.6rem] font-bold text-white shadow sm:text-sm"
+          >
+            {unlocked ? "Next neighbourhood" : "🔒 Next neighbourhood"}
+          </button>
+
+          {/* The game's panels, over the street on larger screens. */}
+          <div className="pointer-events-none absolute inset-0 p-3 sm:p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="pointer-events-auto flex flex-col gap-3">
+                <div className={cx(panel, "hidden items-center gap-3 px-4 py-2.5 sm:flex")}>
+                  <span className="grid size-8 place-items-center rounded-xl bg-[#f26a36] sm:size-11">
+                    <Icon name="home" className="size-5 sm:size-7" />
+                  </span>
+                  <h1 className="font-mulish text-sm font-black leading-[1.05] sm:text-xl lg:text-2xl">
+                    Neighbourhood
+                    <br />
+                    Explorer
+                  </h1>
+                </div>
+                <div className="hidden w-44 lg:block">{menu}</div>
+              </div>
+              <div className="pointer-events-auto flex flex-col items-end gap-3">
+                <div className="flex items-center gap-2">
+                  <span className={cx(panel, "inline-flex min-h-9 items-center gap-2 px-3 font-mulish font-black sm:min-h-12 sm:px-4 sm:text-xl")}>
+                    <Icon name="star" className="size-4 text-[#ffc72c] sm:size-6" /> {points} pts
+                  </span>
+                  <span className={cx(panel, "hidden min-h-12 items-center gap-3 py-1 pl-4 pr-1.5 font-mulish text-lg font-black sm:inline-flex")}>
+                    Lv {level}
+                    <span className="flex gap-0.5" role="img" aria-label={`${Math.round(toNext * 100)}% of the way to level ${level + 1}`}>
+                      {Array.from({ length: 8 }, (_, i) => (
+                        <span key={i} className={cx("h-4 w-2.5 rounded-sm", i < Math.round(toNext * 8) ? "bg-[#4cc3c9]" : "bg-white/20")} />
+                      ))}
+                    </span>
+                    <Portrait look={PLAYER_LOOK} className="size-9 rounded-full bg-white/10 ring-2 ring-white/70" />
+                  </span>
+                </div>
+                <div className="hidden w-[19rem] lg:block">{side}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Minimap. */}
+          <canvas
+            ref={mini}
+            width={128}
+            height={128}
+            aria-hidden
+            className="absolute bottom-3 right-3 hidden size-28 rounded-2xl bg-[#2f6b3a] shadow-xl ring-4 ring-white sm:block lg:bottom-4 lg:right-4 lg:size-36"
+          />
+          {/* Knocking, and notes. */}
+          {atDoor && !dialog && (
+            <button
+              type="button"
+              onClick={() => openQuest(atDoor)}
+              className="absolute bottom-4 left-1/2 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-[#2e7d32] px-6 font-mulish text-lg font-extrabold text-white shadow-xl ring-4 ring-white/70"
+            >
+              Knock on {quests.find((q) => q.id === atDoor)!.client}’s door
+            </button>
           )}
-        </aside>
+          {notice && !atDoor && (
+            <p role="status" className={cx(panel, "absolute bottom-4 left-4 max-w-md px-4 py-2.5 text-sm")}>
+              {notice}
+            </p>
+          )}
+        </div>
+        <p className="mt-2 text-sm text-ink-muted">Click or tap to walk. Arrow keys work too. Visit a house with a ! to start its quest. Demonstration content.</p>
+
+        {/* On smaller screens the menu and panel sit below the game. */}
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:hidden">
+          {menu}
+          {side}
+        </div>
       </div>
 
-      {dialog && <QuestDialog d={dialog} onChoose={choose} onTryAgain={tryAgain} onNext={advance} setDialog={setDialog} />}
+      {dialog && <QuestDialog d={dialog} onChoose={choose} onTryAgain={tryAgain} onNext={advance} setDialog={closeDialog} />}
 
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           .explorer-marker > span:first-child { animation: explorer-bob 2.2s ease-in-out infinite; }
         }
-        @keyframes explorer-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        @keyframes explorer-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
     </div>
   );

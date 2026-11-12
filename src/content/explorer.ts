@@ -27,7 +27,7 @@ export type Quest = {
   takeaway: string;
   topic: { slug: string; title: string };
   /** The client's look, for their portrait and sprite. */
-  look: { skin: string; hair: string; shirt: string; glasses?: boolean; hat?: boolean };
+  look: { skin: string; hair: string; shirt: string; glasses?: boolean; hat?: boolean; style?: "short" | "bun" | "pony" };
 };
 
 export const STEP_LABEL: Record<QuestStep["kind"], string> = {
@@ -113,7 +113,7 @@ export const quests: Quest[] = [
     ],
     takeaway: "If a client asks for something outside the service you’re there for, don’t do it “just this once”. Tell their Care Partner the same day so the right help can be arranged.",
     topic: { slug: "working-with-your-care-partner", title: "Working with your Care Partner" },
-    look: { skin: "#f2c9a5", hair: "#e3e6ea", shirt: "#8e5aa8", glasses: true },
+    look: { skin: "#f2c9a5", hair: "#e3e6ea", shirt: "#8e5aa8", glasses: true, style: "bun" },
   },
   {
     id: "ron",
@@ -191,7 +191,7 @@ export const quests: Quest[] = [
     ],
     takeaway: "Don’t agree to extra time or a different task on the spot. Check with the client’s coordinator first, and mention the cost in plain words.",
     topic: { slug: "who-to-contact-and-when", title: "Who to contact and when" },
-    look: { skin: "#e8b48f", hair: "#cfd3d8", shirt: "#3d7a4a", hat: true },
+    look: { skin: "#e8b48f", hair: "#cfd3d8", shirt: "#3d7a4a", hat: true, style: "short" },
   },
   {
     id: "margaret",
@@ -269,7 +269,7 @@ export const quests: Quest[] = [
     ],
     takeaway: "If something has changed, or you see an injury nobody can explain, keep the client safe, write down what you saw and tell their coordinator the same day.",
     topic: { slug: "sirs-in-depth-know-what-to-report", title: "SIRS in depth: know what to report" },
-    look: { skin: "#f5d3b8", hair: "#bfc5cc", shirt: "#c4566e" },
+    look: { skin: "#f5d3b8", hair: "#bfc5cc", shirt: "#c4566e", style: "bun" },
   },
   {
     id: "ken",
@@ -347,7 +347,7 @@ export const quests: Quest[] = [
     ],
     takeaway: "What you see and hear in a client’s home stays private. Be friendly, don’t confirm anything, and suggest people ask the client themselves.",
     topic: { slug: "aged-care-code-of-conduct", title: "Aged Care Code of Conduct" },
-    look: { skin: "#d9a07c", hair: "#9aa1a9", shirt: "#3b6ea8", glasses: true },
+    look: { skin: "#d9a07c", hair: "#9aa1a9", shirt: "#3b6ea8", glasses: true, style: "short" },
   },
 ];
 

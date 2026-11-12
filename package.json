@@ -14,6 +14,7 @@
     "@anthropic-ai/sdk": "^1.1.0",
     "next": "16.4.2",
     "pdfjs-dist": "6.3.289",
+    "pixelfx": "github:patch-gg/pixelfx#044e12a45dc9cc312cec50ee606dfc98afe5adc2",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
