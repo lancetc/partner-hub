@@ -1,12 +1,14 @@
 import type { IconName } from "./Icon";
 
 /** `short`: the label under the icon on a phone, where space is tight. */
-export const navItems: { href: string; label: string; short?: string; icon: IconName }[] = [
+/** `fullFrom`: a long label that needs a wider screen than the rest before it shows in full in the header. */
+export const navItems: { href: string; label: string; short?: string; icon: IconName; fullFrom?: "2xl" }[] = [
   { href: "/", label: "News", icon: "news" },
   { href: "/learning", label: "Learning", icon: "book" },
   { href: "/paths", label: "Learning paths", short: "Paths", icon: "route" },
   { href: "/challenges", label: "Challenges", icon: "flag" },
   { href: "/journey", label: "Journey map", short: "Journey", icon: "pin" },
+  { href: "/explorer", label: "Neighbourhood Explorer", short: "Explorer", icon: "home", fullFrom: "2xl" },
   { href: "/resources", label: "Resources", icon: "folder" },
 ];
 

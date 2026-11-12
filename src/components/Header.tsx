@@ -42,9 +42,9 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
         <Link href="/" translate="no" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
-          {/* On phones and smaller laptops the buttons and menu need the room, so the logo stands alone. */}
-          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-xl:hidden" />
-          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-xl:sr-only xl:whitespace-nowrap">
+          {/* On phones and laptops the buttons and menu need the room, so the logo stands alone until the screen is extra wide. */}
+          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-2xl:hidden" />
+          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-2xl:sr-only 2xl:whitespace-nowrap">
             Partner Hub
           </span>
         </Link>
@@ -63,7 +63,13 @@ export function Header() {
                       active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-muted hover:text-ink",
                     )}
                   >
-                    {item.short ? (
+                    {item.short && item.fullFrom === "2xl" ? (
+                      // A long label: short until the screen is extra wide.
+                      <>
+                        <span className="2xl:hidden">{item.short}</span>
+                        <span className="hidden 2xl:inline">{item.label}</span>
+                      </>
+                    ) : item.short ? (
                       // The short label on smaller laptops, where the full row doesn't fit.
                       <>
                         <span className="xl:hidden">{item.short}</span>
