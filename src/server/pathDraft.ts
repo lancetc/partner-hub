@@ -37,8 +37,8 @@ type Raw = {
 };
 
 const AUDIENCE: Record<string, string> = {
-  core: "everyone: service partners and care coordinators",
-  partner: "service partners: cleaners, gardeners and other providers who visit older clients at home",
+  core: "everyone: Care Partners and care coordinators",
+  partner: "Care Partners: cleaners, gardeners and other providers who visit older clients at home",
   coordinator: "care coordinators who plan and manage clients' Support at Home services",
 };
 
@@ -48,7 +48,7 @@ export function pathPrompt(
   catalogue: { slug: string; title: string; summary: string; minutes: number; track: string | null; draft: boolean }[],
   source?: { name: string },
 ) {
-  return `You are planning a learning path for Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators. A learning path is an ordered set of short topics, grouped into chapters, that an administrator assigns to people.
+  return `You are planning a learning path for Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators. A learning path is an ordered set of short topics, grouped into chapters, that an administrator assigns to people.
 
 The author's brief:
 <brief>

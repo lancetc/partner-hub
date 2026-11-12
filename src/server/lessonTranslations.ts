@@ -61,7 +61,7 @@ async function viaGoogle(text: string[], lang: string): Promise<string[]> {
 }
 
 export function translatePrompt(text: string[], lang: string) {
-  return `Translate this text from an online training course into ${nameOf(lang)}. The learners are service partners (cleaners, gardeners and other home-support workers) and care coordinators in Australian aged care, many of whom speak ${nameOf(lang)} at home.
+  return `Translate this text from an online training course into ${nameOf(lang)}. The learners are Care Partners (cleaners, gardeners and other home-support workers) and care coordinators in Australian aged care, many of whom speak ${nameOf(lang)} at home.
 
 Rules:
 - Translate the meaning in plain, everyday ${nameOf(lang)}, as a friendly colleague would say it. Keep it about the same length.

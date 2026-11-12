@@ -768,7 +768,7 @@ const briefing: Lesson = {
   beats: ["What changed", "Who it affects", "What to do", "Example", "Source"],
   start: "changed",
   completion: { type: "acknowledge", cardId: "source", label: "Acknowledge the briefing" },
-  owner: "Head of Service Partnerships (demo)",
+  owner: "Head of Care Partnerships (demo)",
   reviewDate: "2027-04-20",
   visual: {
     variant: "rings",
@@ -798,7 +798,7 @@ const briefing: Lesson = {
       beat: 1,
       label: "Who it affects",
       heading: "Partners and coordinators",
-      body: "Service partners who deliver scheduled visits, and coordinators who confirm changes.",
+      body: "Care Partners who deliver scheduled visits, and coordinators who confirm changes.",
       visual: { kind: "illustration", variant: "grid", tone: "sky", icon: "people", alt: "Illustration of people" },
       next: "todo",
     },
@@ -1245,12 +1245,12 @@ const legislativeFramework: Lesson = {
         centreNote: "What matters to me?",
         nodes: [
           { label: "Care coordinator", icon: "chat" },
-          { label: "Service partners", icon: "home" },
+          { label: "Care Partners", icon: "home" },
           { label: "Health professionals", icon: "heart" },
           { label: "Family and supporters", icon: "people" },
           { label: "Community and connections", icon: "leaf" },
         ],
-        alt: "Diagram of the person at the centre, asking what matters to them, surrounded by their care coordinator, service partners, health professionals, family and supporters, and community and connections",
+        alt: "Diagram of the person at the centre, asking what matters to them, surrounded by their care coordinator, Care Partners, health professionals, family and supporters, and community and connections",
       },
       source: {
         title: "Reform changes for workers (Aged Care Quality and Safety Commission)",

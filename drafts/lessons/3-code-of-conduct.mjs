@@ -252,7 +252,7 @@ export default {
         { id: "c3", text: "Suggests a proper path, such as speaking with Bev or contacting Trilogy or the right authority if they’re worried" },
       ],
       guidance:
-        "The learner is a Trilogy Care service partner. The point is privacy: they must not confirm or discuss Bev's situation. Accept any polite wording. It's fine if they say they can't discuss clients.",
+        "The learner is a Care Partner with Trilogy Care. The point is privacy: they must not confirm or discuss Bev's situation. Accept any polite wording. It's fine if they say they can't discuss clients.",
       example: "Thanks for caring about Bev. I can’t talk about any client’s personal matters. If you’re worried about her, the best thing is to speak with her, or call Trilogy Care.",
       showExample: true,
       minWords: 15,

@@ -513,7 +513,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   className={input}
                   value={name}
                   onChange={(e) => change(() => setName(e.target.value))}
-                  placeholder="For example: Service partner essentials"
+                  placeholder="For example: Care Partner essentials"
                   maxLength={120}
                 />
               </Field>
@@ -677,7 +677,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                     Who it’s for
                     <select className={cx(input, "font-normal")} value={genAudience} onChange={(e) => setGenAudience(e.target.value)}>
                       <option value="core">Everyone</option>
-                      <option value="partner">Service partners</option>
+                      <option value="partner">Care Partners</option>
                       <option value="coordinator">Care coordinators</option>
                     </select>
                   </label>

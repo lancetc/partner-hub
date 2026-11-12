@@ -11,10 +11,11 @@ import { RequiredTraining } from "@/components/RequiredTraining";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { missionSlugs } from "@/server/challenges";
+import { pathTopicOrder } from "@/server/learningPaths";
 
 export const metadata: Metadata = {
   title: "Learning",
-  description: "Short, practical topics and learning paths for Trilogy Care service partners and care coordinators, built around real visits.",
+  description: "Short, practical topics and learning paths for Trilogy Care’s Care Partners and care coordinators, built around real visits.",
   alternates: { canonical: "/learning" },
 };
 
@@ -54,6 +55,8 @@ async function Catalogue() {
       topics={lessons
         .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
         .map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null))}
+      // For "Sort by: Learning path", which groups topics under each path in its own order.
+      paths={pathTopicOrder(db)}
     />
   );
 }

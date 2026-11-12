@@ -38,7 +38,7 @@ export function challengePrompt(
   catalogue: { slug: string; title: string; summary: string; minutes: number; track: string | null }[],
   source?: { name: string },
 ) {
-  return `You are designing a Trilogy Challenge for Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators. A challenge runs for ${days} days: each day one short topic (a "mission") opens for everyone at once, and teams earn points for finishing it. A story runs through the week, and each day has a "beat": one or two sentences of that story leading into the day's mission.
+  return `You are designing a Trilogy Challenge for Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators. A challenge runs for ${days} days: each day one short topic (a "mission") opens for everyone at once, and teams earn points for finishing it. A story runs through the week, and each day has a "beat": one or two sentences of that story leading into the day's mission.
 
 The author's brief:
 <brief>

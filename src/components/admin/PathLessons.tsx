@@ -15,7 +15,7 @@ export type PathLesson = { slug: string; title: string; summary?: string; minute
 
 export const trackLabel: Record<string, string> = {
   core: "Everyone",
-  partner: "Service partners",
+  partner: "Care Partners",
   coordinator: "Coordinators",
   briefing: "Policy briefings",
 };

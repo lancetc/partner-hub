@@ -106,13 +106,22 @@ export function ReviewButton({
         }}
         aria-haspopup="dialog"
         aria-label={count ? `Comments on this card, ${count} open` : "Comment on this card"}
+        title="Comment on this card"
         className={cx(
-          "inline-flex items-center gap-1.5 rounded-full bg-gold font-bold text-[#102a43] shadow-sm hover:brightness-95",
-          footer ? "min-h-12 px-4" : "min-h-10 px-3 text-sm",
+          "relative inline-flex shrink-0 items-center justify-center rounded-full bg-gold text-[#102a43] shadow-sm hover:brightness-95",
+          footer ? "size-12" : "size-10",
         )}
       >
-        <Icon name="chat" className="size-4" />
-        {count ? count : "Comment"}
+        <Icon name="chat" className={footer ? "size-5" : "size-4"} />
+        {/* Open comments show as a count on the icon. */}
+        {count ? (
+          <span
+            aria-hidden
+            className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[#102a43] px-1 font-mulish text-[0.7rem] font-extrabold leading-5 text-white ring-2 ring-surface"
+          >
+            {count}
+          </span>
+        ) : null}
       </button>
       {open && <Panel review={review} card={card} cards={cards} onJump={onJump} onClose={() => setOpen(false)} />}
     </>

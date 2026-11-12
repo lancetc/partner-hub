@@ -57,7 +57,7 @@ const AUTOSAVE_MS = 1500;
 
 const TRACKS: { id: Lesson["track"]; label: string }[] = [
   { id: "core", label: "Everyone" },
-  { id: "partner", label: "Service partners" },
+  { id: "partner", label: "Care Partners" },
   { id: "coordinator", label: "Care coordinators" },
   { id: "briefing", label: "Policy briefing" },
 ];
@@ -1096,7 +1096,7 @@ function ThemePicker({ value, onChange }: { value: ThemeId; onChange: (t: ThemeI
 }
 
 function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; isNew: boolean }) {
-  const [sources, setSources] = useState<string[]>(isNew ? [] : ["Aged Care Act 2024 — Statement of Rights", "Trilogy Care service partner agreement"]);
+  const [sources, setSources] = useState<string[]>(isNew ? [] : ["Aged Care Act 2024 — Statement of Rights", "Trilogy Care’s Care Partner agreement"]);
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
       <Panel title="What is this topic for?">
@@ -5548,7 +5548,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             onChange={(e) => setBrief(e.target.value)}
             disabled={busy}
             className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed"
-            placeholder="For example: Service partners need to know what to do when a client seems confused or unwell during a visit. Use a cleaning visit as the scenario, and make sure they know to tell the coordinator the same day."
+            placeholder="For example: Care Partners need to know what to do when a client seems confused or unwell during a visit. Use a cleaning visit as the scenario, and make sure they know to tell the coordinator the same day."
           />
         </Field>
         <div className="flex flex-col gap-4">

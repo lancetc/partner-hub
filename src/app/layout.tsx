@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   // Full addresses for share images and canonical links: the hub's public address in production.
   metadataBase: new URL(process.env.HUB_PUBLIC_URL ?? "http://localhost:3000"),
   title: { default: "Partner Hub · Trilogy Care", template: "%s · Partner Hub" },
-  description: "News, practical learning and onboarding for Trilogy Care service partners and care coordinators.",
+  description: "News, practical learning and onboarding for Trilogy Care’s Care Partners and care coordinators.",
   openGraph: { siteName: "Trilogy Care Partner Hub", locale: "en_AU", type: "website" },
   // Installed on an iPhone home screen, it opens full screen like an app.
   appleWebApp: { capable: true, title: "Partner Hub", statusBarStyle: "default" },

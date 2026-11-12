@@ -220,7 +220,7 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
                       checked={w.audience.includes(g)}
                       onChange={(e) => set({ audience: e.target.checked ? [...w.audience, g] : w.audience.filter((x) => x !== g) })}
                     />
-                    {g === "partner" ? "Service partners" : "Care coordinators"}
+                    {g === "partner" ? "Care Partners" : "Care coordinators"}
                   </label>
                 ))}
               </div>

@@ -17,7 +17,7 @@ export const DRAFTS_PER_HOUR = 20;
 const CATEGORY_HINTS: Record<string, string> = {
   trilogy: "news about Trilogy Care itself: people, the Partner Hub, how we work",
   policy: "a change to rules, rates, processes or requirements that partners or coordinators must act on",
-  spotlight: "a story about one service partner or team and what they do well",
+  spotlight: "a story about one Care Partner or team and what they do well",
   "case-study": "a worked example of a real-world situation and what good practice looked like",
   learning: "new or updated training, topics, webinars or learning paths",
   industry: "aged care sector news from government or regulators",
@@ -70,7 +70,7 @@ export const DRAFT_SCHEMA = {
 } as const;
 
 export function draftPrompt(brief: string, today: string) {
-  return `You write news for Trilogy Care's Partner Hub, read by service partners (cleaners, gardeners and other home-support workers) and care coordinators in Australian aged care (Support at Home). Turn the author's brief into a news item.
+  return `You write news for Trilogy Care's Partner Hub, read by Care Partners (cleaners, gardeners and other home-support workers) and care coordinators in Australian aged care (Support at Home). Turn the author's brief into a news item.
 
 Rules:
 - Use only the facts in the brief. Don't invent names, quotes, dates, figures, rates, sources or links. If the brief gives no quote, don't include one.

@@ -105,12 +105,12 @@ export default {
         centreNote: "What matters to me?",
         nodes: [
           { label: "Care coordinator", icon: "chat" },
-          { label: "Service partners", icon: "home" },
+          { label: "Care Partners", icon: "home" },
           { label: "Health professionals", icon: "heart" },
           { label: "Family and supporters", icon: "people" },
           { label: "Community and connections", icon: "leaf" },
         ],
-        alt: "The person at the centre, asking what matters to them, surrounded by their coordinator, service partners, health professionals, family and supporters, and community",
+        alt: "The person at the centre, asking what matters to them, surrounded by their coordinator, Care Partners, health professionals, family and supporters, and community",
       },
       keyPoints: tiles(
         "The system should",

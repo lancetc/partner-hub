@@ -109,7 +109,7 @@ export function prompt(master: Lesson, instructions?: string) {
       action: c.action,
     };
   });
-  return `You are writing spaced learning follow ups for Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators.
+  return `You are writing spaced learning follow ups for Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators.
 
 The author has written one master lesson. Write four short follow up lessons that bring the same learning back over time. Spaced learning is repeated retrieval and application, not repetition: ask the learner to recall, decide or apply something before explaining it, use fresh situations, and give feedback that explains why.
 

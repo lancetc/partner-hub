@@ -40,7 +40,7 @@ export function Welcome() {
           </div>
           <h1 className="font-serif text-4xl font-semibold tracking-tight">Welcome to Trilogy Care</h1>
           <p className="text-lg">
-            We support people to live well at home, with support their way. As a service partner, you’re a big part of that.
+            We support people to live well at home, with support their way. As a Care Partner, you’re a big part of that.
           </p>
           <p className="text-lg">
             Next, tell us about your role and services. We’ll create a checklist of what you need, and show what we’re checking along

@@ -305,7 +305,7 @@ export default {
         { id: "c3", text: "Says they’ll check with Joan’s coordinator, rather than cancelling on Mark’s say-so" },
       ],
       guidance:
-        "The learner is a Trilogy Care service partner, such as a gardener or cleaner. Accept any polite, plain wording; don't require legal terms. Mark is Joan's registered supporter, not a legal decision-maker.",
+        "The learner is a Care Partner with Trilogy Care, such as a gardener or cleaner. Accept any polite, plain wording; don't require legal terms. Mark is Joan's registered supporter, not a legal decision-maker.",
       example: "Thanks for letting me know, Mark. Because Joan asked for these visits, I need to confirm any change with her. I’ll ask her coordinator to get in touch with you both today.",
       showExample: true,
       minWords: 15,

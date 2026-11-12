@@ -9,7 +9,7 @@ import { adapterFor, type NotificationAdapter } from "./notify";
 import { renderEmail, type Block, type WebinarCard } from "@/lib/emailTemplate";
 
 /*
-  Email campaigns (EDM): a monthly update and a quarterly newsletter to service partners and
+  Email campaigns (EDM): a monthly update and a quarterly newsletter to Care Partners and
   coordinators. Built from blocks, previewed, then scheduled or sent. Each person gets one copy,
   everyone can unsubscribe in one click, and unsubscribed people are always skipped.
 */

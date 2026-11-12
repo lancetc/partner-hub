@@ -266,7 +266,7 @@ function ChallengeForm({
           intro="Describe the challenge, and attach a document if you have one. Claude designs the week using your existing topics as missions where they fit, and names any new ones to write. You review it before anything changes."
           steps={CHALLENGE_STEPS}
           endpoint="/api/admin/challenges/draft"
-          placeholder="For example: A five-day challenge for service partners on spotting and reporting changes in a client, building to a SIRS scenario on Friday."
+          placeholder="For example: A five-day challenge for Care Partners on spotting and reporting changes in a client, building to a SIRS scenario on Friday."
           extra={
             <label className="flex flex-col gap-1 text-sm font-semibold">
               How many days

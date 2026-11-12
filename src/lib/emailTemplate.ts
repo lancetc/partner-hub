@@ -110,7 +110,7 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
     }
   }
 
-  const footer = `You’re receiving this because you work with Trilogy Care as a service partner or care coordinator.`;
+  const footer = `You’re receiving this because you work with Trilogy Care as a Care Partner or care coordinator.`;
   const html = `<!doctype html><html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.subject)}</title></head>
 <body style="margin:0;padding:0;background:#eef4f9">
 <span style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${esc(c.preheader)}</span>

@@ -129,7 +129,7 @@ function AgreementForm({ task, status }: { task: OnboardingTask; status: DocStat
   return (
     <div className="flex flex-col gap-3">
       <div className="max-h-48 overflow-y-auto rounded-2xl border border-line p-4 text-[0.95rem] text-ink-muted" tabIndex={0} aria-label="Agreement summary">
-        <p className="font-semibold text-ink">Service partner agreement (demonstration summary)</p>
+        <p className="font-semibold text-ink">Care Partner agreement (demonstration summary)</p>
         <p className="mt-2">This placeholder stands in for the real agreement, which Trilogy’s legal and partnerships teams must provide.</p>
         <p className="mt-2">
           It would cover how services are arranged and confirmed, how changes are agreed, invoicing, privacy and confidentiality, and how to raise concerns.

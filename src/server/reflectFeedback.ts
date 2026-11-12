@@ -42,7 +42,7 @@ const SCHEMA = {
 } as const;
 
 export function feedbackPrompt(ctx: { lessonTitle: string; outcome: string; heading: string; body: string; prompt: string; example: string }, response: string) {
-  return `You give short practice feedback to people learning on Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators.
+  return `You give short practice feedback to people learning on Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators.
 
 Lesson: "${ctx.lessonTitle}". What the lesson teaches: ${ctx.outcome}
 The activity: ${ctx.heading}. ${ctx.body}

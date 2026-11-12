@@ -25,7 +25,7 @@ export type OnboardingTask = {
 };
 
 export const roles = [
-  { id: "individual", label: "Individual service partner", hint: "You deliver services yourself" },
+  { id: "individual", label: "Individual Care Partner", hint: "You deliver services yourself" },
   { id: "org-admin", label: "Partner organisation administrator", hint: "You manage a business and its workers" },
 ];
 
@@ -109,7 +109,7 @@ export const onboardingTasks: OnboardingTask[] = [
     id: "agreement",
     group: "Agreements",
     kind: "agreement",
-    title: "Service partner agreement",
+    title: "Care Partner agreement",
     why: "Sets out how we work together. Read it before you accept.",
     responsible: "You",
     requiredForReadiness: true,

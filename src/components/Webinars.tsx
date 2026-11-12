@@ -33,7 +33,10 @@ export function WebinarIndex() {
   const shown = (data?.webinars ?? []).filter((w) => !topic || w.topics.includes(topic));
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <Link href="/resources" className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent hover:underline">
+        <Icon name="arrow-left" className="size-4" /> Resources
+      </Link>
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">{data?.page.heading ?? "Webinars"}</h1>
           {data?.page.intro && <p className="mt-2 max-w-2xl text-lg text-ink-muted">{data.page.intro}</p>}

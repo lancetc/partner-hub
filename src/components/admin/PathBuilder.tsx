@@ -400,7 +400,7 @@ function Settings({
                   onChange={(e) => update({ audience: e.target.checked ? [...config.audience, a] : config.audience.filter((x) => x !== a) })}
                   className="size-5 accent-[var(--action)]"
                 />
-                {a === "partner" ? "Service partners" : "Care coordinators"}
+                {a === "partner" ? "Care Partners" : "Care coordinators"}
               </label>
             ))}
           </div>

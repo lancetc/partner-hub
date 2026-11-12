@@ -36,7 +36,7 @@ const answer = (over: Record<string, unknown> = {}) => ({
     { type: "list", text: "", items: ["Open the portal", "Add the note"], cite: "" },
   ],
   seoTitle: "Log visit notes on the day from 1 December",
-  seoDescription: "What changes for service partners from 1 December, and how to log notes in the Trilogy Care Portal.",
+  seoDescription: "What changes for Care Partners from 1 December, and how to log notes in the Trilogy Care Portal.",
   imageIdea: "A support worker typing notes on a phone in a car.",
   policy: {
     status: "announced",

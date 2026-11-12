@@ -16,12 +16,12 @@ import { formatWhen, useApi, type FollowUpListItem, type Me } from "@/lib/api";
 const trackLabel: Record<Lesson["track"], string> = {
   core: "For everyone",
   reinforcement: "Follow ups",
-  partner: "Service partners",
+  partner: "Care Partners",
   coordinator: "Coordinators",
   briefing: "Policy briefings",
 };
 
-type Sort = "recommended" | "newest" | "az" | "shortest" | "longest";
+type Sort = "recommended" | "newest" | "az" | "za" | "path" | "shortest" | "longest";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
 type View = "grid" | "list";
@@ -29,7 +29,9 @@ type View = "grid" | "list";
 const SORTS: { value: Sort; label: string }[] = [
   { value: "recommended", label: "Recommended" },
   { value: "newest", label: "Newest first" },
-  { value: "az", label: "A to Z" },
+  { value: "az", label: "Title A–Z" },
+  { value: "za", label: "Title Z–A" },
+  { value: "path", label: "Learning path" },
   { value: "shortest", label: "Shortest first" },
   { value: "longest", label: "Longest first" },
 ];
@@ -40,14 +42,29 @@ const LENGTHS: { value: Length; label: string; test: (m: number) => boolean }[] 
   { value: "long", label: "Over 10 min", test: (m) => m > 10 },
 ];
 const PAGE = 24;
-const select = "h-11 rounded-full border border-line-strong bg-surface px-3 text-sm font-medium";
+/** The same fields as the admin Topics page. */
+const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
+
+export type PathTopics = { id: string; name: string; slugs: string[] };
+
+/**
+  Topics grouped under each learning path, in the path's own order, then the topics in no path.
+  A topic in several paths shows under each of them.
+*/
+function byPath(shown: TopicSummary[], paths: PathTopics[]) {
+  const bySlug = new Map(shown.map((t) => [t.slug, t]));
+  const groups = paths.map((p) => ({ id: p.id as string | null, name: p.name, topics: p.slugs.flatMap((s) => bySlug.get(s) ?? []) })).filter((g) => g.topics.length);
+  const inAPath = new Set(paths.flatMap((p) => p.slugs));
+  const loose = shown.filter((t) => !inAPath.has(t.slug));
+  return loose.length ? [...groups, { id: null, name: "Not in a learning path", topics: loose }] : groups;
+}
 
 /*
   The Learning page's catalogue, built for hundreds of topics: search, a subject to browse by,
   filters for who it's for, progress and length, sorting, a grid or a compact list, and "Show more".
   The choices live in the page address, so a filtered view can be bookmarked or shared.
 */
-export function LessonList({ topics }: { topics: TopicSummary[] }) {
+export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; paths?: PathTopics[] }) {
   const hydrated = useHydrated();
   const attempts = useHub((s) => s.lessons);
   const me = useApi<Me>("/api/me").data;
@@ -127,7 +144,9 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
     return i === -1 ? SUBJECTS.length : i;
   };
   const sorted = [...filtered].sort((a, b) => {
-    if (sort === "az") return a.title.localeCompare(b.title);
+    // Learning path groups topics under each path (see byPath); titles order them within a group.
+    if (sort === "az" || sort === "path") return a.title.localeCompare(b.title);
+    if (sort === "za") return b.title.localeCompare(a.title);
     if (sort === "shortest") return a.minutes - b.minutes || a.title.localeCompare(b.title);
     if (sort === "longest") return b.minutes - a.minutes || a.title.localeCompare(b.title);
     if (sort === "newest") return (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "") || a.title.localeCompare(b.title);
@@ -212,24 +231,91 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
       )}
 
       <section aria-labelledby="all-topics">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 id="all-topics" className="font-serif text-2xl font-semibold">
-            All topics <span className="text-base font-normal text-ink-muted">({topics.length})</span>
-          </h2>
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 sm:max-w-sm">
-            <Icon name="search" className="size-4 shrink-0 text-ink-muted" />
-            <span className="sr-only">Search topics</span>
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setShown(PAGE);
-              }}
-              placeholder="Search topics"
-              className="min-h-11 w-full bg-transparent outline-none placeholder:text-ink-muted"
-            />
+        <h2 id="all-topics" className="font-serif text-2xl font-semibold">
+          All topics <span className="text-base font-normal text-ink-muted">({topics.length})</span>
+        </h2>
+
+        {/* Search, filters and sort: the same toolbar as the admin Topics page. */}
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
+            Search
+            <span className="relative">
+              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                type="search"
+                className={cx(field, "pl-9")}
+                placeholder="Topic title or subject"
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setShown(PAGE);
+                }}
+              />
+            </span>
           </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            Audience
+            <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(PAGE))}>
+              <option value="all">All audiences</option>
+              {tracks.map((tr) => (
+                <option key={tr} value={tr}>
+                  {trackLabel[tr]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            Your progress
+            <select className={cx(field, "w-auto")} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(PAGE))}>
+              <option value="any">Any progress</option>
+              <option value="not-started">Not started</option>
+              <option value="in-progress">In progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            Length
+            <select className={cx(field, "w-auto")} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(PAGE))}>
+              {LENGTHS.map((x) => (
+                <option key={x.value} value={x.value}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            Sort by
+            <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+              {SORTS.map((x) => (
+                <option key={x.value} value={x.value}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
+            {(["grid", "list"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
+                title={v === "grid" ? "Tiles" : "List"}
+                onClick={() => setView(v)}
+                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
+              >
+                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
+              </button>
+            ))}
+          </div>
+          <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
+            {filtering ? `Showing ${filtered.length} of ${topics.length}` : `${topics.length} topics`}
+            {filtering && (
+              <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
+                Clear search and filters
+              </button>
+            )}
+          </p>
         </div>
 
         {/* Subjects: the main way to browse. */}
@@ -263,74 +349,6 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
           })}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="filter-for">
-            Who it’s for
-          </label>
-          <select id="filter-for" className={select} value={track} onChange={(e) => (setTrack(e.target.value), setShown(PAGE))}>
-            <option value="all">Everyone’s topics</option>
-            {tracks.map((tr) => (
-              <option key={tr} value={tr}>
-                {trackLabel[tr]}
-              </option>
-            ))}
-          </select>
-          <label className="sr-only" htmlFor="filter-status">
-            Your progress
-          </label>
-          <select id="filter-status" className={select} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(PAGE))}>
-            <option value="any">Any progress</option>
-            <option value="not-started">Not started</option>
-            <option value="in-progress">In progress</option>
-            <option value="completed">Completed</option>
-          </select>
-          <label className="sr-only" htmlFor="filter-length">
-            Length
-          </label>
-          <select id="filter-length" className={select} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(PAGE))}>
-            {LENGTHS.map((x) => (
-              <option key={x.value} value={x.value}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-          <span className="flex-1" />
-          <label className="flex items-center gap-2 text-sm text-ink-muted">
-            Sort
-            <select className={select} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              {SORTS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
-                title={v === "grid" ? "Tiles" : "List"}
-                onClick={() => setView(v)}
-                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
-              >
-                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <p role="status" className="mt-4 flex flex-wrap items-center gap-3 text-sm text-ink-muted">
-          {filtering ? `${filtered.length} of ${topics.length} topics` : `${topics.length} topics`}
-          {filtering && (
-            <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
-              Clear filters
-            </button>
-          )}
-        </p>
-
         {!sorted.length ? (
           <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-8 text-center text-ink-muted">
             No topics match. Try another word, or{" "}
@@ -339,9 +357,48 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
             </button>
             .
           </p>
-        ) : view === "grid" ? (
+        ) : sort === "path" ? (
+          byPath(sorted, paths).map((g) => (
+            <section key={g.id ?? "none"} className="mt-10 first:mt-6" aria-labelledby={`topics-path-${g.id ?? "none"}`}>
+              <h3 id={`topics-path-${g.id ?? "none"}`} className="flex flex-wrap items-baseline gap-x-3 font-serif text-xl font-semibold">
+                {g.id ? (
+                  <Link href={`/paths/${encodeURIComponent(g.id)}`} className="hover:underline">
+                    {g.name}
+                  </Link>
+                ) : (
+                  g.name
+                )}
+                <span className="font-sans text-sm font-normal text-ink-muted">
+                  {g.topics.length} {g.topics.length === 1 ? "topic" : "topics"}
+                </span>
+              </h3>
+              {topicList(g.topics)}
+            </section>
+          ))
+        ) : (
+          topicList(sorted.slice(0, shown))
+        )}
+
+        {sort !== "path" && sorted.length > shown && (
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShown((n) => n + PAGE)}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-5 font-semibold hover:bg-muted"
+            >
+              Show more <span className="font-normal text-ink-muted">({sorted.length - shown} more)</span>
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
+  /** Topics as tiles or as a compact list. */
+  function topicList(items: TopicSummary[]) {
+    return view === "grid" ? (
           <ul className="mt-5 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.slice(0, shown).map((l) => {
+            {items.map((l) => {
               const s = label(l);
               return (
                 <li key={l.slug} className="group relative flex flex-col gap-3">
@@ -372,7 +429,7 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
           </ul>
         ) : (
           <ul className="mt-5 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
-            {sorted.slice(0, shown).map((l) => {
+            {items.map((l) => {
               const s = label(l);
               return (
                 <li key={l.slug} className="group relative flex items-center gap-4 p-3 sm:px-4">
@@ -401,22 +458,8 @@ export function LessonList({ topics }: { topics: TopicSummary[] }) {
               );
             })}
           </ul>
-        )}
-
-        {sorted.length > shown && (
-          <div className="mt-8 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setShown((n) => n + PAGE)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-5 font-semibold hover:bg-muted"
-            >
-              Show more <span className="font-normal text-ink-muted">({sorted.length - shown} more)</span>
-            </button>
-          </div>
-        )}
-      </section>
-    </div>
-  );
+        );
+  }
 }
 
 /** Where a learner is in a lesson's spaced follow ups. The next one ready links straight to it. */

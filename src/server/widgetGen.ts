@@ -32,7 +32,7 @@ export type WidgetInput = {
 export type WidgetResult = { html: string; alt: string };
 
 export function widgetPrompt(input: WidgetInput) {
-  const brief = `You are building an interactive widget for one card of a short online lesson by Trilogy Care, an Australian aged care provider. The learners are service partners (cleaners, gardeners, other home-support workers) and care coordinators, often on a phone.
+  const brief = `You are building an interactive widget for one card of a short online lesson by Trilogy Care, an Australian aged care provider. The learners are Care Partners (cleaners, gardeners, other home-support workers) and care coordinators, often on a phone.
 ${input.lesson ? `\nLesson: ${input.lesson}` : ""}${input.heading ? `\nCard heading: ${input.heading}` : ""}
 
 How the widget runs:

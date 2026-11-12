@@ -47,7 +47,7 @@ export function ProfileSettings() {
             <dd translate="no">{me.org?.name}</dd>
             <dt className="text-ink-muted">Role</dt>
             <dd>
-              {me.user.audience === "staff" ? "Trilogy Care staff" : me.user.audience === "coordinator" ? "Care coordinator" : "Service partner"}
+              {me.user.audience === "staff" ? "Trilogy Care staff" : me.user.audience === "coordinator" ? "Care coordinator" : "Care Partner"}
               {me.user.role === "org_admin" ? " · organisation admin" : me.user.role === "author" ? " · learning author" : ""}
             </dd>
           </dl>

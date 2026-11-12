@@ -295,7 +295,7 @@ function Form({ initial }: { initial: Detail | null }) {
                     checked={s.audience.includes(a)}
                     onChange={(e) => set({ audience: e.target.checked ? [...s.audience, a] : s.audience.filter((x) => x !== a) })}
                   />
-                  {a === "partner" ? "Service partners" : "Care coordinators"}
+                  {a === "partner" ? "Care Partners" : "Care coordinators"}
                 </label>
               ))}
             </fieldset>
@@ -551,7 +551,7 @@ function StoryWriter({ onDraft }: { onDraft: (story: Story, imageIdea: string) =
         value={brief}
         maxLength={4000}
         onChange={(e) => setBrief(e.target.value)}
-        placeholder="For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all service partners. Source: Trilogy Care operations update, 20 November."
+        placeholder="For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all Care Partners. Source: Trilogy Care operations update, 20 November."
         className={cx(textarea, "mt-3")}
       />
       {error && (

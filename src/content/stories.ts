@@ -122,7 +122,7 @@ export const stories: Story[] = [
     category: "policy",
     title: "From 3 November, confirm extra visit time before you stay",
     dek: "A demonstration briefing: what changed, who it affects and what to do when a client asks you to stay longer.",
-    byline: "Service Partnerships (demo)",
+    byline: "Care Partnerships (demo)",
     date: "2026-10-20T23:30:00Z",
     readMinutes: 3,
     visual: {
@@ -143,7 +143,7 @@ export const stories: Story[] = [
       published: "2026-10-20",
       effective: "2026-11-03",
       jurisdiction: "All states and territories (demo)",
-      owner: "Head of Service Partnerships (demo)",
+      owner: "Head of Care Partnerships (demo)",
       reviewDate: "2027-04-20",
     },
     body: [
@@ -153,7 +153,7 @@ export const stories: Story[] = [
         text: "From the effective date, any extension to a planned visit needs to be confirmed through the care coordinator before the extra time is delivered. Previously, short extensions could be noted afterwards.",
       },
       { type: "h2", text: "Who it affects" },
-      { type: "p", text: "All service partners delivering scheduled visits, and the coordinators who confirm changes." },
+      { type: "p", text: "All Care Partners delivering scheduled visits, and the coordinators who confirm changes." },
       { type: "h2", text: "What to do" },
       {
         type: "list",

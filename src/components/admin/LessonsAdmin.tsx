@@ -322,7 +322,7 @@ function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths:
   );
 }
 
-const TRACK_LABEL: Record<string, string> = { core: "Everyone", partner: "Service partners", coordinator: "Care coordinators", briefing: "Policy briefing" };
+const TRACK_LABEL: Record<string, string> = { core: "Everyone", partner: "Care Partners", coordinator: "Care coordinators", briefing: "Policy briefing" };
 const SPACED_STATE: Record<LessonRow["state"], { label: string; tone: "good" | "warn" | "neutral" }> = {
   live: { label: "Follow ups live", tone: "good" },
   review: { label: "Follow ups to review", tone: "warn" },

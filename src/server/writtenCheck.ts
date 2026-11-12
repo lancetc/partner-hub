@@ -62,7 +62,7 @@ type Ctx = { lessonTitle: string; outcome: string };
 
 export function checkPrompt(ctx: Ctx, card: Pick<WrittenCard, "heading" | "body" | "prompt" | "criteria" | "guidance" | "example">, answer: string) {
   const criteria = card.criteria.map((c) => `- [${c.id}] ${c.text}`).join("\n");
-  return `You check written answers for people learning on Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators, and give them short, useful feedback.
+  return `You check written answers for people learning on Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators, and give them short, useful feedback.
 
 Lesson: "${ctx.lessonTitle}". What the lesson teaches: ${ctx.outcome}
 The activity: ${card.heading}. ${card.body}

@@ -44,7 +44,7 @@ export default async function OpenGraphImage() {
       <img src={`data:image/svg+xml;base64,${logo.toString("base64")}`} alt="" width={372} height={120} />
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 84, fontWeight: 700, letterSpacing: -2 }}>Partner Hub</div>
-        <div style={{ fontSize: 36, marginTop: 12, opacity: 0.9 }}>News and practical learning for service partners and care coordinators</div>
+        <div style={{ fontSize: 36, marginTop: 12, opacity: 0.9 }}>News and practical learning for Care Partners and care coordinators</div>
       </div>
     </div>,
     size,

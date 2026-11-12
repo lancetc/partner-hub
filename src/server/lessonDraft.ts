@@ -96,15 +96,15 @@ function docxText(xml: string) {
 }
 
 const AUDIENCE: Record<string, string> = {
-  core: "everyone at Trilogy Care, service partners and care coordinators",
-  partner: "service partners: cleaners, gardeners and other providers who visit older clients at home",
+  core: "everyone at Trilogy Care, Care Partners and care coordinators",
+  partner: "Care Partners: cleaners, gardeners and other providers who visit older clients at home",
   coordinator: "care coordinators who plan and manage clients' Support at Home services",
   briefing: "anyone affected by a policy change, as a short briefing",
 };
 
 export function draftPrompt(req: DraftRequest, source?: Source) {
   const minutes = Math.min(8, Math.max(2, Math.round(req.minutes ?? 4)));
-  return `You are writing a short mobile lesson for Trilogy Care's Partner Hub, a training site for Australian aged care service partners and care coordinators.
+  return `You are writing a short mobile lesson for Trilogy Care's Partner Hub, a training site for Australian aged care Care Partners and care coordinators.
 
 The author's brief:
 <brief>

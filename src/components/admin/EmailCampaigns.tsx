@@ -99,7 +99,7 @@ export function CampaignList() {
   return (
     <AdminShell title="Email campaigns">
       <p className="max-w-3xl text-ink-muted">
-        A monthly update and a quarterly newsletter to service partners and coordinators. Each is built from blocks, filled with the latest news, topics and
+        A monthly update and a quarterly newsletter to Care Partners and coordinators. Each is built from blocks, filled with the latest news, topics and
         webinars, and includes an unsubscribe link.
       </p>
       {(error || err) && (
@@ -338,7 +338,7 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                       checked={audience.includes(g)}
                       onChange={(e) => change(() => setAudience(e.target.checked ? [...audience, g] : audience.filter((x) => x !== g)))}
                     />
-                    {g === "partner" ? "Service partners" : "Care coordinators"}
+                    {g === "partner" ? "Care Partners" : "Care coordinators"}
                   </label>
                 ))}
               </div>
