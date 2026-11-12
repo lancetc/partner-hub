@@ -36,6 +36,8 @@ import { AvatarField, MakePresenterCard } from "./AvatarField";
 import { WidgetBuilder, WidgetFields } from "./WidgetBuilder";
 import { RichEditable } from "./RichEditable";
 import { IconPick } from "./IconPick";
+import { AUDIENCES } from "@/lib/audiences";
+import { spacedLearningOn } from "@/lib/features";
 
 /*
   Lesson authoring. Cards are edited in place on a canvas (like 7taps); details, media, spaced
@@ -881,7 +883,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
       )}
 
       <nav aria-label="Topic editor" className="mt-5 flex gap-1 overflow-x-auto border-b border-line">
-        {STEPS.map((s) => {
+        {STEPS.filter((s) => s.id !== "spaced" || spacedLearningOn()).map((s) => {
           const active = s.id === step;
           const warn = s.id === "review" && checks.some((c) => !c.ok);
           return (
@@ -972,7 +974,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         )}
         {step === "brief" && <Brief lesson={lesson} update={update} isNew={isNew} />}
         {step === "media" && <Media lesson={lesson} update={update} isNew={isNew} />}
-        {step === "spaced" && <Spaced lesson={lesson} isNew={isNew} />}
+        {step === "spaced" && spacedLearningOn() && <Spaced lesson={lesson} isNew={isNew} />}
         {step === "comments" && !isNew && (
           <ReviewComments
             slug={initial.slug}
@@ -1119,7 +1121,42 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
           {!isNew && <SubjectField slug={l.slug} />}
           <fieldset className="sm:col-span-2">
             <legend className="text-sm font-semibold">Audience</legend>
-            <div className="mt-1 flex flex-wrap gap-2">
+            <p className="text-sm text-ink-muted">Who this topic is written for. Choose one or more; they show on the topic card.</p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {AUDIENCES.map((a) => {
+                const on = (l.audiences ?? []).includes(a);
+                return (
+                  <label
+                    key={a}
+                    className={cx(
+                      "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4",
+                      on ? "border-action bg-tealtint" : "border-line-strong",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--action)]"
+                      checked={on}
+                      onChange={(e) =>
+                        update((d) => {
+                          const next = new Set(d.audiences ?? []);
+                          if (e.target.checked) next.add(a);
+                          else next.delete(a);
+                          // Kept in the list's own order.
+                          d.audiences = AUDIENCES.filter((x) => next.has(x));
+                        })
+                      }
+                    />
+                    {a}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+          <fieldset className="sm:col-span-2">
+            <legend className="text-sm font-semibold">Track</legend>
+            <p className="text-sm text-ink-muted">The broad group it’s for. Decides who it’s recommended to and who it counts for in completion reports.</p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {TRACKS.map((t) => (
                 <label
                   key={t.id}
@@ -5598,7 +5635,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Audience">
+            <Field label="Track">
               <select className={input} value={audience} onChange={(e) => setAudience(e.target.value as Lesson["track"])} disabled={busy}>
                 {TRACKS.map((t) => (
                   <option key={t.id} value={t.id}>

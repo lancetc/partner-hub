@@ -1,3 +1,4 @@
+import { spacedLearningOn } from "@/lib/features";
 import "server-only";
 import type { FollowUpContent, PathConfig, PathStep } from "@/content/followups";
 import { stageLabel } from "@/content/followups";
@@ -209,7 +210,7 @@ export function recordLessonCompletion(
     const anchor = new Date(completion.completed_at);
 
     // Spaced learning only runs for master lessons with the checkbox ticked.
-    const published = isSpaced(db, lesson.slug)
+    const published = spacedLearningOn() && isSpaced(db, lesson.slug)
       ? (db.prepare("SELECT * FROM path_versions WHERE status = 'published'").all() as PathVersionRow[]).map(parseVersion)
       : [];
     const followUps = [];

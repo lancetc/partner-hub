@@ -11,12 +11,16 @@ import { QrShare } from "./QrShare";
 import { StoryVisual } from "../StoryVisual";
 import { cx } from "@/lib/format";
 import type { Lesson } from "@/content/lessons";
+import { AUDIENCES } from "@/lib/audiences";
+import { spacedLearningOn } from "@/lib/features";
 
 type Variation = { stage: string; slug: string; title: string; cards: number; minutes: number; source: string; gap: number; variant: string | null };
 type LessonRow = {
   slug: string;
   title: string;
   track: string;
+  /** Who it's written for, from the audience list (empty when not set yet). */
+  audiences: string[];
   minutes: number;
   cards: number;
   visual: Lesson["visual"];
@@ -106,11 +110,16 @@ export function LessonsAdmin() {
           </Link>
         )}
       </div>
-      <p className="max-w-3xl text-ink-muted">
-        Write one master topic. Tick <strong>Spaced learning</strong> and Claude writes the follow ups from it: a quick Recall at week 2, an Apply scenario at
-        month 2 and a Refresh at week 14, with an easier Refresh for anyone who struggled. Review them, then approve to send them to learners.
-      </p>
-      {data.data && !data.data.generator.connected && (
+      {/* The spaced learning introduction and its Claude notice only show while spaced learning is switched on. */}
+      {spacedLearningOn() ? (
+        <p className="max-w-3xl text-ink-muted">
+          Write one master topic. Tick <strong>Spaced learning</strong> and Claude writes the follow ups from it: a quick Recall at week 2, an Apply scenario at
+          month 2 and a Refresh at week 14, with an easier Refresh for anyone who struggled. Review them, then approve to send them to learners.
+        </p>
+      ) : (
+        <p className="max-w-3xl text-ink-muted">Write, edit and publish topics. Set who each one is for under Audience in the topic’s Details.</p>
+      )}
+      {spacedLearningOn() && data.data && !data.data.generator.connected && (
         <p className="mt-4 flex max-w-3xl items-start gap-2 rounded-2xl border-2 border-dashed border-gold p-3 text-sm">
           <Icon name="spark" className="mt-0.5 size-4 shrink-0" />
           <span>
@@ -183,7 +192,8 @@ const SORTS = {
   edited: "Recently edited",
   az: "Title A–Z",
   za: "Title Z–A",
-  audience: "Audience",
+  // Sorts by track; the id stays "audience" so a sort people already chose is remembered.
+  audience: "Track",
   path: "Learning path",
   shortest: "Shortest first",
   longest: "Longest first",
@@ -245,9 +255,15 @@ function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths:
   const sort = useSyncExternalStore(subscribeSort, readSort, () => "attention" as SortId);
   const [q, setQ] = useState("");
   const [track, setTrack] = useState("all");
+  // An audience from the list, "none" for topics without one yet, or "all".
+  const [audience, setAudience] = useState("all");
   const tracks = [...new Set(lessons.map((l) => l.track))];
   const needle = q.trim().toLowerCase();
-  const shown = lessons.filter((l) => (track === "all" || l.track === track) && (!needle || l.title.toLowerCase().includes(needle))).sort(COMPARE[sort]);
+  const audienceMatch = (l: LessonRow) =>
+    audience === "all" || (audience === "none" ? !l.audiences.length : l.audiences.includes(audience));
+  const shown = lessons
+    .filter((l) => (track === "all" || l.track === track) && audienceMatch(l) && (!needle || l.title.toLowerCase().includes(needle)))
+    .sort(COMPARE[sort]);
   return (
     <>
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -260,8 +276,20 @@ function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths:
         </label>
         <label className="flex flex-col gap-1 text-sm font-semibold">
           Audience
-          <select className={cx(input, "w-auto font-normal")} value={track} onChange={(e) => setTrack(e.target.value)}>
+          <select className={cx(input, "w-auto font-normal")} value={audience} onChange={(e) => setAudience(e.target.value)}>
             <option value="all">All audiences</option>
+            {AUDIENCES.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+            <option value="none">Not set yet</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-semibold">
+          Track
+          <select className={cx(input, "w-auto font-normal")} value={track} onChange={(e) => setTrack(e.target.value)}>
+            <option value="all">All tracks</option>
             {tracks.map((t) => (
               <option key={t} value={t}>
                 {TRACK_LABEL[t] ?? t}
@@ -298,11 +326,11 @@ function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths:
                 {g.lessons.length} {g.lessons.length === 1 ? "topic" : "topics"}
               </span>
             </h2>
-            <ul className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{g.lessons.map(children)}</ul>
+            <ul className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{g.lessons.map(children)}</ul>
           </section>
         ))
       ) : shown.length ? (
-        <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{shown.map(children)}</ul>
+        <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map(children)}</ul>
       ) : (
         <p className="mt-4 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">
           No topics match.{" "}
@@ -364,6 +392,18 @@ function LessonCard({
         <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
           {TRACK_LABEL[l.track] ?? l.track} · {l.minutes} min · {l.cards} cards
         </p>
+        {/* Who it's written for. */}
+        {l.audiences.length > 0 ? (
+          <ul aria-label="Audience" className="flex flex-wrap gap-1.5">
+            {l.audiences.map((a) => (
+              <li key={a} className="inline-flex items-center gap-1 rounded-full bg-tealtint px-2.5 py-0.5 text-xs font-semibold">
+                <Icon name="people" className="size-3.5 text-accent" /> {a}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-ink-muted">Audience not set</p>
+        )}
         <h3 className="font-serif text-lg font-semibold leading-snug">
           {l.status === "unpublished" ? (
             l.title
@@ -373,19 +413,21 @@ function LessonCard({
             </Link>
           )}
         </h3>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={l.status === "unpublished"}
-          title={l.status === "unpublished" ? "Publish the topic first" : "Spaced learning and follow ups"}
-          className="flex items-center gap-2 self-start rounded-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Badge tone={spaced.tone}>
-            {generating && <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
-            {spaced.label}
-          </Badge>
-          {l.status !== "unpublished" && <span className="text-accent hover:underline">Follow ups</span>}
-        </button>
+        {spacedLearningOn() && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={l.status === "unpublished"}
+            title={l.status === "unpublished" ? "Publish the topic first" : "Spaced learning and follow ups"}
+            className="flex items-center gap-2 self-start rounded-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Badge tone={spaced.tone}>
+              {generating && <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
+              {spaced.label}
+            </Badge>
+            {l.status !== "unpublished" && <span className="text-accent hover:underline">Follow ups</span>}
+          </button>
+        )}
         <div className="mt-auto flex flex-col gap-2 pt-2">
           {canEdit && (
             <Link href={`/admin/lessons/${l.slug}/edit`} className={cx(btn.primary, "w-full justify-center")}>

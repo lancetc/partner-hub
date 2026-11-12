@@ -146,7 +146,7 @@ export const stages: Stage[] = [
     role: { text: "Care Partner and Care Team" },
     involved: [d("Care Partner; Care Team."), s("Providers and support workers; client and family (bill approval, check-ins).")],
     touchpoint: [d("Care Partner check-ins, Portal, statements and bills")],
-    client: [d("Can request updates any time (deck, stage 8)."), s("Reviews statements, approves or queries bills, raises changes in need.")],
+    client: [s("Reviews statements, approves or queries bills, raises changes in need.")],
     trilogy: [d("Track budget and approve bills")],
     feeling: [s("Settled and supported when things run smoothly")],
     mood: "Settled",

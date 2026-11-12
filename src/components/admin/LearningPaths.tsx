@@ -170,7 +170,7 @@ export function LearningPathList() {
       ) : !data.paths.length ? (
         <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">No learning paths yet.</p>
       ) : (
-        <ul className="mt-6 grid gap-4 lg:grid-cols-2">
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.paths.map((p) => (
             <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} onDelete={() => remove(p)} />
           ))}
@@ -239,7 +239,8 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
   const notStarted = p.assigned - p.started - p.finished;
 
   return (
-    <li className="relative flex flex-col gap-4 overflow-hidden rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
+    // A container, so the chapter list inside can go to two columns only when the tile itself is wide enough.
+    <li className="@container relative flex flex-col gap-4 overflow-hidden rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
       {p.thumbnail && <StoryVisual {...p.thumbnail} alt="" className="-mx-5 -mt-5 aspect-[16/7]" />}
       <div>
         <div className="flex flex-wrap items-center gap-2">
@@ -289,7 +290,7 @@ function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPre
           {stages.map((st, si) => (
             <div key={si}>
               {st.stage && <p className="mb-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">{st.stage}</p>}
-              <ol className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+              <ol className="grid gap-x-4 gap-y-1 @lg:grid-cols-2">
                 {st.chapters.map((c) => {
                   const done = c.slugs.filter((x) => isReady.has(x)).length;
                   return (

@@ -1,3 +1,4 @@
+import { spacedLearningOn } from "@/lib/features";
 import "server-only";
 import { baseUrl, runDueCampaigns } from "./campaigns";
 import { challengeEmailStillDue, queueChallengeEmails } from "./challenges";
@@ -275,8 +276,9 @@ export async function dispatch(db: Db, now: Date, adapters?: Partial<Record<"ema
 }
 
 export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"email" | "sms", NotificationAdapter>>): Promise<WorkerResult> {
-  const released = releaseDue(db, now);
-  const digests = queueDigests(db, now);
+  // Spaced learning releases and digests only run while it is switched on (lib/features).
+  const released = spacedLearningOn() ? releaseDue(db, now) : 0;
+  const digests = spacedLearningOn() ? queueDigests(db, now) : 0;
   // Each day's challenge invitation, and an afternoon reminder.
   queueChallengeEmails(db, now, baseUrl());
   // Required training that's just become due soon, or has expired.

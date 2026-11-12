@@ -6,6 +6,7 @@ import { HttpError, requireAuthor, userById, type User } from "./auth";
 import { originalLesson, syncPublishedLessons } from "./lessonRegistry";
 import { recordVersion, versionContent } from "./lessonVersions";
 import { blankLesson } from "@/content/blankLesson";
+import { cleanAudiences } from "@/lib/audiences";
 
 /*
   Saving lessons from the editor. Save draft keeps the author's work without changing what learners
@@ -96,7 +97,9 @@ function validate(input: Lesson, slug: string): Lesson {
   if (!input.nodes[input.start]) throw new HttpError(400, "The topic’s first card is missing.");
   for (const id of ids) if (input.nodes[id]?.id !== id) throw new HttpError(400, `Card “${id}” is damaged. Reload the editor and try again.`);
   if (!TRACKS.includes(input.track)) throw new HttpError(400, "Choose who the topic is for.");
-  const lesson = { ...input, slug, title: title.slice(0, 160) };
+  // Audiences: only the known ones, each once; left off altogether when none are chosen.
+  const audiences = cleanAudiences(input.audiences);
+  const lesson = { ...input, slug, title: title.slice(0, 160), audiences: audiences.length ? audiences : undefined };
   if (JSON.stringify(lesson).length > MAX_BYTES) throw new HttpError(413, "This topic is too large to save. Use uploaded images rather than pasted ones.");
   return lesson;
 }

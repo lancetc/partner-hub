@@ -321,6 +321,8 @@ export type Lesson = {
   outcome: string;
   /** `reinforcement` lessons are only delivered as steps in a learning sequence. */
   track: "core" | "partner" | "coordinator" | "briefing" | "reinforcement";
+  /** Who it's written for, from the list in lib/audiences (one or more). Shown on topic cards. */
+  audiences?: string[];
   minutes: number;
   beats: string[];
   start: string;

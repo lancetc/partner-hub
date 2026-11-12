@@ -7,6 +7,7 @@ import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ThemeToggle } from "../ThemeToggle";
 import { setAutoplay, stopAudio, useAutoplay } from "@/lib/audioPrefs";
+import { cardSounds } from "@/lib/sfx";
 
 /**
   Set when the player runs inside the lesson editor's preview window: the close button then
@@ -188,7 +189,8 @@ const SWIPE_AT = 90;
   deck of cards does. Dragging sideways tilts the card; let go past the threshold to swipe.
 */
 function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Frame>[0]["deck"]>; fill: boolean; children: React.ReactNode }) {
-  const start = useRef<{ x: number; y: number; pointer: number; active: boolean } | null>(null);
+  // `ready`: pulled past the swipe point, so the "ready" sound plays once each time it's crossed.
+  const start = useRef<{ x: number; y: number; pointer: number; active: boolean; ready: boolean } | null>(null);
   // The drag offset belongs to one card, so a new card always starts square.
   const [drag, setDrag] = useState<{ id: string; dx: number; dragging: boolean }>({ id: deck.id, dx: 0, dragging: false });
   const dx = drag.id === deck.id ? drag.dx : 0;
@@ -232,7 +234,7 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
         style={{ ...deck.surface?.style, ...(dx ? { transform: `translateX(${dx}px) rotate(${dx / 28}deg)` } : {}) }}
         onPointerDown={(e) => {
           if ((e.pointerType === "mouse" && e.button !== 0) || (e.target as HTMLElement).closest(NO_SWIPE)) return;
-          start.current = { x: e.clientX, y: e.clientY, pointer: e.pointerId, active: false };
+          start.current = { x: e.clientX, y: e.clientY, pointer: e.pointerId, active: false, ready: false };
         }}
         onPointerMove={(e) => {
           const s = start.current;
@@ -243,6 +245,7 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
             // Only a clearly sideways drag is a swipe; anything else is scrolling.
             if (Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.5) {
               s.active = true;
+              cardSounds.pickUp();
               // Keep following the finger even if it leaves the card. The pointer can already be gone.
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -252,14 +255,24 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
             }
             return;
           }
-          setDrag({ id: deck.id, dx: resist(mx), dragging: true });
+          const moved = resist(mx);
+          // A click as the card passes the point where letting go turns it (only where there's a card to turn to).
+          const past = (moved <= -SWIPE_AT && Boolean(deck.onNext)) || (moved >= SWIPE_AT && Boolean(deck.onBack));
+          if (past && !s.ready) cardSounds.ready();
+          s.ready = past;
+          setDrag({ id: deck.id, dx: moved, dragging: true });
         }}
         onPointerUp={() => {
           const s = start.current;
           start.current = null;
           if (!s?.active) return;
-          if (dx <= -SWIPE_AT && deck.onNext) deck.onNext();
-          else if (dx >= SWIPE_AT && deck.onBack) deck.onBack();
+          if (dx <= -SWIPE_AT && deck.onNext) {
+            cardSounds.swipe("next");
+            deck.onNext();
+          } else if (dx >= SWIPE_AT && deck.onBack) {
+            cardSounds.swipe("back");
+            deck.onBack();
+          } else if (dx !== 0) cardSounds.settle();
           setDrag({ id: deck.id, dx: 0, dragging: false });
         }}
         onPointerCancel={() => {

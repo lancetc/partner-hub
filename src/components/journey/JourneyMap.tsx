@@ -240,8 +240,8 @@ const Txt = ({ parts }: { parts: JourneyText }) => <>{parts.map((p) => p.text).j
   Rows line up across every column (CSS subgrid), so the road stays straight however long a card is.
 */
 
-/** Space on each side of the timeline, so its first stop lines up with the page content above. */
-const GUTTER = "max(1rem, calc((100vw - 72rem) / 2 + 1.5rem))";
+/** Space inside the timeline's box, on each side of the road: tighter on phones (set on the scroller). */
+const GUTTER = "var(--jm-gutter)";
 
 function Road() {
   const scroller = useRef<HTMLDivElement>(null);
@@ -305,6 +305,50 @@ function Road() {
     el.scrollBy({ left: dir * Math.min(el.clientWidth * 0.8, 900), behavior: reduce ? "auto" : "smooth" });
   };
 
+  /*
+    Full screen: the timeline box fills the screen. Where the browser allows it (computers, Android) it uses true
+    full screen; iPhones only allow that for video, so there the box simply covers the whole browser window.
+    Esc, the browser's own controls or the Exit button bring it back.
+  */
+  const box = useRef<HTMLDivElement>(null);
+  const exitButton = useRef<HTMLButtonElement>(null);
+  const [full, setFull] = useState(false);
+  const enterFull = () => {
+    setFull(true);
+    box.current?.requestFullscreen?.().catch(() => {
+      // Not allowed here (an iPhone, say): the box still covers the window.
+    });
+  };
+  const exitFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setFull(false);
+  };
+  useEffect(() => {
+    if (!full) return;
+    const onChange = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.fullscreenElement) setFull(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    window.addEventListener("keydown", onKey);
+    // The page behind stays put while the timeline is open, and the timeline opens at its top.
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (box.current) box.current.scrollTop = 0;
+    exitButton.current?.focus();
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [full]);
+  // The box changes width, so check again which arrows have somewhere to go.
+  useEffect(() => {
+    scroller.current?.dispatchEvent(new Event("scroll"));
+  }, [full]);
+
   const items: React.ReactNode[] = [];
   // Which grid column each stage lands in, so a fork's side roads can sit under exactly those stages.
   const column: Record<number, number> = {};
@@ -323,9 +367,9 @@ function Road() {
           <h2 id="journey-timeline" className="font-serif text-2xl font-semibold tracking-tight">
             The journey, stage by stage
           </h2>
-          <p className="text-sm text-ink-muted">Scroll sideways, or use the arrows, to follow the road.</p>
+          <p className="text-sm text-ink-muted">Use the arrows, or swipe, to follow the road.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <nav aria-label="Phases" className="flex flex-wrap gap-1.5">
             {phases.map((p) => (
               <a
@@ -338,45 +382,78 @@ function Road() {
               </a>
             ))}
           </nav>
-          <span className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => move(-1)}
-              disabled={edge.start}
-              aria-label="Earlier in the journey"
-              className="grid size-11 place-items-center rounded-full border border-line-strong bg-surface hover:bg-muted disabled:opacity-35"
-            >
-              <Icon name="arrow-left" className="size-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => move(1)}
-              disabled={edge.end}
-              aria-label="Later in the journey"
-              className="grid size-11 place-items-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-35"
-            >
-              <Icon name="arrow-right" className="size-5" />
-            </button>
-          </span>
+          <button
+            type="button"
+            onClick={enterFull}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
+          >
+            <Icon name="expand" className="size-4" /> Full screen
+          </button>
         </div>
       </div>
 
-      <div className="relative mt-3">
-        {/* Fades at the edges hint there's more to either side. */}
+      {/* Boxed to the page width: the road scrolls sideways inside the box, not across the whole page. */}
+      <div className="mx-auto mt-3 max-w-6xl px-3 sm:px-6">
+      {/* overflow-clip rather than hidden: it rounds the corners without stopping the arrows from sticking. */}
+      <div
+        ref={box}
+        role={full ? "dialog" : undefined}
+        aria-modal={full || undefined}
+        aria-label={full ? "Client journey, full screen" : undefined}
+        className={cx("relative overflow-clip border border-line bg-bg shadow-sm", !full && "rounded-3xl")}
+        // Full screen as plain styles, so it works whether or not the browser's own full screen is available.
+        style={full ? { position: "fixed", inset: 0, zIndex: 100, overflowY: "auto", overscrollBehavior: "contain", border: 0 } : undefined}
+      >
+        {full && (
+          <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-bg/95 px-4 py-2 backdrop-blur sm:px-6">
+            <p className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</p>
+            <button
+              ref={exitButton}
+              type="button"
+              onClick={exitFull}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted"
+            >
+              <Icon name="collapse" className="size-4" /> Exit full screen
+            </button>
+          </div>
+        )}
+        {/* Fades at the edges hint there's more to either side. (Left out in full screen, where the box scrolls down.) */}
+        {!full && (
+          <>
+            <div
+              aria-hidden
+              className={cx("pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-r from-bg to-transparent transition-opacity", edge.start && "opacity-0")}
+            />
+            <div
+              aria-hidden
+              className={cx("pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-l from-bg to-transparent transition-opacity", edge.end && "opacity-0")}
+            />
+          </>
+        )}
+        {/*
+          Slideshow arrows on the box's left and right edges. The box is taller than most screens, so they ride at
+          the middle of the screen while the box is in view (sticky), never leaving it; in full screen they're simply
+          fixed at the middle. Each fades away at its end of the road. Phones swipe instead, so the buttons don't
+          cover the cards there.
+        */}
         <div
-          aria-hidden
-          className={cx("pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-r from-bg to-transparent transition-opacity", edge.start && "opacity-0")}
-        />
-        <div
-          aria-hidden
-          className={cx("pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-l from-bg to-transparent transition-opacity", edge.end && "opacity-0")}
-        />
+          className="pointer-events-none absolute inset-0 z-30 hidden sm:block"
+          style={full ? { position: "fixed", inset: 0, zIndex: 110 } : undefined}
+        >
+          <div
+            className={cx("flex justify-between px-3", !full && "sticky top-[calc(50vh-1.5rem)]")}
+            style={full ? { position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)" } : undefined}
+          >
+            <SlideArrow dir={-1} hidden={edge.start} onClick={() => move(-1)} />
+            <SlideArrow dir={1} hidden={edge.end} onClick={() => move(1)} />
+          </div>
+        </div>
         <div
           ref={scroller}
           role="region"
           aria-label="Client journey timeline, from left to right"
           tabIndex={0}
-          className="snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-4 pt-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus motion-safe:scroll-smooth"
+          className="snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-5 pt-4 [--jm-gutter:0.75rem] focus-visible:outline-2 sm:[--jm-gutter:1.25rem] focus-visible:outline-offset-[-2px] focus-visible:outline-focus motion-safe:scroll-smooth"
           style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
         >
           {/* Four rows per stop (phase, picture, road, card), and a fifth for side roads where the journey forks. */}
@@ -387,7 +464,29 @@ function Road() {
           </ol>
         </div>
       </div>
+      </div>
     </section>
+  );
+}
+
+/** One of the slideshow arrows on the timeline box: earlier (-1) on the left, later (1) on the right. */
+function SlideArrow({ dir, hidden, onClick }: { dir: 1 | -1; hidden: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={hidden}
+      aria-label={dir === 1 ? "Later in the journey" : "Earlier in the journey"}
+      className={cx(
+        "grid size-12 place-items-center rounded-full shadow-lg ring-1 ring-black/10 transition-opacity",
+        dir === 1 ? "bg-action text-on-action hover:bg-action-hover" : "bg-surface text-ink hover:bg-muted",
+        hidden && "opacity-0",
+      )}
+      // Set directly: the wrapper lets clicks through to the timeline, and the button has to take them back.
+      style={{ pointerEvents: hidden ? "none" : "auto" }}
+    >
+      <Icon name={dir === 1 ? "arrow-right" : "arrow-left"} className="size-5" />
+    </button>
   );
 }
 
@@ -416,7 +515,7 @@ function PhaseBand({ n, named }: { n: number; named: boolean }) {
       {named && (
         <h3
           id={`phase-${n}`}
-          className="inline-flex min-h-7 w-max scroll-mt-24 items-center gap-x-2 self-start whitespace-nowrap rounded-full px-3 py-0.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-white shadow-sm"
+          className="inline-flex min-h-7 w-max scroll-mt-24 items-center gap-x-2 self-start whitespace-nowrap rounded-full px-3 py-0.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-white shadow-sm"
           style={{ background: p.colour }}
         >
           <span className="opacity-75">Phase {index}</span> {p.name}
@@ -449,7 +548,7 @@ function Moment({ b, first }: { b: Between; first: boolean }) {
           />
         </div>
       )}
-      <p className="flex flex-wrap items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <p className="flex flex-wrap items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
         {below ? "Before it starts" : `Between ${b.after} and ${b.after + 1}`}
         {b.wait && (
           <span className="inline-flex items-center gap-1 rounded-full bg-orange/15 px-2 py-0.5 normal-case tracking-normal text-warm">
@@ -497,7 +596,7 @@ function StageStop({ s }: { s: Stage }) {
   const phase = phaseOf(s.n);
   const fork = forkAt(s.n);
   return (
-    <li id={`stage-${s.n}`} className="row-span-4 grid w-[min(84vw,20rem)] scroll-mt-24 snap-start grid-cols-[minmax(0,1fr)] grid-rows-subgrid">
+    <li id={`stage-${s.n}`} className="row-span-4 grid w-[min(calc(100vw-4rem),20rem)] scroll-mt-24 snap-start grid-cols-[minmax(0,1fr)] grid-rows-subgrid">
       <PhaseBand n={s.n} named={phase.stages[0] === s.n && s.n !== 1} />
       {/* Smaller than the card below, centred over the stop. A photo, where the stage has one, fills the same frame. */}
       <div className="jm-art relative mx-auto aspect-[400/260] w-[78%] self-end overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
@@ -518,7 +617,7 @@ function StageStop({ s }: { s: Stage }) {
         </span>
       </div>
       <article className="jm-card self-start rounded-2xl border border-line bg-surface p-4 text-sm shadow-sm">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em]">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">
           <span className="text-accent">Stage {s.n}</span>
           <span className="text-ink-muted">· {phase.name}</span>
           {s.n === 9 && <span className="rounded-full bg-muted px-2 py-0.5 normal-case tracking-normal text-ink">Can happen at any stage</span>}
@@ -534,7 +633,8 @@ function StageStop({ s }: { s: Stage }) {
         {fork && (
           <a
             href={`#fork-${fork.id}`}
-            className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-accent/60 px-2.5 py-0.5 text-xs font-semibold text-accent hover:bg-tealtint"
+            // The chip stays small; an invisible margin around it makes it easy to tap.
+            className="relative ml-1 mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-accent/60 px-2.5 py-0.5 text-xs font-semibold text-accent after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] hover:bg-tealtint"
           >
             <Icon name="route" className="size-3.5" /> Varies by {fork.by.toLowerCase()}
           </a>
@@ -549,7 +649,7 @@ function StageStop({ s }: { s: Stage }) {
 
         <div className="mt-2.5 grid gap-2">
           <section className="rounded-xl bg-tealtint px-3 py-2">
-            <h4 className="flex items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em]">
+            <h4 className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">
               <Icon name="user" className="size-3.5 text-accent" /> The client
             </h4>
             <p className="mt-0.5 leading-snug">
@@ -557,7 +657,7 @@ function StageStop({ s }: { s: Stage }) {
             </p>
           </section>
           <section className="rounded-xl bg-muted px-3 py-2">
-            <h4 className="flex items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em]">
+            <h4 className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">
               <Icon name="building" className="size-3.5 text-accent" /> Trilogy Care
             </h4>
             <p className="mt-0.5 leading-snug">
@@ -569,7 +669,7 @@ function StageStop({ s }: { s: Stage }) {
         <section className="mt-2.5 flex items-start gap-2.5">
           <Mood score={s.score} />
           <div className="min-w-0">
-            <h4 className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em]">
+            <h4 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">
               Feeling <span className="font-sans font-semibold normal-case tracking-normal text-ink-muted">· {s.mood}</span>
             </h4>
             <p className="leading-snug">
@@ -579,7 +679,7 @@ function StageStop({ s }: { s: Stage }) {
         </section>
 
         <section className="mt-2.5 rounded-xl border border-orange/40 bg-orange/10 px-3 py-2">
-          <h4 className="flex items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-warm">
+          <h4 className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-warm">
             <Icon name="alert" className="size-3.5" /> Pain point
           </h4>
           <p className="mt-0.5 leading-snug">
@@ -655,7 +755,7 @@ function ForkLanes({ f, from, to }: { f: Fork; from: number; to: number }) {
       <div className="jm-card rounded-3xl border-2 border-dashed border-line-strong bg-surface p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div className="max-w-2xl">
-            <p className="flex items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+            <p className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
               <Icon name="route" className="size-3.5" /> Where the road splits · Stages {f.from}–{f.to}
             </p>
             <h3 className="mt-0.5 font-serif text-xl font-semibold leading-tight">Two ways through, by {f.by.toLowerCase()}</h3>

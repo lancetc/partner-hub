@@ -74,3 +74,38 @@ export function useFollowWords() {
     () => true,
   );
 }
+
+/*
+  Learner preference for the small sound effects when dragging cards (pick up, ready, whoosh).
+  Defaults to on; stored per browser. The player's mute button silences them too.
+*/
+const SFX_KEY = "tc-sound-effects";
+const sfxListeners = new Set<() => void>();
+
+function readSfx() {
+  try {
+    return localStorage.getItem(SFX_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setSoundEffects(on: boolean) {
+  try {
+    localStorage.setItem(SFX_KEY, on ? "on" : "off");
+  } catch {}
+  sfxListeners.forEach((l) => l());
+}
+
+export function useSoundEffects() {
+  return useSyncExternalStore(
+    (cb) => {
+      sfxListeners.add(cb);
+      return () => sfxListeners.delete(cb);
+    },
+    readSfx,
+    () => true,
+  );
+}
+
+export const soundEffectsEnabled = readSfx;

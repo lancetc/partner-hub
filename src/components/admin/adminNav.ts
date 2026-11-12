@@ -1,4 +1,5 @@
 import type { IconName } from "../Icon";
+import { spacedLearningOn } from "@/lib/features";
 
 export type AdminLink = { href: string; label: string; icon: IconName; description: string; authorOnly?: boolean };
 
@@ -7,7 +8,12 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
   {
     title: "Content",
     links: [
-      { href: "/admin/lessons", label: "Topics", icon: "book", description: "Write, edit and publish topics, and their spaced follow ups." },
+      {
+        href: "/admin/lessons",
+        label: "Topics",
+        icon: "book",
+        description: spacedLearningOn() ? "Write, edit and publish topics, and their spaced follow ups." : "Write, edit and publish topics.",
+      },
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
       { href: "/admin/learning-paths", label: "Learning paths", icon: "route", description: "Sets of topics in order, assigned to people." },
       {
@@ -54,7 +60,10 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       { href: "/admin/outbox", label: "Notifications", icon: "info", description: "Emails and reminders sent, waiting or failed." },
-      { href: "/admin/schedules", label: "Spaced schedules", icon: "calendar", description: "When follow ups go out after a topic." },
+      // Only while spaced learning is switched on (lib/features).
+      ...(spacedLearningOn()
+        ? [{ href: "/admin/schedules", label: "Spaced schedules", icon: "calendar" as const, description: "When follow ups go out after a topic." }]
+        : []),
     ],
   },
 ];

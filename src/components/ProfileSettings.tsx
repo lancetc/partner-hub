@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { LANGUAGES, languageName } from "@/lib/languages";
-import { setAutoplay, setFollowWords, useAutoplay, useFollowWords } from "@/lib/audioPrefs";
+import { setAutoplay, setFollowWords, setSoundEffects, useAutoplay, useFollowWords, useSoundEffects } from "@/lib/audioPrefs";
 import { setTranslation } from "./SiteTranslator";
 import { Icon } from "./Icon";
 import { OfflineLessons } from "./OfflineLessons";
@@ -14,6 +14,7 @@ export function ProfileSettings() {
   const me = useApi<Me>("/api/me").data;
   const autoplay = useAutoplay();
   const follow = useFollowWords();
+  const sfx = useSoundEffects();
   const [choice, setChoice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +133,15 @@ export function ProfileSettings() {
           <span>
             <span className="font-semibold">Highlight each word as it’s spoken</span>
             <span className="block text-sm text-ink-muted">Follow the captions and transcript word by word while the audio plays. Saved on this device.</span>
+          </span>
+        </label>
+        <label className="mt-3 flex cursor-pointer items-start gap-3">
+          <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={sfx} onChange={(e) => setSoundEffects(e.target.checked)} />
+          <span>
+            <span className="font-semibold">Sound effects</span>
+            <span className="block text-sm text-ink-muted">
+              Small sounds as you drag and swipe cards in a topic. Muting a topic’s audio silences them too. Saved on this device.
+            </span>
           </span>
         </label>
       </section>
