@@ -14,6 +14,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         icon: "book",
         description: spacedLearningOn() ? "Write, edit and publish topics, and their spaced follow ups." : "Write, edit and publish topics.",
       },
+      {
+        href: "/admin/approvals",
+        label: "Approvals",
+        icon: "circle-check",
+        description: "Topics in review: what's waiting on you, and what's due a refresh.",
+        authorOnly: true,
+      },
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
       { href: "/admin/learning-paths", label: "Learning paths", icon: "route", description: "Sets of topics in order, assigned to people." },
       {

@@ -5,10 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { cardSounds } from "@/lib/sfx";
-import { badges, LEVEL_SIZE, POINTS, quests, STEP_LABEL, type Quest } from "@/content/explorer";
+import { badges, doorLines, fillLine, LEVEL_SIZE, POINTS, quests, STEP_LABEL, timeOfDay, type LineVars, type Quest } from "@/content/explorer";
 import { Icon, type IconName } from "../Icon";
 import { Effects } from "./effects";
 import {
+  CAM_BOUNDS,
   cameraFor,
   drawMinimap,
   drawWorld,
@@ -19,7 +20,6 @@ import {
   roofTop,
   route,
   screenOf,
-  SIGN,
   START,
   toWorld,
   VIEW,
@@ -37,7 +37,12 @@ import {
   on phones the menu and panel sit below it. Progress is kept in this browser for each person.
 */
 
-type Progress = { quests: Record<string, { points: number; perfect: boolean; at: string }>; badges: string[] };
+type Progress = {
+  quests: Record<string, { points: number; perfect: boolean; at: string }>;
+  badges: string[];
+  /** Knocks at each door, so return visits take turns through what the client says. */
+  knocks?: Record<string, number>;
+};
 const EMPTY: Progress = { quests: {}, badges: [] };
 const storageKey = (userId: string) => `tc-explorer-${userId}`;
 
@@ -60,7 +65,11 @@ const levelOf = (points: number) => Math.floor(points / LEVEL_SIZE) + 1;
 type Tab = "map" | "quests" | "progress" | "badges";
 type Dialog = {
   quest: Quest;
-  phase: "intro" | "step" | "done";
+  /** "visit": popping back in after helping, before choosing to replay. */
+  phase: "visit" | "intro" | "step" | "done";
+  /** What the client says at the door this time. */
+  lines: string[];
+  vars: LineVars;
   step: number;
   picked: number | null;
   /** Choices already tried on this step. */
@@ -103,13 +112,17 @@ export function Explorer() {
   const mini = useRef<HTMLCanvasElement>(null);
   const player = useRef<PlayerState>({ x: START.x + 0.5, y: START.y + 0.5, facing: "right", walking: false, t: 0 });
   const cam = useRef<Cam>(cameraFor(START.x + 0.5, START.y + 0.5));
+  /** How far the view has been dragged away from the player (canvas pixels). Eases back once they walk. */
+  const pan = useRef({ x: 0, y: 0 });
+  const drag = useRef<{ id: number; x: number; y: number; from: { x: number; y: number }; moved: boolean } | null>(null);
+  /** A drag just ended, so the click that follows it shouldn't walk anywhere. */
+  const dragged = useRef(false);
   const path = useRef<Tile[]>([]);
   const hover = useRef<Tile | null>(null);
   /** A quest to open when the player reaches its door. */
   const heading = useRef<string | null>(null);
   const atDoorRef = useRef<string | null>(null);
   const markers = useRef<Record<string, HTMLElement | null>>({});
-  const signLabel = useRef<HTMLSpanElement>(null);
   const gateLabel = useRef<HTMLButtonElement>(null);
   const effects = useRef<Effects | null>(null);
   // What the drawing loop needs from React, kept current after each render.
@@ -172,9 +185,19 @@ export function Explorer() {
         p.walking = true;
       } else p.walking = false;
 
-      // The camera eases after the player, staying within the street.
-      const want = cameraFor(p.x, p.y);
-      const k = reduced ? 1 : Math.min(1, dt * 5);
+      // The camera eases after the player, plus however far the view's been dragged, staying within
+      // the street. Once the player walks again, the view glides back to them.
+      const base = cameraFor(p.x, p.y);
+      if (p.walking && !drag.current) {
+        const ease = Math.exp(-dt * 4);
+        pan.current = { x: pan.current.x * ease, y: pan.current.y * ease };
+      }
+      const want = {
+        x: Math.max(CAM_BOUNDS.x0, Math.min(CAM_BOUNDS.x1, base.x + pan.current.x)),
+        y: Math.max(CAM_BOUNDS.y0, Math.min(CAM_BOUNDS.y1, base.y + pan.current.y)),
+      };
+      if (!drag.current) pan.current = { x: want.x - base.x, y: want.y - base.y };
+      const k = reduced || drag.current?.moved ? 1 : Math.min(1, dt * 5);
       cam.current = { x: cam.current.x + (want.x - cam.current.x) * k, y: cam.current.y + (want.y - cam.current.y) * k };
       const c = { x: Math.round(cam.current.x), y: Math.round(cam.current.y) };
 
@@ -197,8 +220,6 @@ export function Explorer() {
         const s = roofTop(c, h);
         lay(markers.current[h.id], s.x, s.y, true);
       }
-      const sg = screenOf(c, SIGN.x + 0.5, SIGN.y + 0.5, 24);
-      lay(signLabel.current, sg.x, sg.y);
       const gt = screenOf(c, gate.x + 0.5, gate.y + 0.5, 50);
       lay(gateLabel.current, gt.x, gt.y);
       if (mctx && frame++ % 4 === 0) drawMinimap(mctx, mini.current!.width, p, st.done);
@@ -235,9 +256,30 @@ export function Explorer() {
     [walkTo],
   );
 
+  /** Knocking: what the client says depends on how often you've called and whether you've helped yet. */
   const openQuest = (id: string) => {
     const quest = quests.find((q) => q.id === id)!;
-    setDialog({ quest, phase: "intro", step: 0, picked: null, tried: [], earned: 0, perfect: true, newBadges: [], replay: Boolean(progress.quests[id]) });
+    const knocks = progress.knocks?.[id] ?? 0;
+    const helped = Boolean(progress.quests[id]);
+    const vars: LineVars = { name: me?.user.name.split(" ")[0] ?? "love", time: timeOfDay(new Date()) };
+    if (userId) {
+      const next_: Progress = { ...progress, knocks: { ...progress.knocks, [id]: knocks + 1 } };
+      save(userId, next_);
+      setProgress(next_);
+    }
+    setDialog({
+      quest,
+      phase: helped ? "visit" : "intro",
+      lines: doorLines(quest, knocks, helped, vars),
+      vars,
+      step: 0,
+      picked: null,
+      tried: [],
+      earned: 0,
+      perfect: true,
+      newBadges: [],
+      replay: helped,
+    });
   };
   useEffect(() => {
     openRef.current = openQuest;
@@ -245,6 +287,10 @@ export function Explorer() {
 
   /** A click or tap on the street: walk there, or to the door of the house that was clicked. */
   const onWorldClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragged.current) {
+      dragged.current = false;
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const w = toWorld(((e.clientX - r.left) / r.width) * VIEW.w + cam.current.x, ((e.clientY - r.top) / r.height) * VIEW.h + cam.current.y);
     const t = { x: Math.floor(w.x), y: Math.floor(w.y) };
@@ -256,9 +302,37 @@ export function Explorer() {
     if (!walkTo(t)) setNotice("You can’t walk there. Try the footpath or the grass.");
     else setNotice(null);
   };
+  /* Dragging with the mouse pulls the view around, like a map. */
+  const onWorldDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    dragged.current = false;
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...pan.current }, moved: false };
+  };
+  const onWorldUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    if (!d.moved) return;
+    dragged.current = e.type === "pointerup";
+    e.currentTarget.style.cursor = "";
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
   const onWorldMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType !== "mouse") return;
     const r = e.currentTarget.getBoundingClientRect();
+    const d = drag.current;
+    if (d && d.id === e.pointerId) {
+      if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) {
+        d.moved = true;
+        hover.current = null;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.currentTarget.style.cursor = "grabbing";
+      }
+      if (d.moved) {
+        pan.current = { x: d.from.x - ((e.clientX - d.x) / r.width) * VIEW.w, y: d.from.y - ((e.clientY - d.y) / r.height) * VIEW.h };
+        return;
+      }
+    }
     const w = toWorld(((e.clientX - r.left) / r.width) * VIEW.w + cam.current.x, ((e.clientY - r.top) / r.height) * VIEW.h + cam.current.y);
     const t = { x: Math.floor(w.x), y: Math.floor(w.y) };
     hover.current = walkable(t) || houseAt(t)?.quest ? t : null;
@@ -328,7 +402,7 @@ export function Explorer() {
     award("good-neighbour", Boolean(quests_.ken));
     award("first-try", Object.values(quests_).some((q) => q.perfect));
     award("local", quests.every((q) => quests_[q.id]));
-    const next_: Progress = { quests: quests_, badges: [...earned] };
+    const next_: Progress = { ...progress, quests: quests_, badges: [...earned] };
     const newBadges = [...earned].filter((b) => !progress.badges.includes(b));
     const newLevel = levelOf(totalPoints(next_));
     celebrate.current = { house: dialog.quest.id, points: total, levelUp: newLevel > level ? newLevel : null, badge: newBadges.length > 0 };
@@ -368,13 +442,13 @@ export function Explorer() {
               onClick={() => setTab(t.id)}
               className={cx(
                 "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 font-mulish text-sm font-extrabold sm:flex-row sm:gap-2.5 sm:px-3 sm:text-base lg:min-h-11 lg:justify-start",
-                tab === t.id ? "bg-[#cdeffa] text-[#102a43]" : "text-white hover:bg-white/10",
+                tab === t.id ? "bg-[#3cb8b9] text-[#102a43]" : "text-white hover:bg-white/10",
               )}
             >
               <Icon name={t.icon} className="size-5" />
               {t.label}
               {t.count ? (
-                <span className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-[#e5484d] text-xs font-bold text-white sm:static sm:ml-auto sm:size-6">{t.count}</span>
+                <span className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-[#c7393e] text-xs font-bold text-white sm:static sm:ml-auto sm:size-6">{t.count}</span>
               ) : null}
             </button>
           </li>
@@ -388,7 +462,7 @@ export function Explorer() {
       {tab === "map" &&
         (next ? (
           <section className="overflow-hidden rounded-2xl bg-white text-[#102a43] shadow-lg ring-2 ring-[#3d5288]">
-            <div className="flex items-center gap-3 bg-[#2a2350] p-3.5 text-white">
+            <div className="flex items-center gap-3 bg-[#008282] p-3.5 text-white">
               <Portrait look={next.look} className="size-14 shrink-0 rounded-xl bg-white/10" />
               <div>
                 <p className="text-sm text-white/80">Next quest</p>
@@ -408,7 +482,7 @@ export function Explorer() {
               <button
                 type="button"
                 onClick={() => goToQuest(next.id)}
-                className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2e7d32] font-mulish text-lg font-extrabold text-white hover:bg-[#276b2b]"
+                className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#008282] font-mulish text-lg font-extrabold text-white hover:bg-[#006b6b]"
               >
                 Start quest <Icon name="arrow-right" className="size-5" />
               </button>
@@ -464,7 +538,7 @@ export function Explorer() {
                     </span>
                   </p>
                   <span className="mt-1 block h-2 overflow-hidden rounded-full bg-[#e8eef6]">
-                    <span className="block h-full rounded-full bg-[#0e7c7b]" style={{ width: `${((r?.points ?? 0) / max) * 100}%` }} />
+                    <span className="block h-full rounded-full bg-[#008282]" style={{ width: `${((r?.points ?? 0) / max) * 100}%` }} />
                   </span>
                 </li>
               );
@@ -479,8 +553,8 @@ export function Explorer() {
           {badges.map((b) => {
             const has = progress.badges.includes(b.id);
             return (
-              <li key={b.id} className={cx("rounded-2xl p-2.5 text-center shadow ring-2", has ? "bg-[#fff6d6] text-[#102a43] ring-[#ffc72c]" : "bg-white text-[#102a43] ring-[#3d5288]")}>
-                <span className={cx("mx-auto grid size-9 place-items-center rounded-full", has ? "bg-[#ffc72c]" : "bg-[#e8eef6] text-[#5a6b85]")}>
+              <li key={b.id} className={cx("rounded-2xl p-2.5 text-center shadow ring-2", has ? "bg-[#fff6d6] text-[#102a43] ring-[#fab53d]" : "bg-white text-[#102a43] ring-[#3d5288]")}>
+                <span className={cx("mx-auto grid size-9 place-items-center rounded-full", has ? "bg-[#fab53d]" : "bg-[#e8eef6] text-[#5a6b85]")}>
                   <Icon name={has ? "star" : "lock"} className="size-5" />
                 </span>
                 <p className="mt-1 text-sm font-bold leading-tight">{b.name}</p>
@@ -511,6 +585,9 @@ export function Explorer() {
             width={VIEW.w}
             height={VIEW.h}
             onClick={onWorldClick}
+            onPointerDown={onWorldDown}
+            onPointerUp={onWorldUp}
+            onPointerCancel={onWorldUp}
             onPointerMove={onWorldMove}
             onPointerLeave={() => (hover.current = null)}
             className="absolute inset-0 size-full cursor-pointer"
@@ -537,7 +614,7 @@ export function Explorer() {
                   <span
                     className={cx(
                       "absolute -right-2 -top-2 grid size-6 place-items-center rounded-full font-mulish text-sm font-black ring-[3px] ring-white sm:size-8 sm:text-lg",
-                      isDone ? "bg-[#2e9e4f] text-white" : "bg-[#ffc72c] text-[#102a43]",
+                      isDone ? "bg-[#008282] text-white" : "bg-[#fab53d] text-[#102a43]",
                     )}
                   >
                     {isDone ? <Icon name="check" className="size-4" /> : "!"}
@@ -547,15 +624,6 @@ export function Explorer() {
               </button>
             );
           })}
-          <span
-            ref={signLabel}
-            aria-hidden
-            className="pointer-events-none invisible absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-center font-mulish text-[0.55rem] font-black leading-tight text-[#3d2614] sm:text-sm lg:text-base"
-          >
-            Welcome to
-            <br />
-            the Neighbourhood
-          </span>
           <button
             ref={gateLabel}
             type="button"
@@ -570,7 +638,7 @@ export function Explorer() {
             <div className="flex items-start justify-between gap-3">
               <div className="pointer-events-auto flex flex-col gap-3">
                 <div className={cx(panel, "hidden items-center gap-3 px-4 py-2.5 sm:flex")}>
-                  <span className="grid size-8 place-items-center rounded-xl bg-[#f26a36] sm:size-11">
+                  <span className="grid size-8 place-items-center rounded-xl bg-[#c7393e] sm:size-11">
                     <Icon name="home" className="size-5 sm:size-7" />
                   </span>
                   <h1 className="font-mulish text-sm font-black leading-[1.05] sm:text-xl lg:text-2xl">
@@ -584,13 +652,13 @@ export function Explorer() {
               <div className="pointer-events-auto flex flex-col items-end gap-3">
                 <div className="flex items-center gap-2">
                   <span className={cx(panel, "inline-flex min-h-9 items-center gap-2 px-3 font-mulish font-black sm:min-h-12 sm:px-4 sm:text-xl")}>
-                    <Icon name="star" className="size-4 text-[#ffc72c] sm:size-6" /> {points} pts
+                    <Icon name="star" className="size-4 text-[#fab53d] sm:size-6" /> {points} pts
                   </span>
                   <span className={cx(panel, "hidden min-h-12 items-center gap-3 py-1 pl-4 pr-1.5 font-mulish text-lg font-black sm:inline-flex")}>
                     Lv {level}
                     <span className="flex gap-0.5" role="img" aria-label={`${Math.round(toNext * 100)}% of the way to level ${level + 1}`}>
                       {Array.from({ length: 8 }, (_, i) => (
-                        <span key={i} className={cx("h-4 w-2.5 rounded-sm", i < Math.round(toNext * 8) ? "bg-[#4cc3c9]" : "bg-white/20")} />
+                        <span key={i} className={cx("h-4 w-2.5 rounded-sm", i < Math.round(toNext * 8) ? "bg-[#3cb8b9]" : "bg-white/20")} />
                       ))}
                     </span>
                     <Portrait look={PLAYER_LOOK} className="size-9 rounded-full bg-white/10 ring-2 ring-white/70" />
@@ -614,7 +682,7 @@ export function Explorer() {
             <button
               type="button"
               onClick={() => openQuest(atDoor)}
-              className="absolute bottom-4 left-1/2 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-[#2e7d32] px-6 font-mulish text-lg font-extrabold text-white shadow-xl ring-4 ring-white/70"
+              className="absolute bottom-4 left-1/2 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-[#008282] px-6 font-mulish text-lg font-extrabold text-white shadow-xl ring-4 ring-white/70"
             >
               Knock on {quests.find((q) => q.id === atDoor)!.client}’s door
             </button>
@@ -625,7 +693,7 @@ export function Explorer() {
             </p>
           )}
         </div>
-        <p className="mt-2 text-sm text-ink-muted">Click or tap to walk. Arrow keys work too. Visit a house with a ! to start its quest. Demonstration content.</p>
+        <p className="mt-2 text-sm text-ink-muted">Click or tap to walk, and drag to look around. Arrow keys work too. Visit a house with a ! to start its quest. Demonstration content.</p>
 
         {/* On smaller screens the menu and panel sit below the game. */}
         <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:hidden">
@@ -683,11 +751,11 @@ function QuestDialog({
         className="flex max-h-[calc(100dvh-1.5rem)] w-[min(40rem,100%)] flex-col overflow-hidden rounded-3xl bg-surface text-ink shadow-2xl ring-4 ring-[#33467a]"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center gap-3 bg-[#2a2350] px-5 py-4 text-white">
+        <header className="flex items-center gap-3 bg-[#008282] px-5 py-4 text-white">
           <Portrait look={q.look} className="size-14 shrink-0 rounded-xl bg-white/10" />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-white/75">
-              {d.phase === "intro" ? "At the door" : d.phase === "step" ? `Step ${d.step + 1} of ${q.steps.length} · ${STEP_LABEL[step.kind]}` : "Quest complete"}
+              {d.phase === "visit" ? "Popping in" : d.phase === "intro" ? "At the door" : d.phase === "step" ? `Step ${d.step + 1} of ${q.steps.length} · ${STEP_LABEL[step.kind]}` : "Quest complete"}
             </p>
             <h2 id="quest-title" className="font-mulish text-xl font-extrabold leading-tight">
               {q.title}
@@ -698,33 +766,51 @@ function QuestDialog({
           </button>
         </header>
         {d.phase === "step" && (
-          <div className="flex gap-1 bg-[#2a2350] px-5 pb-3" aria-hidden>
+          <div className="flex gap-1 bg-[#008282] px-5 pb-3" aria-hidden>
             {q.steps.map((_, i) => (
-              <span key={i} className={cx("h-1.5 flex-1 rounded-full", i < d.step ? "bg-[#4cc3c9]" : i === d.step ? "bg-[#ffc72c]" : "bg-white/20")} />
+              <span key={i} className={cx("h-1.5 flex-1 rounded-full", i < d.step ? "bg-white" : i === d.step ? "bg-[#fab53d]" : "bg-white/20")} />
             ))}
           </div>
         )}
 
         <div className="overflow-y-auto p-5">
-          {d.phase === "intro" && (
+          {(d.phase === "intro" || d.phase === "visit") && (
             <>
               <div className="flex flex-col gap-2">
-                {q.opening.map((line, i) => (
+                {d.lines.map((line, i) => (
                   <p
                     key={i}
                     className={cx(
                       "rounded-2xl px-4 py-3",
-                      line.startsWith("(") ? "bg-muted italic text-ink-muted" : "rounded-tl-sm bg-[#f3eefc] text-[#2a2350] dark:bg-muted dark:text-ink",
+                      line.startsWith("(") ? "bg-muted italic text-ink-muted" : "rounded-tl-sm bg-[#e3f5f5] text-[#004f4f] dark:bg-muted dark:text-ink",
                     )}
                   >
                     {line.startsWith("(") ? line.slice(1, -1) : <>“{line}”</>}
                   </p>
                 ))}
               </div>
-              {d.replay && <p className="mt-3 text-sm text-ink-muted">You’ve done this one. Play it again for practice; your first score is kept.</p>}
-              <button ref={first} type="button" onClick={() => setDialog({ ...d, phase: "step" })} className={cx(primary, "mt-5")}>
-                What do you do? <Icon name="arrow-right" className="size-5" />
-              </button>
+              {d.phase === "visit" ? (
+                // Popping back in after helping: a chat, then back out, or the quest again for practice.
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button ref={first} type="button" onClick={close} className={primary}>
+                    Back to the street
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ ...d, phase: "intro", lines: q.opening.map((l) => fillLine(l, d.vars)) })}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-line-strong px-5 font-bold hover:bg-muted"
+                  >
+                    Play the quest again
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {d.replay && <p className="mt-3 text-sm text-ink-muted">You’ve done this one. Play it again for practice; your first score is kept.</p>}
+                  <button ref={first} type="button" onClick={() => setDialog({ ...d, phase: "step" })} className={cx(primary, "mt-5")}>
+                    What do you do? <Icon name="arrow-right" className="size-5" />
+                  </button>
+                </>
+              )}
             </>
           )}
 
@@ -744,9 +830,9 @@ function QuestDialog({
                         onClick={() => onChoose(i)}
                         className={cx(
                           "flex min-h-12 w-full items-start gap-3 rounded-2xl border-2 px-4 py-3 text-left font-medium transition-colors",
-                          chosen && c.verdict === "best" && "border-[#2e9e4f] bg-[#e5f5ea] text-[#14532d]",
-                          chosen && c.verdict === "partly" && "border-[#d89b1e] bg-[#fff6d6] text-[#5c3d00]",
-                          chosen && c.verdict === "no" && "border-[#d64545] bg-[#fde8e8] text-[#7a1d1d]",
+                          chosen && c.verdict === "best" && "border-[#008282] bg-[#e3f5f5] text-[#004f4f]",
+                          chosen && c.verdict === "partly" && "border-[#fab53d] bg-[#fff6d6] text-[#5c3d00]",
+                          chosen && c.verdict === "no" && "border-[#c7393e] bg-[#fde8e8] text-[#7a1d1d]",
                           !chosen && !ruledOut && d.picked === null && "border-line-strong hover:border-action hover:bg-tealtint",
                           (ruledOut || (d.picked !== null && !chosen)) && "border-line opacity-50",
                         )}
@@ -765,7 +851,7 @@ function QuestDialog({
                   role="status"
                   className={cx(
                     "mt-4 rounded-2xl p-4",
-                    picked.verdict === "best" ? "bg-[#e5f5ea] text-[#14532d]" : picked.verdict === "partly" ? "bg-[#fff6d6] text-[#5c3d00]" : "bg-[#fde8e8] text-[#7a1d1d]",
+                    picked.verdict === "best" ? "bg-[#e3f5f5] text-[#004f4f]" : picked.verdict === "partly" ? "bg-[#fff6d6] text-[#5c3d00]" : "bg-[#fde8e8] text-[#7a1d1d]",
                   )}
                 >
                   <p className="font-bold">
@@ -795,7 +881,7 @@ function QuestDialog({
           {d.phase === "done" && (
             <>
               <div className="flex items-center gap-4 rounded-2xl bg-[#fff6d6] p-4 text-[#102a43]">
-                <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#ffc72c]">
+                <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#fab53d]">
                   <Icon name="star" className="size-7" />
                 </span>
                 <div>
@@ -810,7 +896,7 @@ function QuestDialog({
                 <p className="mt-3 flex flex-wrap items-center gap-2 font-semibold">
                   New badge{d.newBadges.length > 1 ? "s" : ""}:
                   {d.newBadges.map((id) => (
-                    <span key={id} className="inline-flex items-center gap-1 rounded-full bg-[#ffc72c] px-3 py-1 text-sm text-[#102a43]">
+                    <span key={id} className="inline-flex items-center gap-1 rounded-full bg-[#fab53d] px-3 py-1 text-sm text-[#102a43]">
                       <Icon name="star" className="size-3.5" /> {badges.find((b) => b.id === id)?.name}
                     </span>
                   ))}
@@ -835,7 +921,7 @@ function QuestDialog({
   );
 }
 
-const primary = "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2e7d32] px-5 font-bold text-white hover:bg-[#276b2b]";
+const primary = "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#008282] px-5 font-bold text-white hover:bg-[#006b6b]";
 
 /** A client's portrait: a simple face in their colours. */
 function Portrait({ look, className }: { look: Quest["look"]; className?: string }) {

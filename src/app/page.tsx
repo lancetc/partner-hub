@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
 import { ChallengeBanner } from "@/components/ChallengePage";
+import { HomeCommunity } from "@/components/community/HomeCommunity";
 import { missionSlugs } from "@/server/challenges";
 import type { Metadata } from "next";
 
@@ -31,6 +32,7 @@ export default function NewsHome() {
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <Learning />
       </Suspense>
+      <HomeCommunity />
       <div className="mt-6">
         <Suspense>
           <Stories />

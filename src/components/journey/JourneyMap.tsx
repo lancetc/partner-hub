@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { between, forkAt, forks, phaseOf, phases, stages, type Between, type Fork, type JourneyText, type Stage } from "@/content/journey";
 import { cx } from "@/lib/format";
@@ -54,6 +55,16 @@ export function JourneyMap() {
       <Hero />
       <Road />
     </div>
+  );
+}
+
+/** Just the road, filling its own browser tab (opened from the Full screen link). */
+export function JourneyFull() {
+  return (
+    <>
+      <style>{MOTION}</style>
+      <Road standalone />
+    </>
   );
 }
 
@@ -243,7 +254,7 @@ const Txt = ({ parts }: { parts: JourneyText }) => <>{parts.map((p) => p.text).j
 /** Space inside the timeline's box, on each side of the road: tighter on phones (set on the scroller). */
 const GUTTER = "var(--jm-gutter)";
 
-function Road() {
+function Road({ standalone = false }: { standalone?: boolean }) {
   const scroller = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLOListElement>(null);
   const [edge, setEdge] = useState({ start: true, end: false });
@@ -306,48 +317,35 @@ function Road() {
   };
 
   /*
-    Full screen: the timeline box fills the screen. Where the browser allows it (computers, Android) it uses true
-    full screen; iPhones only allow that for video, so there the box simply covers the whole browser window.
-    Esc, the browser's own controls or the Exit button bring it back.
+    Full screen: the Full screen link opens the road in its own tab (/journey/full), where the box covers
+    the whole window, above the site's header and menus. There, the browser's own full screen is a click
+    away too (computers and Android; iPhones only allow it for video).
   */
   const box = useRef<HTMLDivElement>(null);
-  const exitButton = useRef<HTMLButtonElement>(null);
-  const [full, setFull] = useState(false);
-  const enterFull = () => {
-    setFull(true);
-    box.current?.requestFullscreen?.().catch(() => {
-      // Not allowed here (an iPhone, say): the box still covers the window.
-    });
-  };
-  const exitFull = () => {
+  const full = standalone;
+  const [browserFull, setBrowserFull] = useState(false);
+  const toggleBrowserFull = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    setFull(false);
+    else document.documentElement.requestFullscreen?.().catch(() => {});
   };
   useEffect(() => {
     if (!full) return;
-    const onChange = () => {
-      if (!document.fullscreenElement) setFull(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.fullscreenElement) setFull(false);
-    };
+    const onChange = () => setBrowserFull(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", onChange);
-    window.addEventListener("keydown", onKey);
-    // The page behind stays put while the timeline is open, and the timeline opens at its top.
+    // The page behind stays put: only the road scrolls.
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    if (box.current) box.current.scrollTop = 0;
-    exitButton.current?.focus();
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
-      window.removeEventListener("keydown", onKey);
       document.body.style.overflow = overflow;
     };
   }, [full]);
-  // The box changes width, so check again which arrows have somewhere to go.
-  useEffect(() => {
-    scroller.current?.dispatchEvent(new Event("scroll"));
-  }, [full]);
+  /** Closes the tab when this page opened it; otherwise goes back to the journey page. */
+  const router = useRouter();
+  const close = () => {
+    window.close();
+    window.setTimeout(() => router.push("/journey"), 150);
+  };
 
   const items: React.ReactNode[] = [];
   // Which grid column each stage lands in, so a fork's side roads can sit under exactly those stages.
@@ -382,13 +380,14 @@ function Road() {
               </a>
             ))}
           </nav>
-          <button
-            type="button"
-            onClick={enterFull}
+          <a
+            href="/journey/full"
+            target="_blank"
+            rel="noopener"
             className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
           >
-            <Icon name="expand" className="size-4" /> Full screen
-          </button>
+            <Icon name="expand" className="size-4" /> Full screen<span className="sr-only"> (opens in a new tab)</span>
+          </a>
         </div>
       </div>
 
@@ -397,24 +396,29 @@ function Road() {
       {/* overflow-clip rather than hidden: it rounds the corners without stopping the arrows from sticking. */}
       <div
         ref={box}
-        role={full ? "dialog" : undefined}
-        aria-modal={full || undefined}
-        aria-label={full ? "Client journey, full screen" : undefined}
         className={cx("relative overflow-clip border border-line bg-bg shadow-sm", !full && "rounded-3xl")}
-        // Full screen as plain styles, so it works whether or not the browser's own full screen is available.
+        // In its own tab the box covers the whole window, above the site's header and menus.
         style={full ? { position: "fixed", inset: 0, zIndex: 100, overflowY: "auto", overscrollBehavior: "contain", border: 0 } : undefined}
       >
         {full && (
           <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-bg/95 px-4 py-2 backdrop-blur sm:px-6">
-            <p className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</p>
-            <button
-              ref={exitButton}
-              type="button"
-              onClick={exitFull}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted"
-            >
-              <Icon name="collapse" className="size-4" /> Exit full screen
-            </button>
+            <h1 className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</h1>
+            <span className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={toggleBrowserFull}
+                className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted sm:inline-flex"
+              >
+                <Icon name={browserFull ? "collapse" : "expand"} className="size-4" /> {browserFull ? "Exit full screen" : "Full screen"}
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted"
+              >
+                <Icon name="close" className="size-4" /> Close
+              </button>
+            </span>
           </div>
         )}
         {/* Fades at the edges hint there's more to either side. (Left out in full screen, where the box scrolls down.) */}

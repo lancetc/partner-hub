@@ -23,7 +23,7 @@ export const iso = (x: number, y: number): Pt => ({ x: (x - y) * HW, y: (x + y) 
 export const toWorld = (wx: number, wy: number): Pt => ({ x: (wx / HW + wy / HH) / 2, y: (wy / HH - wx / HW) / 2 });
 
 /** How far the camera may go: the whole street, with the gardens beyond it filling the corners. */
-export const CAM_BOUNDS = { x0: -N * HW + 40, x1: N * HW - VIEW.w - 40, y0: -40, y1: 2 * N * HH - VIEW.h + 70 };
+export const CAM_BOUNDS = { x0: -N * HW - 60, x1: N * HW - VIEW.w + 60, y0: -130, y1: 2 * N * HH - VIEW.h + 160 };
 
 export type House = {
   /** The quest inside, or a neighbour's house with no quest. */
@@ -46,10 +46,10 @@ export type House = {
 const house = (h: Omit<House, "trim"> & { trim?: string }): House => ({ trim: "#ffffff", ...h });
 
 export const houses: House[] = [
-  house({ id: "dot", quest: true, x: 2, y: 2, w: 3, d: 3, doorFace: "x", door: { x: 5, y: 3 }, wall: "#f7e7c9", wallShade: "#e0c9a2", roof: "#5d6d90", roofShade: "#46526f", doorColour: "#8a4b2c" }),
-  house({ id: "ron", quest: true, x: 8, y: 2, w: 3, d: 3, doorFace: "y", door: { x: 9, y: 5 }, wall: "#f3dcc0", wallShade: "#d9bb94", roof: "#a85a4e", roofShade: "#813f37", doorColour: "#2f5f4a" }),
-  house({ id: "margaret", quest: true, x: 2, y: 9, w: 3, d: 3, doorFace: "x", door: { x: 5, y: 10 }, wall: "#eef1e5", wallShade: "#d0d4c2", roof: "#4c6878", roofShade: "#384f5c", doorColour: "#a8323e" }),
-  house({ id: "ken", quest: true, x: 8, y: 9, w: 3, d: 3, doorFace: "y", door: { x: 9, y: 12 }, wall: "#f4dfc4", wallShade: "#d6b993", roof: "#8a5a8a", roofShade: "#694168", doorColour: "#334b78" }),
+  house({ id: "dot", quest: true, x: 2, y: 2, w: 3, d: 3, doorFace: "x", door: { x: 5, y: 3 }, wall: "#f7e7c9", wallShade: "#e0c9a2", roof: "#5d6d90", roofShade: "#46526f", doorColour: "#c7393e" }),
+  house({ id: "ron", quest: true, x: 8, y: 2, w: 3, d: 3, doorFace: "y", door: { x: 9, y: 5 }, wall: "#f3dcc0", wallShade: "#d9bb94", roof: "#a85a4e", roofShade: "#813f37", doorColour: "#008282" }),
+  house({ id: "margaret", quest: true, x: 2, y: 9, w: 3, d: 3, doorFace: "x", door: { x: 5, y: 10 }, wall: "#eef1e5", wallShade: "#d0d4c2", roof: "#4c6878", roofShade: "#384f5c", doorColour: "#f9b53f" }),
+  house({ id: "ken", quest: true, x: 8, y: 9, w: 3, d: 3, doorFace: "y", door: { x: 9, y: 12 }, wall: "#f4dfc4", wallShade: "#d6b993", roof: "#8a5a8a", roofShade: "#694168", doorColour: "#3cb8b9" }),
   house({ id: "n1", quest: false, x: 2, y: 13, w: 3, d: 3, doorFace: "x", door: { x: 5, y: 14 }, wall: "#e9eef4", wallShade: "#c9d1db", roof: "#7a5c48", roofShade: "#5c4536", doorColour: "#2d6a7a" }),
   house({ id: "n2", quest: false, x: 8, y: 13, w: 3, d: 3, doorFace: "x", door: { x: 11, y: 14 }, wall: "#f6e3d3", wallShade: "#dcc3ad", roof: "#4f7a5a", roofShade: "#3b5c44", doorColour: "#7a3b2f" }),
 ];
@@ -58,8 +58,6 @@ export const questHouses = houses.filter((h) => h.quest);
 /** The gate to the next neighbourhood, at the end of the cross street. Locked for now. */
 export const gate: Tile = { x: 0, y: 7 };
 export const START: Tile = { x: 6, y: 14 };
-/** Where the welcome sign stands (its words are laid over the canvas). */
-export const SIGN: Tile = { x: 7, y: 15 };
 
 type Ground = "grass" | "path" | "road" | "bed" | "verge";
 
@@ -135,7 +133,6 @@ type Thing =
   | { kind: "bush"; x: number; y: number }
   | { kind: "bench"; x: number; y: number }
   | { kind: "mailbox"; x: number; y: number }
-  | { kind: "sign"; x: number; y: number }
   | { kind: "gate"; x: number; y: number }
   | { kind: "van"; x: number; y: number }
   | { kind: "bin"; x: number; y: number }
@@ -165,7 +162,6 @@ const things: Thing[] = [
   { kind: "mailbox", x: 11, y: 13 },
   { kind: "bin", x: 7, y: 4 },
   { kind: "bin", x: 7, y: 10 },
-  { kind: "sign", x: SIGN.x, y: SIGN.y },
   { kind: "gate", x: gate.x, y: gate.y },
   { kind: "van", x: 13, y: 4 },
   ...[2, 3, 4].map((x) => ({ kind: "fence" as const, x, y: 5, side: "y" as const })),
@@ -299,7 +295,7 @@ function drawTile(ctx: Ctx, x: number, y: number, at: (x: number, y: number) => 
       const py = c.y + (hash(x, y, k + 20) - 0.5) * 16;
       blob(ctx, px, py - 2, 3, k % 2 ? "#3f8a3a" : "#4f9d45");
     }
-    const colours = ["#ff6b8b", "#ffd166", "#ffffff", "#c77dff", "#ff8c42", "#7bdff2", "#ff4f6d"];
+    const colours = ["#c7393e", "#fab53d", "#ffffff", "#3cb8b9", "#f9b53f", "#ff8fab", "#c77dff"];
     for (let k = 0; k < 16; k++) {
       const px = c.x + (hash(x, y, k + 40) - 0.5) * 40;
       const py = c.y + (hash(x, y, k + 60) - 0.5) * 14 - 4;
@@ -330,7 +326,7 @@ function windowOn(ctx: Ctx, a: Pt, b: Pt, t0: number, t1: number) {
   poly(ctx, quad(a, b, t0 - 0.03, t1 + 0.03, 11, 13), "#ffffff");
   for (let k = 0; k < 5; k++) {
     const p = onFace(a, b, t0 + ((t1 - t0) * (k + 0.5)) / 5, 9);
-    rect(ctx, p.x, p.y, 2, 2, k % 2 ? "#ff6b8b" : "#4f9d45");
+    rect(ctx, p.x, p.y, 2, 2, k % 2 ? "#c7393e" : "#4f9d45");
   }
 }
 
@@ -492,7 +488,7 @@ function drawBush(ctx: Ctx, x: number, y: number, at: (x: number, y: number) => 
     [-4, -14, 6, "#6dbb59"],
   ] as const)
     blob(ctx, c.x + dx, c.y + dy, r, col);
-  for (let k = 0; k < 6; k++) rect(ctx, c.x + (hash(x, y, k) - 0.5) * 22, c.y - 8 + (hash(x, y, k + 3) - 0.5) * 12, 2, 2, k % 2 ? "#ffd166" : "#ff8fab");
+  for (let k = 0; k < 6; k++) rect(ctx, c.x + (hash(x, y, k) - 0.5) * 22, c.y - 8 + (hash(x, y, k + 3) - 0.5) * 12, 2, 2, k % 2 ? "#fab53d" : "#c7393e");
 }
 
 function drawFence(ctx: Ctx, x: number, y: number, side: "x" | "y", at: (x: number, y: number) => Pt) {
@@ -525,30 +521,23 @@ function drawThing(ctx: Ctx, t: Thing, at: (x: number, y: number) => Pt, unlocke
       return;
     case "mailbox":
       rect(ctx, c.x + 8, c.y - 12, 2, 12, "#5a4a3a");
-      rect(ctx, c.x + 4, c.y - 20, 10, 8, "#d64545");
+      rect(ctx, c.x + 4, c.y - 20, 10, 8, "#c7393e");
       rect(ctx, c.x + 4, c.y - 20, 10, 2, "#ef6a6a");
       rect(ctx, c.x + 6, c.y - 17, 6, 1, "#ffffff");
       return;
     case "bin":
       rect(ctx, c.x - 6, c.y - 16, 12, 16, "#2f5f4a");
-      rect(ctx, c.x - 7, c.y - 18, 14, 3, "#e0b030");
+      rect(ctx, c.x - 7, c.y - 18, 14, 3, "#fab53d");
       rect(ctx, c.x + 3, c.y - 16, 3, 16, "#244a3a");
-      return;
-    case "sign":
-      rect(ctx, c.x - 20, c.y - 14, 4, 14, "#6e4a2c");
-      rect(ctx, c.x + 16, c.y - 14, 4, 14, "#6e4a2c");
-      rect(ctx, c.x - 26, c.y - 36, 52, 24, "#c98f55");
-      rect(ctx, c.x - 26, c.y - 36, 52, 3, "#e6b47c");
-      rect(ctx, c.x - 26, c.y - 15, 52, 3, "#9a6a3c");
       return;
     case "gate":
       rect(ctx, c.x - 20, c.y - 40, 5, 40, "#6e4a2c");
       rect(ctx, c.x + 16, c.y - 40, 5, 40, "#6e4a2c");
       rect(ctx, c.x - 22, c.y - 44, 45, 6, "#7f573a");
-      for (let k = 0; k < 8; k++) rect(ctx, c.x - 13 + k * 4, c.y - 32, 2, 30, unlocked ? "#7cc865" : "#cfd3d8");
+      for (let k = 0; k < 8; k++) rect(ctx, c.x - 13 + k * 4, c.y - 32, 2, 30, unlocked ? "#3cb8b9" : "#cfd3d8");
       if (!unlocked) {
-        rect(ctx, c.x - 4, c.y - 20, 9, 8, "#ffd166");
-        ctx.strokeStyle = "#ffd166";
+        rect(ctx, c.x - 4, c.y - 20, 9, 8, "#fab53d");
+        ctx.strokeStyle = "#fab53d";
         ctx.lineWidth = 2;
         ctx.strokeRect(R(c.x - 2), R(c.y - 25), 5, 5);
       }
@@ -564,7 +553,7 @@ function drawThing(ctx: Ctx, t: Thing, at: (x: number, y: number) => Pt, unlocke
       poly(ctx, [D0, C0, up(C0, H), up(D0, H)], "#d9dde2");
       poly(ctx, [B0, C0, up(C0, H), up(B0, H)], "#f4f6f8");
       poly(ctx, [up(A0, H), up(B0, H), up(C0, H), up(D0, H)], "#ffffff");
-      poly(ctx, quad(B0, C0, 0.05, 0.95, 6, 9), "#0e7c7b");
+      poly(ctx, quad(B0, C0, 0.05, 0.95, 6, 9), "#008282");
       for (let k = 0; k < 3; k++) poly(ctx, quad(B0, C0, 0.1 + k * 0.27, 0.32 + k * 0.27, 12, 19), "#7d98a8");
       poly(ctx, quad(D0, C0, 0.12, 0.88, 12, 19), "#6f8796");
       for (const p of [lerp(B0, C0, 0.2), lerp(B0, C0, 0.8)]) blob(ctx, p.x, p.y, 4, "#2b2b2b");
@@ -652,7 +641,24 @@ const PLAYER: Look = { skin: "#f0c3a0", hair: "#5b3a24", shirt: "#1e3a5c", style
    each frame just places those images (in depth order, so people pass behind houses and trees)
    and draws the people. Painting thousands of little shapes every frame was far too slow. */
 
-type Sprite = { canvas: HTMLCanvasElement; ox: number; oy: number };
+type Sprite = { canvas: HTMLCanvasElement; ox: number; oy: number; alpha?: Uint8ClampedArray };
+/** Whether a cached image has paint at a point (in its own pixels). */
+function solidAt(s: Sprite, x: number, y: number) {
+  const { width: w, height: h } = s.canvas;
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x < 0 || y < 0 || x >= w || y >= h) return false;
+  s.alpha ??= s.canvas.getContext("2d")!.getImageData(0, 0, w, h).data;
+  return s.alpha[(y * w + x) * 4 + 3] > 60;
+}
+// Points on a person (from their feet) that, if covered, mean they're hidden: head, chest, legs.
+const BODY = [
+  [0, -30],
+  [-4, -24],
+  [4, -24],
+  [0, -16],
+  [0, -6],
+];
 const sprites = new Map<string, Sprite>();
 /** A cached image of something standing at `anchor` (world-screen pixels), with room around it. */
 function sprite(key: string, box: readonly [number, number, number, number], anchor: Pt, paint: (ctx: Ctx, at: (x: number, y: number) => Pt) => void): Sprite {
@@ -753,42 +759,55 @@ export function drawWorld(
 
   type Item = { depth: number; draw: () => void };
   const items: Item[] = [];
-  // Place a cached image, skipping it when it's nowhere near the screen.
-  const place = (s: Sprite, anchor: Pt) => {
+  const p = opts.player;
+  const pp = at(p.x, p.y);
+  const playerDepth = p.x + p.y + 0.06;
+  // The people who must stay in view: the player, and any client they're standing near.
+  const watched: { at: Pt; depth: number }[] = [{ at: pp, depth: playerDepth }];
+  const porch = (h: House) => (h.doorFace === "x" ? { x: h.door.x + 0.2, y: h.door.y + 0.18 } : { x: h.door.x + 0.18, y: h.door.y + 0.2 });
+  houses.forEach((h) => {
+    if (!opts.looks[h.id]) return;
+    const w = porch(h);
+    if (Math.hypot(w.x - p.x, w.y - p.y) < 2.5) watched.push({ at: at(w.x, w.y), depth: h.x + h.w + h.y + h.d - 0.95 });
+  });
+  // Place a cached image, skipping it when it's nowhere near the screen. Anything standing in front
+  // of the player (or the client they're visiting) is drawn see-through, so they're never lost behind it.
+  const place = (s: Sprite, anchor: Pt, depth: number) => {
     const x = anchor.x - cam.x - s.ox;
     const y = anchor.y - cam.y - s.oy;
     if (x > VIEW.w || y > VIEW.h || x + s.canvas.width < 0 || y + s.canvas.height < 0) return;
+    const hides = watched.some((w) => depth > w.depth && BODY.some(([dx, dy]) => solidAt(s, w.at.x + dx - x, w.at.y + dy - y)));
+    if (hides) ctx.globalAlpha = 0.4;
     ctx.drawImage(s.canvas, x, y);
+    ctx.globalAlpha = 1;
   };
   houses.forEach((h) => {
     const depth = h.x + h.w + h.y + h.d - 1;
     const anchor = iso(h.x + h.w / 2, h.y + h.d / 2);
-    items.push({ depth, draw: () => place(sprite(`house:${h.id}`, BOX.house, anchor, (c, a) => drawHouse(c, h, a)), anchor) });
+    items.push({ depth, draw: () => place(sprite(`house:${h.id}`, BOX.house, anchor, (c, a) => drawHouse(c, h, a)), anchor, depth) });
     // The client waits on the porch until their quest is done, then waves from it.
     const look = opts.looks[h.id];
     if (look) {
       // On the porch: just outside the front wall, beside the doorway, so they don't stand where the player knocks.
-      const p = h.doorFace === "x" ? at(h.door.x + 0.2, h.door.y + 0.18) : at(h.door.x + 0.18, h.door.y + 0.2);
+      const w = porch(h);
+      const s = at(w.x, w.y);
       const done = opts.done.has(h.id);
-      items.push({ depth: depth + 0.05, draw: () => drawPerson(ctx, p.x, p.y, { ...look, flip: h.doorFace === "y", wave: done && Math.floor(opts.time * 2) % 2 === 0 }) });
+      items.push({ depth: depth + 0.05, draw: () => drawPerson(ctx, s.x, s.y, { ...look, flip: h.doorFace === "y", wave: done && Math.floor(opts.time * 2) % 2 === 0 }) });
     }
   });
   things.forEach((t) => {
     const anchor = iso(t.x + 0.5, t.y + 0.5);
     const key = `${t.kind}:${t.x},${t.y}${t.kind === "fence" ? t.side : ""}${t.kind === "gate" && opts.unlocked ? ":open" : ""}`;
-    items.push({
-      depth: t.kind === "fence" ? t.x + t.y + 1.9 : t.kind === "van" ? t.x + t.y + 2.4 : t.x + t.y + 1,
-      draw: () => place(sprite(key, boxOf(t), anchor, (c, a) => drawThing(c, t, a, opts.unlocked)), anchor),
-    });
+    const depth = t.kind === "fence" ? t.x + t.y + 1.9 : t.kind === "van" ? t.x + t.y + 2.4 : t.x + t.y + 1;
+    items.push({ depth, draw: () => place(sprite(key, boxOf(t), anchor, (c, a) => drawThing(c, t, a, opts.unlocked)), anchor, depth) });
   });
   outside.forEach((t) => {
     const anchor = iso(t.x + 0.5, t.y + 0.5);
     const paint = (c: Ctx, a: (x: number, y: number) => Pt) => (t.kind === "tree" ? drawTree(c, t, a) : drawBush(c, t.x, t.y, a));
-    items.push({ depth: t.x + t.y + 1, draw: () => place(sprite(`out:${t.x},${t.y}`, t.kind === "tree" ? BOX.tree : BOX.bush, anchor, paint), anchor) });
+    const depth = t.x + t.y + 1;
+    items.push({ depth, draw: () => place(sprite(`out:${t.x},${t.y}`, t.kind === "tree" ? BOX.tree : BOX.bush, anchor, paint), anchor, depth) });
   });
-  const p = opts.player;
-  const pp = at(p.x, p.y);
-  items.push({ depth: p.x + p.y + 0.06, draw: () => drawPerson(ctx, pp.x, pp.y, { ...PLAYER, flip: p.facing === "left", walking: p.walking, t: p.t, backpack: true }) });
+  items.push({ depth: playerDepth, draw: () => drawPerson(ctx, pp.x, pp.y, { ...PLAYER, flip: p.facing === "left", walking: p.walking, t: p.t, backpack: true }) });
   items.sort((a, b) => a.depth - b.depth).forEach((i) => i.draw());
 }
 
@@ -820,10 +839,10 @@ export function drawMinimap(ctx: Ctx, size: number, player: PlayerState, done: S
       ctx.fillRect(x * s, y * s, s + 0.5, s + 0.5);
     }
   houses.forEach((h) => {
-    ctx.fillStyle = !h.quest ? "#c9c0ad" : done.has(h.id) ? "#7cc865" : "#f2b66d";
+    ctx.fillStyle = !h.quest ? "#c9c0ad" : done.has(h.id) ? "#3cb8b9" : "#fab53d";
     ctx.fillRect(h.x * s + 1, h.y * s + 1, h.w * s - 2, h.d * s - 2);
   });
-  ctx.fillStyle = "#1e88e5";
+  ctx.fillStyle = "#c7393e";
   ctx.beginPath();
   ctx.arc(player.x * s, player.y * s, Math.max(3, s * 0.5), 0, Math.PI * 2);
   ctx.fill();

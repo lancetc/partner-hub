@@ -42,16 +42,17 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
         <Link href="/" translate="no" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
           <Logo className="h-8 w-auto shrink-0 sm:h-10" />
-          {/* On phones and smaller laptops the buttons and menu need the room, so the logo stands alone. */}
-          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-xl:hidden" />
-          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-xl:sr-only xl:whitespace-nowrap">
+          {/* On phones and laptops the buttons and menu need the room, so the logo stands alone. */}
+          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-2xl:hidden" />
+          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-2xl:sr-only 2xl:whitespace-nowrap">
             Partner Hub
           </span>
         </Link>
 
         <nav aria-label="Primary" className="ml-2 hidden lg:block xl:ml-6">
           <ul className="flex items-center gap-1">
-            {navItems.map((item) => {
+            {/* No News item up here: the logo goes to the homepage, which is the news. */}
+            {navItems.filter((item) => item.href !== "/").map((item) => {
               const active = isActive(pathname, item.href);
               return (
                 <li key={item.href}>

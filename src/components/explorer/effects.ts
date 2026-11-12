@@ -1,6 +1,6 @@
 /*
   Pixel effects for the Neighbourhood Explorer, from pixelfx (github:patch-gg/pixelfx, MIT).
-  Ambient effects stay put in the world (jacaranda petals, falling leaves, butterflies) or on the
+  Ambient effects stay put in the world (jacaranda petals, falling leaves, a bird) or on the
   screen (sun rays); one-shots celebrate (coins for points, quest complete, level up). They're drawn
   into their own pixel frame, then laid over the street.
 */
@@ -9,7 +9,6 @@ import { clearFrame, composite, createFrame, createFx, type Fx, type FxModule } 
 import * as petals from "pixelfx/fx/weather/cherry-blossoms";
 import * as leaves from "pixelfx/fx/weather/falling-leaves";
 import * as rays from "pixelfx/fx/weather/god-rays";
-import * as butterfly from "pixelfx/fx/critters/butterfly";
 import * as bird from "pixelfx/fx/critters/bird";
 import * as questComplete from "pixelfx/fx/ui/quest-complete";
 import * as coins from "pixelfx/fx/ui/coin-collect";
@@ -29,6 +28,9 @@ export class Effects {
   private lctx: CanvasRenderingContext2D;
   private ambient: Placed[] = [];
   private bursts: Placed[] = [];
+  /** Small butterflies flitting over the gardens, drawn here at the street's own scale (pixelfx's are much bigger). */
+  private butterflies: Butterfly[] = [];
+  private time = 0;
 
   constructor(private reducedMotion: boolean) {
     this.layer = document.createElement("canvas");
@@ -41,13 +43,15 @@ export class Effects {
     // a bird crossing high up, and soft sun rays across the screen.
     this.ambient = [
       { fx: createFx(petals as FxModule, { palette: JACARANDA, seed: 4 }), world: { x: 7.5, y: 0.5, lift: -10 } },
-      { fx: createFx(petals as FxModule, { palette: JACARANDA, seed: 9 }), world: { x: 0.5, y: 14.5, lift: -10 } },
+      // One gum dropping leaves is plenty; more filled the screen.
       { fx: createFx(leaves as FxModule, { palette: GUM_LEAVES, seed: 3 }), world: { x: 0.5, y: 0.5, lift: -10 } },
-      { fx: createFx(leaves as FxModule, { palette: GUM_LEAVES, seed: 6 }), world: { x: 15.5, y: 10.5, lift: -10 } },
-      { fx: createFx(butterfly as FxModule, { seed: 2 }), world: { x: 3.5, y: 6, lift: 18 } },
-      { fx: createFx(butterfly as FxModule, { seed: 5, palette: ["#2a1405", "#5c3008", "#9a5a0e", "#d48e18", "#f5b92c", "#ffde5e", "#fff4bc"] }), world: { x: 12, y: 10.5, lift: 18 } },
       { fx: createFx(bird as FxModule, { seed: 3 }), world: { x: 5, y: 1, lift: 120 } },
       { fx: createFx(rays as FxModule, { seed: 3, light: 0.35 }), screen: { x: 150, y: 220 } },
+    ];
+    this.butterflies = [
+      { x: 3.5, y: 6, phase: 0, wing: "#3cb8b9", light: "#a8e6e6" },
+      { x: 12, y: 10.5, phase: 2.1, wing: "#fab53d", light: "#ffe2a6" },
+      { x: 9.5, y: 7.5, phase: 4.2, wing: "#ffffff", light: "#fff4bc" },
     ];
   }
 
@@ -73,6 +77,7 @@ export class Effects {
 
   /** Steps every effect on, then draws them over the street. */
   draw(ctx: CanvasRenderingContext2D, cam: Cam, dt: number) {
+    this.time += dt;
     if (!this.ambient.length && !this.bursts.length) return;
     clearFrame(this.frame);
     const place = (p: Placed) => {
@@ -93,5 +98,54 @@ export class Effects {
     composite(this.frame, this.image.data, null, 1);
     this.lctx.putImageData(this.image, 0, 0);
     ctx.drawImage(this.layer, 0, 0);
+    for (const b of this.butterflies) drawButterfly(ctx, b, cam, this.time);
   }
+}
+
+type Butterfly = { x: number; y: number; phase: number; wing: string; light: string };
+
+/** A butterfly about 9 px across, wandering a loop above its garden with quick wingbeats. */
+function drawButterfly(ctx: CanvasRenderingContext2D, b: Butterfly, cam: Cam, time: number) {
+  const a = time * 0.9 + b.phase;
+  const home = iso(b.x, b.y);
+  const x = Math.round(home.x - cam.x + 26 * Math.sin(a) + 6 * Math.sin(3 * a));
+  const y = Math.round(home.y - cam.y - 22 + 10 * Math.sin(2 * a + 0.4) + 2 * Math.sin(time * 5 + b.phase));
+  if (x < -10 || y < -10 || x > VIEW.w + 10 || y > VIEW.h + 30) return;
+  const open = Math.floor(time * 9 + b.phase * 3) % 3 !== 0;
+  const dark = "#2a2238";
+  const px = (dx: number, dy: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x + dx, y + dy, 1, 1);
+  };
+  // A small shadow on the ground below.
+  ctx.fillStyle = "rgba(0,0,0,0.15)";
+  ctx.fillRect(x - 2, y + 20, 4, 1);
+  for (const s of [-1, 1]) {
+    if (open) {
+      // Forewing with a dark tip, then the smaller hindwing below it.
+      px(s * 1, -2, b.wing);
+      px(s * 2, -2, b.wing);
+      px(s * 2, -3, b.light);
+      px(s * 3, -3, dark);
+      px(s * 4, -3, dark);
+      px(s * 3, -2, b.light);
+      px(s * 4, -2, b.wing);
+      px(s * 1, -1, b.wing);
+      px(s * 2, -1, b.wing);
+      px(s * 3, -1, b.wing);
+      px(s * 1, 0, b.wing);
+      px(s * 2, 0, b.light);
+      px(s * 2, 1, dark);
+    } else {
+      // Wings up, seen edge-on.
+      px(s * 1, -4, dark);
+      px(s * 1, -3, b.wing);
+      px(s * 1, -2, b.light);
+      px(s * 1, -1, b.wing);
+    }
+  }
+  // Body and antennae.
+  for (let dy = -2; dy <= 1; dy++) px(0, dy, dark);
+  px(-1, -4, dark);
+  px(1, -4, dark);
 }

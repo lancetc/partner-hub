@@ -21,7 +21,7 @@ export default function ResourcesPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-8 sm:px-6 lg:pt-10">
       <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Resources</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Guides, templates, webinars and contacts you can come back to. Demonstration content.</p>
+      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Guides, templates, webinars, the client journey, challenges and contacts you can come back to. Demonstration content.</p>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
       <Link
         href="/resources/glossary"
@@ -50,6 +50,50 @@ export default function ResourcesPage() {
           <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Webinars</span>
           <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Recorded sessions to watch any time</span>
           <span className="mt-1 block text-ink-muted">Support at Home, care coordination and working with Trilogy.</span>
+        </span>
+        <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+      </Link>
+      <Link
+        href="/journey"
+        className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
+      >
+        <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#c7393e] text-white">
+          <Icon name="pin" className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Journey map</span>
+          <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">The client journey, from enquiry to exit</span>
+          <span className="mt-1 block text-ink-muted">Ten stages: what the client does, what Trilogy does, and how each one feels.</span>
+        </span>
+        <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+      </Link>
+      <Link
+        href="/challenges"
+        className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
+      >
+        <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#fab53d] text-[#102a43]">
+          <Icon name="flag" className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Challenges</span>
+          <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Team challenges, a mission a day</span>
+          <span className="mt-1 block text-ink-muted">Join a challenge, earn points with your team and climb the leaderboard.</span>
+        </span>
+        <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+      </Link>
+      <Link
+        href="/play/conversations"
+        className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6 md:col-span-2"
+      >
+        <span aria-hidden className="relative h-12 w-12 shrink-0">
+          <span className="absolute inset-0 -rotate-12 rounded-lg bg-[#c7393e]" />
+          <span className="absolute inset-0 rotate-6 rounded-lg bg-[#fab53d]" />
+          <span className="absolute inset-0 grid place-items-center rounded-lg bg-[#008282] text-lg">💬</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">New game · Care Conversations</span>
+          <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Conversation cards for learning from each other</span>
+          <span className="mt-1 block text-ink-muted">48 cards in six themes. Reflect on your own, run a team session with a room code, or share a perspective with the community.</span>
         </span>
         <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
       </Link>

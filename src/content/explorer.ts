@@ -20,8 +20,21 @@ export type Quest = {
   title: string;
   /** One line for the quest card. */
   teaser: string;
-  /** What the client says when you knock. */
+  /** What the client says when you first knock. Lines in brackets are what you see, not what they say. */
   opening: string[];
+  /**
+    Knocking again, so a return visit doesn't repeat the same words. The game takes these in turn
+    (never the same one twice running). Lines can use {name} for your first name and {time} for
+    morning, afternoon or evening.
+  */
+  returns: {
+    /** Back before you've finished: a different hello… */
+    hello: string[];
+    /** …then the situation again, in other words. */
+    recap: string[];
+    /** After you've helped: how things turned out. Each is a short exchange. */
+    after: string[][];
+  };
   steps: QuestStep[];
   /** The rule of thumb to take away. */
   takeaway: string;
@@ -111,6 +124,18 @@ export const quests: Quest[] = [
         ],
       },
     ],
+    returns: {
+      hello: ["Back again, love? The kettle’s just boiled.", "Oh, it’s you, {name}! Good {time}.", "Come in, come in. Mind the step."],
+      recap: [
+        "I was just saying to Jess, I’m not so steady in the shower these days. She could help me tomorrow, couldn’t she? Just the once.",
+        "So, about my shower. Jess said she’d check whether she can help me tomorrow. It’d only be the one time.",
+      ],
+      after: [
+        ["Good {time}, {name}! A lovely lady called Priya helps me shower on Tuesdays now.", "She brought a little stool for the shower, too. I feel ever so much safer."],
+        ["(Dot is out in the front garden, deadheading her roses.)", "Look at me! Now I’m not fretting about the shower, I’ve had the energy for my roses."],
+        ["Jess sends her love. She was relieved she didn’t have to say no to me herself.", "You’ll stay for a cuppa, won’t you?"],
+      ],
+    },
     takeaway: "If a client asks for something outside the service you’re there for, don’t do it “just this once”. Tell their Care Partner the same day so the right help can be arranged.",
     topic: { slug: "working-with-your-care-partner", title: "Working with your Care Partner" },
     look: { skin: "#f2c9a5", hair: "#e3e6ea", shirt: "#8e5aa8", glasses: true, style: "bun" },
@@ -189,6 +214,18 @@ export const quests: Quest[] = [
         ],
       },
     ],
+    returns: {
+      hello: ["Back again? Mia’s still going on those hedges.", "G’day, {name}! Good {time} for it.", "Ah, you again. Pull up a chair."],
+      recap: [
+        "So, those gutters. Storm season’s nearly here. Could Mia knock them over while she’s out the back? I’ll pay for the extra.",
+        "I’ve been thinking about those gutters again. Mia’s got a ladder in the ute. Half an hour, tops?",
+      ],
+      after: [
+        ["G’day, {name}! A proper gutter bloke came out last week with all the gear.", "Took him twenty minutes. Didn’t even need my ladder."],
+        ["(Ron is on the porch with a cuppa, watching the clouds roll in.)", "Let it rain! Gutters are clear and Mia finished the hedges. Best of both."],
+        ["My coordinator rang and talked me through the cost first. No surprises on the statement. I liked that.", "You’d tell me if I was asking too much, wouldn’t you?"],
+      ],
+    },
     takeaway: "Don’t agree to extra time or a different task on the spot. Check with the client’s coordinator first, and mention the cost in plain words.",
     topic: { slug: "who-to-contact-and-when", title: "Who to contact and when" },
     look: { skin: "#e8b48f", hair: "#cfd3d8", shirt: "#3d7a4a", hat: true, style: "short" },
@@ -267,6 +304,18 @@ export const quests: Quest[] = [
         ],
       },
     ],
+    returns: {
+      hello: ["(Margaret opens the door slowly and peers out at you.)", "Hello, dear. Are you from the council?", "Oh, hello. I was just looking for my glasses."],
+      recap: [
+        "(She still seems unsure where she is. The bruise on her forearm is darker now, and she tugs her sleeve down over it.)",
+        "(She asks you the same question twice in a minute. As she reaches for the door handle, you see the bruise on her arm again.)",
+      ],
+      after: [
+        ["Hello, {name}! I remember you this time.", "The doctor found a water infection. A course of tablets and I’m right as rain."],
+        ["(Margaret is doing the crossword at the kitchen table, pen in hand.)", "Seven down: “helpful visitor”. I’ll pencil you in, shall I?"],
+        ["My daughter comes on Sundays now, since the coordinator rang her.", "And they’ve put a rail by the back step. No more tumbles for me."],
+      ],
+    },
     takeaway: "If something has changed, or you see an injury nobody can explain, keep the client safe, write down what you saw and tell their coordinator the same day.",
     topic: { slug: "sirs-in-depth-know-what-to-report", title: "SIRS in depth: know what to report" },
     look: { skin: "#f5d3b8", hair: "#bfc5cc", shirt: "#c4566e", style: "bun" },
@@ -345,11 +394,43 @@ export const quests: Quest[] = [
         ],
       },
     ],
+    returns: {
+      hello: ["(Ken’s neighbour spots you over the fence again.)", "(The neighbour is watering the roses, and waves you over.)", "(As you reach Ken’s gate, the neighbour calls out.)"],
+      recap: [
+        "Sorry to bother you again. Ken’s been home a week and I’ve not seen him out. Is it his heart? I only want to help.",
+        "Me again! I won’t pry, but was it the heart? I’d feel better knowing.",
+      ],
+      after: [
+        ["(The neighbour is out the front, chatting with Ken himself.)", "Ken’s told me all about it! We’re walking round the block together each morning now."],
+        ["(Ken waves you over from his porch.)", "Good {time}, {name}. My neighbour brought a casserole and asked me how I was. Much nicer than asking you."],
+        ["(The neighbour gives you a friendly nod over the fence.)", "No questions today, I promise. Ken and I are having a cuppa later."],
+      ],
+    },
     takeaway: "What you see and hear in a client’s home stays private. Be friendly, don’t confirm anything, and suggest people ask the client themselves.",
     topic: { slug: "aged-care-code-of-conduct", title: "Aged Care Code of Conduct" },
     look: { skin: "#d9a07c", hair: "#9aa1a9", shirt: "#3b6ea8", glasses: true, style: "short" },
   },
 ];
+
+/* Knocking */
+
+/** What fills the {variables} in a line. */
+export type LineVars = { name: string; time: string };
+
+export const timeOfDay = (d: Date) => (d.getHours() < 12 ? "morning" : d.getHours() < 17 ? "afternoon" : "evening");
+
+/** A line with its {variables} filled in. Unknown ones are left as written. */
+export const fillLine = (line: string, vars: LineVars) => line.replace(/\{(\w+)\}/g, (all, key: string) => (key in vars ? vars[key as keyof LineVars] : all));
+
+/**
+  What's said at a client's door, given how many times you've knocked there before and whether
+  you've helped yet. The first knock gets the full opening; after that the lines take turns.
+*/
+export function doorLines(q: Quest, knocks: number, helped: boolean, vars: LineVars): string[] {
+  const { hello, recap, after } = q.returns;
+  const lines = helped ? after[knocks % after.length] : knocks === 0 ? q.opening : [hello[(knocks - 1) % hello.length], recap[(knocks - 1) % recap.length]];
+  return lines.map((l) => fillLine(l, vars));
+}
 
 /* Scoring */
 

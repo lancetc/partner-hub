@@ -394,6 +394,26 @@ CREATE TABLE IF NOT EXISTS worker_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, clock TEXT NOT NULL,
   released INTEGER NOT NULL, digests INTEGER NOT NULL, dispatched INTEGER NOT NULL, note TEXT
 );
+-- A topic on its way to being published: in review, with changes asked for, waiting on Compliance,
+-- or approved. draft_hash is the saved draft that was submitted (see server/topicApproval).
+CREATE TABLE IF NOT EXISTS topic_approvals (
+  slug TEXT PRIMARY KEY, stage TEXT NOT NULL CHECK (stage IN ('review','changes','compliance','approved')),
+  draft_hash TEXT NOT NULL, reviewer_id TEXT NOT NULL REFERENCES users(id), compliance INTEGER NOT NULL DEFAULT 0,
+  submitted_by TEXT NOT NULL REFERENCES users(id), submitted_at TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
+);
+-- Every step a topic took: submitted, changes asked for, approved, published, withdrawn.
+CREATE TABLE IF NOT EXISTS topic_approval_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, action TEXT NOT NULL, actor TEXT NOT NULL REFERENCES users(id),
+  note TEXT NOT NULL DEFAULT '', version TEXT, at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS topic_approval_events_slug ON topic_approval_events (slug, at);
+-- A Care Conversations team session: the host moves through a shuffled deck and everyone who joins with
+-- the code sees the same card (see server/conversationRooms).
+CREATE TABLE IF NOT EXISTS conversation_rooms (
+  code TEXT PRIMARY KEY, host_id TEXT NOT NULL REFERENCES users(id), theme TEXT NOT NULL, seed INTEGER NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0, flipped INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, ended_at TEXT
+);
 `;
 
 export const demoOrgs = [
@@ -457,9 +477,69 @@ export const demoUsers = [
     audience: "staff",
     service_role: null,
     timezone: "Australia/Brisbane",
-    label: "Learning author · Trilogy",
+    label: "Learning author and Hub owner · Trilogy",
+    review_role: "publisher",
+    review_area: "Partner Hub",
+  },
+  // Trilogy staff who review topics before they're published (see server/topicApproval). They open
+  // admin like authors do, so they can read the draft and comment on its cards.
+  {
+    id: "dana",
+    name: "Dana Okafor",
+    email: "dana@example.test",
+    org_id: "trilogy",
+    role: "author",
+    audience: "staff",
+    service_role: null,
+    timezone: "Australia/Brisbane",
+    label: "Subject-matter expert, clinical · Trilogy",
+    review_role: "sme",
+    review_area: "Clinical",
+  },
+  {
+    id: "hamish",
+    name: "Hamish Clarke",
+    email: "hamish@example.test",
+    org_id: "trilogy",
+    role: "author",
+    audience: "staff",
+    service_role: null,
+    timezone: "Australia/Sydney",
+    label: "Subject-matter expert, care coordination · Trilogy",
+    review_role: "sme",
+    review_area: "Care coordination",
+  },
+  {
+    id: "morgan",
+    name: "Morgan Reid",
+    email: "morgan@example.test",
+    org_id: "trilogy",
+    role: "author",
+    audience: "staff",
+    service_role: null,
+    timezone: "Australia/Brisbane",
+    label: "Compliance approver · Trilogy",
+    review_role: "compliance",
+    review_area: "Quality and Compliance",
   },
 ] as const;
+
+/** Adds demo accounts that arrived after a database was first created, and keeps their approval roles current. */
+export function seedStaff(db: Db) {
+  for (const u of demoUsers) {
+    db.prepare("INSERT OR IGNORE INTO users (id, name, email, org_id, role, audience, service_role, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+      u.id,
+      u.name,
+      u.email,
+      u.org_id,
+      u.role,
+      u.audience,
+      u.service_role,
+      u.timezone,
+    );
+    if ("review_role" in u) db.prepare("UPDATE users SET review_role = ?, review_area = ? WHERE id = ?").run(u.review_role, u.review_area, u.id);
+  }
+}
 
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
@@ -488,6 +568,10 @@ export function migrate(db: Db) {
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.
   if (!userCols.includes("language")) db.exec("ALTER TABLE users ADD COLUMN language TEXT");
+  // Trilogy staff in the topic approval process: a subject-matter expert ("sme"), "compliance", or the "publisher" (Hub owner).
+  if (!userCols.includes("review_role")) db.exec("ALTER TABLE users ADD COLUMN review_role TEXT");
+  // What a reviewer knows about, shown when an author picks one: "Clinical", "Care coordination".
+  if (!userCols.includes("review_area")) db.exec("ALTER TABLE users ADD COLUMN review_area TEXT");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).
@@ -586,6 +670,7 @@ export function openDb(file: string) {
   const db = new DatabaseSync(file);
   migrate(db);
   seed(db);
+  seedStaff(db);
   seedPaths(db);
   return db;
 }

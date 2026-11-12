@@ -28,6 +28,7 @@ import { GRADIENTS, gradientIds } from "@/content/gradients";
 import { dropTargets, insertAfterCard, isLinear, mainLine, movable, moveBlock, moveToPosition, nextOf, ordered } from "@/lib/lessonGraph";
 import { confirmAction } from "@/lib/confirm";
 import { CardComments, ReviewComments, type EditorReview } from "./ReviewComments";
+import { approvalButton, TopicApproval, type Approval } from "./TopicApproval";
 import { openCounts } from "../ReviewThreads";
 import { ImageGenerator } from "./ImageGenerator";
 import { BuildProgress, readEvents, type BuildPhase } from "./BuildProgress";
@@ -50,7 +51,7 @@ const STEPS = [
   { id: "media", label: "Media and voice", hint: "Poster, images and narration", icon: "camera" },
   { id: "spaced", label: "Spaced learning", hint: "Follow ups written by Claude", icon: "route" },
   { id: "comments", label: "Comments", hint: "Feedback from reviewers", icon: "chat" },
-  { id: "review", label: "Review and publish", hint: "Checks and sign off", icon: "check" },
+  { id: "review", label: "Review and publish", hint: "Checks, approval and publishing", icon: "check" },
 ] as const satisfies readonly { id: string; label: string; hint: string; icon: IconName }[];
 type StepId = (typeof STEPS)[number]["id"];
 
@@ -578,10 +579,9 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
   const [conflict, setConflict] = useState<string | null>(null);
   const leaving = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // Goes with the next publish: what changed, and whether people who already did it should be told.
-  const [changeNote, setChangeNote] = useState("");
-  const [important, setImportant] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  // Where the topic is in review and approval, and what the signed-in person can do (see TopicApproval).
+  const approvalApi = useApi<Approval>(isNew ? null : `/api/admin/lessons/${encodeURIComponent(initial.slug)}/approval`);
   const [previewing, setPreviewing] = useState(false);
   const [step, setStep] = useState<StepId>("cards");
   const [selected, setSelected] = useState(card && initial.nodes[card] ? card : initial.start);
@@ -631,6 +631,8 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
       });
       setStatus(r.status);
       setConflict(null);
+      // A save can change the approval: an edit after submitting means submitting again.
+      approvalApi.reload();
       // Edits made while saving stay unsaved; auto-save picks them up next.
       if (edits.current === at) setDirty(false);
       return true;
@@ -692,29 +694,16 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
     };
   }, [isNew, initial.slug]);
 
-  async function publish() {
-    if (dirty && !(await save())) return;
-    setBusy("publish");
-    setSaveError(null);
-    try {
-      const r = await api<{ version: string; status: LessonStatus }>(`/api/admin/lessons/${initial.slug}/content`, {
-        body: { action: "publish", notes: changeNote, kind: important ? "important" : "minor" },
-      });
-      setLesson((l) => ({ ...l, version: r.version }));
-      setStatus(r.status);
-      setNotice(
-        important
-          ? `Published version ${r.version} as an important change. People who did an earlier version see what’s changed next time they open it.`
-          : `Published version ${r.version}. Learners see it from their next visit; anyone who already finished keeps their completion.`,
-      );
-      setChangeNote("");
-      setImportant(false);
-      setHistoryKey((k) => k + 1);
-    } catch (e) {
-      setSaveError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+  /** After the Hub owner publishes the approved draft from the approval panel. */
+  function published(r: { version: string; status: LessonStatus }, important: boolean) {
+    setLesson((l) => ({ ...l, version: r.version }));
+    setStatus(r.status);
+    setNotice(
+      important
+        ? `Published version ${r.version} as an important change. People who did an earlier version see what’s changed next time they open it.`
+        : `Published version ${r.version}. Learners see it from their next visit; anyone who already finished keeps their completion.`,
+    );
+    setHistoryKey((k) => k + 1);
   }
 
   async function discard() {
@@ -821,8 +810,15 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
           {busy === "save" ? "Saving…" : dirty || isNew ? "Save draft" : "Saved"}
         </button>
         {!isNew && (
-          <button type="button" className={btn.primary} onClick={publish} disabled={busy !== null || (!dirty && status?.state === "live")}>
-            <Icon name="check" className="size-4" /> {busy === "publish" ? "Publishing…" : "Publish"}
+          // Publishing goes through review first: this opens the approval, where the next step is.
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={() => setStep("review")}
+            disabled={busy !== null || (!dirty && approvalApi.data?.stage === "live")}
+          >
+            <Icon name={approvalApi.data?.stage === "approved" ? "check" : "arrow-right"} className="size-4" />
+            {!dirty && approvalApi.data?.stage === "live" ? "Published" : approvalButton(dirty && approvalApi.data?.stage === "live" ? null : approvalApi.data)}
           </button>
         )}
       </div>
@@ -830,7 +826,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         <span>
           <Icon name="info" className="mr-1 inline size-4 align-[-3px]" />
           {isNew
-            ? "Save once to keep this topic as a draft; after that, changes save automatically. Learners won’t see it until you publish."
+            ? "Save once to keep this topic as a draft; after that, changes save automatically. Learners won’t see it until it’s reviewed, approved and published."
             : busy === "save"
               ? "Saving…"
               : dirty
@@ -840,9 +836,9 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
                     ? "Not saved yet. Press Save draft to try again."
                     : "Saving your changes…"
                 : status?.state === "unpublished"
-                  ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until you publish.`
+                  ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until it’s approved and published.`
                   : status?.state === "changes"
-                    ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until you publish.`
+                    ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until the changes are approved and published.`
                     : "Everything is published."}
         </span>
         {!isNew && !dirty && status && status.state !== "live" && (
@@ -994,18 +990,26 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         {previewing && <PreviewDialog slug={initial.slug} cardId={selected} dirty={dirty} onClose={() => setPreviewing(false)} />}
         {step === "review" && (
           <Review
-            lesson={lesson}
             checks={checks}
             slug={initial.slug}
             isNew={isNew}
-            changeNote={changeNote}
-            setChangeNote={setChangeNote}
-            important={important}
-            setImportant={setImportant}
-            onPublish={publish}
-            publishing={busy === "publish"}
-            canPublish={!isNew && (dirty || status?.state !== "live")}
             historyKey={historyKey}
+            approval={
+              <TopicApproval
+                slug={initial.slug}
+                data={approvalApi.data}
+                setData={approvalApi.setData}
+                error={approvalApi.error}
+                dirty={dirty}
+                save={() => save()}
+                onPublished={published}
+                onComments={() => {
+                  setCommentsFor(null);
+                  reviewApi.reload();
+                  setStep("comments");
+                }}
+              />
+            }
           />
         )}
       </div>
@@ -6334,37 +6338,19 @@ function Review({
   checks,
   slug,
   isNew,
-  changeNote,
-  setChangeNote,
-  important,
-  setImportant,
-  onPublish,
-  publishing,
-  canPublish,
   historyKey,
+  approval,
 }: {
-  lesson: Lesson;
   checks: Check[];
   slug: string;
   isNew: boolean;
-  changeNote: string;
-  setChangeNote: (s: string) => void;
-  important: boolean;
-  setImportant: (on: boolean) => void;
-  onPublish: () => void;
-  publishing: boolean;
-  canPublish: boolean;
   historyKey: number;
+  /** The approval panel: submit, review, approve and publish (see TopicApproval). */
+  approval: React.ReactNode;
 }) {
   const passed = checks.filter((c) => c.ok).length;
-  const flow = [
-    { label: "Draft", who: "You", done: true },
-    { label: "Content review", who: "Subject matter expert" },
-    { label: "Compliance review", who: "Quality and Compliance" },
-    { label: "Published", who: "Live for learners" },
-  ];
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <Panel title="Automatic checks" aside={<Badge tone={passed === checks.length ? "good" : "warn"}>{`${passed} of ${checks.length} passed`}</Badge>}>
         <ul className="flex flex-col divide-y divide-line">
           {checks.map((c) => (
@@ -6389,45 +6375,7 @@ function Review({
         </div>
       </Panel>
       <div className="flex flex-col gap-5">
-        <Panel title="Sign off">
-          <ol className="flex flex-col border-l-2 border-line pl-5">
-            {flow.map((f) => (
-              <li key={f.label} className="relative py-2">
-                <span
-                  aria-hidden
-                  className={cx(
-                    "absolute -left-[1.72rem] top-3.5 size-3 rounded-full border-2",
-                    f.done ? "border-action bg-action" : "border-line-strong bg-surface",
-                  )}
-                />
-                <p className="font-semibold">{f.label}</p>
-                <p className="text-sm text-ink-muted">{f.who}</p>
-              </li>
-            ))}
-          </ol>
-          <Field label="What changed in this version" hint="Kept in the version history. For an important change, learners see it too." className="mt-3">
-            <textarea
-              rows={3}
-              className={textarea}
-              value={changeNote}
-              onChange={(e) => setChangeNote(e.target.value)}
-              placeholder="For example: Updated the example rate and the worked amounts."
-            />
-          </Field>
-          <label className="mt-2 flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={important} onChange={(e) => setImportant(e.target.checked)} />
-            <span>
-              <span className="font-semibold">Important change</span>
-              <span className="block text-ink-muted">People who did an earlier version see this note next time they open the topic.</span>
-            </span>
-          </label>
-          <button type="button" className={cx(btn.primary, "mt-3 w-full")} onClick={onPublish} disabled={!canPublish || publishing}>
-            {publishing ? "Publishing…" : "Publish"}
-          </button>
-          <p className="mt-2 text-xs text-ink-muted">
-            {isNew ? "Save the topic first." : "Learners who already finished keep their completion. Publishing starts a new version."}
-          </p>
-        </Panel>
+        {isNew ? <p className="text-ink-muted">Save the topic first, then submit it for review.</p> : approval}
         {!isNew && <VersionHistory key={historyKey} slug={slug} />}
       </div>
     </div>
