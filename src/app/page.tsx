@@ -1,6 +1,5 @@
 import { stories } from "@/content/stories";
 import { NewsGrid } from "@/components/NewsGrid";
-import { HomeLearning } from "@/components/HomeLearning";
 import { HomeWorkspace } from "@/components/HomeWorkspace";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -18,8 +17,8 @@ const step = (n: number) => ({ "--step": n }) as React.CSSProperties;
 
 /*
   The homepage in two levels. At the top, a workspace: what you need to know, what you need to do,
-  and where to get help (Ask Trilogy). Below it, discovery: your learning, the Community, challenges
-  and the news, for when there's time to browse.
+  and where to get help (Ask Trilogy). Below it, discovery: the Community, challenges and the news,
+  for when there's time to browse. (Your learning is on Topics and My Training.)
 */
 export default function Home() {
   return (
@@ -33,14 +32,11 @@ export default function Home() {
           Explore the Hub
         </h2>
         <p data-build-step style={step(6)} className="mt-1 max-w-2xl text-lg text-ink-muted">
-          Learning, the Community, challenges and news, for when you have a few minutes.
+          The Community, challenges and news, for when you have a few minutes.
         </p>
         <div data-build-step style={step(6)} className="max-w-3xl empty:hidden">
           <ChallengeBanner />
         </div>
-        <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
-          <Learning />
-        </Suspense>
         <HomeCommunity />
         <div data-build-step style={step(7)} className="mt-10">
           <h2 className="font-serif text-2xl font-semibold">The latest at Trilogy</h2>
@@ -66,11 +62,4 @@ async function Stories() {
   getDb();
   const ordered = [...stories].sort((a, b) => b.date.localeCompare(a.date));
   return <NewsGrid stories={ordered} />;
-}
-
-/** Where the person is in their learning. */
-async function Learning() {
-  await connection();
-  const db = getDb();
-  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} />;
 }
