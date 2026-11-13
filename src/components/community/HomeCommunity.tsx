@@ -24,7 +24,7 @@ export function HomeCommunity() {
   const online = members.filter((m) => m.online);
 
   return (
-    <section aria-labelledby="home-community" className="mt-6 overflow-hidden rounded-3xl border border-line bg-surface">
+    <section aria-labelledby="home-community" data-build-step style={{ "--step": 5 } as React.CSSProperties} className="mt-6 overflow-hidden rounded-3xl border border-line bg-surface">
       <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[22rem_minmax(0,1fr)]">
         {/* The invitation. */}
         <div className="relative flex flex-col gap-4 overflow-hidden bg-[#008282] p-6 text-white sm:p-7">

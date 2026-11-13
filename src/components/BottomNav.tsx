@@ -10,7 +10,7 @@ import { cx } from "@/lib/format";
 export function BottomNav() {
   const pathname = usePathname();
   const ownControls = /^\/(learning|review|open)\/[^/]+/.test(pathname);
-  if (ownControls) return null;
+  if (ownControls || pathname === "/login") return null;
   return (
     <nav
       aria-label="Primary"

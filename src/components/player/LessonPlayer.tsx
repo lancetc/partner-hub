@@ -19,6 +19,7 @@ import { send as sendOrQueue } from "@/lib/outbox";
 import { cumulative, cx, formatDate, spacedWhen } from "@/lib/format";
 import { Icon } from "../Icon";
 import { Frame, type SaveState } from "./Frame";
+import { TopicOutline, Workspace } from "./DesktopAside";
 import { api, durationLabel, formatWhen, useApi } from "@/lib/api";
 import { WaitingSurveys } from "../WaitingSurveys";
 import { ListenCard } from "./AudioStage";
@@ -374,6 +375,12 @@ export function LessonPlayer({
     }
   }
 
+  /** The desktop layout's panels either side of the card (see DesktopAside), for where the learner is now. */
+  const aside = (at: { beat: number; done: boolean } | null) => ({
+    left: <TopicOutline lesson={lesson} progress={at} path={nextTopic?.path} />,
+    right: <Workspace slug={lesson.slug} beats={lesson.beats.length} progress={at} />,
+  });
+
   if (!hydrated) {
     return (
       <Frame
@@ -396,6 +403,7 @@ export function LessonPlayer({
         beats={lesson.beats}
         saveState="idle"
         progress={null}
+        aside={aside(null)}
         footer={
           <Intro
             part="actions"
@@ -448,6 +456,7 @@ export function LessonPlayer({
         beats={lesson.beats}
         saveState={saveState}
         progress={{ beat: lesson.beats.length, done: true }}
+        aside={aside({ beat: lesson.beats.length, done: true })}
       >
         <Complete
           lesson={lesson}
@@ -644,6 +653,7 @@ export function LessonPlayer({
       }
       onRetry={() => pending.current && save(pending.current)}
       progress={{ beat: node.beat, done: false }}
+      aside={aside({ beat: node.beat, done: false })}
       review={review}
       fill={fullVideo || Boolean(bgPhoto) || listen}
       deck={{

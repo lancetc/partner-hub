@@ -8,6 +8,7 @@ import { Icon } from "../Icon";
 import { ThemeToggle } from "../ThemeToggle";
 import { setAutoplay, stopAudio, useAutoplay } from "@/lib/audioPrefs";
 import { cardSounds } from "@/lib/sfx";
+import { setPlayerLayout, usePlayerLayout } from "@/lib/playerLayout";
 
 /**
   Set when the player runs inside the lesson editor's preview window: the close button then
@@ -31,6 +32,7 @@ export function Frame({
   deck,
   footer,
   headerAction,
+  aside,
   children,
 }: {
   title: string;
@@ -59,13 +61,33 @@ export function Frame({
   children?: React.ReactNode;
   /** An extra button in the header for the card on screen, such as its bookmark. */
   headerAction?: React.ReactNode;
+  /**
+    Panels either side of the card in the desktop layout (computer screens only): the topic's outline
+    on the left, the learner's workspace on the right. Without them there's no layout switch.
+  */
+  aside?: { left: React.ReactNode; right: React.ReactNode };
 }) {
   const embeddedClose = useContext(EmbeddedClose);
+  const layout = usePlayerLayout();
+  const wide = Boolean(aside) && layout === "desktop";
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-strong sm:items-center sm:p-6">
+    <div
+      className={cx(
+        "fixed inset-0 z-50 flex justify-center bg-strong sm:items-center sm:p-6",
+        wide && "lg:grid lg:grid-cols-[minmax(15rem,19rem)_minmax(0,38rem)_minmax(16rem,21rem)] lg:content-center lg:gap-6",
+      )}
+    >
+      {wide && (
+        <aside aria-label="About this topic" className="scrollbar-none hidden h-[min(56rem,calc(100dvh-3rem))] overflow-y-auto lg:block">
+          {aside!.left}
+        </aside>
+      )}
       <section
         aria-label={title}
-        className="flex h-dvh w-full max-w-[30rem] flex-col overflow-hidden bg-surface sm:h-[min(56rem,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl"
+        className={cx(
+          "flex h-dvh w-full flex-col overflow-hidden bg-surface sm:h-[min(56rem,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl",
+          wide ? "max-w-[30rem] lg:max-w-none" : "max-w-[30rem]",
+        )}
       >
         <header className="flex items-center gap-2 border-b border-line px-3 py-2">
           {embeddedClose ? (
@@ -87,6 +109,7 @@ export function Frame({
           <span className="ml-auto" />
           <SaveIndicator state={saveState} onRetry={onRetry} />
           {headerAction}
+          {aside && <LayoutToggle wide={wide} />}
           <AutoplayToggle />
           <ThemeToggle />
         </header>
@@ -121,12 +144,33 @@ export function Frame({
             {children}
           </Deck>
         ) : (
-          <div className={fill ? "min-h-0 flex-1 px-3 pb-3 pt-3" : "flex-1 overflow-y-auto px-4 pb-6 pt-4"}>{children}</div>
+          <div className={fill ? "min-h-0 flex-1 px-3 pb-3 pt-3" : "scrollbar-none flex-1 overflow-y-auto px-4 pb-6 pt-4"}>{children}</div>
         )}
 
         {footer && <div className="relative border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </section>
+      {wide && (
+        <aside aria-label="Your workspace" className="scrollbar-none hidden h-[min(56rem,calc(100dvh-3rem))] overflow-y-auto lg:block">
+          {aside!.right}
+        </aside>
+      )}
     </div>
+  );
+}
+
+/** Demo phase: switch between the phone-style card and the desktop layout. Only on computer-sized screens. */
+function LayoutToggle({ wide }: { wide: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={wide}
+      aria-label={wide ? "Switch to the card layout" : "Switch to the desktop layout"}
+      title={wide ? "Card layout" : "Desktop layout: the topic outline and your workspace beside the card"}
+      onClick={() => setPlayerLayout(wide ? "card" : "desktop")}
+      className={cx("hidden size-11 items-center justify-center rounded-full hover:bg-muted lg:inline-flex", wide ? "text-accent" : "text-ink-muted")}
+    >
+      <Icon name={wide ? "mobile" : "monitor"} className="size-5" />
+    </button>
   );
 }
 

@@ -57,9 +57,25 @@ export type IconName =
   | "checklist"
   | "qr"
   | "expand"
+  | "monitor"
+  | "mobile"
   | "collapse";
 
 const paths: Record<IconName, React.ReactNode> = {
+  /** A desktop screen on its stand: the player's desktop layout. */
+  monitor: (
+    <>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </>
+  ),
+  /** A phone: the player's card layout. */
+  mobile: (
+    <>
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M11 18h2" />
+    </>
+  ),
   /** Full screen: four corners pointing out. */
   expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   /** Leave full screen: four corners pointing in. */

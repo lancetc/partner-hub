@@ -34,11 +34,19 @@ export const viewport: Viewport = {
 // Runs before first paint: explicit choice wins, otherwise follow the system preference.
 const themeScript = `(function(){try{var t=localStorage.getItem("tc-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
+/*
+  Also before first paint: just after signing in (or with ?intro, to see it again), the homepage builds
+  itself from the top down. data-build on <html> switches the entrance animations on (globals.css); it's
+  taken off once they've played, so nothing animates on later visits. Never for people who prefer reduced motion.
+*/
+const buildScript = `(function(){try{var d=document.documentElement,s=sessionStorage;if(location.pathname!=="/")return;if(s.getItem("tc-build")!=="1"&&!/[?&]intro\\b/.test(location.search))return;s.removeItem("tc-build");if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-build","");setTimeout(function(){d.removeAttribute("data-build")},9000)}catch(e){}})()`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en-AU" data-theme="light" suppressHydrationWarning className={`${robotoFlex.variable} ${robotoSerif.variable} ${mulish.variable} antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: buildScript }} />
       </head>
       <body className="min-h-dvh bg-bg pb-20 text-ink lg:pb-0">
         <a href="#main" className="sr-only z-50 rounded-lg bg-action px-4 py-2 text-on-action focus:not-sr-only focus:fixed focus:left-4 focus:top-4">

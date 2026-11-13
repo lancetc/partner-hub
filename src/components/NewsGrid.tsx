@@ -53,7 +53,7 @@ function EditorialLayout({ stories }: { stories: Story[] }) {
   const more = rest.slice(8);
 
   return (
-    <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-12">
+    <div data-build-tiles className="mt-6 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-12">
       <StoryTile story={lead} size="lead" className="order-1 sm:col-span-2 lg:order-2 lg:col-span-6" />
       <StoryTile story={policy} size="policy" className="order-2 sm:col-span-2 lg:order-3 lg:col-span-3" />
       <div className="order-3 flex flex-col gap-4 sm:col-span-2 lg:order-1 lg:col-span-3 lg:border-r lg:border-line lg:pr-8">
@@ -92,7 +92,7 @@ function FilteredLayout({ stories }: { stories: Story[] }) {
     return <p className="mt-10 rounded-2xl bg-muted p-6 text-ink-muted">No stories in this category yet.</p>;
   }
   return (
-    <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+    <div data-build-tiles className="mt-8 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
       {stories.map((s) => (
         <StoryTile key={s.slug} story={s} size={s.policy ? "policy" : "standard"} />
       ))}

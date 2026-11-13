@@ -81,6 +81,22 @@ export function AccountMenu() {
               <Icon name="route" /> Administration
             </Link>
           )}
+          {/* Prototype: clears the sign-in and goes to the sign-in page, where any button signs in as the demo author. */}
+          <button
+            type="button"
+            className={item}
+            onClick={async () => {
+              setOpen(false);
+              // Nothing kept for offline use stays on the device for the next person.
+              await clearOfflineData().catch(() => {});
+              await api("/api/demo/session", { method: "DELETE" }).catch(() => {});
+              // A full load, so nothing of the signed-out person stays in memory.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+              window.location.assign("/login");
+            }}
+          >
+            <Icon name="arrow-left" /> Sign out
+          </button>
           <hr className="my-1 border-line" />
           <p className="px-3 pt-2 font-mulish text-xs font-bold uppercase tracking-wider text-ink-muted">Prototype controls</p>
           {me && (

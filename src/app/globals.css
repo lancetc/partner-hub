@@ -319,3 +319,26 @@ input[type="range"].brand-range::-moz-range-thumb {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+  The homepage building itself from the top down after signing in (see buildScript in app/layout).
+  The site header drops in, then each part of the page rises into place in order (--step), and the news
+  tiles one after another. Each plays when its part arrives, since some stream in a moment later.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  html[data-build] [data-site-header] { animation: build-down 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  html[data-build] [data-build-step] {
+    animation: build-in 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(var(--step, 0) * 260ms + 350ms);
+  }
+  /* The tiles follow once the news section (step 6) has risen in. */
+  html[data-build] [data-build-tiles] > * { animation: build-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 2100ms both; }
+  html[data-build] [data-build-tiles] > :nth-child(2) { animation-delay: 2280ms; }
+  html[data-build] [data-build-tiles] > :nth-child(3) { animation-delay: 2460ms; }
+  html[data-build] [data-build-tiles] > :nth-child(4) { animation-delay: 2640ms; }
+  html[data-build] [data-build-tiles] > :nth-child(5) { animation-delay: 2820ms; }
+  html[data-build] [data-build-tiles] > :nth-child(6) { animation-delay: 3000ms; }
+  html[data-build] [data-build-tiles] > :nth-child(n + 7) { animation-delay: 3180ms; }
+}
+@keyframes build-in { from { opacity: 0; transform: translateY(22px); } }
+@keyframes build-down { from { opacity: 0; transform: translateY(-100%); } }
