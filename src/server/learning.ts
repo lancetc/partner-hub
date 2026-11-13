@@ -273,7 +273,7 @@ export function learnerFollowUps(db: Db, user: User) {
         stage: pv.steps[i.step_index]?.stage ?? null,
         anchor: e.anchor,
         base: base ? { slug: base.slug, title: base.title } : null,
-        href: content?.kind === "lesson" ? `/learning/s/${content.slug}?instance=${i.id}` : `/learning/follow-ups/${i.id}`,
+        href: content?.kind === "lesson" ? `/topics/s/${content.slug}?instance=${i.id}` : `/topics/follow-ups/${i.id}`,
         stepNumber: i.step_index + 1,
         stepCount: instances.length,
         title: content?.title ?? stageLabel.custom,
@@ -326,7 +326,7 @@ export function followUpView(db: Db, user: User, id: number) {
     id: instance.id,
     status: statusOf(instance, enrolment),
     // Short lessons in a sequence are played in the lesson player.
-    lessonHref: activity?.kind === "lesson" ? `/learning/s/${activity.slug}?instance=${instance.id}` : null,
+    lessonHref: activity?.kind === "lesson" ? `/topics/s/${activity.slug}?instance=${instance.id}` : null,
     stage: step?.stage ?? null,
     pathName: pv.config.name,
     stepNumber: instance.step_index + 1,

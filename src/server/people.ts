@@ -241,7 +241,7 @@ export function assignLearning(db: Db, actor: User, input: { kind?: unknown; id?
           priority: dueDate ? "high" : "normal",
           title: `Topic assigned: ${lesson.title}`,
           body: `${actor.name} assigned you this ${lesson.minutes}-minute topic${due}.`,
-          href: `/learning/${encodeURIComponent(id)}`,
+          href: `/topics/${encodeURIComponent(id)}`,
           dueAt: dueDate ? `${dueDate}T23:59:00Z` : null,
           source: `assign:topic:${id}:${now.getTime()}`,
         },

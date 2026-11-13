@@ -6174,7 +6174,7 @@ function PreviewDialog({ slug, cardId, dirty, onClose }: { slug: string; cardId:
       document.body.style.overflow = scroll;
     };
   }, [onClose]);
-  const src = `/learning/${encodeURIComponent(slug)}?preview=1&embed=1${fromStart ? "" : `&card=${encodeURIComponent(cardId)}`}`;
+  const src = `/topics/${encodeURIComponent(slug)}?preview=1&embed=1${fromStart ? "" : `&card=${encodeURIComponent(cardId)}`}`;
   const choice = (on: boolean) =>
     cx("min-h-9 rounded-full px-3 text-sm font-semibold", on ? "bg-surface text-ink shadow-sm" : "text-white/80 hover:text-white");
   return (

@@ -202,7 +202,7 @@ async function StoryArticle({
               <p className="mt-2 font-serif text-xl font-semibold leading-snug">{lesson.title}</p>
               <p className="mt-1 text-[0.95rem] text-ink-muted">{lesson.summary}</p>
               <Link
-                href={`/learning/${lesson.slug}`}
+                href={`/topics/${lesson.slug}`}
                 className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
               >
                 {lesson.track === "briefing" ? "See what changed" : "Start topic"} · {lesson.minutes} min

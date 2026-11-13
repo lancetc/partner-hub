@@ -11,7 +11,7 @@ import { catalogueTopics } from "@/server/catalogue";
 import { missionSlugs } from "@/server/challenges";
 
 export const metadata: Metadata = {
-  title: "Learning paths",
+  title: "My Training",
   description: "Sets of Trilogy Care topics to work through in order, from the basics of aged care to getting invoices paid.",
   alternates: { canonical: "/paths" },
 };
@@ -20,8 +20,8 @@ export const metadata: Metadata = {
 export default function LearningPathsPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Learning paths</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Topics grouped into a path, to work through in order. Finish every topic to earn a certificate.</p>
+      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">My Training</h1>
+      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Learning paths: topics grouped to work through in order. Finish every topic in a path to earn a certificate.</p>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
       </Suspense>
@@ -37,7 +37,7 @@ async function YourLearning() {
   await connection();
   const db = getDb();
   const topics = catalogueTopics(db, (await currentUser(db)).id);
-  return <HomeLearning topics={topics} browse={{ href: "/learning", label: `Browse all ${topics.length} topics` }} />;
+  return <HomeLearning topics={topics} browse={{ href: "/topics", label: `Browse all ${topics.length} topics` }} />;
 }
 
 /** Read per request: progress is the signed-in person's, and authors can add paths at any time. */

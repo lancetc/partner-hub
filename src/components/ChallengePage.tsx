@@ -119,7 +119,7 @@ export function ChallengePage({ id }: { id: string }) {
             </p>
           ) : (
             <Link
-              href={`/learning/${today.slug}`}
+              href={`/topics/${today.slug}`}
               className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-full bg-action px-6 font-semibold text-on-action hover:bg-action-hover"
             >
               <Icon name="play" className="size-4" /> Play now · about {today.minutes} min
@@ -164,7 +164,7 @@ export function ChallengePage({ id }: { id: string }) {
                 </p>
               </div>
               {m.open && (
-                <Link href={`/learning/${m.slug}`} className="shrink-0 rounded-full px-3 py-2 text-sm font-semibold text-accent hover:bg-muted">
+                <Link href={`/topics/${m.slug}`} className="shrink-0 rounded-full px-3 py-2 text-sm font-semibold text-accent hover:bg-muted">
                   {m.completedAt ? "Replay" : "Play"}
                   <span className="sr-only"> day {m.day}</span>
                 </Link>

@@ -28,7 +28,7 @@ function documents(db: Db, user: User): Doc[] {
     .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
     .map((l) => ({
       id: `lesson:${l.slug}`,
-      href: `/learning/${l.slug}`,
+      href: `/topics/${l.slug}`,
       title: l.title,
       meta: `Topic · ${l.minutes} min`,
       head: l.title,

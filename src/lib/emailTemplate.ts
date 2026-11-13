@@ -79,7 +79,7 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
       case "lesson": {
         const l = lessons.find((x) => x.slug === b.slug);
         if (!l) break;
-        const href = `${ctx.baseUrl}/learning/${l.slug}`;
+        const href = `${ctx.baseUrl}/topics/${l.slug}`;
         rows.push(card(l.visual.photo ? abs(l.visual.photo.src, ctx.baseUrl) : null, `Topic · ${l.minutes} min`, l.title, l.summary, href, "Start the topic"));
         text.push(`${l.title} (${l.minutes} min topic)\n${l.summary}\n${href}`, "");
         break;

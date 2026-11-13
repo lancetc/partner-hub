@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: localAddresses(),
   cacheComponents: true,
   partialPrefetching: true,
+  // Topics used to live at /learning. Old links keep working: shared and QR links (/learning/s/…),
+  // emails, Inbox items, bookmarks and search results all land on the same page under /topics.
+  async redirects() {
+    return [
+      { source: "/learning", destination: "/topics", permanent: true },
+      { source: "/learning/:path*", destination: "/topics/:path*", permanent: true },
+    ];
+  },
   experimental: {
     // The dev server's build cache, kept on disk between restarts, kept coming back in a state where
     // it told every open page to reload over and over (the page never finished loading). Without it

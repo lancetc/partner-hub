@@ -40,7 +40,7 @@ const catalogue = () => lessons.filter((l) => l.track !== "reinforcement");
 export function topicMetadata(slug: string): Metadata {
   const l = lessonBySlug(slug);
   if (!l || l.track === "reinforcement") return { title: "Topic", robots: hidden };
-  return page(l.title, l.summary || l.outcome, `/learning/${l.slug}`, l.visual?.photo?.src);
+  return page(l.title, l.summary || l.outcome, `/topics/${l.slug}`, l.visual?.photo?.src);
 }
 
 type PathRow = { id: string; name: string; description: string; who_photo: string | null };
@@ -72,7 +72,7 @@ export function webinarMetadata(db: Db, id: string): Metadata {
 /** Overview pages for the sitemap. */
 export function sitemapEntries(db: Db) {
   return {
-    topics: catalogue().map((l) => ({ path: `/learning/${l.slug}` })),
+    topics: catalogue().map((l) => ({ path: `/topics/${l.slug}` })),
     paths: livePaths(db).map((p) => ({ path: `/paths/${p.id}` })),
     webinars: publishedWebinars(db).map((w) => ({ path: `/webinars/${w.id}`, lastModified: w.updated_at })),
   };

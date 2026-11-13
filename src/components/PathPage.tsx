@@ -20,7 +20,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-8 sm:px-6">
       <Link
-        href={preview ? `/admin/learning-paths/${encodeURIComponent(id)}` : "/learning"}
+        href={preview ? `/admin/learning-paths/${encodeURIComponent(id)}` : "/topics"}
         className="inline-flex min-h-11 items-center gap-1.5 font-medium text-accent hover:underline"
       >
         <Icon name="arrow-left" className="size-4" /> {preview ? "Back to editing the path" : "All learning"}

@@ -18,7 +18,7 @@ Then open http://localhost:3000.
 | Area | Route | Notes |
 | --- | --- | --- |
 | News | `/`, `/news/[slug]` | Editorial grid, category filters, saved stories, policy status and source details |
-| Learning | `/learning`, `/learning/[slug]` | Card player with presenter, calculator, branching, audio (browser speech), short response, quiz and briefing acknowledgement |
+| Learning | `/topics`, `/topics/[slug]` | Card player with presenter, calculator, branching, audio (browser speech), short response, quiz and briefing acknowledgement |
 | Onboarding | `/onboarding` | Welcome sequence, role/service-based checklist, document lifecycle, readiness status, prototype reviewer controls |
 | Resources | `/resources` | Guides, templates and contacts |
 | Saved | `/saved` | Bookmarked stories, lessons and resources (also in search) |
@@ -40,7 +40,7 @@ Spaced follow ups after a lesson, from `Trilogy-Care-Spaced-Learning-Claude-Feat
 | Notification adapters (email via HTTP provider, SMS stub) | `src/server/notify.ts` |
 | Authoring: drafts, review, publish, pause/resume, rebaseline, withdraw | `src/server/paths.ts` |
 | Reporting, scoped by organisation | `src/server/reports.ts` |
-| Learner UI | `/learning` (Follow ups), `/learning/follow-ups/[id]` |
+| Learner UI | `/topics` (Follow ups), `/topics/follow-ups/[id]` |
 | Admin UI | `/admin`, `/admin/paths/[id]`, `/admin/follow-ups/[id]`, `/admin/outbox` |
 
 Tests (`npm test`) cover the scheduling rules, weekend and daylight saving cases, idempotent enrolment, concurrent workers, digest cap, reminders, unknown provider outcomes, attempts, after-completion mode, pause/resume, withdrawal and cross-organisation access.

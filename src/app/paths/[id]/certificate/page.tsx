@@ -43,7 +43,7 @@ async function Page({ params, searchParams }: Pick<PageProps<"/paths/[id]/certif
           {path ? "Your certificate is ready once you've finished every topic in this path." : "This learning path isn't available. It may have been removed."}
         </p>
         <Link
-          href={path ? `/paths/${encodeURIComponent(id)}` : "/learning"}
+          href={path ? `/paths/${encodeURIComponent(id)}` : "/topics"}
           className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
         >
           <Icon name="arrow-left" className="size-4" /> {path ? "Back to the path" : "All learning"}

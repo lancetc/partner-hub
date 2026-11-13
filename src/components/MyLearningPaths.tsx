@@ -64,7 +64,7 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
   const live = p.steps.filter((s) => !s.draft);
   const done = live.filter(isDone).length;
   const nextIndex = preview ? 0 : p.steps.findIndex((s) => !s.draft && !isDone(s));
-  const href = (slug: string) => (preview ? `/learning/${slug}?preview=1&path=${encodeURIComponent(p.id)}` : `/learning/${slug}`);
+  const href = (slug: string) => (preview ? `/topics/${slug}?preview=1&path=${encodeURIComponent(p.id)}` : `/topics/${slug}`);
   const next = p.steps[nextIndex];
   const soon = p.steps.length - live.length;
   // Time still to go, counting lessons that are coming soon.

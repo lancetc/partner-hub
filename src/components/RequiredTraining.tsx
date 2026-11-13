@@ -59,7 +59,7 @@ export function RequiredTraining({ items, className }: { items: RequiredItem[]; 
           const urgent = t.status === "expired" || t.status === "due_soon";
           return (
             <li key={t.slug}>
-              <Link href={`/learning/${encodeURIComponent(t.slug)}`} className="flex min-h-14 items-center justify-between gap-3 py-2.5 hover:text-accent">
+              <Link href={`/topics/${encodeURIComponent(t.slug)}`} className="flex min-h-14 items-center justify-between gap-3 py-2.5 hover:text-accent">
                 <span className="min-w-0">
                   <span className="block font-semibold">{t.title}</span>
                   <span className={cx("block text-sm", t.status === "expired" ? "font-semibold text-danger" : "text-ink-muted")}>{when(t)}</span>

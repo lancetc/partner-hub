@@ -5,7 +5,7 @@ import type { Lesson } from "@/content/lessons";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { TopicSummary } from "@/lib/topicSummary";
-import { SUBJECTS, subjectLabel } from "@/lib/subjects";
+import { isSubject, SUBJECTS, subjectLabel } from "@/lib/subjects";
 import { useHub, useHydrated } from "@/lib/store";
 import { StoryVisual } from "./StoryVisual";
 import { SaveButton } from "./SaveButton";
@@ -21,13 +21,19 @@ const trackLabel: Record<Lesson["track"], string> = {
   briefing: "Policy briefings",
 };
 
-type Sort = "recommended" | "newest" | "az" | "za" | "path" | "shortest" | "longest";
+type Sort = "subject" | "recommended" | "newest" | "az" | "za" | "path" | "shortest" | "longest";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
 type View = "grid" | "list";
 
+/*
+  The default is "By subject": the catalogue under subject headings in a fixed order, so it reads the
+  same every visit. (What's assigned or under way is already in Your learning and Assigned to you.)
+  "Suggested for you" is the personal order: under way and assigned first, finished last.
+*/
 const SORTS: { value: Sort; label: string }[] = [
-  { value: "recommended", label: "Recommended" },
+  { value: "subject", label: "By subject" },
+  { value: "recommended", label: "Suggested for you" },
   { value: "newest", label: "Newest first" },
   { value: "az", label: "Title A–Z" },
   { value: "za", label: "Title Z–A" },
@@ -51,6 +57,14 @@ export type PathTopics = { id: string; name: string; slugs: string[] };
   Topics grouped under each learning path, in the path's own order, then the topics in no path.
   A topic in several paths shows under each of them.
 */
+/** Topics under their subject, in the subjects' own order (the same as the chips). */
+function bySubject(shown: TopicSummary[]) {
+  const ids = [...SUBJECTS.map((s) => s.id as string), "other"];
+  return ids
+    .map((id) => ({ id, name: subjectLabel(id), icon: SUBJECTS.find((s) => s.id === id)?.icon ?? ("folder" as const), topics: shown.filter((t) => (isSubject(t.subject) ? t.subject : "other") === id) }))
+    .filter((g) => g.topics.length);
+}
+
 function byPath(shown: TopicSummary[], paths: PathTopics[]) {
   const bySlug = new Map(shown.map((t) => [t.slug, t]));
   const groups = paths.map((p) => ({ id: p.id as string | null, name: p.name, topics: p.slugs.flatMap((s) => bySlug.get(s) ?? []) })).filter((g) => g.topics.length);
@@ -74,7 +88,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   const [track, setTrack] = useState<string>(params.get("for") ?? "all");
   const [status, setStatusFilter] = useState<Status>((params.get("status") as Status) || "any");
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
-  const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "recommended");
+  const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "subject");
   const [view, setView] = useState<View>((params.get("view") as View) || "grid");
   const [shown, setShown] = useState(PAGE);
   // The subject chips fold away behind the current one until it's pressed.
@@ -107,7 +121,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
     if (track !== "all") next.set("for", track);
     if (status !== "any") next.set("status", status);
     if (length !== "any") next.set("length", length);
-    if (sort !== "recommended") next.set("sort", sort);
+    if (sort !== "subject") next.set("sort", sort);
     if (view !== "grid") next.set("view", view);
     const qs = next.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
@@ -139,7 +153,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   const stepsFor = (slug: string) => followUps.filter((f) => f.base?.slug === slug);
   const signoffs = useApi<{ signoffs: Record<string, Signoff> }>("/api/signoffs").data?.signoffs ?? {};
 
-  // Their own track first in "Recommended": a coordinator sees coordinator topics before partner ones.
+  // Their own track first in "Suggested for you": a coordinator sees coordinator topics before partner ones.
   const mine = me?.user.audience === "coordinator" ? "coordinator" : me?.user.audience === "partner" ? "partner" : null;
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const lengthTest = LENGTHS.find((x) => x.value === length)!.test;
@@ -167,6 +181,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   const sorted = [...filtered].sort((a, b) => {
     // Learning path groups topics under each path (see byPath); titles order them within a group.
     if (sort === "az" || sort === "path") return a.title.localeCompare(b.title);
+    if (sort === "subject") return subjectOrder(a) - subjectOrder(b) || a.title.localeCompare(b.title);
     if (sort === "za") return b.title.localeCompare(a.title);
     if (sort === "shortest") return a.minutes - b.minutes || a.title.localeCompare(b.title);
     if (sort === "longest") return b.minutes - a.minutes || a.title.localeCompare(b.title);
@@ -174,6 +189,8 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
     return rank(a) - rank(b) || subjectOrder(a) - subjectOrder(b) || a.title.localeCompare(b.title);
   });
   const filtering = Boolean(words.length) || subject !== "all" || track !== "all" || status !== "any" || length !== "any";
+  // By subject shows headings while every subject is in view; with one subject chosen it's one plain list.
+  const grouped = sort === "subject" && subject === "all";
   const reset = () => {
     setQ("");
     setSubject("all");
@@ -200,7 +217,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <p className="font-mulish text-xs font-bold text-warm">Required{l.assignment?.due && ` · due ${formatDate(l.assignment.due)}`}</p>
                     <h3 className="font-serif text-xl font-semibold leading-snug">
-                      <Link href={`/learning/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
+                      <Link href={`/topics/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
                         {l.title}
                       </Link>
                     </h3>
@@ -232,7 +249,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                       Enrolled · {subjectLabel(l.subject)} · {l.minutes} min
                     </p>
                     <h3 className="font-serif text-xl font-semibold leading-snug">
-                      <Link href={`/learning/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
+                      <Link href={`/topics/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
                         {l.title}
                       </Link>
                     </h3>
@@ -418,6 +435,21 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
             </button>
             .
           </p>
+        ) : grouped ? (
+          bySubject(sorted).map((g) => (
+            <section key={g.id} className="mt-10 first:mt-6" aria-labelledby={`topics-subject-${g.id}`}>
+              <h3 id={`topics-subject-${g.id}`} className="flex flex-wrap items-center gap-x-3 font-serif text-xl font-semibold">
+                <span className="grid size-9 place-items-center rounded-full bg-tealtint text-accent">
+                  <Icon name={g.icon} className="size-4" />
+                </span>
+                {g.name}
+                <span className="font-sans text-sm font-normal text-ink-muted">
+                  {g.topics.length} {g.topics.length === 1 ? "topic" : "topics"}
+                </span>
+              </h3>
+              {topicList(g.topics)}
+            </section>
+          ))
         ) : sort === "path" ? (
           byPath(sorted, paths).map((g) => (
             <section key={g.id ?? "none"} className="mt-10 first:mt-6" aria-labelledby={`topics-path-${g.id ?? "none"}`}>
@@ -440,7 +472,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
           topicList(sorted.slice(0, shown))
         )}
 
-        {sort !== "path" && sorted.length > shown && (
+        {sort !== "path" && !grouped && sorted.length > shown && (
           <div className="mt-8 flex justify-center">
             <button
               type="button"
@@ -472,7 +504,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                   </div>
                   <h3 className="font-serif text-xl font-semibold leading-snug">
                     <Link
-                      href={`/learning/${l.slug}`}
+                      href={`/topics/${l.slug}`}
                       className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
                     >
                       {l.title}
@@ -502,7 +534,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                     </p>
                     <h3 className="font-semibold leading-snug">
                       <Link
-                        href={`/learning/${l.slug}`}
+                        href={`/topics/${l.slug}`}
                         className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
                       >
                         {l.title}
@@ -588,7 +620,7 @@ function SpacedStatus({ stages, steps, signoff, slug }: { stages: { stage: strin
             <span className="font-semibold">{signoff.by} suggested more support:</span> “{signoff.note}”
           </p>
           <Link
-            href={`/learning/${slug}`}
+            href={`/topics/${slug}`}
             className="relative z-10 inline-flex min-h-11 items-center gap-1 font-semibold text-accent underline-offset-4 hover:underline"
           >
             Go over the topic again <Icon name="arrow-right" className="size-4" />

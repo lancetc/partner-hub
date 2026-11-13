@@ -29,7 +29,7 @@ describe("site search", () => {
   it("finds a topic written in the editor by the words on its cards, with a snippet", () => {
     const slug = writeTopic("Handling a heatwave", "Check the client has **water** and a cool room on hot days.");
     const [hit] = search(db, u("sam"), "cool room");
-    expect(hit).toMatchObject({ id: `lesson:${slug}`, href: `/learning/${slug}`, title: "Handling a heatwave", meta: expect.stringMatching(/^Topic/) });
+    expect(hit).toMatchObject({ id: `lesson:${slug}`, href: `/topics/${slug}`, title: "Handling a heatwave", meta: expect.stringMatching(/^Topic/) });
     // Formatting marks don't show in the snippet.
     expect(search(db, u("sam"), "water")[0].snippet).toMatch(/has water and a cool room/);
   });
@@ -55,7 +55,7 @@ describe("site search", () => {
   it("looks up saved items by id, skipping any that are gone", () => {
     const slug = writeTopic("Handling a heatwave", "Water.");
     expect(savedItems(db, u("sam"), [`lesson:${slug}`, "lesson:nope"])).toEqual([
-      { id: `lesson:${slug}`, href: `/learning/${slug}`, title: "Handling a heatwave", meta: expect.stringMatching(/^Topic/) },
+      { id: `lesson:${slug}`, href: `/topics/${slug}`, title: "Handling a heatwave", meta: expect.stringMatching(/^Topic/) },
     ]);
   });
 });

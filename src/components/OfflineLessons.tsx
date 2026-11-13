@@ -36,7 +36,7 @@ export function OfflineLessons() {
               {downloads.map((d) => (
                 <li key={d.slug} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                   <span>
-                    <Link href={`/learning/${d.slug}`} className="font-semibold hover:underline">
+                    <Link href={`/topics/${d.slug}`} className="font-semibold hover:underline">
                       {d.title}
                     </Link>
                     <span className="block text-sm text-ink-muted">

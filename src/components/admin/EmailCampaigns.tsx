@@ -465,7 +465,7 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                     {b.type === "button" && (
                       <div className="grid gap-2 sm:grid-cols-2">
                         <input className={input} value={b.label} placeholder="Button text" onChange={(e) => setBlock(i, { label: e.target.value })} />
-                        <input className={input} value={b.url} placeholder="/learning or https://…" onChange={(e) => setBlock(i, { url: e.target.value })} />
+                        <input className={input} value={b.url} placeholder="/topics or https://…" onChange={(e) => setBlock(i, { url: e.target.value })} />
                       </div>
                     )}
                     {b.type === "image" && (

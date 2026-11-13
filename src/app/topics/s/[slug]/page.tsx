@@ -11,7 +11,7 @@ import { canAuthor, currentUser } from "@/server/auth";
 // Personal to the signed-in person, so kept out of search results.
 export const metadata: Metadata = { title: "Follow up", robots: { index: false, follow: false } };
 
-export default function SequenceLessonPage({ params, searchParams }: PageProps<"/learning/s/[slug]">) {
+export default function SequenceLessonPage({ params, searchParams }: PageProps<"/topics/s/[slug]">) {
   return (
     <Suspense fallback={<div className="fixed inset-0 z-50 bg-strong" aria-busy="true" />}>
       <Player params={params} searchParams={searchParams} />
@@ -19,7 +19,7 @@ export default function SequenceLessonPage({ params, searchParams }: PageProps<"
   );
 }
 
-async function Player({ params, searchParams }: Pick<PageProps<"/learning/s/[slug]">, "params" | "searchParams">) {
+async function Player({ params, searchParams }: Pick<PageProps<"/topics/s/[slug]">, "params" | "searchParams">) {
   const { slug } = await params;
   const query = await searchParams;
   const db = getDb();

@@ -34,14 +34,18 @@ export type BrowsePath = {
   topicTitles: string[];
 };
 
-type Sort = "recommended" | "az" | "za" | "shortest" | "longest" | "most";
+type Sort = "az" | "recommended" | "za" | "shortest" | "longest" | "most";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
 type View = "grid" | "list";
 
+/*
+  The default is Name A–Z, so the list reads the same every visit; the person's own paths are already
+  above it. "Suggested for you" is the personal order: assigned and under way first, finished last.
+*/
 const SORTS: { value: Sort; label: string }[] = [
-  { value: "recommended", label: "Recommended" },
   { value: "az", label: "Name A–Z" },
+  { value: "recommended", label: "Suggested for you" },
   { value: "za", label: "Name Z–A" },
   { value: "shortest", label: "Shortest first" },
   { value: "longest", label: "Longest first" },
@@ -64,7 +68,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
   const [audience, setAudience] = useState(params.get("for") ?? "all");
   const [status, setStatus] = useState<Status>((params.get("status") as Status) || "any");
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
-  const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "recommended");
+  const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "az");
   const [view, setView] = useState<View>((params.get("view") as View) || "grid");
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
@@ -74,7 +78,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
     if (audience !== "all") next.set("for", audience);
     if (status !== "any") next.set("status", status);
     if (length !== "any") next.set("length", length);
-    if (sort !== "recommended") next.set("sort", sort);
+    if (sort !== "az") next.set("sort", sort);
     if (view !== "grid") next.set("view", view);
     const qs = next.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
@@ -90,7 +94,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
       lengthTest(p.minutes) &&
       words.every((w) => [p.name, p.description, p.audience, ...p.topicTitles].join(" ").toLowerCase().includes(w)),
   );
-  // Recommended: assigned and due first, then ones under way, then new ones, finished ones last.
+  // Suggested for you: assigned and due first, then ones under way, then new ones, finished ones last.
   const rank = (p: BrowsePath) => (p.done ? 4 : p.started ? 1 : 2) - (p.assigned ? 1 : 0);
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "az") return a.name.localeCompare(b.name);

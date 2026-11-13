@@ -7,7 +7,7 @@ import type { IconName } from "@/components/Icon";
 export const metadata: Metadata = { title: "Page not found" };
 
 const PLACES: { href: string; label: string; note: string; icon: IconName }[] = [
-  { href: "/learning", label: "Topics", note: "Short topics to learn between visits", icon: "book" },
+  { href: "/topics", label: "Topics", note: "Short topics to learn between visits", icon: "book" },
   { href: "/news", label: "News", note: "What’s changing, and why", icon: "news" },
   { href: "/onboarding", label: "My onboarding", note: "Your next steps", icon: "checklist" },
   { href: "/resources", label: "Resources", note: "Guides, forms and contacts", icon: "folder" },
@@ -27,7 +27,7 @@ export default function NotFound() {
           <Link href="/" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-action px-6 font-semibold text-on-action hover:bg-action-hover">
             <Icon name="home" className="size-4" /> Go to the home page
           </Link>
-          <Link href="/learning" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 font-semibold hover:bg-muted">
+          <Link href="/topics" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 font-semibold hover:bg-muted">
             Browse topics <Icon name="arrow-right" className="size-4" />
           </Link>
         </div>

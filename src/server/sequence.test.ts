@@ -29,7 +29,7 @@ describe("learning sequence", () => {
     const steps = sequence();
     expect(steps.map((s) => s.stage)).toEqual(["Recall", "Apply", "Refresh"]);
     expect(steps.map((s) => local(s.plannedRelease!))).toEqual(["2026-11-05 09:30", "2026-12-21 09:30", "2027-01-28 09:30"]);
-    expect(steps[0].href).toBe(`/learning/s/lf-recall?instance=${steps[0].id}`);
+    expect(steps[0].href).toBe(`/topics/s/lf-recall?instance=${steps[0].id}`);
     expect(steps[0].base).toEqual({ slug: "legislative-framework", title: "Legislative Framework" });
   });
 
@@ -76,7 +76,7 @@ describe("learning sequence", () => {
   it("gives a learner who missed a first attempt the support refresher, on the same date", async () => {
     const refresh = await runTo({ recall: true, apply: false });
     expect(refresh.title).toBe("Legislative Framework: refresher with practice");
-    expect(refresh.href).toContain("/learning/s/lf-refresh-support?instance=");
+    expect(refresh.href).toContain("/topics/s/lf-refresh-support?instance=");
     expect(local(refresh.plannedRelease!)).toBe("2027-01-28 09:30");
   });
 

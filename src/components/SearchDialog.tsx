@@ -29,7 +29,7 @@ const index: Result[] = [
     .filter((l) => l.track !== "reinforcement")
     .map((l) => ({
       id: `lesson:${l.slug}`,
-      href: `/learning/${l.slug}`,
+      href: `/topics/${l.slug}`,
       title: l.title,
       meta: `Topic · ${l.minutes} min`,
       text: `${l.title} ${l.summary} ${l.outcome}`,

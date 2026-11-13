@@ -5,7 +5,7 @@ import { FollowUpPlayer } from "@/components/player/FollowUpPlayer";
 // Personal to the signed-in person, so kept out of search results.
 export const metadata: Metadata = { title: "Follow up", robots: { index: false, follow: false } };
 
-export default function FollowUpPage({ params }: PageProps<"/learning/follow-ups/[id]">) {
+export default function FollowUpPage({ params }: PageProps<"/topics/follow-ups/[id]">) {
   return (
     <Suspense fallback={<div className="fixed inset-0 z-50 bg-strong" aria-busy="true" />}>
       <Player params={params} />
@@ -13,7 +13,7 @@ export default function FollowUpPage({ params }: PageProps<"/learning/follow-ups
   );
 }
 
-async function Player({ params }: { params: PageProps<"/learning/follow-ups/[id]">["params"] }) {
+async function Player({ params }: { params: PageProps<"/topics/follow-ups/[id]">["params"] }) {
   const { id } = await params;
   return <FollowUpPlayer id={id} />;
 }

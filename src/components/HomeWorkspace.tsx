@@ -183,7 +183,7 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
 
           {current && (
             <Link
-              href={`/learning/${current.topic.slug}`}
+              href={`/topics/${current.topic.slug}`}
               data-build-step
               style={step(4)}
               className="group flex gap-4 rounded-3xl border border-[#f9b53f]/50 bg-[#f9b53f]/15 p-4 hover:border-[#f9b53f]"

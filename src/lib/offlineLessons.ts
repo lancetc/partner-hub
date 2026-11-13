@@ -61,7 +61,7 @@ export async function downloadLesson(slug: string, userId: string) {
     const m = (await res.json()) as Manifest;
     const cache = await caches.open(OFFLINE_CACHE);
     // The page itself (as this person sees it), the Learning page to start from, and the offline fallback.
-    const pages = [m.page, "/learning", "/offline"];
+    const pages = [m.page, "/topics", "/offline"];
     const html = await fetch(m.page, { credentials: "same-origin", cache: "no-store" });
     if (!html.ok) throw new Error("Couldn’t get the topic to download.");
     const text = await html.clone().text();

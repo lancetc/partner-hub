@@ -13,7 +13,7 @@ import { pathTopicOrder } from "@/server/learningPaths";
 export const metadata: Metadata = {
   title: "Topics",
   description: "Short, practical topics for Trilogy Care’s Care Partners and care coordinators, built around real visits.",
-  alternates: { canonical: "/learning" },
+  alternates: { canonical: "/topics" },
 };
 
 /*
@@ -46,7 +46,7 @@ export default function LearningPage() {
 async function YourLearning() {
   await connection();
   const db = getDb();
-  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} browse={{ href: "/paths", label: "Browse learning paths" }} />;
+  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} browse={{ href: "/paths", label: "Go to My Training" }} />;
 }
 
 /** Read per request: authors can publish new topics, and change subjects, at any time. */

@@ -145,7 +145,7 @@ describe("compliance register", () => {
     expect(queueComplianceReminders(db, later(340), "https://hub.test")).toBe(1);
     expect(queueComplianceReminders(db, later(341), "https://hub.test")).toBe(0);
     expect(outbox()[0]).toMatchObject({ user_id: "sam", subject: `Your ${a.title} training is due soon`, status: "queued" });
-    expect(outbox()[0].body).toContain(`https://hub.test/learning/${a.slug}`);
+    expect(outbox()[0].body).toContain(`https://hub.test/topics/${a.slug}`);
     expect(queueComplianceReminders(db, later(365), "https://hub.test")).toBe(1);
     expect(outbox()[1].subject).toBe(`Your ${a.title} training has expired`);
 

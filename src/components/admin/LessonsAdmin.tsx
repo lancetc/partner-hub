@@ -408,7 +408,7 @@ function LessonCard({
           {l.status === "unpublished" ? (
             l.title
           ) : (
-            <Link href={`/learning/${l.slug}`} className="hover:underline">
+            <Link href={`/topics/${l.slug}`} className="hover:underline">
               {l.title}
             </Link>
           )}
@@ -615,7 +615,7 @@ function SpacedPanel({
                     <p className="text-sm leading-snug">{v.title}</p>
                     <p className="text-xs text-ink-muted">{v.source}</p>
                     <Link
-                      href={`/learning/s/${v.slug}?preview=1`}
+                      href={`/topics/s/${v.slug}?preview=1`}
                       className="mt-auto inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-accent hover:underline"
                     >
                       Preview <Icon name="arrow-right" className="size-4" />

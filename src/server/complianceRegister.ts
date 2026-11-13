@@ -507,8 +507,8 @@ export function reminderText(user: { name: string }, items: ReminderItem[], base
         ? `Your required training ${expired.length === 1 ? "has" : "have"} expired. Please refresh ${expired.length === 1 ? "it" : "them"} as soon as you can.`
         : "Your required training is due for a refresh soon.",
     "",
-    ...expired.map((i) => `• ${i.title}: expired on ${when(i.expiresAt)}\n  ${baseUrl}/learning/${i.slug}`),
-    ...due.map((i) => `• ${i.title}: refresh by ${when(i.expiresAt)}\n  ${baseUrl}/learning/${i.slug}`),
+    ...expired.map((i) => `• ${i.title}: expired on ${when(i.expiresAt)}\n  ${baseUrl}/topics/${i.slug}`),
+    ...due.map((i) => `• ${i.title}: refresh by ${when(i.expiresAt)}\n  ${baseUrl}/topics/${i.slug}`),
     "",
     "Open the topic and choose Refresh your training. It takes a few minutes, and your record updates as soon as you finish.",
   ];

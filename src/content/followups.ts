@@ -53,7 +53,7 @@ const changeGuide = {
   url: "/resources#change-request-guide",
   issuer: "Trilogy Care (demonstration source)",
 };
-const sources = [{ title: "A little extra time, lesson version 1.0-demo", url: "/learning/a-little-extra-time" }, { title: changeGuide.title, url: changeGuide.url }];
+const sources = [{ title: "A little extra time, lesson version 1.0-demo", url: "/topics/a-little-extra-time" }, { title: changeGuide.title, url: changeGuide.url }];
 const objective = "Check the confirmation process before agreeing to change a visit.";
 
 export const seedFollowUps: FollowUpContent[] = [

@@ -34,7 +34,7 @@ function readOpen() {
   Learning paths, the other page (or nothing).
 */
 export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; browse?: { href: string; label: string } | null }) {
-  const link = browse === undefined ? { href: "/learning", label: `Browse all ${topics.length} topics` } : browse;
+  const link = browse === undefined ? { href: "/topics", label: `Browse all ${topics.length} topics` } : browse;
   const hydrated = useHydrated();
   const attempts = useHub((s) => s.lessons);
   const me = useApi<Me>("/api/me").data;
@@ -121,7 +121,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
           {/* Pick up where you left off: the most recent topic first. */}
           {inProgress[0] && (
             <Link
-              href={`/learning/${inProgress[0].topic.slug}`}
+              href={`/topics/${inProgress[0].topic.slug}`}
               className="group flex gap-4 rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] ring-1 ring-[#0e7c7b]/15 hover:ring-[#0e7c7b]/40"
             >
               <StoryVisual {...inProgress[0].topic.visual} alt="" className="size-20 shrink-0 rounded-xl" iconSize="size-6" />
@@ -167,7 +167,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
                 </p>
                 {next ? (
                   <Link
-                    href={`/learning/${next.slug}`}
+                    href={`/topics/${next.slug}`}
                     className="inline-flex min-h-10 items-center gap-1.5 self-start font-semibold text-accent hover:underline"
                   >
                     Next: {next.title} <Icon name="arrow-right" className="size-4" />
@@ -203,7 +203,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
                 ))}
                 {due.slice(0, 3).map((t) => (
                   <li key={t.slug}>
-                    <Link href={`/learning/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
+                    <Link href={`/topics/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
                       <Icon name="flag" className="size-4 shrink-0 text-warm" />
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold leading-snug">{t.title}</span>
@@ -215,7 +215,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
                 ))}
                 {enrolled.slice(0, 3).map((t) => (
                   <li key={t.slug}>
-                    <Link href={`/learning/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
+                    <Link href={`/topics/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
                       <Icon name="plus" className="size-4 shrink-0 text-action" />
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold leading-snug">{t.title}</span>
@@ -236,7 +236,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
               <ul className="flex flex-col gap-1">
                 {inProgress.slice(1, 4).map(({ topic, step }) => (
                   <li key={topic.slug}>
-                    <Link href={`/learning/${topic.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
+                    <Link href={`/topics/${topic.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold leading-snug">{topic.title}</span>
                         <span className="block text-xs text-ink-muted">
@@ -264,7 +264,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
                     {subjectLabel(t.subject)} · {t.minutes} min
                   </span>
                   <Link
-                    href={`/learning/${t.slug}`}
+                    href={`/topics/${t.slug}`}
                     className="font-serif text-lg font-semibold leading-snug after:absolute after:inset-0 after:content-[''] group-hover:underline"
                   >
                     {t.title}

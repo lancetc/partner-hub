@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Trilogy Care Partner Hub",
     short_name: "Partner Hub",
     description: "News, practical learning and onboarding for Trilogy Care’s Care Partners and care coordinators.",
-    start_url: "/learning",
+    start_url: "/topics",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",

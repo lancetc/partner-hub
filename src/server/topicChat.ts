@@ -113,7 +113,7 @@ export function prepareChat(db: Db, user: User, input: { slug?: unknown; message
     .join(" ");
   const others: RelatedDoc[] = related(db, user, question, { exclude: `lesson:${slug}`, limit: 4 });
   const sources: ChatSource[] = [
-    { title: lesson.title, href: `/learning/${slug}`, meta: "This topic" },
+    { title: lesson.title, href: `/topics/${slug}`, meta: "This topic" },
     ...others.map(({ title, href, meta }) => ({ title, href, meta })),
   ];
   const extra = others.length

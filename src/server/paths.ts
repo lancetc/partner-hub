@@ -186,7 +186,7 @@ export function createFromLesson(db: Db, actor: User, lessonSlug: string, now: D
   const lesson = lessons.find((l) => l.slug === lessonSlug);
   if (!lesson) throw new HttpError(404, "Topic not found.");
   const pathId = `path-${lesson.slug}-${now.getTime().toString(36)}`;
-  const sources = [{ title: `${lesson.title}, topic version ${lesson.version}`, url: `/learning/${lesson.slug}` }];
+  const sources = [{ title: `${lesson.title}, topic version ${lesson.version}`, url: `/topics/${lesson.slug}` }];
   const stages = [
     { stage: "recall", title: "A quick recall", hint: "Ask the learner to recall what should happen first." },
     { stage: "scenario", title: "A new scenario", hint: "Change the situation while keeping the same objective." },

@@ -739,7 +739,7 @@ export function nextTopicAfter(db: Db, user: User, slug: string) {
   const open = (s: (typeof path.steps)[number]) => live(s) && !s.completedAt;
   const next = path.steps.slice(at + 1).find(open) ?? path.steps.slice(0, at).find(open) ?? path.steps.slice(at + 1).find(live);
   return {
-    next: next ? { href: `/learning/${encodeURIComponent(next.slug)}`, title: next.title, done: Boolean(next.completedAt) } : null,
+    next: next ? { href: `/topics/${encodeURIComponent(next.slug)}`, title: next.title, done: Boolean(next.completedAt) } : null,
     path: { href: `/paths/${encodeURIComponent(path.id)}`, name: path.name },
   };
 }

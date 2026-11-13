@@ -60,7 +60,7 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
           <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
             {story.relatedLesson && (
               <Link
-                href={`/learning/${story.relatedLesson}`}
+                href={`/topics/${story.relatedLesson}`}
                 className="relative z-10 inline-flex min-h-11 items-center gap-2 rounded-full bg-teal-bright px-5 font-semibold text-navy hover:bg-white"
               >
                 See what changed <Icon name="arrow-right" className="size-4" />

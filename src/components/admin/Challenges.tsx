@@ -401,7 +401,7 @@ function ChallengeForm({
                     <Link href={`/admin/lessons/${encodeURIComponent(m.slug)}/edit`} className={btn.quiet}>
                       <Icon name="pen" className="size-4" /> Edit topic
                     </Link>
-                    <Link href={`/learning/${encodeURIComponent(m.slug)}?preview=1`} target="_blank" className={btn.quiet}>
+                    <Link href={`/topics/${encodeURIComponent(m.slug)}?preview=1`} target="_blank" className={btn.quiet}>
                       <Icon name="play" className="size-4" /> Preview
                     </Link>
                   </div>

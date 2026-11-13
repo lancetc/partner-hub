@@ -69,7 +69,7 @@ function SavedCards({ cards }: { cards: CardBookmark[] }) {
                     <Icon name="bookmark-filled" className="size-4 shrink-0 text-action" />
                     <span className="min-w-0 flex-1">
                       <Link
-                        href={`/learning/${encodeURIComponent(c.lesson)}?card=${encodeURIComponent(c.card)}`}
+                        href={`/topics/${encodeURIComponent(c.lesson)}?card=${encodeURIComponent(c.card)}`}
                         className="font-semibold leading-snug after:absolute after:inset-0 after:content-[''] hover:underline"
                       >
                         {c.heading || c.label || "Untitled card"}

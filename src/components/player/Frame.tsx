@@ -22,7 +22,7 @@ export type SaveState = "idle" | "saving" | "saved" | "queued" | "error";
 export function Frame({
   title,
   beats,
-  closeHref = "/learning",
+  closeHref = "/topics",
   closeLabel = "Close and return to Topics",
   saveState,
   onRetry,

@@ -27,14 +27,14 @@ export function generateStaticParams() {
   return lessons.map((l) => ({ slug: l.slug }));
 }
 
-export async function generateMetadata({ params }: PageProps<"/learning/[slug]">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/topics/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   // A challenge mission doesn't give itself away before it opens, and isn't indexed.
   if (missionSlugs(getDb()).has(slug)) return { title: "Trilogy Challenge mission", robots: { index: false } };
   return topicMetadata(slug);
 }
 
-export default function LessonPage({ params, searchParams }: PageProps<"/learning/[slug]">) {
+export default function LessonPage({ params, searchParams }: PageProps<"/topics/[slug]">) {
   return (
     <Suspense fallback={<div className="fixed inset-0 z-50 bg-strong" aria-busy="true" />}>
       <Lesson params={params} searchParams={searchParams} />
@@ -42,7 +42,7 @@ export default function LessonPage({ params, searchParams }: PageProps<"/learnin
   );
 }
 
-async function Lesson({ params, searchParams }: Pick<PageProps<"/learning/[slug]">, "params" | "searchParams">) {
+async function Lesson({ params, searchParams }: Pick<PageProps<"/topics/[slug]">, "params" | "searchParams">) {
   const { slug } = await params;
   const query = await searchParams;
   // Lessons can be published from the editor at any time, so read the current version.

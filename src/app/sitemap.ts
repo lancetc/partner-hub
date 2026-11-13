@@ -14,7 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const latest = stories.reduce((d, s) => ((s.updated ?? s.date) > d ? (s.updated ?? s.date) : d), "");
   return [
     { url: `${base}/`, lastModified: latest || undefined, changeFrequency: "daily", priority: 1 },
-    { url: `${base}/learning`, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${base}/topics`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${base}/webinars`, changeFrequency: "weekly", priority: 0.5 },
     { url: `${base}/resources`, changeFrequency: "monthly", priority: 0.5 },
     ...stories.map((s) => ({ url: `${base}/news/${s.slug}`, lastModified: s.updated ?? s.date, changeFrequency: "monthly" as const, priority: 0.8 })),

@@ -54,7 +54,7 @@ export function TaskPanel({ task, state, status, blocked }: { task: OnboardingTa
     case "learning":
       return (
         <div className="flex flex-wrap items-center gap-3">
-          <Link href={`/learning/${task.lessonSlug}`} className={primaryBtn}>
+          <Link href={`/topics/${task.lessonSlug}`} className={primaryBtn}>
             {status === "verified" ? "Review topic" : status === "draft" ? "Keep learning" : "Start topic"}
           </Link>
           <p className="text-sm text-ink-muted">Opens the topic. Your onboarding updates when it’s complete.</p>

@@ -11,7 +11,7 @@ export default function OfflinePage() {
       <h1 className="font-serif text-4xl font-semibold tracking-tight">You’re offline</h1>
       <p className="mt-3 text-lg text-ink-muted">This page isn’t saved on your device yet. It will open once you’re back online.</p>
       <p className="mt-3 text-ink-muted">Topics you’ve downloaded still work, and anything you do is saved and will sync later.</p>
-      <Link href="/learning" className="mt-6 inline-flex min-h-11 items-center rounded-full bg-action px-5 font-semibold text-on-action">
+      <Link href="/topics" className="mt-6 inline-flex min-h-11 items-center rounded-full bg-action px-5 font-semibold text-on-action">
         Go to Learning
       </Link>
     </div>

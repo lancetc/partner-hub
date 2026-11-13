@@ -229,7 +229,7 @@ export function FollowUpPlayer({ id }: { id: string }) {
                   {!isLast && <Icon name="arrow-right" className="size-5" />}
                 </button>
               ) : (
-                <Link href="/learning" className="ml-auto inline-flex min-h-12 items-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
+                <Link href="/topics" className="ml-auto inline-flex min-h-12 items-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
                   Back to learning
                 </Link>
               )}
@@ -250,7 +250,7 @@ export function FollowUpPlayer({ id }: { id: string }) {
             Saved. {a && !a.initialCorrect ? "You worked through the feedback, which is exactly what practice is for." : "Nicely applied."}
           </p>
           <NextUp view={view} />
-          <Link href="/learning" className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
+          <Link href="/topics" className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
             Back to learning
           </Link>
         </div>
@@ -387,7 +387,7 @@ function Message({ icon, heading, text }: { icon: "alert" | "clock" | "info"; he
       </span>
       <h1 className="font-serif text-3xl font-semibold">{heading}</h1>
       <p className="text-lg">{text}</p>
-      <Link href="/learning" className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
+      <Link href="/topics" className="inline-flex min-h-12 items-center justify-center rounded-full bg-action px-6 text-lg font-semibold text-on-action">
         Back to learning
       </Link>
     </div>

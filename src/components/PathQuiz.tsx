@@ -414,7 +414,7 @@ function Outcome({ result: r, pathLink, preview }: { result: QuizOutcome; pathLi
             {r.focus.map((f) => (
               <li key={f.slug}>
                 <Link
-                  href={`/learning/${encodeURIComponent(f.slug)}`}
+                  href={`/topics/${encodeURIComponent(f.slug)}`}
                   className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-2 font-semibold hover:border-line-strong"
                 >
                   {f.title} <Icon name="arrow-right" className="size-4 shrink-0 text-accent" />
@@ -445,7 +445,7 @@ function HeldList({ topics }: { topics: Focus[] }) {
       {topics.map((f) => (
         <li key={f.slug}>
           <Link
-            href={`/learning/${encodeURIComponent(f.slug)}`}
+            href={`/topics/${encodeURIComponent(f.slug)}`}
             className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-gold bg-surface px-4 py-2 font-semibold hover:border-line-strong"
           >
             <span className="flex items-center gap-2">

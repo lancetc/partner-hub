@@ -1649,7 +1649,7 @@ function Complete({
 }) {
   const ack = lesson.completion.type === "acknowledge";
   // Previews and reviews go back where they came from; a learner's topic goes back to its path.
-  const back = (!review && !preview && pathBack) || backTo || { href: "/learning", label: "Back to learning" };
+  const back = (!review && !preview && pathBack) || backTo || { href: "/topics", label: "Back to learning" };
   return (
     <div className="animate-card-in flex flex-col gap-5 py-6">
       {queued && (

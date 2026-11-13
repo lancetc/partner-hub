@@ -942,7 +942,7 @@ function QuestDialog({
               <h3 className="mt-5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Take this with you</h3>
               <p className="mt-1 text-lg">{q.takeaway}</p>
               <Link
-                href={`/learning/${q.topic.slug}`}
+                href={`/topics/${q.topic.slug}`}
                 className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold hover:bg-muted"
               >
                 <Icon name="book" className="size-4" /> Learn more: {q.topic.title}

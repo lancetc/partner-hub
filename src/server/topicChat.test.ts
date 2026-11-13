@@ -58,7 +58,7 @@ describe("the topic assistant", () => {
     expect(events[0].type).toBe("sources");
     expect((events[0] as { sources: unknown[] }).sources[0]).toEqual({
       title: "A little extra time",
-      href: "/learning/a-little-extra-time",
+      href: "/topics/a-little-extra-time",
       meta: "This topic",
     });
     expect(

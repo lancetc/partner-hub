@@ -127,8 +127,8 @@ export function prepareAsk(db: Db, user: User, input: { question?: unknown }, no
     topic = {
       title: lesson.title,
       minutes: lesson.minutes,
-      href: `/learning/${lesson.slug}`,
-      card: hit ? { heading: hit.card.heading || hit.card.label || "The card that covers it", href: `/learning/${lesson.slug}?card=${encodeURIComponent(hit.card.id)}` } : null,
+      href: `/topics/${lesson.slug}`,
+      card: hit ? { heading: hit.card.heading || hit.card.label || "The card that covers it", href: `/topics/${lesson.slug}?card=${encodeURIComponent(hit.card.id)}` } : null,
     };
     if (hit) passage = { title: lesson.title, href: topic.card!.href, text: hit.passage };
     break;
