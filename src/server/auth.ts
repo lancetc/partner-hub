@@ -20,6 +20,8 @@ export type User = {
   manager_id?: string | null;
   /** The language they read the hub in, through Google Translate. Null is English. */
   language?: string | null;
+  /** Their profile picture file (server/profilePictures), or null for initials. */
+  avatar?: string | null;
 };
 
 export const SESSION_COOKIE = "tc-demo-user";

@@ -73,7 +73,8 @@ export type FollowUpListItem = {
 };
 
 export type Me = {
-  user: { id: string; name: string; role: "learner" | "org_admin" | "author"; audience: string; serviceRole: string | null; language: string };
+  /** avatar: their profile picture address, or null for initials. */
+  user: { id: string; name: string; role: "learner" | "org_admin" | "author"; audience: string; serviceRole: string | null; language: string; avatar: string | null };
   org: { name: string };
   canAuthor: boolean;
   canReport: boolean;

@@ -597,6 +597,8 @@ export function migrate(db: Db) {
   if (!userCols.includes("review_role")) db.exec("ALTER TABLE users ADD COLUMN review_role TEXT");
   // What a reviewer knows about, shown when an author picks one: "Clinical", "Care coordination".
   if (!userCols.includes("review_area")) db.exec("ALTER TABLE users ADD COLUMN review_area TEXT");
+  // Their profile picture (server/profilePictures): a file name under data/avatars, or null for initials.
+  if (!userCols.includes("avatar")) db.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).

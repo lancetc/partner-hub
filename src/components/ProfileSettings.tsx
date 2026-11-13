@@ -9,10 +9,12 @@ import { Icon } from "./Icon";
 import { OfflineLessons } from "./OfflineLessons";
 import { MyCertificates } from "./MyCertificates";
 import { EmailSettings } from "./EmailSettings";
+import { ProfilePicture } from "./ProfilePicture";
 
 /* Your profile and settings: your certificates, the language you read the hub in, and audio. */
 export function ProfileSettings() {
-  const me = useApi<Me>("/api/me").data;
+  const meApi = useApi<Me>("/api/me");
+  const me = meApi.data;
   const autoplay = useAutoplay();
   const follow = useFollowWords();
   const sfx = useSoundEffects();
@@ -41,6 +43,11 @@ export function ProfileSettings() {
 
       <section className="mt-8 rounded-3xl border border-line bg-surface p-5">
         <h2 className="font-serif text-xl font-semibold">Your profile</h2>
+        {me && (
+          <div className="mt-4">
+            <ProfilePicture me={me} onChange={(avatar) => meApi.setData({ ...me, user: { ...me.user, avatar } })} />
+          </div>
+        )}
         {me ? (
           <dl className="mt-3 grid gap-x-6 gap-y-2 text-[0.98rem] sm:grid-cols-[10rem_1fr]">
             <dt className="text-ink-muted">Name</dt>
@@ -149,7 +156,8 @@ export function ProfileSettings() {
           <span>
             <span className="font-semibold">Sound effects</span>
             <span className="block text-sm text-ink-muted">
-              Small sounds as you drag and swipe cards in a topic. Muting a topic’s audio silences them too. Saved on this device.
+              A soft click when you press a button, with a light tap on phones, and small sounds as you drag and swipe cards in a topic. Muting a
+              topic’s audio silences the card sounds. Saved on this device.
             </span>
           </span>
         </label>

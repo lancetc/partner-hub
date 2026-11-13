@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
+import { confirmAction } from "@/lib/confirm";
 import { cardSounds } from "@/lib/sfx";
 import { badges, doorLines, fillLine, LEVEL_SIZE, POINTS, quests, STEP_LABEL, timeOfDay, type LineVars, type Quest } from "@/content/explorer";
 import { Icon, type IconName } from "../Icon";
@@ -99,6 +100,8 @@ export function Explorer() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [atDoor, setAtDoor] = useState<string | null>(null);
+  // The landing screen: shown each time the game opens (Continue is one press for returning players), and from "How to play".
+  const [intro, setIntro] = useState(true);
 
   const done = new Set(Object.keys(progress.quests));
   const points = totalPoints(progress);
@@ -646,6 +649,15 @@ export function Explorer() {
                     <br />
                     Explorer
                   </h1>
+                  <button
+                    type="button"
+                    onClick={() => setIntro(true)}
+                    aria-label="How to play"
+                    title="How to play"
+                    className="ml-1 grid size-9 place-items-center rounded-full bg-white/10 font-mulish text-lg font-black hover:bg-white/20"
+                  >
+                    ?
+                  </button>
                 </div>
                 <div className="hidden w-44 lg:block">{menu}</div>
               </div>
@@ -693,7 +705,12 @@ export function Explorer() {
             </p>
           )}
         </div>
-        <p className="mt-2 text-sm text-ink-muted">Click or tap to walk, and drag to look around. Arrow keys work too. Visit a house with a ! to start its quest. Demonstration content.</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          Click or tap to walk, and drag to look around. Arrow keys work too. Visit a house with a ! to start its quest. Demonstration content.{" "}
+          <button type="button" onClick={() => setIntro(true)} className="font-semibold text-accent underline-offset-4 hover:underline">
+            How to play
+          </button>
+        </p>
 
         {/* On smaller screens the menu and panel sit below the game. */}
         <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:hidden">
@@ -703,6 +720,26 @@ export function Explorer() {
       </div>
 
       {dialog && <QuestDialog d={dialog} onChoose={choose} onTryAgain={tryAgain} onNext={advance} setDialog={closeDialog} />}
+      {intro && (
+        <Intro
+          helped={done.size}
+          level={level}
+          points={points}
+          badgeCount={progress.badges.length}
+          onStart={() => setIntro(false)}
+          onRestart={async () => {
+            const ok = await confirmAction("Your points, badges and finished houses in this browser are cleared, and you start the street again.", {
+              title: "Start again?",
+              confirmLabel: "Start again",
+              danger: true,
+            });
+            if (!ok || !userId) return;
+            save(userId, EMPTY);
+            setProgress(EMPTY);
+            setIntro(false);
+          }}
+        />
+      )}
 
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
@@ -956,5 +993,135 @@ function Portrait({ look, className }: { look: Quest["look"]; className?: string
       <circle cx="17.5" cy="25" r="1.6" fill="#f08a8a" opacity="0.45" />
       <circle cx="30.5" cy="25" r="1.6" fill="#f08a8a" opacity="0.45" />
     </svg>
+  );
+}
+
+/*
+  The landing screen: what the game is, who lives on the street, how to play and what you earn, then
+  Start (or Continue, with how far you've got). Opens over the street each time the game starts, and
+  again from "How to play".
+*/
+function Intro({
+  helped,
+  level,
+  points,
+  badgeCount,
+  onStart,
+  onRestart,
+}: {
+  helped: number;
+  level: number;
+  points: number;
+  badgeCount: number;
+  onStart: () => void;
+  onRestart: () => void;
+}) {
+  const start = useRef<HTMLButtonElement>(null);
+  // Focus Start once when the screen opens (the game redraws often; that mustn't move focus), and Esc closes it.
+  const startNow = useRef(onStart);
+  useEffect(() => {
+    startNow.current = onStart;
+  });
+  useEffect(() => {
+    start.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && startNow.current();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const returning = helped > 0 || points > 0;
+  const how: { icon: IconName; title: string; text: string }[] = [
+    { icon: "pin", title: "Walk", text: "Click or tap where you want to go, or use the arrow keys." },
+    { icon: "expand", title: "Look around", text: "Drag the street to look further along it." },
+    { icon: "home", title: "Knock", text: "Walk up to a house with a ! over it and knock on the door." },
+    { icon: "target", title: "Choose", text: "Each visit has three decisions. See what happens, and why." },
+  ];
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="explorer-intro-title" className="fixed inset-0 z-50 overflow-y-auto bg-[#102a43]/85 p-3 backdrop-blur-sm sm:p-6">
+      <div className="mx-auto my-auto flex min-h-full max-w-3xl items-center">
+        <div className="w-full overflow-hidden rounded-3xl bg-[#1d2b4f] text-white shadow-2xl ring-4 ring-[#3d5288]">
+          {/* The street's four neighbours, waiting at their doors. */}
+          <div className="relative overflow-hidden bg-[#5aa64c] px-5 pb-5 pt-6 sm:px-8">
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-8 bg-[#6b6f76]" />
+            <div aria-hidden className="absolute inset-x-0 bottom-8 h-2 bg-[#d9d4c7]" />
+            <ul className="relative flex justify-around gap-2" aria-label="Who lives on the street">
+              {quests.map((q) => (
+                <li key={q.id} className="flex flex-col items-center gap-1.5">
+                  <span className="rounded-full bg-white p-1 shadow-lg ring-[3px] ring-[#1d2b4f]">
+                    <Portrait look={q.look} className="size-12 sm:size-16" />
+                  </span>
+                  <span className="rounded-full bg-[#1d2b4f]/85 px-2.5 py-0.5 font-mulish text-xs font-extrabold sm:text-sm">{q.client}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="p-5 sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#c7393e]">
+                <Icon name="home" className="size-7" />
+              </span>
+              <h2 id="explorer-intro-title" className="font-mulish text-3xl font-black leading-tight sm:text-4xl">
+                Neighbourhood Explorer
+              </h2>
+            </div>
+            <p className="mt-4 text-lg text-white/90">
+              Walk a pixel-art suburb and knock on doors. Dot, Ron, Margaret and Ken each have a real situation to work through, from a request that might be
+              outside the plan to something that just doesn’t feel right. Choose what you’d do, see what happens, and learn why.
+            </p>
+
+            <h3 className="mt-6 font-mulish text-sm font-extrabold uppercase tracking-[0.14em] text-[#9fe3e3]">How to play</h3>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+              {how.map((h) => (
+                <li key={h.title} className="flex items-start gap-3 rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#3cb8b9] text-[#102a43]">
+                    <Icon name={h.icon} className="size-5" />
+                  </span>
+                  <span>
+                    <span className="block font-mulish font-extrabold">{h.title}</span>
+                    <span className="block text-sm text-white/80">{h.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <ul className="mt-4 flex flex-col gap-1.5 text-sm text-white/85">
+              <li className="flex items-center gap-2">
+                <Icon name="star" className="size-4 text-[#fab53d]" /> Earn points for each choice (most for right first time), level up and collect {badges.length} badges.
+              </li>
+              <li className="flex items-center gap-2">
+                <Icon name="refresh" className="size-4 text-[#3cb8b9]" /> Pop back in later: your clients remember you and tell you how things turned out.
+              </li>
+              <li className="flex items-center gap-2">
+                <Icon name="book" className="size-4 text-[#f9b53f]" /> Every quest links to the learning topic behind it.
+              </li>
+            </ul>
+
+            {returning && (
+              <p className="mt-5 rounded-2xl bg-[#fab53d]/15 px-4 py-3 text-sm ring-1 ring-[#fab53d]/40">
+                <span className="font-semibold">Welcome back.</span> You’ve helped {helped} of {quests.length} neighbours · level {level} · {points} points ·{" "}
+                {badgeCount} {badgeCount === 1 ? "badge" : "badges"}.
+              </p>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                ref={start}
+                type="button"
+                onClick={onStart}
+                className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-[#fab53d] px-7 font-mulish text-xl font-black text-[#102a43] shadow-lg hover:bg-[#f9c56a] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                {returning ? "Continue" : "Start exploring"} <Icon name="arrow-right" className="size-6" />
+              </button>
+              {returning && (
+                <button type="button" onClick={onRestart} className="inline-flex min-h-12 items-center rounded-2xl px-4 font-semibold text-white/80 hover:bg-white/10 hover:text-white">
+                  Start again
+                </button>
+              )}
+              <span className="text-xs text-white/60">Saved in this browser. Demonstration content.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

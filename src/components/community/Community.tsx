@@ -83,13 +83,13 @@ function useTab(): [Tab, (t: Tab) => void] {
 
 // ---------- The page ----------
 
-type You = { id: string; name: string; role: string };
+type You = { id: string; name: string; role: string; photo?: string | null };
 
 export function Community() {
   const hydrated = useHydrated();
   const me = useApi<Me>("/api/me").data;
   const who = me?.user.id ?? "guest";
-  const you: You = { id: "you", name: me?.user.name ?? "You", role: me?.user.serviceRole ?? (me?.user.audience === "coordinator" ? "Care coordinator" : "Care Partner") };
+  const you: You = { id: "you", name: me?.user.name ?? "You", photo: me?.user.avatar ?? null, role: me?.user.serviceRole ?? (me?.user.audience === "coordinator" ? "Care coordinator" : "Care Partner") };
   const [saved, setSaved] = useState<Record<string, Mine>>({});
   const mine = saved[who] ?? (hydrated ? load(who) : EMPTY);
   const update = (change: (m: Mine) => Mine) => {
@@ -190,19 +190,25 @@ function Pattern() {
 
 // ---------- People ----------
 
-type Person = Pick<Member, "id" | "name"> & { online?: boolean; level?: number };
+/** `photo`: the signed-in person's own profile picture, when they've added one. */
+type Person = Pick<Member, "id" | "name"> & { online?: boolean; level?: number; photo?: string | null };
 
 function Avatar({ person, size = "md", ring, level }: { person: Person; size?: "xs" | "sm" | "md" | "lg"; ring?: string; level?: number }) {
   const sizes = { xs: "size-7 text-[0.65rem]", sm: "size-9 text-xs", md: "size-11 text-sm", lg: "size-16 text-lg" };
   return (
     <span className="relative inline-flex shrink-0">
-      <span
-        className={cx("grid place-items-center rounded-full font-mulish font-extrabold text-white ring-2", sizes[size], ring ?? "ring-surface")}
-        style={{ background: person.id === "you" ? "#102a43" : avatarColour(person.id) }}
-        aria-hidden
-      >
-        {initials(person.name)}
-      </span>
+      {person.photo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the person's own picture from this hub's avatar endpoint
+        <img src={person.photo} alt="" className={cx("rounded-full object-cover ring-2", sizes[size], ring ?? "ring-surface")} />
+      ) : (
+        <span
+          className={cx("grid place-items-center rounded-full font-mulish font-extrabold text-white ring-2", sizes[size], ring ?? "ring-surface")}
+          style={{ background: person.id === "you" ? "#102a43" : avatarColour(person.id) }}
+          aria-hidden
+        >
+          {initials(person.name)}
+        </span>
+      )}
       {level !== undefined && (
         <span
           className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-[#fab53d] font-mulish text-[0.65rem] font-extrabold text-[#102a43] ring-2 ring-surface"

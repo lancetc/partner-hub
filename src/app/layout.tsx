@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteTranslator } from "@/components/SiteTranslator";
 import { SyncManager } from "@/components/SyncManager";
+import { PressSounds } from "@/components/PressSounds";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { ConfirmHost } from "@/components/ConfirmHost";
 import "./globals.css";
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </Suspense>
         <SiteTranslator />
         <SyncManager />
+        <PressSounds />
         <ConfirmHost />
       </body>
     </html>

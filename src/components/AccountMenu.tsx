@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { UserAvatar } from "./UserAvatar";
+import { PICTURE_CHANGED } from "./ProfilePicture";
 import { resetHub, setHub, useHub } from "@/lib/store";
 import { api, useApi, type Me } from "@/lib/api";
 import { LANGUAGES } from "@/lib/languages";
@@ -15,7 +17,14 @@ export function AccountMenu() {
   const wrap = useRef<HTMLDivElement>(null);
   const flaky = useHub((s) => s.demo.flakyNetwork);
   const savedCount = useHub((s) => s.saved.length);
-  const me = useApi<Me>("/api/me").data;
+  const meApi = useApi<Me>("/api/me");
+  const me = meApi.data;
+  // A new or removed profile picture shows straight away.
+  const reloadMe = meApi.reload;
+  useEffect(() => {
+    window.addEventListener(PICTURE_CHANGED, reloadMe);
+    return () => window.removeEventListener(PICTURE_CHANGED, reloadMe);
+  }, [reloadMe]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,9 +55,9 @@ export function AccountMenu() {
         aria-controls="account-menu"
         aria-label="Account menu"
         onClick={() => setOpen((o) => !o)}
-        className="ml-1 inline-flex size-11 items-center justify-center rounded-full bg-navy font-mulish text-sm font-bold text-white ring-offset-2 ring-offset-bg hover:ring-2 hover:ring-action dark:bg-teal-bright dark:text-navy"
+        className="ml-1 inline-flex size-11 items-center justify-center overflow-hidden rounded-full bg-navy font-mulish text-sm font-bold text-white ring-offset-2 ring-offset-bg hover:ring-2 hover:ring-action dark:bg-teal-bright dark:text-navy"
       >
-        {initials}
+        {me?.user.avatar ? <UserAvatar name={me.user.name} src={me.user.avatar} className="size-11" /> : initials}
       </button>
       {open && (
         <div

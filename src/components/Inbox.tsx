@@ -166,24 +166,16 @@ export function Inbox() {
 }
 
 function InboxRow({ item, open, onToggle, act }: { item: Item; open: boolean; onToggle: () => void; act: (b: Record<string, unknown>) => Promise<void> }) {
+  const tone = toneOf(item);
   const due = item.dueAt && !item.done ? dueLabel(item.dueAt) : null;
   const outstanding = item.kind === "action" ? !item.done : !item.read;
   return (
-    <li
-      className={cx(
-        "overflow-hidden rounded-3xl border bg-surface",
-        item.priority === "critical" && !item.done ? "border-[#c7393e]/50" : "border-line",
-        item.done && "opacity-75",
-      )}
-    >
+    <li className={cx("overflow-hidden rounded-3xl border", tone.box, item.done && "opacity-75")}>
       <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-start gap-3 p-4 text-left hover:bg-muted/60 sm:p-5">
-        <span
-          aria-hidden
-          className={cx(
-            "mt-1.5 size-2.5 shrink-0 rounded-full",
-            outstanding ? (item.priority === "critical" ? "bg-[#c7393e]" : item.kind === "action" ? "bg-[#fab53d]" : "bg-[#3cb8b9]") : "bg-transparent",
-          )}
-        />
+        <span aria-hidden className={cx("relative grid size-11 shrink-0 place-items-center rounded-2xl", tone.icon)}>
+          <Icon name={tone.glyph} className="size-5" />
+          {outstanding && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#c7393e] ring-2 ring-surface" />}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2 text-xs">
             <span className="font-mulish font-extrabold uppercase tracking-[0.12em] text-ink-muted">{item.category}</span>
@@ -217,7 +209,7 @@ function Details({ item, act }: { item: Item; act: (b: Record<string, unknown>) 
     setBusy(false);
   };
   return (
-    <div className="border-t border-line px-4 pb-5 pt-4 sm:px-5 sm:pl-[2.6rem]">
+    <div className="border-t border-black/5 bg-surface/70 px-4 pb-5 pt-4 sm:px-5 sm:pl-[4.6rem] dark:border-white/10">
       {item.body && <p>{item.body}</p>}
       {item.campaign &&
         (email.data ? (
@@ -257,6 +249,24 @@ function Details({ item, act }: { item: Item; act: (b: Record<string, unknown>) 
       )}
     </div>
   );
+}
+
+/** Each kind of notice in its own brand colour: critical red, actions amber, updates teal, activity purple. Done items go plain. */
+function toneOf(item: Item): { box: string; icon: string; glyph: Parameters<typeof Icon>[0]["name"] } {
+  if (item.done) return { box: "border-line bg-surface", icon: "bg-muted text-ink-muted", glyph: "check" };
+  if (item.priority === "critical") return { box: "border-[#c7393e]/40 bg-[#c7393e]/[0.07]", icon: "bg-[#c7393e] text-white", glyph: "alert" };
+  if (item.kind === "action") return { box: "border-[#fab53d]/50 bg-[#fab53d]/10", icon: "bg-[#fab53d] text-[#102a43]", glyph: item.ackRequired ? "check" : "flag" };
+  if (item.kind === "update")
+    return {
+      box: "border-[#3cb8b9]/40 bg-[#3cb8b9]/10",
+      icon: "bg-[#008282] text-white",
+      glyph: /webinar|event/i.test(item.category) ? "calendar" : /learning/i.test(item.category) ? "book" : "news",
+    };
+  return {
+    box: "border-[#7a4fa3]/30 bg-[#7a4fa3]/[0.07]",
+    icon: "bg-[#7a4fa3] text-white",
+    glyph: /achievement|badge/i.test(item.category) ? "star" : "chat",
+  };
 }
 
 /** How the hub tells people things: the delivery rules, so nobody wonders why something came by email. */

@@ -85,3 +85,33 @@ export const cardSounds = {
     if (c) tone(c, { from: 300, to: 170, dur: 0.12, vol: 0.07 });
   },
 };
+
+/** Button sounds follow only the Sound effects setting (muting a topic's narration doesn't silence the rest of the site). */
+function uiAudio() {
+  if (typeof window === "undefined" || !soundEffectsEnabled()) return null;
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    ctx ??= new Ctx();
+    if (ctx.state === "suspended") void ctx.resume();
+    return ctx;
+  } catch {
+    return null;
+  }
+}
+
+/** A soft, very short click: a little body under a quick top, like pressing a real button. */
+export const uiSounds = {
+  /** The main action on a screen: a slightly fuller press. */
+  press() {
+    const c = uiAudio();
+    if (!c) return;
+    tone(c, { from: 240, to: 150, dur: 0.07, vol: 0.06, type: "sine" });
+    tone(c, { from: 1500, to: 1100, dur: 0.025, vol: 0.025, type: "triangle" });
+  },
+  /** Toggles, tabs, chips and everything else: a light tick. */
+  tick() {
+    const c = uiAudio();
+    if (c) tone(c, { from: 1300, to: 950, dur: 0.03, vol: 0.03, type: "triangle" });
+  },
+};
