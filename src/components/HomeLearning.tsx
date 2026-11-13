@@ -28,7 +28,12 @@ function readOpen() {
   }
 }
 
-export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
+/**
+  `browse`: the link on the right of the closed panel. On the homepage, every topic; on Learning and
+  Learning paths, the other page (or nothing).
+*/
+export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; browse?: { href: string; label: string } | null }) {
+  const link = browse === undefined ? { href: "/learning", label: `Browse all ${topics.length} topics` } : browse;
   const hydrated = useHydrated();
   const attempts = useHub((s) => s.lessons);
   const me = useApi<Me>("/api/me").data;
@@ -94,9 +99,10 @@ export function HomeLearning({ topics }: { topics: TopicSummary[] }) {
             </span>
           </button>
         </h2>
-        <Link href="/learning" className="inline-flex min-h-11 items-center gap-1.5 pl-3 font-semibold text-accent hover:underline sm:pl-0">
-          Browse all {topics.length} topics <Icon name="arrow-right" className="size-4" />
-        </Link>
+        {link && (
+          <Link href={link.href} className="inline-flex min-h-11 items-center gap-1.5 pl-3 font-semibold text-accent hover:underline sm:pl-0">
+            {link.label} <Icon name="arrow-right" className="size-4" /></Link>
+        )}
       </div>
 
       <div id="your-learning-panel" hidden={!open} className="px-5 pb-5 sm:px-6 sm:pb-6">

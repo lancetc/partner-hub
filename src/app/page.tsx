@@ -2,15 +2,12 @@ import { stories } from "@/content/stories";
 import { NewsGrid } from "@/components/NewsGrid";
 import { HomeLearning } from "@/components/HomeLearning";
 import { HomeWorkspace } from "@/components/HomeWorkspace";
-import { lessons } from "@/content/lessons";
-import { topicSummary } from "@/lib/topicSummary";
-import { topicDates, topicSubjects } from "@/server/topicSubjects";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getDb, type Db } from "@/server/db";
+import { getDb } from "@/server/db";
+import { catalogueTopics } from "@/server/catalogue";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
-import { missionSlugs } from "@/server/challenges";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -55,20 +52,10 @@ export default function Home() {
   );
 }
 
-/** Topics as the homepage needs them, read per request (topics are published at any time). */
-function topicsFor(db: Db) {
-  const subjects = topicSubjects(db);
-  const dates = topicDates(db);
-  const missions = missionSlugs(db);
-  return lessons
-    .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
-    .map((l) => topicSummary(l, subjects[l.slug] ?? null, dates[l.slug] ?? null));
-}
-
 /** The workspace at the top: personal, so read per request. */
 async function Workspace() {
   await connection();
-  return <HomeWorkspace topics={topicsFor(getDb())} />;
+  return <HomeWorkspace topics={catalogueTopics(getDb())} />;
 }
 
 /** Read per request: stories can be edited and published in admin at any time. */
@@ -82,5 +69,5 @@ async function Stories() {
 /** Where the person is in their learning. */
 async function Learning() {
   await connection();
-  return <HomeLearning topics={topicsFor(getDb())} />;
+  return <HomeLearning topics={catalogueTopics(getDb())} />;
 }

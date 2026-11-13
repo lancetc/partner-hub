@@ -717,7 +717,7 @@ function DateBlock({ event, hydrated, small }: { event: CommunityEvent; hydrated
   return (
     <span
       className={cx(
-        "flex shrink-0 flex-col items-center justify-center rounded-xl bg-[#fff1d6] font-mulish text-[#7a4a00]",
+        "flex shrink-0 flex-col items-center justify-center rounded-xl bg-[#fab53d] font-mulish text-[#102a43] shadow-sm",
         small ? "size-12" : "size-16",
       )}
       aria-hidden

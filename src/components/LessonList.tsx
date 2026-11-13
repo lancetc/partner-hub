@@ -397,7 +397,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   /** Topics as tiles or as a compact list. */
   function topicList(items: TopicSummary[]) {
     return view === "grid" ? (
-          <ul className="mt-5 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((l) => {
               const s = label(l);
               return (
