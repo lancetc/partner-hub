@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useApi } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import type { RegisterStatus } from "@/lib/complianceRegister";
 import { Icon } from "./Icon";
 
-type Item = {
+export type RequiredItem = {
   slug: string;
   title: string;
   minutes: number;
@@ -19,7 +18,7 @@ type Item = {
 };
 
 /** When it needs doing, in a few words. */
-function when(t: Item) {
+function when(t: RequiredItem) {
   if (t.status === "expired") return t.expiresAt ? `Expired ${formatDate(t.expiresAt)}. Refresh it now.` : "Expired. Refresh it now.";
   if (t.status === "due_soon")
     return `Refresh by ${formatDate(t.expiresAt!)}${t.daysLeft !== null ? ` (${t.daysLeft} ${t.daysLeft === 1 ? "day" : "days"})` : ""}`;
@@ -34,29 +33,33 @@ function when(t: Item) {
   return t.expiresAt ? `Done ${formatDate(t.completedAt!)} · next refresh ${formatDate(t.expiresAt)}` : `Done ${formatDate(t.completedAt!)}`;
 }
 
-/** The person's required (compliance register) training on their Learning page: what's due first. Hidden when nothing applies. */
-export function RequiredTraining() {
-  const { data } = useApi<{ training: Item[] }>("/api/me/compliance");
-  const items = data?.training ?? [];
+/** Required training that needs the person to do something: expired, due soon, changed, not done, or missing its quiz result. */
+export const requiredToDo = (items: RequiredItem[]) =>
+  items.filter(
+    (t) => t.status === "expired" || t.status === "due_soon" || t.status === "refresher" || t.status === "not_trained" || t.missing.includes("an assessment record"),
+  );
+
+/**
+  The person's required (compliance register) training, as a card in the "Your learning" panel
+  (HomeLearning): what's due first, each linking to its topic.
+*/
+export function RequiredTraining({ items, className }: { items: RequiredItem[]; className?: string }) {
   if (!items.length) return null;
-  const action = items.filter(
-    (t) =>
-      t.status === "expired" || t.status === "due_soon" || t.status === "refresher" || t.status === "not_trained" || t.missing.includes("an assessment record"),
-  ).length;
+  const action = requiredToDo(items).length;
   return (
-    <section aria-labelledby="required-training" className="rounded-3xl border border-line bg-surface p-5">
+    <section aria-labelledby="required-training" className={cx("flex flex-col gap-1 rounded-2xl border border-line p-4", className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="required-training" className="flex items-center gap-2 font-serif text-2xl font-semibold">
-          <Icon name="shield" className="size-5 text-accent" /> Your required training
-        </h2>
-        <span className="text-sm text-ink-muted">{action ? `${action} to do` : "All up to date"}</span>
+        <h3 id="required-training" className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+          <Icon name="shield" className="size-4 text-accent" /> Your required training
+        </h3>
+        <span className={cx("text-sm", action ? "font-semibold text-danger" : "text-ink-muted")}>{action ? `${action} to do` : "All up to date"}</span>
       </div>
-      <ul className="mt-3 flex flex-col divide-y divide-line">
+      <ul className="flex flex-col divide-y divide-line">
         {items.map((t) => {
           const urgent = t.status === "expired" || t.status === "due_soon";
           return (
             <li key={t.slug}>
-              <Link href={`/learning/${encodeURIComponent(t.slug)}`} className="flex min-h-14 items-center justify-between gap-3 py-3 hover:text-accent">
+              <Link href={`/learning/${encodeURIComponent(t.slug)}`} className="flex min-h-14 items-center justify-between gap-3 py-2.5 hover:text-accent">
                 <span className="min-w-0">
                   <span className="block font-semibold">{t.title}</span>
                   <span className={cx("block text-sm", t.status === "expired" ? "font-semibold text-danger" : "text-ink-muted")}>{when(t)}</span>

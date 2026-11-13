@@ -342,3 +342,9 @@ input[type="range"].brand-range::-moz-range-thumb {
 }
 @keyframes build-in { from { opacity: 0; transform: translateY(22px); } }
 @keyframes build-down { from { opacity: 0; transform: translateY(-100%); } }
+
+/* Learning's subject chips sliding out from behind the current subject, one after another (LessonList). */
+@media (prefers-reduced-motion: no-preference) {
+  .subject-slide { animation: subject-slide 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+}
+@keyframes subject-slide { from { opacity: 0; transform: translateX(-14px); } }

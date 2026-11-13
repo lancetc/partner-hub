@@ -1,7 +1,7 @@
 import type { IconName } from "./Icon";
 
 /**
-  The Community first, then in the order people use them: learn (topics, then paths), put it into practice
+  The Community first, then in the order people use them: learn (Topics, then Learning paths), put it into practice
   (the Play game), and look things up (Resources, which holds the journey map, challenges, webinars, the
   glossary and Care Conversations). News is the homepage; the header leaves it out because the logo goes there.
   `short`: the label under the icon on a phone, where space is tight.
@@ -9,7 +9,7 @@ import type { IconName } from "./Icon";
 export const navItems: { href: string; label: string; short?: string; icon: IconName }[] = [
   { href: "/", label: "News", icon: "news" },
   { href: "/community", label: "Community", icon: "people" },
-  { href: "/learning", label: "Learning", icon: "book" },
+  { href: "/learning", label: "Topics", icon: "book" },
   { href: "/paths", label: "Learning paths", short: "Paths", icon: "route" },
   { href: "/play", label: "Play", icon: "home" },
   { href: "/resources", label: "Resources", icon: "folder" },

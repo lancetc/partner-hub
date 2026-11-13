@@ -10,6 +10,7 @@ import type { TopicSummary } from "@/lib/topicSummary";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
 import type { MyPath } from "./MyLearningPaths";
+import { RequiredTraining, requiredToDo, type RequiredItem } from "./RequiredTraining";
 
 /*
   On the homepage, before the news: where each person is in their learning. What to pick up again,
@@ -41,6 +42,9 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
   const followUps = useApi<{ items: FollowUpListItem[] }>("/api/follow-ups").data?.items ?? [];
   const certificates = useApi<{ certificates: { id: string }[] }>("/api/me/certificates").data?.certificates.length ?? 0;
   const enrolments = useApi<{ topics: { slug: string }[] }>("/api/enrolments").data?.topics ?? [];
+  // Required (compliance) training lives in this panel too, and what's to do shows on the closed line.
+  const required = useApi<{ training: RequiredItem[] }>("/api/me/compliance").data?.training ?? [];
+  const requiredOpen = requiredToDo(required);
   const [open, setOpen] = useState(() => typeof window !== "undefined" && readOpen());
   const toggle = () => {
     setOpen(!open);
@@ -94,6 +98,11 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
             <span className="min-w-0">
               <span className="block font-serif text-xl font-semibold sm:text-2xl">{newcomer ? "Start learning" : "Your learning"}</span>
               <span className="block truncate font-sans text-sm font-normal text-ink-muted">
+                {requiredOpen.length > 0 && (
+                  <span className={cx("font-semibold", requiredOpen.some((t) => t.status === "expired") ? "text-danger" : "text-warm")}>
+                    {requiredOpen.length} required to do ·{" "}
+                  </span>
+                )}
                 {newcomer ? "Short topics of five to ten minutes, built around real visits." : open || !glance ? stats : `${stats} · ${glance}`}
               </span>
             </span>
@@ -107,6 +116,8 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
 
       <div id="your-learning-panel" hidden={!open} className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mt-1 grid gap-4 lg:grid-cols-2">
+          {/* Required training first: what the person must do comes before what they might like to. */}
+          <RequiredTraining items={required} className="lg:col-span-2" />
           {/* Pick up where you left off: the most recent topic first. */}
           {inProgress[0] && (
             <Link

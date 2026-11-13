@@ -23,7 +23,7 @@ export function Frame({
   title,
   beats,
   closeHref = "/learning",
-  closeLabel = "Close and return to Learning",
+  closeLabel = "Close and return to Topics",
   saveState,
   onRetry,
   progress,

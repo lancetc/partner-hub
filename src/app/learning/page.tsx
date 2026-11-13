@@ -4,15 +4,14 @@ import type { Metadata } from "next";
 import { getDb } from "@/server/db";
 import { LessonList } from "@/components/LessonList";
 import { HomeLearning } from "@/components/HomeLearning";
-import { RequiredTraining } from "@/components/RequiredTraining";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { catalogueTopics } from "@/server/catalogue";
 import { pathTopicOrder } from "@/server/learningPaths";
 
 export const metadata: Metadata = {
-  title: "Learning",
-  description: "Short, practical topics and learning paths for Trilogy Care’s Care Partners and care coordinators, built around real visits.",
+  title: "Topics",
+  description: "Short, practical topics for Trilogy Care’s Care Partners and care coordinators, built around real visits.",
   alternates: { canonical: "/learning" },
 };
 
@@ -24,7 +23,7 @@ export const metadata: Metadata = {
 export default function LearningPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Learning</h1>
+      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Topics</h1>
       <p className="mt-2 max-w-2xl text-lg text-ink-muted">Short, practical topics you can finish between visits. Your place is saved as you go.</p>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
@@ -34,9 +33,6 @@ export default function LearningPage() {
       </div>
       <div className="mt-8 max-w-2xl empty:hidden">
         <WaitingSurveys heading="Survey waiting for you" />
-      </div>
-      <div className="mt-8 max-w-2xl empty:hidden">
-        <RequiredTraining />
       </div>
       <Suspense>
         <Catalogue />

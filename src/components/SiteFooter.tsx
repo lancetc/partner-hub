@@ -15,7 +15,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     title: "Partner Hub",
     links: [
       { label: "News", href: "/" },
-      { label: "Learning", href: "/learning" },
+      { label: "Topics", href: "/learning" },
       { label: "Webinars", href: "/webinars" },
       { label: "Resources", href: "/resources" },
       { label: "Saved", href: "/saved" },

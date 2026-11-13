@@ -77,6 +77,8 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "recommended");
   const [view, setView] = useState<View>((params.get("view") as View) || "grid");
   const [shown, setShown] = useState(PAGE);
+  // The subject chips fold away behind the current one until it's pressed.
+  const [subjectsOpen, setSubjectsOpen] = useState(false);
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
   useEffect(() => {
@@ -318,35 +320,63 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
           </p>
         </div>
 
-        {/* Subjects: the main way to browse. */}
+        {/*
+          Subjects: one chip showing the current subject ("All subjects" to start). Pressing it slides the
+          other subjects out beside it; choosing one folds them away again.
+        */}
         <div
           role="group"
           aria-label="Subject"
           className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
         >
-          {[{ id: "all", label: "All subjects", icon: "list" as const }, ...SUBJECTS].map((s) => {
-            const n = s.id === "all" ? base.length : (counts.get(s.id) ?? 0);
-            const active = subject === s.id;
+          {(() => {
+            const all = [{ id: "all", label: "All subjects", icon: "list" as const }, ...SUBJECTS];
+            const current = all.find((s) => s.id === subject) ?? all[0];
+            const countOf = (id: string) => (id === "all" ? base.length : (counts.get(id) ?? 0));
             return (
-              <button
-                key={s.id}
-                type="button"
-                aria-pressed={active}
-                disabled={!active && !n}
-                onClick={() => {
-                  setSubject(s.id);
-                  setShown(PAGE);
-                }}
-                className={cx(
-                  "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium disabled:opacity-40",
-                  active ? "border-action bg-action text-on-action" : "border-line-strong hover:bg-muted",
+              <>
+                <button
+                  type="button"
+                  aria-expanded={subjectsOpen}
+                  aria-controls="subject-choices"
+                  onClick={() => setSubjectsOpen((o) => !o)}
+                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-action bg-action px-3.5 text-sm font-medium text-on-action"
+                >
+                  <Icon name={current.icon} className="size-4" /> {current.label}
+                  <span className="tabular-nums text-on-action/80">{countOf(current.id)}</span>
+                  <Icon name="chevron-down" className={cx("size-4 transition-transform motion-reduce:transition-none", subjectsOpen ? "rotate-90" : "-rotate-90")} />
+                  <span className="sr-only">{subjectsOpen ? "Hide subjects" : "Choose a subject"}</span>
+                </button>
+                {subjectsOpen && (
+                  <span id="subject-choices" className="contents">
+                    {all
+                      .filter((s) => s.id !== current.id)
+                      .map((s, i) => {
+                        const n = countOf(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            aria-pressed={false}
+                            disabled={!n}
+                            onClick={() => {
+                              setSubject(s.id);
+                              setShown(PAGE);
+                              setSubjectsOpen(false);
+                            }}
+                            style={{ animationDelay: `${i * 35}ms` }}
+                            className="subject-slide inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-sm font-medium hover:bg-muted disabled:opacity-40"
+                          >
+                            <Icon name={s.icon} className="size-4" /> {s.label}
+                            <span className="tabular-nums text-ink-muted">{n}</span>
+                          </button>
+                        );
+                      })}
+                  </span>
                 )}
-              >
-                <Icon name={s.icon} className="size-4" /> {s.label}
-                <span className={cx("tabular-nums", active ? "text-on-action/80" : "text-ink-muted")}>{n}</span>
-              </button>
+              </>
             );
-          })}
+          })()}
         </div>
 
         {!sorted.length ? (
