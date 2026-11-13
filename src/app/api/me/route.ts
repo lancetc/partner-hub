@@ -1,5 +1,5 @@
 import { handle } from "@/server/http";
-import { canAuthor, canReport } from "@/server/auth";
+import { canAuthor, canReport, isSuperadmin } from "@/server/auth";
 import { demoUsers } from "@/server/db";
 import { demoOffsetMs } from "@/server/clock";
 import { pictureUrl } from "@/server/profilePictures";
@@ -10,6 +10,7 @@ export async function GET() {
     org: db.prepare("SELECT name FROM orgs WHERE id = ?").get(user.org_id),
     canAuthor: canAuthor(user),
     canReport: canReport(user),
+    isSuperadmin: isSuperadmin(user),
     demoUsers: demoUsers.map((u) => ({ id: u.id, name: u.name, label: u.label })),
     demoClockOffsetDays: Math.round(demoOffsetMs(db) / 86_400_000),
   }));

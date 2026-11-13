@@ -22,6 +22,8 @@ export type User = {
   language?: string | null;
   /** Their profile picture file (server/profilePictures), or null for initials. */
   avatar?: string | null;
+  /** 1: manages people and permissions across every organisation (server/people). */
+  superadmin?: number;
 };
 
 export const SESSION_COOKIE = "tc-demo-user";
@@ -45,6 +47,12 @@ export class HttpError extends Error {
 }
 
 export const canAuthor = (u: User) => u.role === "author";
+/** Trilogy staff who manage people, their access and their learning across every organisation. */
+export const isSuperadmin = (u: User) => u.superadmin === 1;
+
+export function requireSuperadmin(u: User) {
+  if (!isSuperadmin(u)) throw new HttpError(403, "Only superadmins can manage people and permissions.");
+}
 export const canReport = (u: User) => u.role === "author" || u.role === "org_admin";
 
 /** Organisation scope for reports: Trilogy authors see all; organisation admins see their own. */

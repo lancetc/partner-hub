@@ -1,7 +1,12 @@
 import type { IconName } from "../Icon";
 import { spacedLearningOn } from "@/lib/features";
 
-export type AdminLink = { href: string; label: string; icon: IconName; description: string; authorOnly?: boolean };
+/** authorOnly: learning authors only. superadminOnly: superadmins only (People and permissions). */
+export type AdminLink = { href: string; label: string; icon: IconName; description: string; authorOnly?: boolean; superadminOnly?: boolean };
+
+/** Whether this person sees a link, from /api/me. */
+export const linkAllowed = (l: AdminLink, me: { canAuthor?: boolean; isSuperadmin?: boolean } | null | undefined) =>
+  (!l.authorOnly || Boolean(me?.canAuthor)) && (!l.superadminOnly || Boolean(me?.isSuperadmin));
 
 /** The admin areas, grouped. The sidebar, the phone menu and the overview page all use this list. */
 export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
@@ -45,6 +50,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
   {
     title: "People & progress",
     links: [
+      {
+        href: "/admin/people",
+        label: "People and permissions",
+        icon: "people",
+        description: "Everyone in the hub: give access, assign learning paths and topics, and follow their progress.",
+        superadminOnly: true,
+      },
       { href: "/admin/completions", label: "Completions", icon: "circle-check", description: "Who has finished each topic and path, by topic or by person." },
       {
         href: "/admin/compliance",

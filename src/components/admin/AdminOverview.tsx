@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useApi, type Me } from "@/lib/api";
 import { Icon } from "../Icon";
 import { AdminShell } from "./ui";
-import { ADMIN_GROUPS } from "./adminNav";
+import { ADMIN_GROUPS, linkAllowed } from "./adminNav";
 
 /** The admin front page: every area, grouped, with what each one is for. */
 export function AdminOverview() {
@@ -15,7 +15,7 @@ export function AdminOverview() {
     <AdminShell title="Overview">
       <div className="flex flex-col gap-8">
         {ADMIN_GROUPS.map((g) => {
-          const links = g.links.filter((l) => !l.authorOnly || me?.canAuthor);
+          const links = g.links.filter((l) => linkAllowed(l, me));
           if (!links.length) return null;
           return (
             <section key={g.title} aria-labelledby={`group-${g.title}`}>

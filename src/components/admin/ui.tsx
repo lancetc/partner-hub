@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
-import { ADMIN_GROUPS } from "./adminNav";
+import { ADMIN_GROUPS, linkAllowed } from "./adminNav";
 
 export const btn = {
   primary:
@@ -73,10 +73,11 @@ export const statusText: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const visible = (canAuthor: boolean | undefined) =>
-  ADMIN_GROUPS.map((g) => ({ ...g, links: g.links.filter((l) => !l.authorOnly || canAuthor) })).filter((g) => g.links.length);
+/** The sidebar's groups. Superadmin pages sit in the Superadmin button at the top instead. */
+const visible = (me: Me | null | undefined) =>
+  ADMIN_GROUPS.map((g) => ({ ...g, links: g.links.filter((l) => linkAllowed(l, me) && !l.superadminOnly) })).filter((g) => g.links.length);
 
-function NavLinks({ pathname, canAuthor, onPick }: { pathname: string; canAuthor?: boolean; onPick?: () => void }) {
+function NavLinks({ pathname, me, onPick }: { pathname: string; me?: Me | null; onPick?: () => void }) {
   return (
     <>
       <Link
@@ -90,7 +91,24 @@ function NavLinks({ pathname, canAuthor, onPick }: { pathname: string; canAuthor
       >
         <Icon name="home" className="size-4 shrink-0" /> Overview
       </Link>
-      {visible(canAuthor).map((g) => (
+      {me?.isSuperadmin && (
+        <Link
+          href="/admin/people"
+          onClick={onPick}
+          aria-current={pathname.startsWith("/admin/people") ? "page" : undefined}
+          className={cx(
+            "mt-2 flex min-h-11 items-center gap-2.5 rounded-xl px-3 font-semibold transition-colors",
+            pathname.startsWith("/admin/people") ? "bg-navy text-white ring-2 ring-gold" : "bg-navy text-white hover:bg-navy-medium",
+          )}
+        >
+          <Icon name="shield" className="size-4 shrink-0 text-gold" />
+          <span className="flex flex-col leading-tight">
+            Superadmin
+            <span className="text-xs font-normal text-white/75">People and permissions</span>
+          </span>
+        </Link>
+      )}
+      {visible(me).map((g) => (
         <div key={g.title} className="mt-4">
           <p className="mb-1 px-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">{g.title}</p>
           {g.links.map((l) => {
@@ -132,7 +150,7 @@ export function AdminShell({ title, children, back }: { title: string; children:
         {withMenu && (
           <aside aria-label="Administration" className="hidden lg:block">
             <nav className="sticky top-20 flex flex-col rounded-3xl border border-line bg-surface p-3">
-              <NavLinks pathname={pathname} canAuthor={me?.canAuthor} />
+              <NavLinks pathname={pathname} me={me} />
             </nav>
           </aside>
         )}
@@ -141,7 +159,7 @@ export function AdminShell({ title, children, back }: { title: string; children:
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Administration</p>
             {me && (
               <span className="text-sm text-ink-muted">
-                {me.user.name} · {me.canAuthor ? "Learning author" : "Reports for " + me.org.name}
+                {me.user.name} · {me.isSuperadmin ? "Superadmin" : me.canAuthor ? "Learning author" : "Reports for " + me.org.name}
               </span>
             )}
           </div>
@@ -163,7 +181,7 @@ export function AdminShell({ title, children, back }: { title: string; children:
                   aria-label="Administration"
                   className="absolute left-0 top-full z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-3xl border border-line bg-surface p-3 shadow-xl"
                 >
-                  <NavLinks pathname={pathname} canAuthor={me?.canAuthor} onPick={() => setMenu(false)} />
+                  <NavLinks pathname={pathname} me={me} onPick={() => setMenu(false)} />
                 </nav>
               )}
             </div>

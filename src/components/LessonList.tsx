@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Lesson } from "@/content/lessons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { TopicSummary } from "@/lib/topicSummary";
 import { SUBJECTS, subjectLabel } from "@/lib/subjects";
@@ -79,6 +79,25 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
   const [shown, setShown] = useState(PAGE);
   // The subject chips fold away behind the current one until it's pressed.
   const [subjectsOpen, setSubjectsOpen] = useState(false);
+  // While they fold away: the subject that was current, so the chips leaving stay the ones that were shown.
+  const [subjectsClosing, setSubjectsClosing] = useState<string | null>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  const openSubjects = () => {
+    window.clearTimeout(closeTimer.current);
+    setSubjectsClosing(null);
+    setSubjectsOpen(true);
+  };
+  const closeSubjects = (from: string) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return setSubjectsOpen(false);
+    setSubjectsClosing(from);
+    window.clearTimeout(closeTimer.current);
+    // The leaving animation (globals.css, subject-slide-out) plus its stagger.
+    closeTimer.current = window.setTimeout(() => {
+      setSubjectsOpen(false);
+      setSubjectsClosing(null);
+    }, 240 + SUBJECTS.length * 25);
+  };
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
   useEffect(() => {
@@ -339,19 +358,27 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                   type="button"
                   aria-expanded={subjectsOpen}
                   aria-controls="subject-choices"
-                  onClick={() => setSubjectsOpen((o) => !o)}
+                  onClick={() => (subjectsOpen && !subjectsClosing ? closeSubjects(current.id) : openSubjects())}
                   className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-action bg-action px-3.5 text-sm font-medium text-on-action"
                 >
-                  <Icon name={current.icon} className="size-4" /> {current.label}
-                  <span className="tabular-nums text-on-action/80">{countOf(current.id)}</span>
-                  <Icon name="chevron-down" className={cx("size-4 transition-transform motion-reduce:transition-none", subjectsOpen ? "rotate-90" : "-rotate-90")} />
-                  <span className="sr-only">{subjectsOpen ? "Hide subjects" : "Choose a subject"}</span>
+                  <span key={current.id} className="subject-swap inline-flex items-center gap-1.5">
+                    <Icon name={current.icon} className="size-4" /> {current.label}
+                    <span className="tabular-nums text-on-action/80">{countOf(current.id)}</span>
+                  </span>
+                  <Icon
+                    name="chevron-down"
+                    className={cx(
+                      "size-4 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                      subjectsOpen && !subjectsClosing ? "rotate-90" : "-rotate-90",
+                    )}
+                  />
+                  <span className="sr-only">{subjectsOpen && !subjectsClosing ? "Hide subjects" : "Choose a subject"}</span>
                 </button>
                 {subjectsOpen && (
                   <span id="subject-choices" className="contents">
                     {all
-                      .filter((s) => s.id !== current.id)
-                      .map((s, i) => {
+                      .filter((s) => s.id !== (subjectsClosing ?? current.id))
+                      .map((s, i, list) => {
                         const n = countOf(s.id);
                         return (
                           <button
@@ -360,12 +387,16 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                             aria-pressed={false}
                             disabled={!n}
                             onClick={() => {
+                              closeSubjects(current.id);
                               setSubject(s.id);
                               setShown(PAGE);
-                              setSubjectsOpen(false);
                             }}
-                            style={{ animationDelay: `${i * 35}ms` }}
-                            className="subject-slide inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-sm font-medium hover:bg-muted disabled:opacity-40"
+                            // In one after another from the current chip; out in reverse, the furthest first.
+                            style={{ animationDelay: `${subjectsClosing ? (list.length - 1 - i) * 25 : i * 45}ms` }}
+                            className={cx(
+                              subjectsClosing ? "subject-slide-out" : "subject-slide",
+                              "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-sm font-medium hover:bg-muted disabled:opacity-40",
+                            )}
                           >
                             <Icon name={s.icon} className="size-4" /> {s.label}
                             <span className="tabular-nums text-ink-muted">{n}</span>

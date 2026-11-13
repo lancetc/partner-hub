@@ -218,7 +218,7 @@ export function peopleOverview(db: Db, viewer: User, now: Date) {
   });
 }
 
-function pathsFor(db: Db, userId: string, f: ReturnType<typeof facts>) {
+export function pathsFor(db: Db, userId: string, f: ReturnType<typeof facts>) {
   const rows = db
     .prepare(
       "SELECT p.id, p.name, a.due_date, a.self FROM learning_path_assignments a JOIN learning_paths p ON p.id = a.path_id WHERE a.user_id = ? AND p.archived = 0 ORDER BY a.assigned_at",

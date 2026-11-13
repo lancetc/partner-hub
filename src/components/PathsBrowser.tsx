@@ -12,6 +12,7 @@ import { StoryVisual } from "./StoryVisual";
   same search and filters (audience, progress, length and sort), four to a row on a computer. Search
   also looks in the titles of the topics in each path, so "invoice" finds the path that teaches it.
   The choices live in the page address, as on Learning, so a filtered view can be bookmarked or shared.
+  Tiles or a compact list, with the same switch as Learning.
 */
 
 export type BrowsePath = {
@@ -36,6 +37,7 @@ export type BrowsePath = {
 type Sort = "recommended" | "az" | "za" | "shortest" | "longest" | "most";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
+type View = "grid" | "list";
 
 const SORTS: { value: Sort; label: string }[] = [
   { value: "recommended", label: "Recommended" },
@@ -63,6 +65,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
   const [status, setStatus] = useState<Status>((params.get("status") as Status) || "any");
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
   const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "recommended");
+  const [view, setView] = useState<View>((params.get("view") as View) || "grid");
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
   useEffect(() => {
@@ -72,9 +75,10 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
     if (status !== "any") next.set("status", status);
     if (length !== "any") next.set("length", length);
     if (sort !== "recommended") next.set("sort", sort);
+    if (view !== "grid") next.set("view", view);
     const qs = next.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [q, audience, status, length, sort]);
+  }, [q, audience, status, length, sort, view]);
 
   const audiences = [...new Set(paths.map((p) => p.audience).filter(Boolean))].sort();
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -112,7 +116,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
           <h2 id="your-paths" className="mb-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">
             {mine.every((p) => p.assigned) ? "Assigned to you" : "Your paths"}
           </h2>
-          <PathGrid paths={mine} />
+          <PathGrid paths={mine} view={view} />
         </section>
       )}
 
@@ -172,6 +176,21 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
               ))}
             </select>
           </label>
+          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
+            {(["grid", "list"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
+                title={v === "grid" ? "Tiles" : "List"}
+                onClick={() => setView(v)}
+                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
+              >
+                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
+              </button>
+            ))}
+          </div>
           <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
             {filtering ? `Showing ${filtered.length} of ${paths.length}` : `${paths.length} paths`}
             {filtering && (
@@ -184,7 +203,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
 
         {sorted.length ? (
           <div className="mt-5">
-            <PathGrid paths={sorted} />
+            <PathGrid paths={sorted} view={view} />
           </div>
         ) : (
           <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-8 text-center text-ink-muted">
@@ -200,13 +219,68 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
   );
 }
 
-function PathGrid({ paths }: { paths: BrowsePath[] }) {
+function PathGrid({ paths, view }: { paths: BrowsePath[]; view: View }) {
+  if (view === "list")
+    return (
+      <ul className="flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
+        {paths.map((p) => (
+          <PathRow key={p.id} path={p} />
+        ))}
+      </ul>
+    );
   return (
     <ul className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
       {paths.map((p) => (
         <PathTile key={p.id} path={p} />
       ))}
     </ul>
+  );
+}
+
+/** A path as one compact row: thumbnail, what it is, and where the person is in it. */
+function PathRow({ path: p }: { path: BrowsePath }) {
+  const pct = p.total ? Math.round((p.completed / p.total) * 100) : 0;
+  return (
+    <li className="group relative flex items-center gap-4 p-3 sm:px-4">
+      {p.thumbnail ? (
+        <StoryVisual {...p.thumbnail} alt="" className="size-16 shrink-0 rounded-xl" iconSize="size-5" />
+      ) : (
+        <div className="size-16 shrink-0 rounded-xl bg-tealtint" aria-hidden />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">
+          {p.topics} {p.topics === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
+          {p.audience && ` · ${p.audience}`}
+          {(p.assigned || p.selfEnrolled) && (p.assigned ? " · Assigned to you" : " · Enrolled")}
+        </p>
+        <h3 className="font-semibold leading-snug">
+          <Link href={`/paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+            {p.name}
+          </Link>
+        </h3>
+        {p.description && <p className="hidden truncate text-sm text-ink-muted sm:block">{p.description}</p>}
+      </div>
+      {p.dueDate && !p.done && <p className="hidden shrink-0 font-mulish text-sm font-bold text-warm md:block">Due {formatDate(p.dueDate)}</p>}
+      <div className="hidden w-36 shrink-0 text-sm sm:block">
+        {p.done ? (
+          <p className="flex items-center gap-1.5 font-semibold">
+            <Icon name="check" className="size-4 text-accent" /> Completed
+          </p>
+        ) : p.started ? (
+          <div className="flex items-center gap-2">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${p.completed} of ${p.total} topics finished`}>
+              <div className="h-full bg-action" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-ink-muted">
+              {p.completed}/{p.total}
+            </span>
+          </div>
+        ) : (
+          <p className="text-ink-muted">Not started</p>
+        )}
+      </div>
+      <Icon name="arrow-right" className="size-4 shrink-0 text-accent" />
+    </li>
   );
 }
 

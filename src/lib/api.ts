@@ -78,6 +78,8 @@ export type Me = {
   org: { name: string };
   canAuthor: boolean;
   canReport: boolean;
+  /** Manages people and permissions across every organisation (/admin/people). */
+  isSuperadmin: boolean;
   demoUsers: { id: string; name: string; label: string }[];
   demoClockOffsetDays: number;
 };

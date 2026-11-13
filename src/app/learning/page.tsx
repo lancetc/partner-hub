@@ -7,6 +7,7 @@ import { HomeLearning } from "@/components/HomeLearning";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { catalogueTopics } from "@/server/catalogue";
+import { currentUser } from "@/server/auth";
 import { pathTopicOrder } from "@/server/learningPaths";
 
 export const metadata: Metadata = {
@@ -44,7 +45,8 @@ export default function LearningPage() {
 /** Where they are in their learning, as on the homepage, with a link across to the paths. */
 async function YourLearning() {
   await connection();
-  return <HomeLearning topics={catalogueTopics(getDb())} browse={{ href: "/paths", label: "Browse learning paths" }} />;
+  const db = getDb();
+  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} browse={{ href: "/paths", label: "Browse learning paths" }} />;
 }
 
 /** Read per request: authors can publish new topics, and change subjects, at any time. */
@@ -53,7 +55,7 @@ async function Catalogue() {
   const db = getDb();
   return (
     <LessonList
-      topics={catalogueTopics(db)}
+      topics={catalogueTopics(db, (await currentUser(db)).id)}
       // For "Sort by: Learning path", which groups topics under each path in its own order.
       paths={pathTopicOrder(db)}
     />

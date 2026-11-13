@@ -35,7 +35,8 @@ export default function LearningPathsPage() {
 /** Where they are in their learning, as on the homepage, with a link across to every topic. */
 async function YourLearning() {
   await connection();
-  const topics = catalogueTopics(getDb());
+  const db = getDb();
+  const topics = catalogueTopics(db, (await currentUser(db)).id);
   return <HomeLearning topics={topics} browse={{ href: "/learning", label: `Browse all ${topics.length} topics` }} />;
 }
 

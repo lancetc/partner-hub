@@ -343,8 +343,22 @@ input[type="range"].brand-range::-moz-range-thumb {
 @keyframes build-in { from { opacity: 0; transform: translateY(22px); } }
 @keyframes build-down { from { opacity: 0; transform: translateY(-100%); } }
 
-/* Learning's subject chips sliding out from behind the current subject, one after another (LessonList). */
+/*
+  Learning's subject chips sliding out from behind the current subject, one after another (LessonList):
+  an expo ease-out that glides in, sharpening from a slight blur and scale. Closing reverses it
+  quickly, last chip first, with an ease-in so they tuck away rather than drift.
+*/
 @media (prefers-reduced-motion: no-preference) {
-  .subject-slide { animation: subject-slide 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .subject-slide { animation: subject-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .subject-slide-out { animation: subject-out 0.22s cubic-bezier(0.55, 0, 0.75, 0.1) both; pointer-events: none; }
+  /* The current chip's label settling in when the subject changes. */
+  .subject-swap { animation: subject-swap 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
-@keyframes subject-slide { from { opacity: 0; transform: translateX(-14px); } }
+/* People and permissions: a person's panel sliding in from the right. */
+@media (prefers-reduced-motion: no-preference) {
+  .people-panel { animation: people-panel 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@keyframes people-panel { from { transform: translateX(100%); } }
+@keyframes subject-swap { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } }
+@keyframes subject-in { from { opacity: 0; transform: translateX(-32px) scale(0.9); filter: blur(6px); } }
+@keyframes subject-out { to { opacity: 0; transform: translateX(-24px) scale(0.9); filter: blur(6px); } }

@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
 import { catalogueTopics } from "@/server/catalogue";
+import { currentUser } from "@/server/auth";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
 import type { Metadata } from "next";
@@ -55,7 +56,8 @@ export default function Home() {
 /** The workspace at the top: personal, so read per request. */
 async function Workspace() {
   await connection();
-  return <HomeWorkspace topics={catalogueTopics(getDb())} />;
+  const db = getDb();
+  return <HomeWorkspace topics={catalogueTopics(db, (await currentUser(db)).id)} />;
 }
 
 /** Read per request: stories can be edited and published in admin at any time. */
@@ -69,5 +71,6 @@ async function Stories() {
 /** Where the person is in their learning. */
 async function Learning() {
   await connection();
-  return <HomeLearning topics={catalogueTopics(getDb())} />;
+  const db = getDb();
+  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} />;
 }

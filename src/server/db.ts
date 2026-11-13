@@ -427,6 +427,12 @@ CREATE TABLE IF NOT EXISTS notifications (
   UNIQUE (user_id, source)
 );
 CREATE INDEX IF NOT EXISTS notifications_user ON notifications (user_id, created_at);
+-- Single topics assigned to someone by an administrator, with an optional due date (server/people).
+CREATE TABLE IF NOT EXISTS topic_assignments (
+  lesson_slug TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), due_date TEXT,
+  assigned_by TEXT NOT NULL REFERENCES users(id), assigned_at TEXT NOT NULL,
+  PRIMARY KEY (lesson_slug, user_id)
+);
 -- Which email topics each person gets (lib/emailTopics). No row means the topic's default.
 CREATE TABLE IF NOT EXISTS email_topic_prefs (
   user_id TEXT NOT NULL REFERENCES users(id), topic TEXT NOT NULL, subscribed INTEGER NOT NULL, changed_at TEXT NOT NULL, via TEXT NOT NULL,
@@ -549,7 +555,7 @@ export const demoUsers = [
   },
 ] as const;
 
-/** Adds demo accounts that arrived after a database was first created, and keeps their approval roles current. */
+/** Adds demo accounts that arrived after a database was first created, with their approval roles the first time. */
 export function seedStaff(db: Db) {
   for (const u of demoUsers) {
     db.prepare("INSERT OR IGNORE INTO users (id, name, email, org_id, role, audience, service_role, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
@@ -562,8 +568,12 @@ export function seedStaff(db: Db) {
       u.service_role,
       u.timezone,
     );
-    if ("review_role" in u) db.prepare("UPDATE users SET review_role = ?, review_area = ? WHERE id = ?").run(u.review_role, u.review_area, u.id);
+    // Only the first time: after that, People and permissions in admin decides (it leaves review_area set when it clears a role).
+    if ("review_role" in u)
+      db.prepare("UPDATE users SET review_role = ?, review_area = ? WHERE id = ? AND review_role IS NULL AND review_area IS NULL").run(u.review_role, u.review_area, u.id);
   }
+  // The Hub owner is the first superadmin, so someone can always manage people. Others are given it in admin.
+  if (!(db.prepare("SELECT 1 FROM users WHERE superadmin = 1").get())) db.prepare("UPDATE users SET superadmin = 1 WHERE id = ?").run("jordan");
 }
 
 export function migrate(db: Db) {
@@ -599,6 +609,8 @@ export function migrate(db: Db) {
   if (!userCols.includes("review_area")) db.exec("ALTER TABLE users ADD COLUMN review_area TEXT");
   // Their profile picture (server/profilePictures): a file name under data/avatars, or null for initials.
   if (!userCols.includes("avatar")) db.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
+  // Superadmins manage people and permissions across every organisation (server/people). 0 or 1.
+  if (!userCols.includes("superadmin")) db.exec("ALTER TABLE users ADD COLUMN superadmin INTEGER NOT NULL DEFAULT 0");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).
