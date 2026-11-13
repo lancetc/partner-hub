@@ -48,6 +48,7 @@ import { CardComments } from "./CardComments";
 import { ReportProblem } from "./ReportProblem";
 import { OfflineButton } from "../OfflineButton";
 import { EnrolButton } from "../EnrolButton";
+import { PublicQr } from "../PublicQr";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
@@ -1892,15 +1893,19 @@ function TopicEnrol({ slug }: { slug: string }) {
   if (!data) return null;
   const enrolled = data.topics.some((t) => t.slug === slug);
   return (
-    <EnrolButton
-      kind="topic"
-      id={slug}
-      enrolled={enrolled}
-      onChange={(on) =>
-        setData({ topics: on ? [{ slug, enrolledAt: new Date().toISOString() }, ...data.topics] : data.topics.filter((t) => t.slug !== slug) })
-      }
-      className="mt-4"
-    />
+    <>
+      <EnrolButton
+        kind="topic"
+        id={slug}
+        enrolled={enrolled}
+        onChange={(on) =>
+          setData({ topics: on ? [{ slug, enrolledAt: new Date().toISOString() }, ...data.topics] : data.topics.filter((t) => t.slug !== slug) })
+        }
+        className="mt-4"
+      />
+      {/* Beside Enrol: a QR code that opens this topic on any phone without signing in. */}
+      <PublicQr kind="topic" id={slug} className="mt-3" />
+    </>
   );
 }
 

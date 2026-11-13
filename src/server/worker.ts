@@ -8,6 +8,7 @@ import { localDate, nextPermittedSlot, reminderAt, type ScheduleConfig } from "@
 import { tx, type Db } from "./db";
 import { activityInfo, pathVersion, scheduleFor, type EnrolmentRow, type InstanceRow } from "./learning";
 import { adapterFor, type NotificationAdapter } from "./notify";
+import { wants } from "./emailPrefs";
 import type { User } from "./auth";
 
 /*
@@ -95,6 +96,8 @@ export function queueDigests(db: Db, now: Date) {
   let queued = 0;
 
   for (const user of users) {
+    // People who've switched off learning reminders don't get the digest; their follow ups wait in Learning.
+    if (!wants(db, user.id, "learning")) continue;
     const rows = db
       .prepare(
         `SELECT si.*, e.timezone AS tz, e.path_id, e.path_version FROM step_instances si JOIN enrolments e ON e.id = si.enrolment_id

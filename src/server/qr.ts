@@ -9,6 +9,7 @@ import { adapterFor, type NotificationAdapter } from "./notify";
 import { getRow, learningPathDetail } from "./learningPaths";
 import { networkOrigins } from "./pathReviews";
 import { publicToken } from "./publicPaths";
+import { publicTopicToken } from "./publicTopics";
 
 /*
   QR codes that open a learning path or a lesson on a phone. They only ever encode this hub's own
@@ -16,7 +17,7 @@ import { publicToken } from "./publicPaths";
 */
 
 /** "open" is a path's public link: anyone can open it without signing in. */
-export type QrTarget = { kind: "path" | "lesson" | "open"; id: string };
+export type QrTarget = { kind: "path" | "lesson" | "open" | "openTopic"; id: string };
 
 /** The address a QR code opens, and what it's for. Throws if the path or lesson doesn't exist. */
 /** `host`: the address the request came in on, which a public link's code uses while the hub only runs on this computer. */
@@ -24,6 +25,11 @@ export function qrTarget(db: Db, t: QrTarget, host?: string | null) {
   if (t.kind === "open") {
     const p = getRow(db, t.id);
     return { url: `${publicOrigin(host)}/open/${publicToken(db, p.id)}`, title: p.name, kind: "Learning path · open to everyone" };
+  }
+  if (t.kind === "openTopic") {
+    const l = lessons.find((x) => x.slug === t.id && x.track !== "reinforcement");
+    if (!l) throw new HttpError(404, "Topic not found.");
+    return { url: `${publicOrigin(host)}/open/topic/${publicTopicToken(db, l.slug)}`, title: l.title, kind: "Topic · open to everyone" };
   }
   if (t.kind === "path") {
     const p = getRow(db, t.id);

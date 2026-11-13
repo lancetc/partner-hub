@@ -1,5 +1,4 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
 import { lessons } from "@/content/lessons";
 import { stories } from "@/content/stories";
 import type { Db } from "./db";
@@ -7,11 +6,15 @@ import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { adapterFor, type NotificationAdapter } from "./notify";
 import { renderEmail, type Block, type WebinarCard } from "@/lib/emailTemplate";
+import { CRITICAL, isSendTopic, SENDABLE_TOPICS, topicLabel, type SendTopic } from "@/lib/emailTopics";
+import { setTopic, subscribedTo, tokenFor, userForToken } from "./emailPrefs";
+import { acknowledgementReport, notify } from "./notifications";
 
 /*
   Email campaigns (EDM): a monthly update and a quarterly newsletter to Care Partners and
-  coordinators. Built from blocks, previewed, then scheduled or sent. Each person gets one copy,
-  everyone can unsubscribe in one click, and unsubscribed people are always skipped.
+  coordinators, and one-off emails (announcements, policy updates, news, events). Built from blocks,
+  previewed, then scheduled or sent. Each goes out under an email topic (lib/emailTopics) and only to
+  people subscribed to it; each person gets one copy, and can unsubscribe from that topic in one click.
 */
 
 export type Kind = "monthly" | "quarterly" | "one_off";
@@ -25,18 +28,29 @@ type Row = {
   blocks: string;
   audience: string;
   status: "draft" | "scheduled" | "sending" | "sent" | "cancelled";
+  topic: string;
+  ack: number;
   send_at: string | null;
   sent_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
 };
-export type CampaignInput = { name: string; subject: string; preheader: string; blocks: Block[]; audience: Group[] };
+export type CampaignInput = { name: string; subject: string; preheader: string; blocks: Block[]; audience: Group[]; topic?: string; ack?: boolean };
+
+/** Which topics can ask people to confirm they've read the email. */
+export const ACK_TOPICS: SendTopic[] = [CRITICAL, "policy"];
 
 export const baseUrl = () => (process.env.HUB_PUBLIC_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const KIND_LABEL: Record<Kind, string> = { monthly: "Monthly update", quarterly: "Quarterly newsletter", one_off: "Email" };
 
-const parse = (r: Row) => ({ ...r, blocks: JSON.parse(r.blocks) as Block[], audience: JSON.parse(r.audience) as Group[] });
+const parse = (r: Row) => ({
+  ...r,
+  blocks: JSON.parse(r.blocks) as Block[],
+  audience: JSON.parse(r.audience) as Group[],
+  topic: (isSendTopic(r.topic) ? r.topic : "newsletters") as SendTopic,
+  ack: r.ack === 1,
+});
 
 function getRow(db: Db, id: string) {
   const r = db.prepare("SELECT * FROM campaigns WHERE id = ?").get(id) as Row | undefined;
@@ -65,23 +79,21 @@ export function nextDue(kind: "monthly" | "quarterly", from: Date) {
 
 /** Each person's unsubscribe token, created the first time it's needed. */
 export function prefsFor(db: Db, userId: string) {
-  let p = db.prepare("SELECT * FROM email_prefs WHERE user_id = ?").get(userId) as { token: string; newsletters: number } | undefined;
-  if (!p) {
-    db.prepare("INSERT OR IGNORE INTO email_prefs (user_id, token) VALUES (?, ?)").run(userId, randomUUID());
-    p = db.prepare("SELECT * FROM email_prefs WHERE user_id = ?").get(userId) as { token: string; newsletters: number };
-  }
-  return p;
+  return { token: tokenFor(db, userId) };
 }
 
-/** Partners and coordinators in the chosen groups who haven't unsubscribed. Trilogy staff aren't sent marketing. */
-export function recipients(db: Db, audience: Group[]) {
+/**
+  Partners and coordinators in the chosen groups who are subscribed to the topic. Trilogy staff aren't sent these.
+  A critical operational change goes to everyone in the groups, whatever they've chosen.
+*/
+export function recipients(db: Db, audience: Group[], topic: SendTopic = "newsletters") {
   if (!audience.length) return [];
-  return db
-    .prepare(
-      `SELECT u.* FROM users u LEFT JOIN email_prefs p ON p.user_id = u.id
-       WHERE u.audience IN (${audience.map(() => "?").join(",")}) AND COALESCE(p.newsletters, 1) = 1 ORDER BY u.name`,
-    )
+  const people = db
+    .prepare(`SELECT u.* FROM users u WHERE u.audience IN (${audience.map(() => "?").join(",")}) ORDER BY u.name`)
     .all(...audience) as User[];
+  if (topic === CRITICAL) return people;
+  const keep = new Set(subscribedTo(db, people.map((u) => u.id), topic));
+  return people.filter((u) => keep.has(u.id));
 }
 
 export function webinarCards(db: Db) {
@@ -90,9 +102,22 @@ export function webinarCards(db: Db) {
 }
 
 function renderFor(db: Db, c: ReturnType<typeof parse>, user: User) {
-  const token = prefsFor(db, user.id).token;
-  const unsubscribeUrl = `${baseUrl()}/unsubscribe?t=${token}`;
-  return { ...renderEmail(c, { firstName: user.name.split(" ")[0], baseUrl: baseUrl(), unsubscribeUrl, webinars: webinarCards(db) }), unsubscribeUrl };
+  const token = tokenFor(db, user.id);
+  const preferencesUrl = `${baseUrl()}/unsubscribe?t=${token}`;
+  // A critical change can't be switched off, so its link goes to the preferences for everything else.
+  const unsubscribeUrl = c.topic === CRITICAL ? preferencesUrl : `${baseUrl()}/unsubscribe?t=${token}&topic=${c.topic}`;
+  return {
+    ...renderEmail(c, {
+      firstName: user.name.split(" ")[0],
+      baseUrl: baseUrl(),
+      unsubscribeUrl,
+      preferencesUrl,
+      // "Unsubscribe from newsletters", "Unsubscribe from policy and practice updates".
+      topicLabel: c.topic === "newsletters" ? "newsletters" : c.topic === CRITICAL ? "optional emails" : topicLabel(c.topic),
+      webinars: webinarCards(db),
+    }),
+    unsubscribeUrl,
+  };
 }
 
 /** A new campaign from its template, filled with the latest stories, lessons and webinars. */
@@ -130,10 +155,12 @@ export function createCampaign(db: Db, actor: User, kind: Kind, now: Date) {
   const cid = `c-${kind}-${now.getTime().toString(36)}`;
   const at = now.toISOString();
   db.prepare(
-    "INSERT INTO campaigns (id, kind, name, subject, preheader, blocks, audience, status, send_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)",
+    "INSERT INTO campaigns (id, kind, topic, name, subject, preheader, blocks, audience, status, send_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)",
   ).run(
     cid,
     kind,
+    // Newsletters go to newsletter subscribers; a one-off email starts as an announcement.
+    kind === "one_off" ? "announcements" : "newsletters",
     kind === "quarterly" ? `Quarterly newsletter · ${quarter}` : kind === "monthly" ? `Monthly update · ${month}` : "New email",
     kind === "quarterly" ? `Your ${quarter} newsletter from Trilogy Care` : kind === "monthly" ? `What’s new this ${month.split(" ")[0]}` : "News from Trilogy Care",
     kind === "quarterly" ? "Changes, what’s coming and learning for the quarter ahead." : "A quick round-up for partners and coordinators.",
@@ -173,7 +200,9 @@ export function listCampaigns(db: Db, actor: User, now: Date) {
       sendAt: r.send_at,
       sentAt: r.sent_at,
       audience: r.audience,
-      recipients: recipients(db, r.audience).length,
+      topic: r.topic,
+      topicLabel: topicLabel(r.topic),
+      recipients: recipients(db, r.audience, r.topic).length,
       stats: stats(db, r.id),
     })),
     unsubscribed: (db.prepare("SELECT COUNT(*) AS n FROM email_prefs WHERE newsletters = 0").get() as { n: number }).n,
@@ -187,8 +216,14 @@ export function campaignDetail(db: Db, actor: User, id: string) {
   return {
     ...c,
     kindLabel: KIND_LABEL[c.kind],
-    recipients: recipients(db, c.audience).length,
+    topicLabel: topicLabel(c.topic),
+    /** Topics a one-off email can go out under; newsletters always go to newsletter subscribers. */
+    topics: c.kind === "one_off" ? SENDABLE_TOPICS.map((t) => ({ id: t, label: topicLabel(t) })) : [],
+    recipients: recipients(db, c.audience, c.topic).length,
     stats: stats(db, id),
+    /** Who has confirmed they've read it, once it's gone out with acknowledgement on. */
+    acknowledgements: c.ack ? acknowledgementReport(db, `campaign:${id}`) : null,
+    ackTopics: ACK_TOPICS,
     catalogue: {
       stories: [...stories].sort((a, b) => b.date.localeCompare(a.date)).map((s) => ({ slug: s.slug, title: s.title })),
       lessons: lessons.filter((l) => l.track !== "reinforcement").map((l) => ({ slug: l.slug, title: l.title })),
@@ -208,12 +243,18 @@ export function updateCampaign(db: Db, actor: User, id: string, input: CampaignI
   if (!input.subject?.trim()) throw new HttpError(400, "Add a subject line.");
   if (!Array.isArray(input.blocks) || !input.blocks.length) throw new HttpError(400, "Add some content.");
   const audience = (input.audience ?? []).filter((g) => g === "partner" || g === "coordinator");
-  db.prepare("UPDATE campaigns SET name = ?, subject = ?, preheader = ?, blocks = ?, audience = ?, updated_at = ? WHERE id = ?").run(
+  const current = getRow(db, id);
+  // Only a one-off email's topic can change, and only to one people can subscribe to.
+  const topic = current.kind === "one_off" && SENDABLE_TOPICS.includes(input.topic as SendTopic) ? (input.topic as SendTopic) : current.topic;
+  const ack = ACK_TOPICS.includes(topic) && Boolean(input.ack);
+  db.prepare("UPDATE campaigns SET name = ?, subject = ?, preheader = ?, blocks = ?, audience = ?, topic = ?, ack = ?, updated_at = ? WHERE id = ?").run(
     (input.name ?? "").trim().slice(0, 120) || "Untitled email",
     input.subject.trim().slice(0, 150),
     (input.preheader ?? "").trim().slice(0, 200),
     JSON.stringify(input.blocks),
     JSON.stringify(audience),
+    topic,
+    ack ? 1 : 0,
     now.toISOString(),
     id,
   );
@@ -282,13 +323,29 @@ export async function sendCampaign(db: Db, id: string, now: Date, adapter = adap
   db.prepare("UPDATE campaigns SET status = 'sending', updated_at = ? WHERE id = ?").run(now.toISOString(), id);
   const done = new Set((db.prepare("SELECT user_id FROM campaign_deliveries WHERE campaign_id = ? AND status IN ('accepted','delivered','not_configured')").all(id) as { user_id: string }[]).map((r) => r.user_id));
   let sent = 0;
-  for (const user of recipients(db, c.audience)) {
+  for (const user of recipients(db, c.audience, c.topic)) {
     if (done.has(user.id)) continue;
     const result = await deliver(db, c, user, now, adapter);
     db.prepare(
       `INSERT INTO campaign_deliveries VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(campaign_id, user_id) DO UPDATE SET status = excluded.status, provider_ref = excluded.provider_ref, error = excluded.error, at = excluded.at`,
     ).run(id, user.id, result.status, result.status === "accepted" ? result.providerRef : null, "error" in result ? result.error : null, now.toISOString());
+    // And in their Inbox: an action to confirm when it asks for that (or it's critical), otherwise an update.
+    const action = c.ack || c.topic === CRITICAL;
+    notify(
+      db,
+      user.id,
+      {
+        kind: action ? "action" : "update",
+        category: c.ack ? "Acknowledgement required" : topicLabel(c.topic),
+        priority: c.topic === CRITICAL ? "critical" : c.topic === "policy" ? "high" : "normal",
+        title: c.subject,
+        body: c.preheader,
+        ack: c.ack ? { version: `${c.name} · ${c.updated_at.slice(0, 10)}` } : undefined,
+        source: `campaign:${id}`,
+      },
+      now,
+    );
     sent++;
   }
   db.prepare("UPDATE campaigns SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?").run(now.toISOString(), now.toISOString(), id);
@@ -304,10 +361,16 @@ export async function runDueCampaigns(db: Db, now: Date, adapter?: NotificationA
   return sent;
 }
 
-export function setNewsletters(db: Db, token: string, on: boolean, now: Date) {
-  const p = db.prepare("SELECT user_id FROM email_prefs WHERE token = ?").get(token) as { user_id: string } | undefined;
-  if (!p) throw new HttpError(404, "That link isn’t valid any more. Sign in to change your email settings.");
-  db.prepare("UPDATE email_prefs SET newsletters = ?, changed_at = ? WHERE token = ?").run(on ? 1 : 0, now.toISOString(), token);
-  audit(db, { actor: p.user_id, event: on ? "newsletters.resubscribed" : "newsletters.unsubscribed", entity: `user:${p.user_id}`, at: now });
-  return { newsletters: on };
+/** From the link in an email (no sign-in): switch that email's topic off, or back on. Newsletters unless another topic is named. */
+export function setNewsletters(db: Db, token: string, on: boolean, now: Date, topic: string = "newsletters", via: "link" | "one-click" = "link") {
+  const userId = userForToken(db, token);
+  const topics = setTopic(db, userId, topic, on, now, via);
+  return { newsletters: topics.find((t) => t.id === "newsletters")!.on, topic, on, topics };
+}
+
+/** The email as this person got it, to read in their Inbox. Only for people it was sent to. */
+export function campaignForReader(db: Db, user: User, id: string) {
+  const sentTo = db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND source = ?").get(user.id, `campaign:${id}`);
+  if (!sentTo) throw new HttpError(404, "That email isn’t in your Inbox.");
+  return { html: renderFor(db, getRow(db, id), user).html };
 }

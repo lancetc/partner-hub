@@ -15,7 +15,9 @@ export async function GET(req: Request) {
       ? { kind: "lesson", id: q.get("lesson")! }
       : q.get("open")
         ? { kind: "open", id: q.get("open")! }
-        : null;
+        : q.get("openTopic")
+          ? { kind: "openTopic", id: q.get("openTopic")! }
+          : null;
   try {
     if (!target) throw new HttpError(400, "Which path or topic?");
     const { url, title } = qrTarget(getDb(), target, req.headers.get("host"));
@@ -26,7 +28,7 @@ export async function GET(req: Request) {
         .replace(/^-|-$/g, "") || target.id
     }`;
     // A public link changes when it's switched off and on again, so its code is never kept.
-    const cache = target.kind === "open" ? "no-store" : "public, max-age=3600";
+    const cache = target.kind === "open" || target.kind === "openTopic" ? "no-store" : "public, max-age=3600";
     const disposition: Record<string, string> = q.has("download")
       ? { "content-disposition": `attachment; filename="${name}.${q.get("format") === "svg" ? "svg" : "png"}"` }
       : {};

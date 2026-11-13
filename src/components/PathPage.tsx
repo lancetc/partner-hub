@@ -6,6 +6,7 @@ import { useApi } from "@/lib/api";
 import { cx, formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
 import { EnrolButton } from "./EnrolButton";
+import { PublicQr } from "./PublicQr";
 import { Icon, type IconName } from "./Icon";
 import { btn } from "./admin/ui";
 import type { QuizOffer } from "./PathQuiz";
@@ -50,6 +51,8 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
                 onChange={(on) => setData({ ...data, selfEnrolled: on })}
                 className="mt-3"
               />
+              {/* Beside Enrol: a QR code that opens this path on any phone without signing in. */}
+              <PublicQr kind="path" id={id} className="mt-4" />
             </section>
           )}
           {data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} preview={preview} />}

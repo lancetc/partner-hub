@@ -1,5 +1,6 @@
 import { body, handle } from "@/server/http";
-import { recordPublicEvent } from "@/server/publicPaths";
+import { publicPathId, recordPublicEvent } from "@/server/publicPaths";
+import { recordTopicEvent } from "@/server/publicTopics";
 
 /**
   `{ kind, slug? }` from a public path: "opened", "topic" (with the topic's slug) or "path" when every
@@ -9,6 +10,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/open/[token]">)
   const { token } = await ctx.params;
   return handle(async ({ db, now }) => {
     const b = await body<{ kind?: unknown; slug?: unknown }>(req);
-    return recordPublicEvent(db, token, b.kind, b.slug, now);
+    // A public learning path, or a single public topic (opened from its QR code).
+    if (publicPathId(db, token)) return recordPublicEvent(db, token, b.kind, b.slug, now);
+    return recordTopicEvent(db, token, b.kind, now);
   });
 }

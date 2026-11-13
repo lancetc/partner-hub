@@ -58,10 +58,18 @@ export type IconName =
   | "qr"
   | "expand"
   | "monitor"
+  | "inbox"
   | "mobile"
   | "collapse";
 
 const paths: Record<IconName, React.ReactNode> = {
+  /** An in-tray: the Inbox of notices and actions. */
+  inbox: (
+    <>
+      <path d="M3 13h5l1.5 3h5L16 13h5" />
+      <path d="M5.5 5h13l2.5 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2.5-8z" />
+    </>
+  ),
   /** A desktop screen on its stand: the player's desktop layout. */
   monitor: (
     <>

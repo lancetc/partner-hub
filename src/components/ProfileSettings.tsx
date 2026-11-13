@@ -8,6 +8,7 @@ import { setTranslation } from "./SiteTranslator";
 import { Icon } from "./Icon";
 import { OfflineLessons } from "./OfflineLessons";
 import { MyCertificates } from "./MyCertificates";
+import { EmailSettings } from "./EmailSettings";
 
 /* Your profile and settings: your certificates, the language you read the hub in, and audio. */
 export function ProfileSettings() {
@@ -58,6 +59,14 @@ export function ProfileSettings() {
       </section>
 
       <MyCertificates />
+
+      <section id="email" className="mt-5 scroll-mt-24 rounded-3xl border border-line bg-surface p-5" aria-labelledby="email-heading">
+        <h2 id="email-heading" className="flex items-center gap-2 font-serif text-xl font-semibold">
+          <Icon name="mail" className="size-5 text-accent" /> Email notifications
+        </h2>
+        <p className="mb-4 mt-1 text-ink-muted">Choose which emails you get. Essential notices always come, so nothing important is missed.</p>
+        <EmailSettings />
+      </section>
 
       <section className="mt-5 rounded-3xl border border-line bg-surface p-5" aria-labelledby="language-heading">
         <h2 id="language-heading" className="flex items-center gap-2 font-serif text-xl font-semibold">

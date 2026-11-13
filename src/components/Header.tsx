@@ -7,6 +7,7 @@ import { isActive, navItems } from "./nav";
 import { ThemeToggle } from "./ThemeToggle";
 import { SearchButton } from "./SearchDialog";
 import { AccountMenu } from "./AccountMenu";
+import { InboxButton } from "./InboxButton";
 import { Icon } from "./Icon";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -109,6 +110,7 @@ export function Header() {
             </Link>
           )}
           <SearchButton />
+          {me && <InboxButton />}
           <ThemeToggle />
           <AccountMenu />
         </div>

@@ -48,6 +48,13 @@ type Detail = {
   stats: Record<string, number>;
   catalogue: { stories: { slug: string; title: string }[]; lessons: { slug: string; title: string }[]; webinars: { id: string; title: string }[] };
   provider: boolean;
+  topic: string;
+  topicLabel: string;
+  /** Topics a one-off email can go out under (empty for newsletters). */
+  topics: { id: string; label: string }[];
+  ack: boolean;
+  ackTopics: string[];
+  acknowledgements: { total: number; acknowledged: number; people: { name: string; email: string; ackedAt: string | null; version: string | null; opened: boolean }[] } | null;
 };
 
 const STATUS: Record<Status, { label: string; tone: "neutral" | "good" | "warn" | "info" | "bad" }> = {
@@ -215,6 +222,9 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
   const [subject, setSubject] = useState(d.subject);
   const [preheader, setPreheader] = useState(d.preheader);
   const [audience, setAudience] = useState<Group[]>(d.audience);
+  const [topic, setTopic] = useState(d.topic);
+  const [ack, setAck] = useState(d.ack);
+  const canAck = d.ackTopics.includes(topic);
   const [blocks, setBlocks] = useState<Block[]>(d.blocks);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -288,7 +298,7 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
       setBusy(false);
     }
   }
-  const save = () => api(`/api/admin/campaigns/${d.id}`, { method: "PUT", body: { name, subject, preheader, blocks, audience } }).then(() => setDirty(false));
+  const save = () => api(`/api/admin/campaigns/${d.id}`, { method: "PUT", body: { name, subject, preheader, blocks, audience, topic, ack: canAck && ack } }).then(() => setDirty(false));
 
   return (
     <AdminShell title={name || "Email campaign"} back={{ href: "/admin/email", label: "Email campaigns" }}>
@@ -343,10 +353,42 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
                 ))}
               </div>
               <p className="mt-1 text-xs text-ink-muted">
-                {dirty ? "Save to update the count." : `${d.recipients} people, not counting anyone who has unsubscribed.`}
+                {dirty
+                  ? "Save to update the count."
+                  : topic === "critical"
+                    ? `${d.recipients} people. A critical change goes to everyone, whatever their email choices.`
+                    : `${d.recipients} people subscribed to ${d.topicLabel.toLowerCase()}.`}
               </p>
             </fieldset>
+            {d.topics.length > 0 ? (
+              <Field label="What kind of email is it?" hint="People only get it if they have this kind switched on, except critical changes, which go to everyone.">
+                <select className={input} value={topic} onChange={(e) => change(() => setTopic(e.target.value))}>
+                  {d.topics.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <p className="text-sm text-ink-muted">
+                Goes to people subscribed to <span className="font-semibold text-ink">{d.topicLabel.toLowerCase()}</span>.
+              </p>
+            )}
+            {canAck && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={ack} onChange={(e) => change(() => setAck(e.target.checked))} />
+                <span>
+                  <span className="font-semibold">Ask people to confirm they’ve read it</span>
+                  <span className="block text-ink-muted">
+                    It goes into each person’s Inbox under Action required until they confirm. You’ll see who has, with the date and version.
+                  </span>
+                </span>
+              </label>
+            )}
           </section>
+
+          {d.acknowledgements && d.status === "sent" && <Acknowledgements report={d.acknowledgements} />}
 
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="mb-3 font-serif text-xl font-semibold">Content</h2>
@@ -583,5 +625,36 @@ function Editor({ detail: d, reload }: { detail: Detail; reload: () => void }) {
         </aside>
       </div>
     </AdminShell>
+  );
+}
+
+/** Who has confirmed they've read a sent email, when, and which version. */
+function Acknowledgements({ report }: { report: NonNullable<Detail["acknowledgements"]> }) {
+  const percent = report.total ? Math.round((report.acknowledged / report.total) * 100) : 0;
+  return (
+    <section className="rounded-3xl border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-serif text-xl font-semibold">Acknowledgements</h2>
+        <Badge tone={report.acknowledged === report.total ? "good" : "warn"}>{`${report.acknowledged} of ${report.total} confirmed`}</Badge>
+      </div>
+      <span className="mt-3 block h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+        <span className="block h-full rounded-full bg-action" style={{ width: `${percent}%` }} />
+      </span>
+      <ul className="mt-4 flex flex-col divide-y divide-line text-sm">
+        {report.people.map((p) => (
+          <li key={p.email} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+            <span className="min-w-0 flex-1 font-medium">{p.name}</span>
+            {p.ackedAt ? (
+              <span className="text-ink-muted">
+                Confirmed {when(p.ackedAt)}
+                {p.version && ` · ${p.version}`}
+              </span>
+            ) : (
+              <span className="text-ink-muted">{p.opened ? "Opened, not confirmed yet" : "Not opened yet"}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

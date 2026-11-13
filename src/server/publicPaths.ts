@@ -134,6 +134,24 @@ export function setPublicLink(db: Db, actor: User, pathId: string, on: boolean, 
   return publicSharing(db, actor, pathId);
 }
 
+/**
+  The path's public link for its QR code beside "Enrol in this path": made the first time anyone signed
+  in asks for it, with the same checks as an author making it public. Authors can switch it off in admin.
+*/
+export function ensurePublicLink(db: Db, actor: User, pathId: string, now: Date) {
+  getRow(db, pathId);
+  const existing = activeLink(db, pathId);
+  if (existing) return existing.token;
+  const slugs = publishedSlugs(db, pathId);
+  if (!slugs.length) throw new HttpError(409, "This path has no published topics yet.");
+  const missions = missionSlugs(db);
+  if (slugs.some((s) => missions.has(s))) throw new HttpError(409, "This path holds challenge missions, so it can’t be opened publicly.");
+  const token = randomBytes(9).toString("base64url");
+  db.prepare("INSERT INTO public_path_links (token, path_id, created_by, created_at) VALUES (?, ?, ?, ?)").run(token, pathId, actor.id, now.toISOString());
+  audit(db, { actor: actor.id, event: "public_path_link.on", entity: `learning_path:${pathId}`, next: { via: "qr" }, at: now });
+  return token;
+}
+
 /** The active public link's token for a path, for its QR code. */
 export function publicToken(db: Db, pathId: string) {
   const link = activeLink(db, pathId);

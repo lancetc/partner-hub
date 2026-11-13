@@ -243,6 +243,14 @@ CREATE TABLE IF NOT EXISTS public_path_links (
   created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
 );
 CREATE INDEX IF NOT EXISTS public_path_links_path ON public_path_links (path_id);
+-- A single topic anyone can open without signing in, from its QR code (server/publicTopics).
+CREATE TABLE IF NOT EXISTS public_topic_links (
+  token TEXT PRIMARY KEY, lesson_slug TEXT NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT
+);
+CREATE INDEX IF NOT EXISTS public_topic_links_slug ON public_topic_links (lesson_slug);
+-- Anonymous counts from a public topic link: opened, finished. Nothing about the person.
+CREATE TABLE IF NOT EXISTS public_topic_events (token TEXT NOT NULL, lesson_slug TEXT NOT NULL, kind TEXT NOT NULL, at TEXT NOT NULL);
 -- Anonymous counts from public links: opened, a topic finished, the whole path finished. Nothing about the person.
 CREATE TABLE IF NOT EXISTS public_path_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, path_id TEXT NOT NULL, token TEXT NOT NULL,
@@ -407,6 +415,23 @@ CREATE TABLE IF NOT EXISTS topic_approval_events (
   note TEXT NOT NULL DEFAULT '', version TEXT, at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS topic_approval_events_slug ON topic_approval_events (slug, at);
+-- The in-app Inbox (server/notifications): actions to take, updates and activity. The source stops
+-- the same thing being added twice (a campaign, a due date). Acknowledgements keep when and which version.
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('action','update','activity')), category TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('critical','high','normal')),
+  title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', href TEXT, due_at TEXT,
+  ack_required INTEGER NOT NULL DEFAULT 0, ack_version TEXT, source TEXT NOT NULL,
+  created_at TEXT NOT NULL, read_at TEXT, acked_at TEXT, done_at TEXT,
+  UNIQUE (user_id, source)
+);
+CREATE INDEX IF NOT EXISTS notifications_user ON notifications (user_id, created_at);
+-- Which email topics each person gets (lib/emailTopics). No row means the topic's default.
+CREATE TABLE IF NOT EXISTS email_topic_prefs (
+  user_id TEXT NOT NULL REFERENCES users(id), topic TEXT NOT NULL, subscribed INTEGER NOT NULL, changed_at TEXT NOT NULL, via TEXT NOT NULL,
+  PRIMARY KEY (user_id, topic)
+);
 -- A Care Conversations team session: the host moves through a shuffled deck and everyone who joins with
 -- the code sees the same card (see server/conversationRooms).
 CREATE TABLE IF NOT EXISTS conversation_rooms (
@@ -581,6 +606,11 @@ export function migrate(db: Db) {
   if (!uploadCols.includes("deleted_by")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_by TEXT");
   // A picture converted to WebP points at its new file, so old addresses keep showing it.
   if (!uploadCols.includes("replaced_by")) db.exec("ALTER TABLE uploads ADD COLUMN replaced_by TEXT");
+  const campaignCols = (db.prepare("PRAGMA table_info(campaigns)").all() as { name: string }[]).map((c) => c.name);
+  // The email topic a campaign goes out under (lib/emailTopics): only people subscribed to it get it.
+  if (!campaignCols.includes("topic")) db.exec("ALTER TABLE campaigns ADD COLUMN topic TEXT NOT NULL DEFAULT 'newsletters'");
+  // Recipients are asked to confirm they've read it, in their Inbox (critical changes and policy updates).
+  if (!campaignCols.includes("ack")) db.exec("ALTER TABLE campaigns ADD COLUMN ack INTEGER NOT NULL DEFAULT 0");
   const authoredCols = (db.prepare("PRAGMA table_info(authored_lessons)").all() as { name: string }[]).map((c) => c.name);
   // Deleted lessons are hidden everywhere but kept on record, so they can be restored.
   if (!authoredCols.includes("deleted_at")) db.exec("ALTER TABLE authored_lessons ADD COLUMN deleted_at TEXT");

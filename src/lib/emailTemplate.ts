@@ -17,7 +17,16 @@ export type Block =
   | { id: string; type: "divider" };
 
 export type WebinarCard = { id: string; title: string; summary: string; presenter: string; minutes: number; thumbnail: string | null };
-export type RenderContext = { firstName: string; baseUrl: string; unsubscribeUrl: string; webinars: Map<string, WebinarCard> };
+export type RenderContext = {
+  firstName: string;
+  baseUrl: string;
+  unsubscribeUrl: string;
+  webinars: Map<string, WebinarCard>;
+  /** The email topic it goes out under, named in the unsubscribe link ("Policy and practice updates"). */
+  topicLabel?: string;
+  /** Where people change every email topic, without signing in. */
+  preferencesUrl?: string;
+};
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const personal = (s: string, ctx: RenderContext) => s.replace(/\{\{\s*first_name\s*\}\}/g, ctx.firstName);
@@ -120,10 +129,10 @@ export function renderEmail(c: { subject: string; preheader: string; blocks: Blo
   ${rows.join("\n")}
   <tr><td style="padding:24px;background:#f6f9fc;${FONT}font-size:12px;line-height:1.6;color:#64748b">
     ${esc(footer)}<br>Sent by Trilogy Care, Partner Hub team.<br>
-    <a href="${esc(ctx.unsubscribeUrl)}" style="color:#64748b">Unsubscribe from newsletters</a> &middot; <a href="${esc(ctx.baseUrl)}" style="color:#64748b">Open the Partner Hub</a>
+    <a href="${esc(ctx.unsubscribeUrl)}" style="color:#64748b">Unsubscribe from ${esc((ctx.topicLabel ?? "newsletters").toLowerCase())}</a>${ctx.preferencesUrl ? ` &middot; <a href="${esc(ctx.preferencesUrl)}" style="color:#64748b">Email preferences</a>` : ""} &middot; <a href="${esc(ctx.baseUrl)}" style="color:#64748b">Open the Partner Hub</a>
   </td></tr>
 </table></td></tr></table></body></html>`;
 
-  const body = [`${c.preheader}`, "", ...text, footer, "Sent by Trilogy Care, Partner Hub team.", `Unsubscribe: ${ctx.unsubscribeUrl}`].join("\n");
+  const body = [`${c.preheader}`, "", ...text, footer, "Sent by Trilogy Care, Partner Hub team.", `Unsubscribe: ${ctx.unsubscribeUrl}`, ...(ctx.preferencesUrl ? [`Email preferences: ${ctx.preferencesUrl}`] : [])].join("\n");
   return { html, text: body };
 }
