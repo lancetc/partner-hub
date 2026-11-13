@@ -150,10 +150,10 @@ export function LearningPathList() {
   }
   const deleted = data?.deleted ?? [];
   return (
-    <AdminShell title="Learning paths">
+    <AdminShell title="My Training">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-3xl text-ink-muted">
-          A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Learning page with
+          A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their My Training page with
           their progress and what’s next.
         </p>
         <Link href="/admin/learning-paths/new" className={btn.primary}>
@@ -377,7 +377,7 @@ export function LearningPathEditor({ id }: { id?: string }) {
   const loadError = isNew ? list.error : detail.error;
   if (loadError || !source) {
     return (
-      <AdminShell title={isNew ? "New learning path" : "Learning path"} back={{ href: "/admin/learning-paths", label: "Learning paths" }}>
+      <AdminShell title={isNew ? "New learning path" : "Learning path"} back={{ href: "/admin/learning-paths", label: "My Training" }}>
         {loadError ? <ErrorNote text={loadError} /> : <p className="text-ink-muted">Loading…</p>}
       </AdminShell>
     );
@@ -492,7 +492,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   }
 
   return (
-    <AdminShell title={isNew ? "New learning path" : name || "Learning path"} back={{ href: "/admin/learning-paths", label: "Learning paths" }}>
+    <AdminShell title={isNew ? "New learning path" : name || "Learning path"} back={{ href: "/admin/learning-paths", label: "My Training" }}>
       {me?.canAuthor && canEdit && (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
           <Icon name="spark" className="size-4 text-accent" />

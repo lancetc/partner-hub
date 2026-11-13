@@ -60,6 +60,13 @@ describe("people and permissions", () => {
     expect(personDetail(db, u("jordan"), "riley", later).paths.find((p) => p.id === path.id)).toBeUndefined();
   });
 
+  it("lets a superadmin assign anyone, staff and other organisations included", () => {
+    const path = directory(db, u("jordan"), now).assignable.paths[0];
+    assignLearning(db, u("jordan"), { kind: "path", id: path.id, userIds: ["dana", "casey", "sam"] }, now);
+    expect(personDetail(db, u("jordan"), "dana", now).paths.some((p) => p.id === path.id)).toBe(true);
+    expect(personDetail(db, u("jordan"), "casey", now).paths.some((p) => p.id === path.id)).toBe(true);
+  });
+
   it("checks what's being assigned", () => {
     expect(() => assignLearning(db, u("jordan"), { kind: "topic", id: TOPIC, userIds: [] }, now)).toThrow(/at least one/);
     expect(() => assignLearning(db, u("jordan"), { kind: "topic", id: "no-such-topic", userIds: ["sam"] }, now)).toThrow(/published topic/);

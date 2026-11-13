@@ -1,7 +1,7 @@
 import "server-only";
 import { lessons } from "@/content/lessons";
 import { audit, tx, type Db } from "./db";
-import { canAuthor, HttpError, requireReporter, type User } from "./auth";
+import { canAuthor, HttpError, isSuperadmin, requireReporter, type User } from "./auth";
 import { unpublishedLessons } from "./authoredLessons";
 import { thumbnailFor } from "@/lib/pathThumbnail";
 import { cleanQuizSettings, parseQuizSettings, type PathQuizSettings } from "@/lib/pathQuizSettings";
@@ -125,12 +125,16 @@ function progress(db: Db, userId: string, slugs: string[], inOrder: boolean) {
   return { steps, completed, total: live.length, nextSlug: next, done: !next && live.length > 0 };
 }
 
-/** People an administrator can assign: learners in their organisation, or anyone for Trilogy authors. */
+/**
+  People an administrator can assign: learners in their organisation; learners in every organisation for
+  Trilogy authors; and anyone at all, staff and admins included, for superadmins.
+*/
 export function assignableUsers(db: Db, actor: User) {
   requireReporter(actor);
+  const everyone = isSuperadmin(actor);
   const rows = db
     .prepare(
-      `SELECT u.id, u.name, u.audience, u.service_role, o.name AS org FROM users u JOIN orgs o ON o.id = u.org_id WHERE u.role = 'learner' ${canAuthor(actor) ? "" : "AND u.org_id = ?"} ORDER BY u.name`,
+      `SELECT u.id, u.name, u.audience, u.service_role, o.name AS org FROM users u JOIN orgs o ON o.id = u.org_id WHERE ${everyone ? "1 = 1" : "u.role = 'learner'"} ${canAuthor(actor) ? "" : "AND u.org_id = ?"} ORDER BY u.name`,
     )
     .all(...(canAuthor(actor) ? [] : [actor.org_id])) as { id: string; name: string; audience: string; service_role: string | null; org: string }[];
   return rows;

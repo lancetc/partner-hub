@@ -141,8 +141,8 @@ export function personDetail(db: Db, actor: User, userId: string, now: Date) {
     paths,
     topics,
     recent,
-    // The completions report covers learners; staff don't have one.
-    reportHref: p.role === "learner" ? `/admin/completions/people/${encodeURIComponent(p.id)}` : null,
+    // Superadmins see everyone in the completions reports, staff included.
+    reportHref: `/admin/completions/people/${encodeURIComponent(p.id)}`,
   };
 }
 

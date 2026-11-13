@@ -84,7 +84,7 @@ export function AdminHome() {
             <Link href="/admin/lessons" className="font-medium text-accent underline-offset-4 hover:underline">
               Topics
             </Link>{" "}
-            page and runs automatically after someone finishes that topic. Learners never pick these. To group topics for a person, use Learning paths.
+            page and runs automatically after someone finishes that topic. Learners never pick these. To group topics for a person, use My Training.
           </p>
           {error && <ErrorNote text={error} />}
           {!paths.data ? (
