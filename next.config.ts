@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: localAddresses(),
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // The dev server's build cache, kept on disk between restarts, kept coming back in a state where
+    // it told every open page to reload over and over (the page never finished loading). Without it
+    // the first load after a restart takes a few seconds longer, and the loop doesn't return.
+    turbopackFileSystemCacheForDev: false,
+  },
   turbopack: {
     rules: {
       "*.css": {
