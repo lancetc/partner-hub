@@ -85,9 +85,6 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
             Here’s what’s relevant to you this week.
           </p>
         </div>
-        <p className="font-mulish text-sm font-semibold text-ink-muted">
-          <span className="rounded-full bg-muted px-3 py-1">Demonstration content</span>
-        </p>
       </div>
 
       {summary && (

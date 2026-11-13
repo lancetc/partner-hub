@@ -13,7 +13,8 @@ export function NewsGrid({ stories }: { stories: Story[] }) {
     <>
       <div className="-mx-4 sm:-mx-6">
         <div role="group" aria-label="Filter stories by category" className="scrollbar-none flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6">
-          {[{ id: "all" as const, label: "All stories" }, ...categories].map((c) => {
+          {/* No Policy updates filter: those stories still show under All stories. */}
+          {[{ id: "all" as const, label: "All stories" }, ...categories.filter((c) => c.id !== "policy")].map((c) => {
             const active = filter === c.id;
             return (
               <button
