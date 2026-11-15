@@ -86,9 +86,17 @@ export const cardSounds = {
   },
 };
 
+/** Whether the person has touched, clicked or typed on the page yet: browsers keep audio (and vibration) off until then. */
+export function pageActivated() {
+  if (typeof navigator === "undefined") return false;
+  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  // Browsers without the userActivation API (older Safari) are let through: by then the person has pressed something.
+  return ua ? ua.hasBeenActive : true;
+}
+
 /** Button sounds follow only the Sound effects setting (muting a topic's narration doesn't silence the rest of the site). */
-function uiAudio() {
-  if (typeof window === "undefined" || !soundEffectsEnabled()) return null;
+function uiAudio(): AudioContext | null {
+  if (typeof window === "undefined" || !soundEffectsEnabled() || !pageActivated()) return null;
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return null;
@@ -100,18 +108,41 @@ function uiAudio() {
   }
 }
 
+/**
+  Wakes the audio up on a press that browsers count as permission to play (a tap lifting off, a click, a key).
+  A touch going down doesn't count on phones, so without this the first tap's click would be lost or arrive late.
+*/
+export function unlockUiAudio() {
+  uiAudio();
+}
+
+/**
+  Plays only while the audio is actually running: a click queued on paused audio would play late, out of
+  step with the press. Audio that wakes up straight away (the first press, usually) still gets its click.
+*/
+function withUiAudio(play: (c: AudioContext) => void) {
+  const c = uiAudio();
+  if (!c) return;
+  if (c.state === "running") return play(c);
+  const asked = performance.now();
+  c.resume()
+    .then(() => {
+      if (performance.now() - asked < 60) play(c);
+    })
+    .catch(() => {});
+}
+
 /** A soft, very short click: a little body under a quick top, like pressing a real button. */
 export const uiSounds = {
   /** The main action on a screen: a slightly fuller press. */
   press() {
-    const c = uiAudio();
-    if (!c) return;
-    tone(c, { from: 240, to: 150, dur: 0.07, vol: 0.06, type: "sine" });
-    tone(c, { from: 1500, to: 1100, dur: 0.025, vol: 0.025, type: "triangle" });
+    withUiAudio((c) => {
+      tone(c, { from: 240, to: 150, dur: 0.07, vol: 0.06, type: "sine" });
+      tone(c, { from: 1500, to: 1100, dur: 0.025, vol: 0.025, type: "triangle" });
+    });
   },
   /** Toggles, tabs, chips and everything else: a light tick. */
   tick() {
-    const c = uiAudio();
-    if (c) tone(c, { from: 1300, to: 950, dur: 0.03, vol: 0.03, type: "triangle" });
+    withUiAudio((c) => tone(c, { from: 1300, to: 950, dur: 0.03, vol: 0.03, type: "triangle" }));
   },
 };

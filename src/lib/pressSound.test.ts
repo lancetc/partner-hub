@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { soundFor } from "./pressSound";
+import { keyPresses, PRESSABLE, soundFor } from "./pressSound";
 
 const el = (p: Partial<Parameters<typeof soundFor>[0]>) => ({ tag: "button", role: null, className: "", disabled: false, ...p });
 
@@ -24,5 +24,40 @@ describe("button sounds", () => {
     expect(soundFor(el({ tag: "textarea" }))).toBeNull();
     expect(soundFor(el({ tag: "input", inputType: "checkbox" }))).toBe("tick");
     expect(soundFor(el({ tag: "div" }))).toBeNull();
+  });
+
+  it("ticks for disclosure summaries and menu checkboxes", () => {
+    expect(soundFor(el({ tag: "summary" }))).toBe("tick");
+    expect(soundFor(el({ tag: "div", role: "menuitemcheckbox" }))).toBe("tick");
+    expect(soundFor(el({ tag: "div", role: "presentation" }))).toBeNull();
+  });
+});
+
+describe("keys that press", () => {
+  it("presses buttons with Enter or Space", () => {
+    expect(keyPresses("Enter", "BUTTON")).toBe(true);
+    expect(keyPresses(" ", "BUTTON")).toBe(true);
+    expect(keyPresses(" ", "DIV")).toBe(true);
+  });
+
+  it("follows links with Enter only, and flips checkboxes with Space only", () => {
+    expect(keyPresses("Enter", "A")).toBe(true);
+    expect(keyPresses(" ", "A")).toBe(false);
+    expect(keyPresses(" ", "INPUT", "checkbox")).toBe(true);
+    expect(keyPresses("Enter", "INPUT", "checkbox")).toBe(false);
+    expect(keyPresses(" ", "INPUT", "text")).toBe(false);
+  });
+
+  it("ignores every other key", () => {
+    expect(keyPresses("a", "BUTTON")).toBe(false);
+    expect(keyPresses("Tab", "BUTTON")).toBe(false);
+  });
+});
+
+describe("what can be pressed", () => {
+  it("covers buttons, summaries, links, checkboxes and button roles", () => {
+    for (const part of ["button", "summary", "a", "input[type=checkbox]", "[role=switch]", "[role=tab]", "[role=button]"]) {
+      expect(PRESSABLE.split(", ")).toContain(part);
+    }
   });
 });
