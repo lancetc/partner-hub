@@ -91,10 +91,16 @@ export function LessonPlayer({
   publicLink,
   nextTopic,
   enrol = false,
+  personal = false,
 }: {
   lesson: Lesson;
   /** Offer "Enrol in this topic" on the start screen (a catalogue topic opened by someone signed in). */
   enrol?: boolean;
+  /**
+    A topic made just for this person (their onboarding sample topic): it isn't in the catalogue, so
+    the topic assistant, problem reports, offline download, follow ups and surveys are left off.
+  */
+  personal?: boolean;
   instanceId?: string;
   preview?: boolean;
   /** On a learning path that allows skipping (testers): never wait for audio, video or activities. */
@@ -135,7 +141,7 @@ export function LessonPlayer({
   const [quizChecked, setQuizChecked] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const reviewing = useReview(reviewToken, REVIEW_COMMENTS_IN_FOOTER ? lesson.slug : undefined);
+  const reviewing = useReview(reviewToken, REVIEW_COMMENTS_IN_FOOTER && !personal ? lesson.slug : undefined);
   const seq = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
 
@@ -441,9 +447,9 @@ export function LessonPlayer({
           onReview={() => begin(true, true)}
           refresh={preview || anonymous ? null : refresh}
         />
-        {!preview && !anonymous && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
+        {!preview && !anonymous && !personal && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
         {enrol && !preview && !anonymous && lesson.track !== "reinforcement" && <TopicEnrol slug={lesson.slug} />}
-        {!preview && !anonymous && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
+        {!preview && !anonymous && !personal && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
   }
@@ -706,6 +712,7 @@ export function LessonPlayer({
               {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
               {!reviewToken &&
                 !anonymous &&
+                !personal &&
                 (REVIEW_COMMENTS_IN_FOOTER ? (
                   <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
                 ) : (
@@ -933,7 +940,7 @@ export function LessonPlayer({
             />
           </div>
           {/* Reviewers comment through the Comment button instead. */}
-          {!reviewToken && !anonymous && speaksFirst(node.type) ? (
+          {personal ? null : !reviewToken && !anonymous && speaksFirst(node.type) ? (
             // Speaking cards: comments and reporting share one quiet row at the foot of the card.
             <div className={cx("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-1", onColour ? "border-white/20" : "border-line")}>
               {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} quiet />}
