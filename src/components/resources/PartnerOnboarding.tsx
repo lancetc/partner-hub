@@ -32,11 +32,11 @@ const NODES: Node[] = [
   },
   {
     id: "carePartner",
-    x: 425,
+    x: 405,
     y: 395,
-    w: 350,
+    w: 390,
     h: 112,
-    title: "Care Partner",
+    title: "Trilogy Care Partner",
     body: "Trilogy Care case manager: goals, care plan, budget, upgrades.",
     icon: "clipboard",
     tone: "teal",
@@ -120,7 +120,7 @@ export function PartnerOnboardingDiagram() {
       >
         <title id="onboarding-diagram-title">
           Who does what: the referring partner refers the client and is onboarded and supported by the Trilogy Partnership Manager, who hands the referral
-          to the Care Partner. The Care Partner sets the client’s goals, plan and budget, and works with the Care Coordinator, who coordinates the
+          to the Trilogy Care Partner. The Trilogy Care Partner sets the client’s goals, plan and budget, and works with the Care Coordinator, who coordinates the
           client’s services.
         </title>
         <defs>
@@ -195,7 +195,7 @@ function MiniNode({ node: n }: { node: Node }) {
 
 const ROLES: { title: string; body: string; icon: IconName; circle: string; bar: string }[] = [
   { title: "Client", body: "The person receiving care.", icon: "user", circle: "bg-[#d7efee] text-[#007b7c]", bar: "bg-[#2a9d8f]" },
-  { title: "Care Partner", body: "Trilogy Care case manager: plan and budget.", icon: "clipboard", circle: "bg-[#d4e8f2] text-[#1d2b4f]", bar: "bg-[#1d2b4f]" },
+  { title: "Trilogy Care Partner", body: "Trilogy Care case manager: plan and budget.", icon: "clipboard", circle: "bg-[#d4e8f2] text-[#1d2b4f]", bar: "bg-[#1d2b4f]" },
   { title: "Care Coordinator", body: "Arranges and rosters services.", icon: "calendar", circle: "bg-[#f8ead1] text-[#8a5a00]", bar: "bg-[#e0a030]" },
   { title: "Trilogy Partnership Manager", body: "Looks after the referring partner.", icon: "people", circle: "bg-[#f6dcdc] text-[#c7393e]", bar: "bg-[#c7393e]" },
 ];
