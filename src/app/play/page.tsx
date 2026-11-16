@@ -35,25 +35,26 @@ export default function PlayPage() {
         matter in care.
       </PageHero>
 
-      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
+      {/* Three across on a computer (the two games, then why play); the games side by side on a tablet. */}
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Neighbourhood Explorer */}
         <article className="flex flex-col overflow-hidden rounded-3xl border border-line bg-surface">
-          <div className="relative h-56 overflow-hidden bg-[#9fd8a0] sm:h-64">
+          <div className="relative h-56 overflow-hidden bg-[#9fd8a0]">
             <PixelStreet />
             <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]">
               Solo · about 15 minutes
             </span>
           </div>
-          <div className="flex flex-1 flex-col gap-4 p-6 sm:p-7">
+          <div className="flex flex-1 flex-col gap-4 p-6">
             <div>
               <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Practise decisions</p>
-              <h2 className="mt-1 font-serif text-3xl font-semibold">Neighbourhood Explorer</h2>
+              <h2 className="mt-1 font-serif text-2xl font-semibold">Neighbourhood Explorer</h2>
               <p className="mt-2 text-ink-muted">
                 Walk a pixel-art suburb and knock on doors. Each of the {quests.length} clients has a real situation to work through, from a ladder that should
                 stay in the shed to something that just doesn’t feel right. Choose what you’d do, see what happens, and learn why.
               </p>
             </div>
-            <ul className="grid gap-2 text-sm sm:grid-cols-2">
+            <ul className="grid gap-2 text-sm sm:grid-cols-2 md:grid-cols-1">
               <Feature icon="pin">{quests.length} houses, each a quest with several decisions</Feature>
               <Feature icon="star">Points, levels and {badges.length} badges to collect</Feature>
               <Feature icon="refresh">Clients remember you when you pop back in</Feature>
@@ -73,7 +74,7 @@ export default function PlayPage() {
 
         {/* Care Conversations */}
         <article className="flex flex-col overflow-hidden rounded-3xl border border-line bg-surface">
-          <div className="relative h-56 overflow-hidden bg-[#1d2b4f] sm:h-64">
+          <div className="relative h-56 overflow-hidden bg-[#1d2b4f]">
             <div aria-hidden className="absolute inset-x-0 bottom-[-3.5rem] mx-auto h-56 w-72">
               {themes.map((t, i) => (
                 <span
@@ -89,16 +90,16 @@ export default function PlayPage() {
               Solo, team or community
             </span>
           </div>
-          <div className="flex flex-1 flex-col gap-4 p-6 sm:p-7">
+          <div className="flex flex-1 flex-col gap-4 p-6">
             <div>
               <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Learn from each other</p>
-              <h2 className="mt-1 font-serif text-3xl font-semibold">Care Conversations</h2>
+              <h2 className="mt-1 font-serif text-2xl font-semibold">Care Conversations</h2>
               <p className="mt-2 text-ink-muted">
                 A conversation card game. Pick a card, consider the question, share your perspective, and discover how others approach the same situation.
                 Not a quiz: there are no right answers and nothing is scored.
               </p>
             </div>
-            <ul className="grid gap-2 text-sm sm:grid-cols-2">
+            <ul className="grid gap-2 text-sm sm:grid-cols-2 md:grid-cols-1">
               <Feature icon="layers">
                 {cards.length} cards in {themes.length} themes, each with a deeper question on the back
               </Feature>
@@ -123,10 +124,9 @@ export default function PlayPage() {
             </div>
           </div>
         </article>
-      </div>
 
-      <section className="mt-8 grid gap-4 rounded-3xl bg-muted p-6 sm:grid-cols-3 sm:p-7">
-        <h2 className="font-serif text-2xl font-semibold sm:col-span-3">Why play?</h2>
+        <section className="flex flex-col gap-4 rounded-3xl bg-muted p-6 md:col-span-2 md:grid md:grid-cols-3 lg:col-span-1 lg:flex">
+          <h2 className="font-serif text-2xl font-semibold md:col-span-3">Why play?</h2>
         <p>
           <span className="block font-semibold">Practise safely</span>
           <span className="text-ink-muted">Try a decision, see where it leads, and try again. Nobody gets hurt in a pixel suburb.</span>
@@ -139,7 +139,8 @@ export default function PlayPage() {
           <span className="block font-semibold">Short and flexible</span>
           <span className="text-ink-muted">A card takes two minutes; a quest about five. Play between visits or in a team meeting.</span>
         </p>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

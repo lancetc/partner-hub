@@ -8,17 +8,25 @@ import { myChallenges } from "@/server/challenges";
 import { Icon } from "@/components/Icon";
 import { StoryVisual } from "@/components/StoryVisual";
 import { cx } from "@/lib/format";
+import { HeroStats, PageHero } from "@/components/PageHero";
 
 export const metadata: Metadata = { title: "Challenges", robots: { index: false } };
 
 export default function ChallengesPage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Challenges</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">
+    <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+      <PageHero
+        eyebrow="Trilogy Challenge"
+        title="Challenges"
+        aside={
+          <Suspense>
+            <ChallengeStats />
+          </Suspense>
+        }
+      >
         A five-day team competition where Care Coordinators tackle real-world client scenarios, make decisions and put their knowledge to the test. Each day
         unlocks a new challenge, with points, streaks and leaderboards encouraging teams to collaborate, solve problems and compete for the top spot.
-      </p>
+      </PageHero>
       <Suspense>
         <Challenges />
       </Suspense>
@@ -27,6 +35,24 @@ export default function ChallengesPage() {
 }
 
 type Mine = ReturnType<typeof myChallenges>[number];
+
+/** The person's challenges at a glance, for the banner. */
+async function ChallengeStats() {
+  await connection();
+  const db = getDb();
+  const list = myChallenges(db, await currentUser(db), new Date());
+  const live = list.filter((c) => c.state === "live").length;
+  return (
+    <HeroStats
+      stats={[
+        { label: "challenges", value: list.length },
+        // The green dot only while one is actually on.
+        { label: "on now", value: live, dot: live > 0 },
+        { label: "your points", value: list.reduce((n, c) => n + c.points, 0) },
+      ]}
+    />
+  );
+}
 
 /** Read per request: what's open depends on the time, and points on the person. */
 async function Challenges() {
@@ -39,7 +65,7 @@ async function Challenges() {
   return (
     <>
       {list.length ? (
-        <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {list.map((c) => (
             <ChallengeTile key={c.id} c={c} />
           ))}
@@ -75,8 +101,8 @@ function ChallengeTile({ c }: { c: Mine }) {
   const cta =
     c.state === "upcoming" ? "See what’s coming" : c.state === "finished" ? "See the results" : c.todayDone ? "See the leaderboard" : "Play today’s mission";
   return (
-    <li className="group relative flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white sm:p-6">
-      {c.cover && <StoryVisual {...c.cover} alt="" className="-mx-5 -mt-5 aspect-[16/7] sm:-mx-6 sm:-mt-6" />}
+    <li className="group relative flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white">
+      {c.cover && <StoryVisual {...c.cover} alt="" className="-mx-5 -mt-5 aspect-[16/9]" />}
       <div className="flex items-start gap-4">
         {/* The flag only when there's no picture: in a narrow column it crowds the name. */}
         {!c.cover && (
@@ -88,7 +114,7 @@ function ChallengeTile({ c }: { c: Mine }) {
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-white/75">
             Trilogy Challenge · <span className={cx(c.state === "live" && !c.todayDone && "text-[#ffd27a]")}>{status}</span>
           </p>
-          <h2 className="mt-1 font-serif text-2xl font-semibold leading-tight">
+          <h2 className="mt-1 font-serif text-xl font-semibold leading-tight">
             <Link href={`/challenge/${c.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
               {c.name}
             </Link>
@@ -97,7 +123,7 @@ function ChallengeTile({ c }: { c: Mine }) {
         </div>
       </div>
       {c.state !== "upcoming" && (
-        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
           <div>
             <dt className="text-white/70">Points</dt>
             <dd className="font-mulish text-xl font-extrabold">{c.points.toLocaleString("en-AU")}</dd>
