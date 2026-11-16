@@ -1057,6 +1057,77 @@ const scenarios: Scenario[] = [
     ],
   },
   {
+    id: "d-garden",
+    version: 1,
+    kind: "opportunity",
+    client: "dot",
+    speaker: "Dot",
+    role: "Client, 84",
+    channel: "call",
+    time: t(15, 30),
+    title: "Dot’s garden",
+    prompt: "“The council’s got volunteers who help older folk with their gardens,” Dot says. “Mine’s getting away from me. My roses were my pride and joy.”",
+    question: "What do you do with this?",
+    echo: [{ when: { "dot.garden": true }, text: "Following up the council garden volunteers at 3.30 gave Dot back something she loves." }],
+    options: [
+      {
+        id: "help",
+        text: "Ask what she’d most like help with in the garden, offer to find out about the council volunteers, and agree when you’ll call her back.",
+        outcome: "climb",
+        set: { "dot.garden": true },
+        feedback: "Her garden matters to her, and you’ve offered help on her terms with a clear next step. Climb the ladder.",
+        tip: "What a client loves is worth as much attention as what they need.",
+      },
+      {
+        id: "note",
+        text: "Note it on her file for her next review.",
+        outcome: "advance",
+        feedback: "It won’t be forgotten, but she raised it now, and she misses her roses. You move on one square.",
+        tip: "If it matters to the client today, act on it today.",
+      },
+      {
+        id: "notours",
+        text: "Tell her gardening isn’t something you can help with.",
+        outcome: "retry",
+        feedback: "Free council volunteers might be exactly what she needs, and finding them is coordination.",
+        tip: "Know the community options, not just the funded ones.",
+      },
+    ],
+  },
+  {
+    id: "d-roster",
+    version: 1,
+    kind: "recovery",
+    client: "dot",
+    speaker: "Dot’s visits",
+    role: "Replan",
+    channel: "note",
+    time: t(15, 40),
+    title: "Fix Brightside’s roster",
+    prompt: "Brightside’s roster has Dot’s visit next week on the wrong day.",
+    question: "What do you do?",
+    context: [
+      { when: { "dot.bowls": true }, text: "From Dot’s file: bowls on Thursday mornings." },
+      { when: { "dot.plan": "agreed" }, text: "You agreed a visit plan with Dot at 1.35." },
+    ],
+    options: [
+      {
+        id: "fix",
+        text: "Call Brightside, correct the day against what Dot agreed, and confirm it in writing.",
+        outcome: "accept",
+        feedback: "Caught before it happened, checked against what Dot agreed, and written down so it sticks.",
+        tip: "Check rosters against the client’s plan, then confirm in writing.",
+      },
+      {
+        id: "assume",
+        text: "Assume they’ll notice and fix it themselves.",
+        outcome: "retry",
+        feedback: "If they don’t, someone turns up on the wrong day, or not at all.",
+        tip: "If you spot it, own it.",
+      },
+    ],
+  },
+  {
     id: "o-pharmacy",
     version: 1,
     kind: "decision",
@@ -1278,6 +1349,15 @@ const scenarios: Scenario[] = [
 
 const events: GameEvent[] = [
   {
+    id: "roster-mixup",
+    time: t(15, 35),
+    title: "The roster has it wrong",
+    speaker: "Brightside Cleaning",
+    channel: "email",
+    text: "Brightside’s roster for next week has Dot’s visit on the wrong day. Late in the day, and it still needs sorting.",
+    recovery: "d-roster",
+  },
+  {
     id: "delivery-fails",
     time: t(12, 55),
     title: "The grocery delivery falls through",
@@ -1365,9 +1445,14 @@ const twoClientSquares = [
 const twoClientLadders = [
   { from: 5, to: 9 },
   { from: 6, to: 10 },
+  { from: 8, to: 12 },
   { from: 9, to: 13 },
+  { from: 11, to: 15 },
   { from: 12, to: 16 },
+  { from: 14, to: 18 },
 ];
+/** Late in the day, from the top rows only. */
+const lateSlides = { events: ["roster-mixup"], minSquare: 12 };
 
 const boards: Board[] = [
   {
@@ -1402,7 +1487,10 @@ const boards: Board[] = [
       { from: 4, to: 8 },
       { from: 6, to: 10 },
       { from: 7, to: 11 },
+      { from: 9, to: 13 },
       { from: 10, to: 14 },
+      { from: 12, to: 16 },
+      { from: 15, to: 19 },
     ],
     story: [
       { card: "c-start" },
@@ -1417,6 +1505,7 @@ const boards: Board[] = [
       { card: "d-supplier" },
       { card: "o-bins" },
       { card: "o-pharmacy" },
+      { card: "d-garden" },
       { card: "c-triage" },
       { card: "d-lena-back" },
       { card: "o-referral", optional: true },
@@ -1439,6 +1528,14 @@ const boards: Board[] = [
           { from: 11, to: 8 },
           { from: 8, to: 5 },
           { from: 5, to: 2 },
+        ],
+      },
+      {
+        after: 12,
+        ...lateSlides,
+        slides: [
+          { from: 16, to: 13 },
+          { from: 13, to: 10 },
         ],
       },
     ],
@@ -1466,6 +1563,7 @@ const boards: Board[] = [
       { card: "d-key" },
       { card: "t-class" },
       { card: "t-tell" },
+      { card: "d-garden" },
       { card: "d-supplier" },
       { card: "t-invoice" },
       { card: "c-triage" },
@@ -1490,6 +1588,15 @@ const boards: Board[] = [
           { from: 14, to: 11 },
           { from: 11, to: 8 },
           { from: 8, to: 5 },
+        ],
+      },
+      {
+        after: 14,
+        ...lateSlides,
+        slides: [
+          { from: 18, to: 15 },
+          { from: 15, to: 12 },
+          { from: 12, to: 9 },
         ],
       },
     ],
@@ -1517,6 +1624,7 @@ const boards: Board[] = [
       { card: "t-tell" },
       { card: "t-earlier" },
       { card: "t-invoice" },
+      { card: "d-garden" },
       { card: "c-triage" },
       { card: "d-key" },
       { card: "d-lena-back" },
@@ -1543,13 +1651,22 @@ const boards: Board[] = [
           { from: 8, to: 5 },
         ],
       },
+      {
+        after: 14,
+        ...lateSlides,
+        slides: [
+          { from: 18, to: 15 },
+          { from: 15, to: 12 },
+          { from: 12, to: 9 },
+        ],
+      },
     ],
     handover: "h-both",
   },
 ];
 
 export const coordinatorsDay: Content = {
-  version: "2026-11-17b",
+  version: "2026-11-17c",
   avatars: { Dot: "/images/coordinators-day/dot-avatar.webp" },
   scenarios: Object.fromEntries(scenarios.map((s) => [s.id, s])),
   events: Object.fromEntries(events.map((e) => [e.id, e])),

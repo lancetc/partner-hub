@@ -20,6 +20,9 @@ const COLS = 4;
 const CW = 168;
 const CH = 122;
 const PAD = 26;
+/** Each square's tile, smaller than its cell so the painted street shows between them. */
+const TW = 96;
+const TH = 74;
 const BOARD_IMAGE: string | null = "/images/coordinators-day/board-bg.webp";
 
 export type SquareKind = "start" | "handover" | "ladder" | "top" | "slide" | "work";
@@ -63,7 +66,23 @@ const kindLabel: Record<SquareKind, string> = {
   work: "",
 };
 
-export function DayBoard({ board, square, move, className, label }: { board: Board; square: number; move?: Move; className?: string; label?: string }) {
+export function DayBoard({
+  board,
+  square,
+  move,
+  className,
+  label,
+  names = false,
+}: {
+  board: Board;
+  square: number;
+  move?: Move;
+  className?: string;
+  label?: string;
+  /** Show each square's name. Off by default: the names hint at what's coming. */
+  names?: boolean;
+}) {
+  const named = (i: number) => (names ? board.squares[i] : `square ${i + 1}`);
   const { at, width, height } = layout(board.squares.length);
   const kinds = useMemo(() => squareKinds(board), [board]);
   const slides = useMemo(() => allSlides(board), [board]);
@@ -128,8 +147,9 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
       <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" fill="none" stroke="#c99a5b" strokeWidth="12" />
       <rect x="15" y="15" width={width - 30} height={height - 30} rx="20" fill="none" stroke="#e9c994" strokeWidth="2" />
 
-      {/* The path between squares: a cream ribbon. */}
-      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.8" strokeWidth="22" strokeLinejoin="round" strokeLinecap="round" />
+      {/* The path between squares: a thin cream line with a dash flowing along it, from Start to Handover. */}
+      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={ribbon(path)} className="cd-path" fill="none" stroke="#1f8a7e" strokeOpacity="0.75" strokeWidth="2.5" strokeDasharray="3 9" strokeLinecap="round" />
 
       {board.squares.map((_, i) => {
         const c = at(i);
@@ -138,14 +158,14 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         return (
           <g key={i} filter={`url(#${id}-lift)`}>
             <rect
-              x={c.x - CW / 2 + 26}
-              y={c.y - CH / 2 + 15}
-              width={CW - 52}
-              height={CH - 30}
-              rx="16"
+              x={c.x - TW / 2}
+              y={c.y - TH / 2}
+              width={TW}
+              height={TH}
+              rx="14"
               fill={tile[k].fill}
               stroke={here ? "#008282" : tile[k].edge}
-              strokeWidth={here ? 5 : 3}
+              strokeWidth={here ? 4.5 : 2.5}
             />
           </g>
         );
@@ -159,10 +179,10 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         const nx = (-(b.y - a.y) / len) * 10;
         const ny = ((b.x - a.x) / len) * 10;
         const rungs = Math.max(3, Math.floor(len / 22));
-        const ox = 56;
+        const ox = 62;
         return (
           <g key={`l${l.from}`} pointerEvents="none">
-            <title>{`Ladder from ${board.squares[l.from]} up to ${board.squares[l.to]}`}</title>
+            <title>{`Ladder from ${named(l.from)} up to ${named(l.to)}`}</title>
             {[1, -1].map((side) => (
               <line key={side} x1={a.x + ox + nx * side} y1={a.y + ny * side} x2={b.x + ox + nx * side} y2={b.y + ny * side} stroke="#1f8a7e" strokeWidth="6" strokeLinecap="round" />
             ))}
@@ -183,13 +203,13 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         const sameRow = Math.abs(a.y - b.y) < 1;
         // Along a row, the chute dips into the gap below the squares rather than crossing their names.
         const d = sameRow
-          ? `M${a.x - 20} ${a.y + 40} Q${(a.x + b.x) / 2} ${a.y + 104} ${b.x + 20} ${b.y + 40}`
+          ? `M${a.x - 18} ${a.y + 30} Q${(a.x + b.x) / 2} ${a.y + 104} ${b.x + 18} ${b.y + 30}`
           : `M${a.x - 14} ${a.y + 6} Q${(a.x + b.x) / 2 + (i % 2 ? -46 : 46)} ${(a.y + b.y) / 2} ${b.x + 10} ${b.y + 14}`;
         return (
           <g key={`s${s.from}-${s.to}`} pointerEvents="none">
-            <title>{`Possible setback: slide from ${board.squares[s.from]} down to ${board.squares[s.to]}`}</title>
-            <path d={d} fill="none" stroke="#c4562a" strokeWidth="18" strokeLinecap="round" opacity="0.9" markerEnd={`url(#${id}-chute)`} />
-            <path d={d} fill="none" stroke="#f0a27a" strokeWidth="7" strokeLinecap="round" opacity="0.95" />
+            <title>{`Possible setback: slide from ${named(s.from)} down to ${named(s.to)}`}</title>
+            <path d={d} fill="none" stroke="#c4562a" strokeWidth="14" strokeLinecap="round" opacity="0.9" markerEnd={`url(#${id}-chute)`} />
+            <path d={d} fill="none" stroke="#f0a27a" strokeWidth="5" strokeLinecap="round" opacity="0.95" />
           </g>
         );
       })}
@@ -200,18 +220,28 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         const k = kinds[i];
         return (
           <g key={`n${i}`} pointerEvents="none">
-            <text x={c.x} y={c.y - 12} textAnchor="middle" fontSize="28" fontWeight="800" fill="#1d2b4f" fontFamily="var(--font-mulish, sans-serif)">
+            <text
+              x={c.x}
+              y={names ? c.y - 12 : c.y + (kindLabel[k] ? 2 : 10)}
+              textAnchor="middle"
+              fontSize={names ? 20 : 28}
+              fontWeight="800"
+              fill="#1d2b4f"
+              fontFamily="var(--font-mulish, sans-serif)"
+            >
               {i + 1}
             </text>
-            <foreignObject x={c.x - CW / 2 + 28} y={c.y - 2} width={CW - 56} height={38}>
-              <p className="flex h-full items-start justify-center">
-                <span className="rounded-md bg-[#fffaf0]/90 px-1 text-center text-[12px] font-semibold leading-tight text-[#1d2b4f]">{name}</span>
-              </p>
-            </foreignObject>
+            {names && (
+              <foreignObject x={c.x - TW / 2 + 4} y={c.y - 9} width={TW - 8} height={28}>
+                <p className="flex h-full items-start justify-center">
+                  <span className="text-center text-[10.5px] font-semibold leading-[1.15] text-[#1d2b4f]">{name}</span>
+                </p>
+              </foreignObject>
+            )}
             {kindLabel[k] && (
               <g>
-                <rect x={c.x - 42} y={c.y + 28} width="84" height="16" rx="8" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
-                <text x={c.x} y={c.y + 39.8} textAnchor="middle" fontSize="10" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
+                <rect x={c.x - 40} y={c.y + 19} width="80" height="14" rx="7" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
+                <text x={c.x} y={c.y + 29.3} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
                   {kindLabel[k].toUpperCase()}
                 </text>
               </g>
@@ -221,7 +251,7 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
       })}
 
       {/* The pawn. */}
-      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 50}px, ${pawn.y - 28}px)` }} aria-hidden>
+      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 44}px, ${pawn.y - 30}px)` }} aria-hidden>
         <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
         <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
         <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
@@ -325,7 +355,7 @@ function HomeScene({ width: w, height: h }: { width: number; height: number }) {
 }
 
 /** On a phone: the pawn's square and the next few, in a row. */
-export function DayTrack({ board, square }: { board: Board; square: number }) {
+export function DayTrack({ board, square, names = false }: { board: Board; square: number; names?: boolean }) {
   const kinds = squareKinds(board);
   const from = Math.max(0, square - 1);
   const to = Math.min(board.squares.length - 1, from + 3);
@@ -346,9 +376,9 @@ export function DayTrack({ board, square }: { board: Board; square: number }) {
             style={i === square ? undefined : { background: tile[k].fill, borderColor: tile[k].edge }}
           >
             <span className="font-mulish text-base font-extrabold">{i + 1}</span>
-            <span className="mt-0.5 font-semibold">{board.squares[i]}</span>
+            {names && <span className="mt-0.5 font-semibold">{board.squares[i]}</span>}
             {kindLabel[k] && <span className={cx("mt-auto pt-1 font-mulish text-[0.62rem] font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>}
-            {ladder && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {board.squares[ladder.to]}</span>}
+            {ladder && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {names ? board.squares[ladder.to] : `to ${ladder.to + 1}`}</span>}
             {i === square && <span className="sr-only">(you are here)</span>}
           </li>
         );

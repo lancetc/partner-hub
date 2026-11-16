@@ -580,3 +580,9 @@ input[type="range"].brand-range::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .cd-token { transition: none; }
 }
+
+/* The Coordinator's Day: a dash flowing along the path, Start to Handover. */
+@media (prefers-reduced-motion: no-preference) {
+  .cd-path { animation: cd-path 1.4s linear infinite; }
+}
+@keyframes cd-path { to { stroke-dashoffset: -24; } }

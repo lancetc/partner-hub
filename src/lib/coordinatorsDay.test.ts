@@ -27,14 +27,17 @@ const playTo = (run: Run, id: string) => {
 };
 
 describe("The Coordinator's Day", () => {
-  it("has three valid 20-square boards with more ladders and slides", () => {
+  it("has three valid 20-square boards with ladders and slides up into the top rows", () => {
     for (const level of LEVELS) {
       expect(validateBoard(content, level)).toEqual([]);
       const b = content.boards[level];
       expect(b.squares).toHaveLength(20);
       expect(b.ladders.length).toBeGreaterThanOrEqual(4);
       expect(allSlides(b).length).toBeGreaterThanOrEqual(3);
-      expect(b.checkpoints).toHaveLength(3);
+      expect(b.checkpoints).toHaveLength(4);
+      // The top two rows (squares 13 to 20) have ladders and slides of their own.
+      expect(b.ladders.filter((l) => l.from >= 12).length).toBeGreaterThanOrEqual(2);
+      expect(allSlides(b).filter((x) => x.from >= 12).length).toBeGreaterThanOrEqual(2);
     }
   });
 
@@ -100,7 +103,8 @@ describe("The Coordinator's Day", () => {
       const r = playToEnd(startRun(content, "experienced", seed));
       const ids = r.events.map((e) => e.event);
       expect(new Set(ids).size).toBe(ids.length);
-      expect(ids).toHaveLength(3);
+      // Three during the day, and the late one if they're in the top rows by then.
+      expect(ids.length).toBeGreaterThanOrEqual(3);
       expect(r.events.every((e) => e.recovered)).toBe(true);
       // The shopping setback matches how the shopping was sorted.
       if (ids.includes("delivery-fails")) expect(r.flags["dot.shopping"]).toBe("delivery");
@@ -186,7 +190,7 @@ describe("The Coordinator's Day", () => {
     r = proceed(content, choose(content, r, "inbox"));
     r = playToEnd(r);
     const sum = recap(content, r);
-    expect(sum.setbacks).toHaveLength(3);
+    expect(sum.setbacks.length).toBeGreaterThanOrEqual(3);
     expect(sum.setbacks.every((s) => s.recovered)).toBe(true);
     expect(sum.ladders).toBeGreaterThanOrEqual(2);
     expect(sum.firstTry).toBe(sum.cards - 1);

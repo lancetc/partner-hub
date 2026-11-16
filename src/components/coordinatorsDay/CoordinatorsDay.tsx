@@ -22,6 +22,7 @@ import { DayCard } from "./DayCard";
 */
 
 const STORE = "tc-coordinators-day:v1:";
+const NAMES = "tc-coordinators-day:names";
 type Saved = { run: Run | null };
 function load(who: string): Saved {
   try {
@@ -42,9 +43,9 @@ function save(who: string, s: Saved) {
 const levelName: Record<Level, string> = { new: "New coordinator", practising: "Practising coordinator", experienced: "Experienced coordinator" };
 
 /** Words for the move just made, read out to screen readers. */
-function announce(move: Move | undefined, name: (i: number) => string) {
+function announce(move: Move | undefined, place: (i: number) => string) {
   if (!move) return "";
-  const where = `square ${move.to + 1}, ${name(move.to)}`;
+  const where = place(move.to);
   if (move.kind === "stay") return `You stay on square ${move.to + 1}.`;
   if (move.kind === "ladder") return `You climb the ladder to ${where}.`;
   if (move.kind === "slide") return `You slide back to ${where}.`;
@@ -68,6 +69,20 @@ export function CoordinatorsDay() {
   const [level, setLevel] = useState<Level>("new");
   const [cardOpen, setCardOpen] = useState(true);
   const [boardOpen, setBoardOpen] = useState(false);
+  // Square names hint at what's coming, so they're off unless the learner turns them on (remembered on this device).
+  const [names, setNamesState] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem(NAMES) === "on";
+    } catch {
+      return false;
+    }
+  });
+  const setNames = (on: boolean) => {
+    setNamesState(on);
+    try {
+      localStorage.setItem(NAMES, on ? "on" : "off");
+    } catch {}
+  };
   const boardRef = useRef<HTMLElement>(null);
 
   const start = (l: Level) => {
@@ -155,15 +170,20 @@ export function CoordinatorsDay() {
           <HowToPlay />
         </div>
         <section aria-label={`${board.title} board preview`} className="rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5">
-          <p className="mb-2 px-1 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Board preview · {board.title}</p>
-          <DayBoard key={level} board={board} square={0} />
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Board preview · {board.title}</p>
+            <NamesSwitch on={names} onChange={setNames} />
+          </div>
+          <DayBoard key={level} board={board} square={0} names={names} />
         </section>
       </div>
     );
   }
 
   const board = content.boards[run.level];
-  const name = (i: number) => board.squares[i];
+  // With names off, squares are only numbers, here and in what's read out.
+  const name = (i: number) => (names ? board.squares[i] : `square ${i + 1}`);
+  const place = (i: number) => (names ? `square ${i + 1}, ${board.squares[i]}` : `square ${i + 1}`);
   const drawn = run.card.type === "event" ? run.events.find((x) => x.event === run.card.id) : undefined;
   const slide = drawn ? slideFor(board, drawn.checkpoint, run.square) : undefined;
 
@@ -189,7 +209,13 @@ export function CoordinatorsDay() {
           <Icon name="clock" className="size-5 text-accent" /> {clock(run.time)}
         </span>
         <span className="text-sm text-ink-muted">
-          Square {run.square + 1} of {board.squares.length} · <strong className="text-ink">{name(run.square)}</strong>
+          Square {run.square + 1} of {board.squares.length}
+          {names && (
+            <>
+              {" "}
+              · <strong className="text-ink">{board.squares[run.square]}</strong>
+            </>
+          )}
         </span>
         <span className="text-sm text-ink-muted">{levelName[run.level]}</span>
         <span className="ml-auto flex gap-1">
@@ -202,7 +228,7 @@ export function CoordinatorsDay() {
         </span>
       </div>
       <p className="sr-only" role="status" aria-live="polite">
-        {announce(run.phase === "feedback" || run.move?.kind === "slide" || run.move?.kind === "walk" ? run.move : undefined, name)}
+        {announce(run.phase === "feedback" || run.move?.kind === "slide" || run.move?.kind === "walk" ? run.move : undefined, place)}
       </p>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start">
@@ -210,7 +236,7 @@ export function CoordinatorsDay() {
         <section ref={boardRef} aria-label="The board" className="flex scroll-mt-24 flex-col gap-3 lg:sticky lg:top-24">
           {/* Phone: the nearby squares, the full board on request. */}
           <div className="lg:hidden">
-            <DayTrack board={board} square={run.square} />
+            <DayTrack board={board} square={run.square} names={names} />
             <button
               type="button"
               aria-expanded={boardOpen}
@@ -221,8 +247,11 @@ export function CoordinatorsDay() {
             </button>
           </div>
           <div className={cx("rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5", !boardOpen && "hidden lg:block")}>
-            <DayBoard board={board} square={run.square} move={run.move} label={`${board.title} board. You are on square ${run.square + 1}, ${name(run.square)}.`} />
-            <BoardKey />
+            <DayBoard board={board} square={run.square} move={run.move} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
+            <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+              <BoardKey />
+              <NamesSwitch on={names} onChange={setNames} />
+            </div>
           </div>
           {!cardOpen && (
             <div className="rounded-3xl bg-surface p-4 ring-1 ring-line lg:hidden">
@@ -253,6 +282,24 @@ export function CoordinatorsDay() {
   );
 }
 
+/** Shows or hides the squares' names. */
+function NamesSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full px-2 text-sm font-semibold text-ink hover:bg-muted"
+    >
+      <span aria-hidden className={cx("relative h-5 w-9 rounded-full transition-colors", on ? "bg-[#008282]" : "bg-[#c9d3dc]")}>
+        <span className={cx("absolute top-0.5 size-4 rounded-full bg-white shadow transition-[left]", on ? "left-[1.125rem]" : "left-0.5")} />
+      </span>
+      Square names
+    </button>
+  );
+}
+
 function BoardKey() {
   const items: [string, string][] = [
     ["#dff3ea", "Opportunity: handle it well to climb the ladder"],
@@ -260,7 +307,7 @@ function BoardKey() {
     ["#fde9c4", "Handover: finish the day"],
   ];
   return (
-    <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-ink-muted" aria-label="Key">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-ink-muted" aria-label="Key">
       {items.map(([c, t]) => (
         <li key={t} className="flex items-center gap-1.5">
           <span aria-hidden className="size-3 rounded ring-1 ring-black/10" style={{ background: c }} /> {t}

@@ -96,8 +96,9 @@ export type Board = {
   /**
     After the story card at index `after` is resolved, one of `events` may happen. The token goes down the
     marked slide from the square it's on (there's one for each square it could be on by then).
+    `minSquare`: a late setback that only catches the token from this square up (the top rows).
   */
-  checkpoints: { after: number; events: string[]; slides: { from: number; to: number }[] }[];
+  checkpoints: { after: number; events: string[]; slides: { from: number; to: number }[]; minSquare?: number }[];
   handover: string;
 };
 
@@ -206,6 +207,7 @@ export function choose(content: Content, run: Run, optionId: string): Run {
     to = Math.min(last(b), run.square + 1);
     kind = to === run.square ? "stay" : "step";
   } else if (o.outcome === "climb") {
+    // Near the end there's no room for a ladder, so a climb there just moves on one.
     const ladder = b.ladders.find((l) => l.from === run.square);
     to = ladder ? ladder.to : Math.min(last(b), run.square + 1);
     kind = ladder ? "ladder" : "step";
@@ -259,7 +261,13 @@ export function proceed(content: Content, run: Run): Run {
   const resolvedIndex = run.next - 1;
   const cpIndex = board.checkpoints.findIndex((c) => c.after === resolvedIndex);
   // No setbacks once at Handover: the day's nearly done.
-  if (cpIndex !== -1 && !run.events.some((x) => x.checkpoint === cpIndex) && !resolved?.recovery && run.square < last(board)) {
+  if (
+    cpIndex !== -1 &&
+    !run.events.some((x) => x.checkpoint === cpIndex) &&
+    !resolved?.recovery &&
+    run.square < last(board) &&
+    run.square >= (board.checkpoints[cpIndex].minSquare ?? 0)
+  ) {
     const used = new Set(run.events.map((x) => x.event));
     const pool = board.checkpoints[cpIndex].events.filter((id) => !used.has(id) && matches(run.flags, content.events[id].eligible));
     if (pool.length) {
@@ -338,7 +346,7 @@ export function validateBoard(content: Content, level: Level): string[] {
   type S = { square: number; next: number; used: string[]; drawn: number[]; shown: string[]; path: string[] };
   const walk = (s: S): void => {
     const cp = b.checkpoints.findIndex((c, i) => c.after === s.next - 1 && !s.drawn.includes(i));
-    if (cp !== -1 && s.square < end) {
+    if (cp !== -1 && s.square < end && s.square >= (b.checkpoints[cp].minSquare ?? 0)) {
       const pool = b.checkpoints[cp].events.filter((id) => !s.used.includes(id));
       if (pool.length) {
         const slide = slideFor(b, cp, s.square);
@@ -361,7 +369,8 @@ export function validateBoard(content: Content, level: Level): string[] {
     const step = Math.min(end, s.square + 1);
     if (card.kind === "opportunity" && outcomes.has("climb")) {
       const ladder = b.ladders.find((l) => l.from === s.square);
-      if (!ladder && s.square < end) errors.push(`${level}: "${card.id}" can be climbed but there's no ladder on square ${s.square} (${s.path.join(" > ")})`);
+      // Near the end there's no room for a ladder: a climb there just moves on one.
+      if (!ladder && s.square + 4 <= end) errors.push(`${level}: "${card.id}" can be climbed but there's no ladder on square ${s.square} (${s.path.join(" > ")})`);
       walk({ ...s, square: ladder ? ladder.to : step, next: s.next + 1, shown, path: [...s.path, `${card.id}:climb`] });
       if (outcomes.has("advance")) walk({ ...s, square: step, next: s.next + 1, shown, path: [...s.path, `${card.id}:advance`] });
       return;
