@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
-import { Icon, type IconName } from "../Icon";
+import { Icon } from "../Icon";
 import { ONBOARDING, type OnboardingModelId, type OnboardingNode as Node } from "@/content/partnerOnboarding";
 
 /*
@@ -22,7 +22,7 @@ const toneClass = {
 };
 
 export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingModelId }) {
-  const { nodes: NODES, edges: EDGES, description } = ONBOARDING[model];
+  const { nodes: NODES, edges: EDGES, description, key } = ONBOARDING[model];
   const titleId = `onboarding-diagram-${model}`;
   const box = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
@@ -87,7 +87,7 @@ export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingM
         ))}
 
         {EDGES.map((e) => (
-          <foreignObject key={`l-${e.id}`} x={e.lx - 130} y={e.ly - 20} width={260} height={40} className="onb-label" style={delay(e.at + 0.45)}>
+          <foreignObject key={`l-${e.id}`} x={e.lx - 180} y={e.ly - 20} width={360} height={40} className="onb-label" style={delay(e.at + 0.45)}>
             <div className="flex h-full items-center justify-center">
               <span className="whitespace-nowrap rounded-full bg-[#e8f3f3] px-4 py-1.5 font-sans text-[17px] font-semibold text-[#0f2f3a] shadow-sm ring-1 ring-[#cfe6e5]">
                 {e.label}
@@ -116,6 +116,22 @@ export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingM
           </foreignObject>
         ))}
       </svg>
+
+      {key && (
+        <ul aria-label="Key" className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-[#102a43]">
+          {(
+            [
+              ["light", "Client"],
+              ["teal", "Trilogy Care"],
+              ["peach", "External"],
+            ] as const
+          ).map(([tone, label]) => (
+            <li key={tone} className={cx("rounded-xl px-4 py-1.5 ring-1", toneClass[tone])}>
+              {label}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -140,15 +156,9 @@ function MiniNode({ node: n }: { node: Node }) {
   );
 }
 
-const ROLES: { title: string; body: string; icon: IconName; circle: string; bar: string }[] = [
-  { title: "Client", body: "The person receiving care.", icon: "user", circle: "bg-[#d7efee] text-[#007b7c]", bar: "bg-[#2a9d8f]" },
-  { title: "Trilogy Care Partner", body: "Trilogy Care case manager: plan and budget.", icon: "clipboard", circle: "bg-[#d4e8f2] text-[#1d2b4f]", bar: "bg-[#1d2b4f]" },
-  { title: "Care Coordinator", body: "Arranges and rosters services.", icon: "calendar", circle: "bg-[#f8ead1] text-[#8a5a00]", bar: "bg-[#e0a030]" },
-  { title: "Trilogy Partnership Manager", body: "Looks after the referring partner.", icon: "people", circle: "bg-[#f6dcdc] text-[#c7393e]", bar: "bg-[#c7393e]" },
-];
-
-/** The four people a partner works with, joined in a row. */
-export function PartnerRoles() {
+/** The people a partner works with, for their model, joined in a row. */
+export function PartnerRoles({ model = "p1" }: { model?: OnboardingModelId }) {
+  const ROLES = ONBOARDING[model].roles;
   return (
     <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {ROLES.map((r, i) => (

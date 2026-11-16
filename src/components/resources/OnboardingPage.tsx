@@ -23,7 +23,7 @@ export function OnboardingPage({ model }: { model: OnboardingModelId }) {
       </div>
       <h2 className="mt-10 font-serif text-2xl font-semibold">Who you’ll work with</h2>
       <div className="mt-4">
-        <PartnerRoles />
+        <PartnerRoles model={model} />
       </div>
     </div>
   );
