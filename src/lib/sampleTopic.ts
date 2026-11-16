@@ -211,7 +211,7 @@ export function sampleLesson(draft: SampleDraft, opts: { slug: string; interest:
     owner: opts.madeBy === "claude" ? "Made for you by Claude (not reviewed by Trilogy)" : "Made for you from a starter template",
     reviewDate: review,
     visual: { variant, tone, icon, alt: `Illustration for ${title}` },
-    completionMessage: "That’s your first topic done. There are plenty more in My Training.",
+    completionMessage: "That’s your first topic done. There are plenty more in Discovery Paths.",
   };
 }
 
@@ -267,7 +267,7 @@ export function templateDraft(interest: string): SampleDraft {
         heading: "Your next step",
         body: `You’ve made a start on ${topic}.`,
         points: ["Build on what you already know", "Learn a little, often", "Try it on the job"],
-        action: `Look in My Training for topics on ${topic}, and ask your coordinator if there’s something specific you need.`,
+        action: `Look in Discovery Paths for topics on ${topic}, and ask your coordinator if there’s something specific you need.`,
       },
     ],
   };

@@ -62,7 +62,7 @@ export async function createSampleTopic(db: Db, user: User, interestInput: unkno
   const interest = cleanInterest(interestInput);
   if (!interest) throw new HttpError(400, "Tell us a little about what you’d like to learn (a few words is fine).");
   const count = (db.prepare("SELECT COUNT(*) AS n FROM sample_topics WHERE user_id = ?").get(user.id) as { n: number }).n;
-  if (count >= MAX_PER_PERSON) throw new HttpError(429, "You’ve made lots of sample topics already. Have a look through My Training for more.");
+  if (count >= MAX_PER_PERSON) throw new HttpError(429, "You’ve made lots of sample topics already. Have a look through Discovery Paths for more.");
 
   let draft: SampleDraft | null = null;
   let usage: unknown = null;

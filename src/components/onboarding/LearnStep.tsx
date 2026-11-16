@@ -113,7 +113,7 @@ export function LearnStep({
           {cards > 0 && !template && ` · ${cards} ${cards === 1 ? "card" : "cards"} so far`}
         </p>
         <p className="max-w-md text-ink-muted">
-          A short topic on <strong className="text-ink">{cleanInterest(interest)}</strong>. It usually takes under a minute. It’ll be waiting in My Training
+          A short topic on <strong className="text-ink">{cleanInterest(interest)}</strong>. It usually takes under a minute. It’ll be waiting in Discovery Paths
           when it’s ready.
         </p>
       </section>

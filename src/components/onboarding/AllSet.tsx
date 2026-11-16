@@ -69,7 +69,7 @@ export function AllSet() {
             >
               {attempts[latest.slug] ? "Open topic" : "Start topic"} <Icon name="arrow-right" className="size-5" />
             </Link>
-            <span className="text-sm opacity-80">It’s also waiting for you in My Training.</span>
+            <span className="text-sm opacity-80">It’s also waiting for you in Discovery Paths.</span>
           </div>
           {latest.madeBy === "template" && (
             <p className="mt-4 rounded-2xl bg-white/10 p-3 text-sm">
@@ -127,7 +127,7 @@ export function AllSet() {
         </h2>
         <ul className="mt-3 grid gap-3 sm:grid-cols-3">
           {[
-            { href: "/paths", icon: "route", title: "My Training", text: "Training programs to work through, and your learning so far." },
+            { href: "/paths", icon: "route", title: "Discovery Paths", text: "Training programs to work through, and your learning so far." },
             { href: "/topics", icon: "book", title: "Browse topics", text: "Short, practical topics you can finish between visits." },
             { href: "/settings", icon: "user", title: "Profile and settings", text: "Your picture, language, emails and audio." },
           ].map((l) => (

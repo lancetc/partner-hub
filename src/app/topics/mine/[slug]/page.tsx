@@ -25,5 +25,5 @@ async function Player({ params }: Pick<PageProps<"/topics/mine/[slug]">, "params
   const db = getDb();
   const lesson = mySampleLesson(db, await currentUser(db), slug);
   if (!lesson) notFound();
-  return <LessonPlayer lesson={lesson} personal backTo={{ href: "/paths", label: "Back to My Training" }} />;
+  return <LessonPlayer lesson={lesson} personal backTo={{ href: "/paths", label: "Back to Discovery Paths" }} />;
 }
