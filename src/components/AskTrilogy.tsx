@@ -75,17 +75,17 @@ export function AskTrilogy({ className }: { className?: string }) {
   return (
     <section
       aria-labelledby={`${id}-title`}
-      className={cx("relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#008282] to-[#0a6a70] p-5 text-white shadow-sm sm:p-6", className)}
+      className={cx(
+        // The Trilogy mark on brand teal (public/brand/ask-trilogy-bg.svg). On a phone it sits small in the top
+        // corner; wider, the picture fills the card and the content stops short of the mark (its right quarter).
+        "relative overflow-hidden rounded-3xl bg-[#007b7c] bg-[url(/brand/ask-trilogy-bg.svg)] bg-[length:auto_8rem] bg-right-top bg-no-repeat p-5 text-white shadow-sm sm:bg-cover sm:bg-right sm:p-6 sm:pr-[25%]",
+        className,
+      )}
     >
-      {/* Soft brand-colour circles behind the heading. */}
-      <svg aria-hidden className="pointer-events-none absolute -right-10 -top-12 size-56 opacity-60" viewBox="0 0 200 200">
-        <circle cx="130" cy="70" r="70" fill="#3cb8b9" opacity="0.45" />
-        <circle cx="60" cy="40" r="26" fill="#fab53d" opacity="0.5" />
-      </svg>
       <h2 id={`${id}-title`} className="relative flex items-center gap-2 font-serif text-2xl font-semibold">
         <Icon name="spark" className="size-6 text-[#fab53d]" /> Ask Trilogy
       </h2>
-      <p className="relative mt-1 text-white/90">Find an answer, resource or learning topic.</p>
+      <p className="relative mt-1 pr-20 text-white/90 sm:pr-0">Find an answer, resource or learning topic.</p>
       <form
         className="relative mt-4 flex gap-2"
         onSubmit={(e) => {
