@@ -11,8 +11,8 @@ import { cx } from "@/lib/format";
   or glides it up a ladder or down a slide; with reduced motion it simply appears there. Every square
   says what kind it is in words as well as colour.
 
-  BOARD_IMAGE: a painted background, when there is one (public/images/coordinators-day). Until then
-  the scene is drawn here.
+  BOARD_IMAGE: the painted street behind the board (public/images/coordinators-day). Without it, a
+  simpler street is drawn here instead.
 */
 
 /** Four across, so a ladder up four squares always climbs straight up to the next row. */
@@ -20,7 +20,7 @@ const COLS = 4;
 const CW = 168;
 const CH = 122;
 const PAD = 26;
-const BOARD_IMAGE: string | null = null;
+const BOARD_IMAGE: string | null = "/images/coordinators-day/board-bg.webp";
 
 export type SquareKind = "start" | "handover" | "ladder" | "top" | "slide" | "work";
 
@@ -123,13 +123,13 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
       {/* The scene behind, inside the wooden frame. */}
       <g clipPath={`url(#${id}-frame)`}>
         {BOARD_IMAGE ? <image href={BOARD_IMAGE} x="0" y="0" width={width} height={height} preserveAspectRatio="xMidYMid slice" /> : <HomeScene width={width} height={height} />}
-        <rect width={width} height={height} fill="#fffaf0" opacity="0.18" />
+        <rect width={width} height={height} fill="#fffaf0" opacity="0.06" />
       </g>
       <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" fill="none" stroke="#c99a5b" strokeWidth="12" />
       <rect x="15" y="15" width={width - 30} height={height - 30} rx="20" fill="none" stroke="#e9c994" strokeWidth="2" />
 
       {/* The path between squares: a cream ribbon. */}
-      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="30" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.8" strokeWidth="22" strokeLinejoin="round" strokeLinecap="round" />
 
       {board.squares.map((_, i) => {
         const c = at(i);
@@ -138,10 +138,10 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         return (
           <g key={i} filter={`url(#${id}-lift)`}>
             <rect
-              x={c.x - CW / 2 + 20}
-              y={c.y - CH / 2 + 12}
-              width={CW - 40}
-              height={CH - 24}
+              x={c.x - CW / 2 + 26}
+              y={c.y - CH / 2 + 15}
+              width={CW - 52}
+              height={CH - 30}
               rx="16"
               fill={tile[k].fill}
               stroke={here ? "#008282" : tile[k].edge}
@@ -203,15 +203,15 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
             <text x={c.x} y={c.y - 12} textAnchor="middle" fontSize="28" fontWeight="800" fill="#1d2b4f" fontFamily="var(--font-mulish, sans-serif)">
               {i + 1}
             </text>
-            <foreignObject x={c.x - CW / 2 + 22} y={c.y - 2} width={CW - 44} height={40}>
+            <foreignObject x={c.x - CW / 2 + 28} y={c.y - 2} width={CW - 56} height={38}>
               <p className="flex h-full items-start justify-center">
-                <span className="rounded-md bg-[#fffaf0]/90 px-1 text-center text-[12.5px] font-semibold leading-tight text-[#1d2b4f]">{name}</span>
+                <span className="rounded-md bg-[#fffaf0]/90 px-1 text-center text-[12px] font-semibold leading-tight text-[#1d2b4f]">{name}</span>
               </p>
             </foreignObject>
             {kindLabel[k] && (
               <g>
-                <rect x={c.x - 44} y={c.y + 31} width="88" height="17" rx="8.5" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
-                <text x={c.x} y={c.y + 43.5} textAnchor="middle" fontSize="10.5" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
+                <rect x={c.x - 42} y={c.y + 28} width="84" height="16" rx="8" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
+                <text x={c.x} y={c.y + 39.8} textAnchor="middle" fontSize="10" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
                   {kindLabel[k].toUpperCase()}
                 </text>
               </g>
@@ -221,7 +221,7 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
       })}
 
       {/* The pawn. */}
-      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 52}px, ${pawn.y - 30}px)` }} aria-hidden>
+      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 50}px, ${pawn.y - 28}px)` }} aria-hidden>
         <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
         <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
         <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
