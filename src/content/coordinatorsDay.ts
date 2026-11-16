@@ -1531,11 +1531,12 @@ const boards: Board[] = [
         ],
       },
       {
-        after: 12,
+        // After the inbox, so the late setback sits on 18 rather than 17 (where the ladder from 13 lands).
+        after: 13,
         ...lateSlides,
         slides: [
-          { from: 16, to: 13 },
-          { from: 13, to: 10 },
+          { from: 17, to: 14 },
+          { from: 14, to: 11 },
         ],
       },
     ],
@@ -1666,7 +1667,7 @@ const boards: Board[] = [
 ];
 
 export const coordinatorsDay: Content = {
-  version: "2026-11-17c",
+  version: "2026-11-17d",
   avatars: { Dot: "/images/coordinators-day/dot-avatar.webp" },
   scenarios: Object.fromEntries(scenarios.map((s) => [s.id, s])),
   events: Object.fromEntries(events.map((e) => [e.id, e])),

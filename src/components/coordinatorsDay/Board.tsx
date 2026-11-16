@@ -54,7 +54,7 @@ const tile: Record<SquareKind, { fill: string; edge: string }> = {
   handover: { fill: "#fde4b2", edge: "#d9a441" },
   ladder: { fill: "#fbf1df", edge: "#d9a441" },
   top: { fill: "#fbf1df", edge: "#d9a441" },
-  slide: { fill: "#f8d6c8", edge: "#d9774a" },
+  slide: { fill: "#f3dfcf", edge: "#8a5a36" },
   work: { fill: "#fbf1df", edge: "#d9a441" },
 };
 const kindLabel: Record<SquareKind, string> = {
@@ -83,6 +83,8 @@ export function DayBoard({
   names?: boolean;
 }) {
   const named = (i: number) => (names ? board.squares[i] : `square ${i + 1}`);
+  // Opportunity and Setback risk hint at what's coming too, so they show only with the names.
+  const showKind = (k: SquareKind) => Boolean(kindLabel[k]) && (names || k === "start" || k === "handover");
   const { at, width, height } = layout(board.squares.length);
   const kinds = useMemo(() => squareKinds(board), [board]);
   const slides = useMemo(() => allSlides(board), [board]);
@@ -134,9 +136,11 @@ export function DayBoard({
         <filter id={`${id}-lift`} x="-20%" y="-20%" width="140%" height="150%">
           <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#5b4220" floodOpacity="0.25" />
         </filter>
-        <marker id={`${id}-chute`} viewBox="0 0 10 10" refX="6" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto">
-          <path d="M0 0 L10 5 L0 10 z" fill="#c4562a" />
-        </marker>
+        <linearGradient id={`${id}-scales`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6b4527" />
+          <stop offset="0.5" stopColor="#4a2f1b" />
+          <stop offset="1" stopColor="#2e1c10" />
+        </linearGradient>
       </defs>
 
       {/* The scene behind, inside the wooden frame. */}
@@ -196,20 +200,29 @@ export function DayBoard({
         );
       })}
 
-      {/* Slides: an orange chute from the setback square down to the work to redo. */}
-      {slides.map((s, i) => {
-        const a = at(s.from);
-        const b = at(s.to);
+      {/* Slides: a snake, its head on the setback square and its tail on the work to redo. */}
+      {slides.map((sl, i) => {
+        const a = at(sl.from);
+        const b = at(sl.to);
         const sameRow = Math.abs(a.y - b.y) < 1;
-        // Along a row, the chute dips into the gap below the squares rather than crossing their names.
-        const d = sameRow
-          ? `M${a.x - 18} ${a.y + 30} Q${(a.x + b.x) / 2} ${a.y + 104} ${b.x + 18} ${b.y + 30}`
-          : `M${a.x - 14} ${a.y + 6} Q${(a.x + b.x) / 2 + (i % 2 ? -46 : 46)} ${(a.y + b.y) / 2} ${b.x + 10} ${b.y + 14}`;
+        // Along a row the snake dips into the gap below the squares; between rows it curves to one side.
+        const head = sameRow ? { x: a.x - 22, y: a.y + 26 } : { x: a.x - 26, y: a.y + 20 };
+        const tail = sameRow ? { x: b.x + 22, y: b.y + 30 } : { x: b.x + 18, y: b.y + 26 };
+        const bend = sameRow ? { x: (head.x + tail.x) / 2, y: a.y + 104 } : { x: (head.x + tail.x) / 2 + (i % 2 ? -50 : 50), y: (head.y + tail.y) / 2 };
+        const snake = snakeShape(head, bend, tail, i);
         return (
-          <g key={`s${s.from}-${s.to}`} pointerEvents="none">
-            <title>{`Possible setback: slide from ${named(s.from)} down to ${named(s.to)}`}</title>
-            <path d={d} fill="none" stroke="#c4562a" strokeWidth="14" strokeLinecap="round" opacity="0.9" markerEnd={`url(#${id}-chute)`} />
-            <path d={d} fill="none" stroke="#f0a27a" strokeWidth="5" strokeLinecap="round" opacity="0.95" />
+          <g key={`s${sl.from}-${sl.to}`} pointerEvents="none">
+            <title>{`Possible setback: slide from ${named(sl.from)} down to ${named(sl.to)}`}</title>
+            <path d={snake.body} fill={`url(#${id}-scales)`} stroke="#22140a" strokeWidth="1.2" strokeLinejoin="round" />
+            <path d={snake.spine} fill="none" stroke="#c9a05e" strokeWidth="3" strokeDasharray="1.5 7" strokeLinecap="round" opacity="0.9" />
+            <g transform={`translate(${snake.head.x} ${snake.head.y}) rotate(${snake.head.angle})`}>
+              <path d="M10 0 l9 -3 M10 0 l9 3" stroke="#c0392b" strokeWidth="1.6" strokeLinecap="round" />
+              <ellipse cx="0" cy="0" rx="13.5" ry="10.5" fill="#3b2416" stroke="#22140a" strokeWidth="1.2" />
+              <circle cx="4" cy="-4.2" r="2.6" fill="#f6e7c1" />
+              <circle cx="4" cy="4.2" r="2.6" fill="#f6e7c1" />
+              <circle cx="4.8" cy="-4.2" r="1.2" fill="#111" />
+              <circle cx="4.8" cy="4.2" r="1.2" fill="#111" />
+            </g>
           </g>
         );
       })}
@@ -222,7 +235,7 @@ export function DayBoard({
           <g key={`n${i}`} pointerEvents="none">
             <text
               x={c.x}
-              y={names ? c.y - 12 : c.y + (kindLabel[k] ? 2 : 10)}
+              y={names ? c.y - 12 : c.y + (showKind(k) ? 2 : 10)}
               textAnchor="middle"
               fontSize={names ? 20 : 28}
               fontWeight="800"
@@ -238,9 +251,9 @@ export function DayBoard({
                 </p>
               </foreignObject>
             )}
-            {kindLabel[k] && (
+            {showKind(k) && (
               <g>
-                <rect x={c.x - 40} y={c.y + 19} width="80" height="14" rx="7" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
+                <rect x={c.x - 40} y={c.y + 19} width="80" height="14" rx="7" fill={k === "slide" ? "#4a2f1b" : k === "handover" ? "#b88320" : "#1f8a7e"} />
                 <text x={c.x} y={c.y + 29.3} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
                   {kindLabel[k].toUpperCase()}
                 </text>
@@ -258,6 +271,47 @@ export function DayBoard({
       </g>
     </svg>
   );
+}
+
+type Pt = { x: number; y: number };
+function snakeShape(head: Pt, bend: Pt, tail: Pt, seed: number) {
+  const N = 48;
+  const q = (t: number) => ({
+    x: (1 - t) * (1 - t) * head.x + 2 * (1 - t) * t * bend.x + t * t * tail.x,
+    y: (1 - t) * (1 - t) * head.y + 2 * (1 - t) * t * bend.y + t * t * tail.y,
+  });
+  const len = Math.hypot(tail.x - head.x, tail.y - head.y) + Math.hypot(bend.x - head.x, bend.y - head.y) * 0.5;
+  const waves = Math.max(1.5, len / 95);
+  const left: Pt[] = [];
+  const right: Pt[] = [];
+  const spine: Pt[] = [];
+  for (let j = 0; j <= N; j++) {
+    const t = j / N;
+    const p = q(t);
+    const p2 = q(Math.min(1, t + 0.01));
+    const p1 = q(Math.max(0, t - 0.01));
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const m = Math.hypot(dx, dy) || 1;
+    const nx = -dy / m;
+    const ny = dx / m;
+    // The wiggle settles at the head, so the head sits straight on its square.
+    const wiggle = 9 * Math.sin((t * waves + (seed % 2) * 0.5) * Math.PI * 2) * Math.min(1, t * 4);
+    const w = 8.5 * (1 - t) + 1.5 * t;
+    const c = { x: p.x + nx * wiggle, y: p.y + ny * wiggle };
+    spine.push(c);
+    left.push({ x: c.x + nx * w, y: c.y + ny * w });
+    right.push({ x: c.x - nx * w, y: c.y - ny * w });
+  }
+  const pts = (list: Pt[]) => list.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L");
+  const h = q(0);
+  const h2 = q(0.04);
+  const angle = (Math.atan2(h.y - h2.y, h.x - h2.x) * 180) / Math.PI;
+  return {
+    body: `M${pts(left)} L${pts(right.reverse())} Z`,
+    spine: `M${pts(spine.slice(2, -3))}`,
+    head: { x: h.x, y: h.y, angle },
+  };
 }
 
 /** The cream path: straight along each row, then a sweep up and back to the start of the next row. */
@@ -377,8 +431,10 @@ export function DayTrack({ board, square, names = false }: { board: Board; squar
           >
             <span className="font-mulish text-base font-extrabold">{i + 1}</span>
             {names && <span className="mt-0.5 font-semibold">{board.squares[i]}</span>}
-            {kindLabel[k] && <span className={cx("mt-auto pt-1 font-mulish text-[0.62rem] font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>}
-            {ladder && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {names ? board.squares[ladder.to] : `to ${ladder.to + 1}`}</span>}
+            {kindLabel[k] && (names || k === "start" || k === "handover") && (
+              <span className={cx("mt-auto pt-1 font-mulish text-[0.62rem] font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>
+            )}
+            {ladder && names && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {board.squares[ladder.to]}</span>}
             {i === square && <span className="sr-only">(you are here)</span>}
           </li>
         );
