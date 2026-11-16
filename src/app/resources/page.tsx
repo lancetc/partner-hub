@@ -6,7 +6,6 @@ import { SaveButton } from "@/components/SaveButton";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDate } from "@/lib/format";
 import { HeroStats, PageHero } from "@/components/PageHero";
-import { PartnerOnboardingDiagram, PartnerRoles } from "@/components/resources/PartnerOnboarding";
 
 export const metadata: Metadata = {
   title: "Resources",
@@ -37,29 +36,22 @@ export default function ResourcesPage() {
         Guides, templates, webinars, the client journey, challenges and contacts you can come back to. Demonstration content.
       </PageHero>
 
-      {/* A referring (P1) partner's first steps, and who they'll work with. */}
-      <section aria-labelledby="first-steps" className="mt-8 rounded-3xl bg-surface/80 p-5 ring-1 ring-line sm:p-8">
-        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">P1 partner onboarding</p>
-        <h2 id="first-steps" className="mt-1 font-serif text-3xl font-semibold tracking-tight">
-          Your first steps as a Trilogy Care partner
-        </h2>
-        <div className="mt-3 max-w-3xl space-y-2 text-lg text-ink-muted">
-          <p>
-            From referral to your first service, onboarding takes five steps. We handle the call, the client agreement and the budget meeting. You make the
-            referral, sign your contractor agreement and deliver the care.
-          </p>
-          <p className="font-semibold text-ink">All you need to start is one referral code.</p>
-        </div>
-        <div className="mt-8">
-          <PartnerOnboardingDiagram />
-        </div>
-        <h3 className="mt-10 font-serif text-2xl font-semibold">Who you’ll work with</h3>
-        <div className="mt-4">
-          <PartnerRoles />
-        </div>
-      </section>
-
       <div className="mt-8 grid gap-4 md:grid-cols-2">
+      {/* P1 partner onboarding: a referring partner's first steps, on its own page. */}
+      <Link
+        href="/resources/partner-onboarding"
+        className="group flex items-center gap-4 rounded-3xl bg-[#fdebd3] p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6 dark:bg-muted"
+      >
+        <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#008282] text-white">
+          <Icon name="building" className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">P1 partner onboarding</span>
+          <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Your first steps as a Trilogy Care partner</span>
+          <span className="mt-1 block text-ink-muted">From referral to your first service, and who you’ll work with.</span>
+        </span>
+        <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+      </Link>
       <Link
         href="/resources/glossary"
         className="group flex items-center gap-4 rounded-3xl bg-tealtint p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"

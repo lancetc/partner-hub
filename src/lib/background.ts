@@ -185,8 +185,12 @@ export function sameBackground(a: Background, b: Background) {
 const SHOWN = [/^\/$/, /^\/news(\/|$)/, /^\/community$/, /^\/topics$/, /^\/topics\/follow-ups\//, /^\/paths$/, /^\/paths\/[^/]+$/, /^\/inbox$/];
 const SHOWN_UNDER = ["/resources", "/webinars", "/journey", "/challenges", "/challenge/", "/saved", "/settings"];
 
+/** The topic player: a topic, a topic in a sequence, or a follow up. Its card deck sits on the background too. */
+export const isPlayerPath = (pathname: string) => /^\/topics\/(s\/|follow-ups\/)?[^/]+$/.test(pathname);
+
 export function backdropShownOn(pathname: string) {
   if (pathname === "/play" || pathname === "/play/conversations") return true;
+  if (isPlayerPath(pathname)) return true;
   return SHOWN.some((r) => r.test(pathname)) || SHOWN_UNDER.some((p) => pathname === p || pathname.startsWith(p.endsWith("/") ? p : `${p}/`));
 }
 

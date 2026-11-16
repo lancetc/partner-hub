@@ -463,6 +463,21 @@ input[type="range"].brand-range::-moz-range-thumb {
   transition: opacity 0.6s ease;
 }
 .hub-backdrop img[data-loaded] { opacity: 1; }
+/*
+  The topic player (player/Frame) is a full-screen layer. With a background, the background sits just
+  under it, over the page behind, and shows around the card. On a phone, where the card fills the screen,
+  the card itself turns to frosted glass so the background shows through; the cards in the deck stay solid.
+*/
+.hub-backdrop.is-player { z-index: 45; }
+:root:has(> body > .hub-backdrop.is-player) [data-player-frame] { background: transparent; }
+@media (max-width: 639px) {
+  :root:has(> body > .hub-backdrop.is-player) [data-player-card] {
+    background: var(--glass-chrome);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  :root:has(> body > .hub-backdrop.is-player) :is([data-deck-area], [data-player-footer]) { background: transparent; }
+}
 .hub-backdrop-veil {
   position: absolute;
   inset: 0;

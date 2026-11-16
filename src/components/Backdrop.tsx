@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { BACKGROUND_EVENT, backdropColour, backdropImage, backdropShownOn, type Background, type BackdropImage } from "@/lib/background";
+import { BACKGROUND_EVENT, backdropColour, backdropImage, backdropShownOn, isPlayerPath, type Background, type BackdropImage } from "@/lib/background";
+import { cx } from "@/lib/format";
 
 /*
   The person's background, full screen behind the main pages (lib/background says which). Drawn once,
@@ -23,7 +24,8 @@ export function Backdrop({ initial }: { initial: Background | null }) {
   const image = backdropImage(bg);
   return (
     <>
-      <div aria-hidden className="hub-backdrop" style={{ background: backdropColour(bg) ?? image?.color ?? undefined }}>
+      {/* In the topic player it sits just under the player, over the page it opened from (globals.css). */}
+      <div aria-hidden className={cx("hub-backdrop", isPlayerPath(pathname) && "is-player")} style={{ background: backdropColour(bg) ?? image?.color ?? undefined }}>
         {image && <BackdropPhoto key={image.src} image={image} />}
         <div className="hub-backdrop-veil" />
       </div>

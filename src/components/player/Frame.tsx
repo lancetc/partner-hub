@@ -72,6 +72,7 @@ export function Frame({
   const wide = Boolean(aside) && layout === "desktop";
   return (
     <div
+      data-player-frame
       className={cx(
         "fixed inset-0 z-50 flex justify-center bg-strong sm:items-center sm:p-6",
         wide && "lg:grid lg:grid-cols-[minmax(15rem,19rem)_minmax(0,38rem)_minmax(16rem,21rem)] lg:content-center lg:gap-6",
@@ -84,6 +85,7 @@ export function Frame({
       )}
       <section
         aria-label={title}
+        data-player-card
         className={cx(
           "flex h-dvh w-full flex-col overflow-hidden bg-surface sm:h-[min(56rem,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl",
           wide ? "max-w-[30rem] lg:max-w-none" : "max-w-[30rem]",
@@ -147,7 +149,7 @@ export function Frame({
           <div className={fill ? "min-h-0 flex-1 px-3 pb-3 pt-3" : "scrollbar-none flex-1 overflow-y-auto px-4 pb-6 pt-4"}>{children}</div>
         )}
 
-        {footer && <div className="relative border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
+        {footer && <div data-player-footer className="relative border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </section>
       {wide && (
         <aside aria-label="Your workspace" className="scrollbar-none hidden h-[min(56rem,calc(100dvh-3rem))] overflow-y-auto lg:block">
@@ -255,7 +257,7 @@ function Deck({ deck, fill, children }: { deck: NonNullable<Parameters<typeof Fr
   }, [deck.id]);
 
   return (
-    <div className="relative min-h-0 flex-1 bg-strong/60 py-3 pl-3 pr-7">
+    <div data-deck-area className="relative min-h-0 flex-1 bg-strong/60 py-3 pl-3 pr-7">
       {/* Cards waiting behind this one. */}
       {[2, 1].map((i) =>
         i <= behind ? (
