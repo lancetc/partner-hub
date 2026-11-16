@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { Icon, type IconName } from "../Icon";
+import { ONBOARDING, type OnboardingModelId, type OnboardingNode as Node } from "@/content/partnerOnboarding";
 
 /*
-  Resources: a referring (P1) partner's first steps, and who they'll work with. The diagram builds
+  Resources: a partner's first steps, and who they'll work with, for each partner model
+  (content/partnerOnboarding holds the people, lines and words). The diagram builds
   itself when it scrolls into view: each person appears in turn, the lines between them draw on, their
   labels follow, then a gentle flow keeps moving along the lines. With reduced motion it's all there at once.
 
@@ -13,66 +15,15 @@ import { Icon, type IconName } from "../Icon";
   lined up at every width (on a phone it scrolls sideways rather than shrinking past reading).
 */
 
-type Node = { id: string; x: number; y: number; w: number; h: number; title: string; sub?: string; body?: string; icon: IconName; tone: "peach" | "light" | "teal"; at: number };
-
-const NODES: Node[] = [
-  { id: "partner", x: 450, y: 40, w: 300, h: 92, title: "Referring Partner", sub: "(P1 Partner)", icon: "building", tone: "peach", at: 0 },
-  { id: "client", x: 150, y: 205, w: 330, h: 115, title: "Client", sub: "(care recipient)", icon: "user", tone: "light", at: 0.9 },
-  {
-    id: "manager",
-    x: 760,
-    y: 200,
-    w: 390,
-    h: 135,
-    title: "Trilogy Partnership Manager",
-    body: "Owns the referring partner relationship, onboarding, Partner Hub and 30/60/90-day plan.",
-    icon: "people",
-    tone: "teal",
-    at: 1.6,
-  },
-  {
-    id: "carePartner",
-    x: 405,
-    y: 395,
-    w: 390,
-    h: 112,
-    title: "Trilogy Care Partner",
-    body: "Trilogy Care case manager: goals, care plan, budget, upgrades.",
-    icon: "clipboard",
-    tone: "teal",
-    at: 2.4,
-  },
-  {
-    id: "coordinator",
-    x: 425,
-    y: 570,
-    w: 350,
-    h: 105,
-    title: "Care Coordinator",
-    body: "Sources and rosters services, manages providers.",
-    icon: "calendar",
-    tone: "teal",
-    at: 3.1,
-  },
-];
-
-/** The lines: where they run, their label and where it sits, and when they draw. `both`: arrows at each end. */
-const EDGES: { id: string; from: string; to: string; d: string; label: string; lx: number; ly: number; at: number; both?: boolean }[] = [
-  { id: "refers", from: "partner", to: "client", d: "M600 134 V160 H315 V198", label: "refers", lx: 455, ly: 160, at: 0.4 },
-  { id: "support", from: "manager", to: "partner", d: "M600 138 V160 H955 V194", label: "onboarding and support", lx: 785, ly: 160, at: 1.2, both: true },
-  { id: "handover", from: "manager", to: "carePartner", d: "M955 337 V355 H600 V388", label: "hands over referral", lx: 790, ly: 355, at: 2.05 },
-  { id: "goals", from: "client", to: "carePartner", d: "M315 322 V355 H600 V388", label: "goals, plan and budget", lx: 452, ly: 355, at: 1.95 },
-  { id: "together", from: "carePartner", to: "coordinator", d: "M600 509 V563", label: "works together", lx: 600, ly: 536, at: 2.8 },
-  { id: "services", from: "coordinator", to: "client", d: "M423 622 H200 V328", label: "services coordinated", lx: 200, ly: 470, at: 3.45 },
-];
-
 const toneClass = {
   peach: "bg-[#fdebd3] ring-[#f5d2a4]",
   light: "bg-white ring-[#dbe7ec]",
   teal: "bg-[#e3f4f3] ring-[#bfe3e1]",
 };
 
-export function PartnerOnboardingDiagram() {
+export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingModelId }) {
+  const { nodes: NODES, edges: EDGES, description } = ONBOARDING[model];
+  const titleId = `onboarding-diagram-${model}`;
   const box = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
   // Build once, the first time most of it is on screen.
@@ -115,16 +66,12 @@ export function PartnerOnboardingDiagram() {
       <svg
         viewBox="0 0 1200 700"
         role="img"
-        aria-labelledby="onboarding-diagram-title"
+        aria-labelledby={titleId}
         className={cx("onboarding-diagram hidden w-full sm:block", shown && "is-shown")}
       >
-        <title id="onboarding-diagram-title">
-          Who does what: the referring partner refers the client and is onboarded and supported by the Trilogy Partnership Manager, who hands the referral
-          to the Trilogy Care Partner. The Trilogy Care Partner sets the client’s goals, plan and budget, and works with the Care Coordinator, who coordinates the
-          client’s services.
-        </title>
+        <title id={titleId}>{description}</title>
         <defs>
-          <marker id="onb-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id={`onb-arrow-${model}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0 0 L10 5 L0 10 z" fill="#0f4c5c" />
           </marker>
         </defs>
@@ -134,7 +81,7 @@ export function PartnerOnboardingDiagram() {
           <g key={e.id} className="onb-edge" style={delay(e.at)}>
             <path d={e.d} pathLength={1} className="onb-line" fill="none" stroke="#0f4c5c" strokeWidth="3" />
             {/* The arrowheads on their own, so they appear once the line has drawn up to them. */}
-            <path d={e.d} className="onb-arrows" fill="none" stroke="none" markerEnd="url(#onb-arrow)" markerStart={e.both ? "url(#onb-arrow)" : undefined} />
+            <path d={e.d} className="onb-arrows" fill="none" stroke="none" markerEnd={`url(#onb-arrow-${model})`} markerStart={e.both ? `url(#onb-arrow-${model})` : undefined} />
             <path d={e.d} className="onb-flow" fill="none" stroke="#3cb8b9" strokeWidth="7" strokeLinecap="round" />
           </g>
         ))}

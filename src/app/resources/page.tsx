@@ -6,6 +6,7 @@ import { SaveButton } from "@/components/SaveButton";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDate } from "@/lib/format";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { ONBOARDING_MODELS } from "@/content/partnerOnboarding";
 
 export const metadata: Metadata = {
   title: "Resources",
@@ -37,21 +38,24 @@ export default function ResourcesPage() {
       </PageHero>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-      {/* P1 partner onboarding: a referring partner's first steps, on its own page. */}
-      <Link
-        href="/resources/partner-onboarding"
-        className="group flex items-center gap-4 rounded-3xl bg-[#fdebd3] p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6 dark:bg-muted"
-      >
-        <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#008282] text-white">
-          <Icon name="building" className="size-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">P1 partner onboarding</span>
-          <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Your first steps as a Trilogy Care partner</span>
-          <span className="mt-1 block text-ink-muted">From referral to your first service, and who you’ll work with.</span>
-        </span>
-        <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
-      </Link>
+      {/* Partner onboarding, one box per partner model (P1, Brokered, Coordinator managed), each on its own page. */}
+      {ONBOARDING_MODELS.map((o) => (
+        <Link
+          key={o.id}
+          href={o.href}
+          className={`group flex items-center gap-4 rounded-3xl ${o.box.tone} p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6 dark:bg-muted`}
+        >
+          <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#008282] text-white">
+            <Icon name={o.box.icon} className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{o.label}</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">{o.title}</span>
+            <span className="mt-1 block text-ink-muted">{o.box.blurb}</span>
+          </span>
+          <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+        </Link>
+      ))}
       <Link
         href="/resources/glossary"
         className="group flex items-center gap-4 rounded-3xl bg-tealtint p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
