@@ -65,8 +65,9 @@ export function Header() {
                     aria-current={active ? "page" : undefined}
                     className={cx(
                       "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors xl:px-4",
-                      // Hover: solid white over the glass header (dark mode keeps its own muted shade, so the text stays readable).
-                      active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
+                      // The current page and hover: solid white over the glass header. Dark mode keeps its own shades, so the
+                      // light text stays readable.
+                      active ? "bg-white text-ink dark:bg-tealtint" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
                     )}
                   >
                     {item.short ? (
