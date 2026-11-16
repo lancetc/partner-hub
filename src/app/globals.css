@@ -87,6 +87,78 @@
   color-scheme: dark;
 }
 
+/*
+  Glass, over each person's background (components/Backdrop, chosen in Profile and settings). It only
+  switches on where the background shows (the main pages: lib/background backdropShownOn), so the
+  lesson player and admin screens keep their solid surfaces. Surfaces become translucent and the page
+  content sits on one frosted sheet, so text never sits straight on a busy photo: on the darkest or
+  brightest photo the sheet still gives body and muted text at least 4.5:1. Only the sheet, header,
+  bottom nav, footer and floating menus blur what's behind them (blur is costly on phones); cards on
+  the sheet are lighter tints of it with a soft top highlight. People who ask for less transparency
+  get the usual solid surfaces, with the background showing only around the sheet.
+*/
+:root:has(> body > .hub-backdrop) {
+  --glass-sheet: rgb(255 255 255 / 0.74);
+  --glass-chrome: rgb(255 255 255 / 0.66);
+  --glass-pop: rgb(255 255 255 / 0.9);
+  --glass-border: rgb(255 255 255 / 0.7);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-shadow: rgb(16 42 67 / 0.2);
+  --glass-filter: blur(28px) saturate(160%);
+  --backdrop-veil: linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.06));
+  --bg: rgb(255 255 255 / 0.6);
+  --surface: rgb(255 255 255 / 0.68);
+  --surface-muted: rgb(221 231 242 / 0.62);
+  --surface-strong: rgb(205 219 237 / 0.72);
+  --surface-teal: rgb(214 240 241 / 0.8);
+  /* A shade deeper than the usual teal, so teal text keeps 4.5:1 on the sheet over a dark photo. */
+  --action: #0a6a69;
+  --action-hover: #085857;
+}
+:root[data-theme="dark"]:has(> body > .hub-backdrop) {
+  --glass-sheet: rgb(22 38 66 / 0.74);
+  --glass-chrome: rgb(22 38 66 / 0.62);
+  --glass-pop: rgb(30 50 86 / 0.93);
+  --glass-border: rgb(255 255 255 / 0.16);
+  --glass-highlight: rgb(255 255 255 / 0.14);
+  --glass-shadow: rgb(0 0 0 / 0.4);
+  --backdrop-veil: linear-gradient(180deg, rgb(8 18 36 / 0.5), rgb(8 18 36 / 0.38));
+  --bg: rgb(22 38 66 / 0.6);
+  --surface: rgb(48 76 122 / 0.5);
+  --surface-muted: rgb(66 96 144 / 0.42);
+  --surface-strong: rgb(74 105 155 / 0.52);
+  --surface-teal: rgb(29 90 104 / 0.72);
+  --action: #62d2d7;
+  --action-hover: #86dde1;
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root:has(> body > .hub-backdrop) {
+    --glass-sheet: #ffffff;
+    --glass-chrome: #ffffff;
+    --glass-pop: #ffffff;
+    --glass-filter: none;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-muted: #e8eef6;
+    --surface-strong: #dde7f2;
+    --surface-teal: #ddf2f3;
+    --action: #0e7c7b;
+    --action-hover: #0a6463;
+  }
+  :root[data-theme="dark"]:has(> body > .hub-backdrop) {
+    --glass-sheet: #2d4875;
+    --glass-chrome: #2d4875;
+    --glass-pop: #284170;
+    --bg: #2d4875;
+    --surface: #284170;
+    --surface-muted: #34517f;
+    --surface-strong: #3b5987;
+    --surface-teal: #1d5a68;
+    --action: #62d2d7;
+    --action-hover: #86dde1;
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -362,3 +434,90 @@ input[type="range"].brand-range::-moz-range-thumb {
 @keyframes subject-swap { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } }
 @keyframes subject-in { from { opacity: 0; transform: translateX(-32px) scale(0.9); filter: blur(6px); } }
 @keyframes subject-out { to { opacity: 0; transform: translateX(-24px) scale(0.9); filter: blur(6px); } }
+
+/*
+  The background layer itself (components/Backdrop): fixed under everything, so it never moves or
+  shifts the page. The photo fades in once loaded, over its own average colour; the veil softens it
+  in light mode and dims it in dark mode.
+*/
+.hub-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hub-backdrop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.hub-backdrop img[data-loaded] { opacity: 1; }
+.hub-backdrop-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop-veil);
+}
+
+/*
+  The glass pieces. The sheet's frosting is drawn by a layer behind <main> rather than <main> itself:
+  a backdrop-filter on <main> would trap every fixed-position dialog inside it.
+*/
+:root:has(> body > .hub-backdrop) main#main {
+  position: relative;
+  max-width: 82rem;
+  margin: 0.75rem 0.5rem 0;
+  padding-bottom: 2.5rem;
+}
+@media (min-width: 640px) {
+  :root:has(> body > .hub-backdrop) main#main { margin: 1.25rem 1rem 0; }
+}
+@media (min-width: 1344px) {
+  :root:has(> body > .hub-backdrop) main#main { margin-inline: auto; }
+}
+:root:has(> body > .hub-backdrop) main#main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 1.75rem;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-sheet);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 30px 60px -36px var(--glass-shadow);
+}
+:root:has(> body > .hub-backdrop) [data-site-header],
+:root:has(> body > .hub-backdrop) [data-bottom-nav] {
+  background: var(--glass-chrome);
+  border-color: var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+:root:has(> body > .hub-backdrop) [data-site-header] { box-shadow: inset 0 -1px 0 var(--glass-highlight), 0 10px 30px -24px var(--glass-shadow); }
+:root:has(> body > .hub-backdrop) [data-bottom-nav] { box-shadow: inset 0 1px 0 var(--glass-highlight); }
+:root:has(> body > .hub-backdrop) body > footer {
+  margin-top: 2.5rem;
+  background: var(--glass-chrome);
+  border-color: var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+@layer utilities {
+  /* Floating menus, popovers, dialogs and sticky bars: frosted and nearly solid, so what's behind never shows through the words. */
+  :root:has(> body > .hub-backdrop) :is(.absolute, .fixed, .sticky, dialog):is(.bg-surface, .bg-bg, [class*="bg-surface/"], [class*="bg-bg/"]) {
+    background-color: var(--glass-pop);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+}
+@layer components {
+  /* Cards and panels on the sheet: a lighter tint with a lit top edge. Any shadow-* utility still wins. */
+  :root:has(> body > .hub-backdrop) main :is(.rounded-2xl, .rounded-3xl).bg-surface {
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 12px 32px -22px var(--glass-shadow);
+  }
+}

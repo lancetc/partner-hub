@@ -611,6 +611,8 @@ export function migrate(db: Db) {
   if (!userCols.includes("avatar")) db.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
   // Superadmins manage people and permissions across every organisation (server/people). 0 or 1.
   if (!userCols.includes("superadmin")) db.exec("ALTER TABLE users ADD COLUMN superadmin INTEGER NOT NULL DEFAULT 0");
+  // The full-screen background behind the main pages (server/backgrounds, lib/background), as JSON; null is the default.
+  if (!userCols.includes("background")) db.exec("ALTER TABLE users ADD COLUMN background TEXT");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).

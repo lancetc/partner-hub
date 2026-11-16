@@ -9,6 +9,7 @@ import { SyncManager } from "@/components/SyncManager";
 import { PressSounds } from "@/components/PressSounds";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { ConfirmHost } from "@/components/ConfirmHost";
+import { BackdropLayer } from "@/components/BackdropLayer";
 import "./globals.css";
 
 const robotoFlex = Roboto_Flex({ variable: "--font-roboto-flex", subsets: ["latin"], display: "swap" });
@@ -53,6 +54,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main" className="sr-only z-50 rounded-lg bg-action px-4 py-2 text-on-action focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
           Skip to content
         </a>
+        {/* Each person's background behind the main pages, and the glass look over it (globals.css). */}
+        <Suspense fallback={null}>
+          <BackdropLayer />
+        </Suspense>
         <Suspense fallback={<div className="h-16 border-b border-line" />}>
           <Header />
         </Suspense>
