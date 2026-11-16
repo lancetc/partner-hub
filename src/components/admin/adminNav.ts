@@ -27,7 +27,7 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
-      { href: "/admin/learning-paths", label: "My Training", icon: "route", description: "Learning paths: sets of topics in order, assigned to people." },
+      { href: "/admin/learning-paths", label: "Discovery Paths", icon: "route", description: "Learning paths: sets of topics in order, assigned to people." },
       {
         href: "/admin/challenges",
         label: "Challenges",

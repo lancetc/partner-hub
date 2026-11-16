@@ -46,7 +46,7 @@ export default function LearningPage() {
 async function YourLearning() {
   await connection();
   const db = getDb();
-  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} browse={{ href: "/paths", label: "Go to My Training" }} />;
+  return <HomeLearning topics={catalogueTopics(db, (await currentUser(db)).id)} browse={{ href: "/paths", label: "Go to Discovery Paths" }} />;
 }
 
 /** Read per request: authors can publish new topics, and change subjects, at any time. */

@@ -11,7 +11,7 @@ import { catalogueTopics } from "@/server/catalogue";
 import { missionSlugs } from "@/server/challenges";
 
 export const metadata: Metadata = {
-  title: "My Training",
+  title: "Discovery Paths",
   description: "Sets of Trilogy Care topics to work through in order, from the basics of aged care to getting invoices paid.",
   alternates: { canonical: "/paths" },
 };
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default function LearningPathsPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">My Training</h1>
+      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Discovery Paths</h1>
       <p className="mt-2 max-w-2xl text-lg text-ink-muted">Build your knowledge and skills through training programs made up of short, practical topics. Complete each topic in order to earn your certificate.</p>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />

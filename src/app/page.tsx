@@ -18,7 +18,7 @@ const step = (n: number) => ({ "--step": n }) as React.CSSProperties;
 /*
   The homepage in two levels. At the top, a workspace: what you need to know, what you need to do,
   and where to get help (Ask Trilogy). Below it, discovery: the Community, challenges and the news,
-  for when there's time to browse. (Your learning is on Topics and My Training.)
+  for when there's time to browse. (Your learning is on Topics and Discovery Paths.)
 */
 export default function Home() {
   return (
