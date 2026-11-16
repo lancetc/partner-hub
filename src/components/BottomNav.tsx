@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "./Icon";
 import { isActive, navItems } from "./nav";
+import { NavPending } from "./NavPending";
 import { cx } from "@/lib/format";
 
 /** Phone and tablet navigation within thumb reach; on a narrow phone the row scrolls sideways. Hidden inside the lesson player, which has its own controls, and on public links. */
@@ -25,12 +26,13 @@ export function BottomNav() {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={cx("flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-medium", active ? "text-action" : "text-ink-muted")}
+                className={cx("relative flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-medium", active ? "text-action" : "text-ink-muted")}
               >
                 <span className={cx("rounded-full px-4 py-1", active && "bg-tealtint")}>
                   <Icon name={item.icon} className="size-5" />
                 </span>
                 <span className="text-center leading-tight">{item.short ?? item.label}</span>
+                <NavPending className="inset-x-3 top-0" />
               </Link>
             </li>
           );

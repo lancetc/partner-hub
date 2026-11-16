@@ -426,6 +426,12 @@ input[type="range"].brand-range::-moz-range-thumb {
   /* The current chip's label settling in when the subject changes. */
   .subject-swap { animation: subject-swap 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
+/* A menu item's bar while its page is on the way (NavPending): grows quickly, then eases toward the end. */
+@media (prefers-reduced-motion: no-preference) {
+  .nav-pending { animation: nav-pending 6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@keyframes nav-pending { from { transform: scaleX(0.05); } to { transform: scaleX(0.92); } }
+
 /* People and permissions: a person's panel sliding in from the right. */
 @media (prefers-reduced-motion: no-preference) {
   .people-panel { animation: people-panel 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }

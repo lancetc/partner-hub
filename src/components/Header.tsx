@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isActive, navItems } from "./nav";
+import { NavPending } from "./NavPending";
 import { ThemeToggle } from "./ThemeToggle";
 import { SearchButton } from "./SearchDialog";
 import { AccountMenu } from "./AccountMenu";
@@ -63,7 +64,7 @@ export function Header() {
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cx(
-                      "inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors xl:px-4",
+                      "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors xl:px-4",
                       active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-muted hover:text-ink",
                     )}
                   >
@@ -76,6 +77,7 @@ export function Header() {
                     ) : (
                       item.label
                     )}
+                    <NavPending className="inset-x-3 bottom-1" />
                   </Link>
                 </li>
               );
