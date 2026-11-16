@@ -623,6 +623,7 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
         name: p.name,
         description: p.description,
         audience: p.audience,
+        addedAt: p.created_at,
         assigned: Boolean(a && !a.self),
         selfEnrolled: Boolean(a?.self),
         dueDate: a?.due_date ?? null,

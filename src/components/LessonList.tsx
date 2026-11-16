@@ -8,6 +8,7 @@ import type { TopicSummary } from "@/lib/topicSummary";
 import { SUBJECTS, subjectLabel } from "@/lib/subjects";
 import { useHub, useHydrated } from "@/lib/store";
 import { StoryVisual } from "./StoryVisual";
+import { ShelfRow } from "./ShelfRow";
 import { SaveButton } from "./SaveButton";
 import { Icon } from "./Icon";
 import { cx, formatDate } from "@/lib/format";
@@ -445,8 +446,8 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
         {!filtering && shelves.length > 0 && (
           <div className="mt-10 flex flex-col gap-10">
             {shelves.map((sh) => (
-              <ShelfRow key={sh.id} shelf={sh} onSeeAll={() => seeAll(sh.seeAll)}>
-                {(l) => tile(l, "w-[15rem] shrink-0 snap-start sm:w-[17rem]")}
+              <ShelfRow key={sh.id} id={sh.id} title={sh.title} blurb={sh.blurb} count={sh.topics.length} onSeeAll={() => seeAll(sh.seeAll)}>
+                {sh.topics.map((l) => tile(l, "w-[15rem] shrink-0 snap-start sm:w-[17rem]"))}
               </ShelfRow>
             ))}
           </div>
@@ -571,59 +572,6 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
   A row of topics to browse, scrolling sideways (by touch, trackpad or the arrow buttons), with "See all"
   opening the full list sorted or filtered the same way.
 */
-function ShelfRow({ shelf, onSeeAll, children }: { shelf: Shelf; onSeeAll: () => void; children: (t: TopicSummary) => React.ReactNode }) {
-  const row = useRef<HTMLUListElement>(null);
-  const [edges, setEdges] = useState({ start: true, end: false });
-  const measure = () => {
-    const el = row.current;
-    if (el) setEdges({ start: el.scrollLeft <= 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
-  };
-  useEffect(measure, [shelf.topics.length]);
-  const page = (dir: 1 | -1) => {
-    const el = row.current;
-    if (!el) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: reduce ? "auto" : "smooth" });
-  };
-  const id = `shelf-${shelf.id}`;
-  return (
-    <section aria-labelledby={id}>
-      <div className="flex items-end gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 id={id} className="font-serif text-xl font-semibold">
-            {shelf.title}
-          </h3>
-          <p className="text-sm text-ink-muted">{shelf.blurb}</p>
-        </div>
-        <div className="hidden gap-1 sm:flex">
-          {([-1, 1] as const).map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              onClick={() => page(dir)}
-              disabled={dir === -1 ? edges.start : edges.end}
-              aria-label={`${dir === -1 ? "Back" : "More"}: ${shelf.title}`}
-              className="grid size-10 place-items-center rounded-full border border-line-strong hover:bg-muted disabled:opacity-30"
-            >
-              <Icon name={dir === -1 ? "arrow-left" : "arrow-right"} className="size-4" />
-            </button>
-          ))}
-        </div>
-        <button type="button" onClick={onSeeAll} className="inline-flex min-h-11 shrink-0 items-center gap-1 font-semibold text-accent hover:underline">
-          See all <Icon name="arrow-right" className="size-4" />
-        </button>
-      </div>
-      <ul
-        ref={row}
-        onScroll={measure}
-        className="-mx-4 mt-4 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-4 px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
-      >
-        {shelf.topics.map((t) => children(t))}
-      </ul>
-    </section>
-  );
-}
-
 /** Where a learner is in a lesson's spaced follow ups. The next one ready links straight to it. */
 type Signoff = { status: "after_follow_ups" | "waiting" | "confirmed" | "support"; manager: string | null; by?: string; at?: string; note?: string };
 

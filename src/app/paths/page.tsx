@@ -7,7 +7,8 @@ import { browseLearningPaths, slugsFor } from "@/server/learningPaths";
 import { lessonBySlug } from "@/content/lessons";
 import { PathsBrowser } from "@/components/PathsBrowser";
 import { HomeLearning } from "@/components/HomeLearning";
-import { catalogueTopics } from "@/server/catalogue";
+import { catalogueTopics, topicPopularity } from "@/server/catalogue";
+import { now } from "@/server/clock";
 import { missionSlugs } from "@/server/challenges";
 
 export const metadata: Metadata = {
@@ -45,8 +46,23 @@ async function Paths() {
   await connection();
   const db = getDb();
   // Paths holding challenge missions stay out unless assigned: missions open one a day, from the challenge page.
-  const paths = browseLearningPaths(db, await currentUser(db), missionSlugs(db));
+  const user = await currentUser(db);
+  const paths = browseLearningPaths(db, user, missionSlugs(db));
   if (!paths.length) return <p className="mt-10 text-ink-muted">There are no learning paths yet. New ones will appear here.</p>;
-  // Each path's topic titles, so searching for a topic finds the path it's in.
-  return <PathsBrowser paths={paths.map((p) => ({ ...p, topicTitles: slugsFor(db, p.id).map((s) => lessonBySlug(s)?.title ?? "").filter(Boolean) }))} />;
+  // Popular paths: how often colleagues have finished the topics in each lately (the same figures as Topics).
+  const popular = topicPopularity(db, now(db));
+  return (
+    <PathsBrowser
+      audience={user.audience}
+      paths={paths.map((p) => {
+        const slugs = slugsFor(db, p.id);
+        return {
+          ...p,
+          popularity: slugs.reduce((n, s) => n + (popular[s] ?? 0), 0),
+          // Each path's topic titles, so searching for a topic finds the path it's in.
+          topicTitles: slugs.map((s) => lessonBySlug(s)?.title ?? "").filter(Boolean),
+        };
+      })}
+    />
+  );
 }

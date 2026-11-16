@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cx, formatDate, formatHoursMinutes } from "@/lib/format";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
+import { ShelfRow } from "./ShelfRow";
+import { byPathNewest, byPathPopularity, pathForRole, pathShelves, type PathSeeAll } from "@/lib/pathShelves";
 
 /*
   The Learning paths page, laid out like Learning: the person's own paths, then "All paths" with the
@@ -30,11 +32,15 @@ export type BrowsePath = {
   completed: number;
   total: number;
   dueDate: string | null;
+  /** When the path was created, for "Recently added". */
+  addedAt: string | null;
+  /** Topic completions in this path across Trilogy Care lately, for "Popular with your colleagues". */
+  popularity: number;
   /** The titles of the topics in the path, for search. */
   topicTitles: string[];
 };
 
-type Sort = "az" | "recommended" | "za" | "shortest" | "longest" | "most";
+type Sort = "az" | "recommended" | "newest" | "popular" | "za" | "shortest" | "longest" | "most";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
 type View = "grid" | "list";
@@ -46,6 +52,8 @@ type View = "grid" | "list";
 const SORTS: { value: Sort; label: string }[] = [
   { value: "az", label: "Name A–Z" },
   { value: "recommended", label: "Suggested for you" },
+  { value: "newest", label: "Newest first" },
+  { value: "popular", label: "Most popular" },
   { value: "za", label: "Name Z–A" },
   { value: "shortest", label: "Shortest first" },
   { value: "longest", label: "Longest first" },
@@ -62,7 +70,10 @@ const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface p
 
 const stateOf = (p: BrowsePath): Exclude<Status, "any"> => (p.done ? "completed" : p.started ? "in-progress" : "not-started");
 
-export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
+/** The Audience filter's own choice for "See all" on the role row: every path meant for their role. */
+const ROLE = "role";
+
+export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; audience?: string | null }) {
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const [audience, setAudience] = useState(params.get("for") ?? "all");
@@ -89,7 +100,7 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
   const lengthTest = LENGTHS.find((x) => x.value === length)!.test;
   const filtered = paths.filter(
     (p) =>
-      (audience === "all" || p.audience === audience) &&
+      (audience === "all" || (audience === ROLE ? pathForRole(p.audience, role) : p.audience === audience)) &&
       (status === "any" || stateOf(p) === status) &&
       lengthTest(p.minutes) &&
       words.every((w) => [p.name, p.description, p.audience, ...p.topicTitles].join(" ").toLowerCase().includes(w)),
@@ -98,6 +109,8 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
   const rank = (p: BrowsePath) => (p.done ? 4 : p.started ? 1 : 2) - (p.assigned ? 1 : 0);
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "az") return a.name.localeCompare(b.name);
+    if (sort === "newest") return byPathNewest(a, b);
+    if (sort === "popular") return byPathPopularity(a, b);
     if (sort === "za") return b.name.localeCompare(a.name);
     if (sort === "shortest") return a.minutes - b.minutes || a.name.localeCompare(b.name);
     if (sort === "longest") return b.minutes - a.minutes || a.name.localeCompare(b.name);
@@ -112,6 +125,17 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
     setLength("any");
   };
   const mine = paths.filter((p) => p.assigned || p.selfEnrolled);
+  // The rows, as on Topics: they leave out what's already theirs, and step aside while filtering.
+  const shelves = pathShelves({ paths, audience: role });
+  const everyPath = useRef<HTMLHeadingElement>(null);
+  const seeAll = (s: PathSeeAll) => {
+    reset();
+    if (s.sort) setSort(s.sort);
+    if (s.audience) setAudience(ROLE);
+    if (s.length) setLength(s.length);
+    requestAnimationFrame(() => everyPath.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const roleLabel = role === "partner" ? "For Care Partners" : role === "coordinator" ? "For care coordinators" : null;
 
   return (
     <div className="mt-8 flex flex-col gap-12">
@@ -126,10 +150,10 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
 
       <section aria-labelledby="all-paths">
         <h2 id="all-paths" className="font-serif text-2xl font-semibold">
-          All paths <span className="text-base font-normal text-ink-muted">({paths.length})</span>
+          {filtering ? "Results" : "All paths"} <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : paths.length})</span>
         </h2>
 
-        {/* Search, filters and sort: the same toolbar as Learning. */}
+        {/* Search, filters and sort: the same toolbar as Topics. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
             Search
@@ -138,11 +162,12 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
               <input type="search" className={cx(field, "pl-9")} placeholder="Path name or a topic in it" value={q} onChange={(e) => setQ(e.target.value)} />
             </span>
           </label>
-          {audiences.length > 1 && (
+          {(audiences.length > 1 || roleLabel) && (
             <label className="flex flex-col gap-1 text-sm font-semibold">
               Audience
               <select className={cx(field, "w-auto max-w-[16rem]")} value={audience} onChange={(e) => setAudience(e.target.value)}>
                 <option value="all">All audiences</option>
+                {roleLabel && <option value={ROLE}>{roleLabel}</option>}
                 {audiences.map((a) => (
                   <option key={a} value={a}>
                     {a}
@@ -204,6 +229,22 @@ export function PathsBrowser({ paths }: { paths: BrowsePath[] }) {
             )}
           </p>
         </div>
+
+        {!filtering && shelves.length > 0 && (
+          <div className="mt-10 flex flex-col gap-10">
+            {shelves.map((sh) => (
+              <ShelfRow key={sh.id} id={`paths-${sh.id}`} title={sh.title} blurb={sh.blurb} count={sh.paths.length} onSeeAll={() => seeAll(sh.seeAll)}>
+                {sh.paths.map((p) => (
+                  <PathTile key={p.id} path={p} className="w-[15rem] shrink-0 snap-start sm:w-[17rem]" />
+                ))}
+              </ShelfRow>
+            ))}
+          </div>
+        )}
+
+        <h3 ref={everyPath} className={cx("scroll-mt-24 font-serif text-xl font-semibold", filtering || !shelves.length ? "sr-only" : "mt-12")}>
+          Every path
+        </h3>
 
         {sorted.length ? (
           <div className="mt-5">
@@ -288,11 +329,11 @@ function PathRow({ path: p }: { path: BrowsePath }) {
   );
 }
 
-function PathTile({ path: p }: { path: BrowsePath }) {
+function PathTile({ path: p, className }: { path: BrowsePath; className?: string }) {
   const pct = p.total ? Math.round((p.completed / p.total) * 100) : 0;
   const cta = p.done ? "Revisit path" : p.started ? "Continue" : "Start path";
   return (
-    <li className="group relative flex flex-col gap-3">
+    <li className={cx("group relative flex flex-col gap-3", className)}>
       {p.thumbnail ? <StoryVisual {...p.thumbnail} alt="" className="aspect-[16/10] rounded-2xl" /> : <div className="aspect-[16/10] rounded-2xl bg-tealtint" aria-hidden />}
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
         {p.topics} {p.topics === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
