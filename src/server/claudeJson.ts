@@ -21,13 +21,20 @@ export function contentFor(prompt: string, source?: Source): Anthropic.Beta.Beta
   return content;
 }
 
-async function ask(content: Anthropic.Beta.BetaContentBlockParam[], onText: (soFar: string) => void, repair?: { previous: string; correction: string }) {
+type Effort = "low" | "medium" | "high";
+
+async function ask(
+  content: Anthropic.Beta.BetaContentBlockParam[],
+  onText: (soFar: string) => void,
+  repair?: { previous: string; correction: string },
+  effort: Effort = "high",
+) {
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
   if (repair) messages.push({ role: "assistant", content: repair.previous }, { role: "user", content: repair.correction });
   const stream = client().beta.messages.stream({
     model: GENERATION_MODEL,
     max_tokens: 32000,
-    output_config: { effort: "high" },
+    output_config: { effort },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     messages,
@@ -53,6 +60,8 @@ export async function askForJson<T>(
   content: Anthropic.Beta.BetaContentBlockParam[],
   check: (value: unknown) => string[],
   progress: { onText: (soFar: string) => void; onPhase: (phase: "checking" | "fixing", issues?: number) => void },
+  /** Lower for short jobs someone is waiting on (an onboarding sample topic). */
+  effort: Effort = "high",
 ): Promise<{ value: T; usage: unknown }> {
   const parse = (text: string) => {
     try {
@@ -62,7 +71,7 @@ export async function askForJson<T>(
       return { value: null, issues: ["The reply wasn’t valid JSON."] };
     }
   };
-  let { text, usage } = await ask(content, progress.onText);
+  let { text, usage } = await ask(content, progress.onText, undefined, effort);
   progress.onPhase("checking");
   let result = parse(text);
   if (result.issues.length) {
@@ -70,7 +79,9 @@ export async function askForJson<T>(
     ({ text, usage } = await ask(content, progress.onText, {
       previous: text,
       correction: `Your previous reply had these problems:\n${result.issues.slice(0, 30).join("\n")}\n\nReply again with the complete corrected JSON object only.`,
-    }));
+      },
+      effort,
+    ));
     progress.onPhase("checking");
     result = parse(text);
   }

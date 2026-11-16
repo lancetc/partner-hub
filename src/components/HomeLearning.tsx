@@ -7,6 +7,7 @@ import { useHub, useHydrated } from "@/lib/store";
 import { cx, formatDate, formatDuration } from "@/lib/format";
 import { subjectLabel } from "@/lib/subjects";
 import type { TopicSummary } from "@/lib/topicSummary";
+import type { SampleTopicItem } from "@/lib/sampleTopic";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
 import type { MyPath } from "./MyLearningPaths";
@@ -45,6 +46,10 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
   // Required (compliance) training lives in this panel too, and what's to do shows on the closed line.
   const required = useApi<{ training: RequiredItem[] }>("/api/me/compliance").data?.training ?? [];
   const requiredOpen = requiredToDo(required);
+  // Sample topics made for them in onboarding, until they've finished them.
+  const samples = (useApi<{ topics: SampleTopicItem[] }>("/api/me/sample-topics").data?.topics ?? []).filter(
+    (t) => attempts[t.slug]?.status !== "completed",
+  );
   const [open, setOpen] = useState(() => typeof window !== "undefined" && readOpen());
   const toggle = () => {
     setOpen(!open);
@@ -72,12 +77,14 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
     .sort((a, b) => Number(b.subject === "getting-started") - Number(a.subject === "getting-started") || a.minutes - b.minutes)
     .slice(0, 3);
   const isDone = (p: MyPath, slug: string) => Boolean(p.steps.find((s) => s.slug === slug)?.completedAt) || attempts[slug]?.status === "completed";
-  const newcomer = !inProgress.length && !completed && !paths.length;
+  const newcomer = !inProgress.length && !completed && !paths.length && !samples.length;
   const stats = `${completed} ${completed === 1 ? "topic" : "topics"} completed${certificates ? ` · ${certificates} ${certificates === 1 ? "certificate" : "certificates"}` : ""}`;
   // The closed line: what's next, in a few words.
   const glance = inProgress[0]
     ? `Continue: ${inProgress[0].topic.title}`
-    : paths[0]
+    : samples[0]
+      ? `Made for you: ${samples[0].title}`
+      : paths[0]
       ? `${paths[0].name} learning path`
       : ready.length + due.length + enrolled.length
         ? `${ready.length + due.length + enrolled.length} ready for you`
@@ -185,10 +192,24 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
           })}
 
           {/* Ready now: spaced follow ups, topics assigned with a due date, and topics they've enrolled in. */}
-          {(ready.length > 0 || due.length > 0 || enrolled.length > 0) && (
+          {(samples.length > 0 || ready.length > 0 || due.length > 0 || enrolled.length > 0) && (
             <div className="flex flex-col gap-2 rounded-2xl border border-line p-4">
               <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ready for you</span>
               <ul className="flex flex-col gap-1">
+                {samples.slice(0, 3).map((t) => (
+                  <li key={t.slug}>
+                    <Link href={`/topics/mine/${t.slug}`} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">
+                      <Icon name="spark" className="size-4 shrink-0 text-action" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold leading-snug">{t.title}</span>
+                        <span className="block text-xs text-ink-muted">
+                          {attempts[t.slug]?.status === "in_progress" ? "In progress" : "Made for you"} · {t.minutes} min
+                        </span>
+                      </span>
+                      <Icon name="arrow-right" className="size-4 shrink-0 text-ink-muted" />
+                    </Link>
+                  </li>
+                ))}
                 {ready.slice(0, 3).map((f) => (
                   <li key={f.id}>
                     <Link href={f.href} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted">

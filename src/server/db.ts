@@ -105,6 +105,11 @@ CREATE TABLE IF NOT EXISTS generated_lessons (
   content TEXT NOT NULL, model TEXT, created_at TEXT NOT NULL, created_by TEXT,
   approved_at TEXT, approved_by TEXT
 );
+CREATE TABLE IF NOT EXISTS sample_topics (
+  slug TEXT PRIMARY KEY, user_id TEXT NOT NULL, interest TEXT NOT NULL, content TEXT NOT NULL,
+  made_by TEXT NOT NULL CHECK (made_by IN ('claude','template')), model TEXT, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sample_topics_user ON sample_topics (user_id, created_at);
 CREATE TABLE IF NOT EXISTS learning_paths (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '',
   in_order INTEGER NOT NULL DEFAULT 1, archived INTEGER NOT NULL DEFAULT 0,
