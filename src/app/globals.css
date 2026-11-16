@@ -527,3 +527,34 @@ input[type="range"].brand-range::-moz-range-thumb {
     box-shadow: inset 0 1px 0 var(--glass-highlight), 0 12px 32px -22px var(--glass-shadow);
   }
 }
+
+/*
+  Resources, a partner's first steps (PartnerOnboardingDiagram): each person pops in, the lines draw on
+  with their arrowheads and labels after, then a soft flow keeps moving along them. Each part waits for
+  its own --at. Without motion everything simply shows.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .onboarding-diagram .onb-node > div,
+  .onboarding-diagram .onb-label > div,
+  .onboarding-diagram .onb-arrows { opacity: 0; }
+  .onboarding-diagram .onb-line { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .onboarding-diagram .onb-flow { opacity: 0; stroke-dasharray: 0 90; }
+
+  .onboarding-list .onb-row { opacity: 0; }
+  .onboarding-list.is-shown .onb-row { animation: onb-pop 0.6s cubic-bezier(0.16, 1, 0.3, 1) var(--at) both; }
+  .onboarding-diagram.is-shown .onb-node > div { animation: onb-pop 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--at) both; }
+  .onboarding-diagram.is-shown .onb-line { animation: onb-draw 0.75s cubic-bezier(0.65, 0, 0.35, 1) var(--at) forwards; }
+  .onboarding-diagram.is-shown .onb-arrows { animation: onb-fade 0.25s ease-out calc(var(--at) + 0.65s) forwards; }
+  .onboarding-diagram.is-shown .onb-label > div { animation: onb-label 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--at) both; }
+  .onboarding-diagram.is-shown .onb-flow {
+    animation:
+      onb-fade 0.6s ease-out calc(var(--at) + 0.9s) forwards,
+      onb-flow 1.8s linear calc(var(--at) + 0.9s) infinite;
+  }
+}
+@keyframes onb-pop { from { opacity: 0; transform: translateY(14px) scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes onb-label { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+@keyframes onb-draw { to { stroke-dashoffset: 0; } }
+@keyframes onb-fade { to { opacity: 1; } }
+/* One dot every 90 units, moving one gap per loop, so the flow is seamless and the same speed on every line. */
+@keyframes onb-flow { to { stroke-dashoffset: -90; } }
