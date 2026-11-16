@@ -27,6 +27,28 @@ export default function ChallengesPage() {
         A five-day team competition where Care Coordinators tackle real-world client scenarios, make decisions and put their knowledge to the test. Each day
         unlocks a new challenge, with points, streaks and leaderboards encouraging teams to collaborate, solve problems and compete for the top spot.
       </PageHero>
+
+      {/* A game to play on your own any time, alongside the team challenges. */}
+      <Link
+        href="/challenges/coordinators-day"
+        className="group mt-8 flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#1d2b4f] p-5 text-white ring-1 ring-black/5 transition hover:shadow-lg sm:flex-row sm:items-center sm:p-6"
+      >
+        <span aria-hidden className="grid size-16 shrink-0 place-items-center rounded-2xl bg-[#fab53d] text-[#102a43]">
+          <Icon name="route" className="size-8" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#fab53d]">New · solo board game · about 15 minutes</span>
+          <span className="mt-1 block font-serif text-2xl font-semibold group-hover:underline">The Coordinator’s Day</span>
+          <span className="mt-1 block text-white/85">
+            Follow a care coordinator from the first call to handover. Good decisions move you forward, setbacks send you back, and opportunities handled well let you
+            climb. Three levels, from new to experienced.
+          </span>
+        </span>
+        <span className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-full bg-white px-5 font-semibold text-[#102a43] sm:self-center">
+          Play <Icon name="arrow-right" className="size-4" />
+        </span>
+      </Link>
+
       <Suspense>
         <Challenges />
       </Suspense>
