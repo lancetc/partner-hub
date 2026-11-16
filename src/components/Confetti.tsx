@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useHydrated } from "@/lib/store";
 import "./player/fx.css";
 
 /*
@@ -45,8 +46,7 @@ export function Confetti({ pieces = 140, onDone }: { pieces?: number; onDone?: (
   }, [onDone]);
   // Rendered on <body>, not where it's used: a parent with a transform (like the topic-complete
   // card's entry animation) would otherwise shrink the fixed layer to that parent and clip it.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   if (!on || !mounted) return null;
   return createPortal(
     <div aria-hidden className="confetti-layer pointer-events-none fixed inset-0 z-[80] overflow-hidden">
