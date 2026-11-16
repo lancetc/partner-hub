@@ -6,7 +6,8 @@ import { LessonList } from "@/components/LessonList";
 import { HomeLearning } from "@/components/HomeLearning";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
 import { ChallengeBanner } from "@/components/ChallengePage";
-import { catalogueTopics } from "@/server/catalogue";
+import { catalogueTopics, topicPopularity } from "@/server/catalogue";
+import { now } from "@/server/clock";
 import { currentUser } from "@/server/auth";
 import { pathTopicOrder } from "@/server/learningPaths";
 
@@ -58,6 +59,8 @@ async function Catalogue() {
       topics={catalogueTopics(db, (await currentUser(db)).id)}
       // For "Sort by: Learning path", which groups topics under each path in its own order.
       paths={pathTopicOrder(db)}
+      // For the "Popular with your colleagues" row and "Sort by: Most popular".
+      popularity={topicPopularity(db, now(db))}
     />
   );
 }

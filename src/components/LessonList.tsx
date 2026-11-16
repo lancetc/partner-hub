@@ -12,6 +12,7 @@ import { SaveButton } from "./SaveButton";
 import { Icon } from "./Icon";
 import { cx, formatDate } from "@/lib/format";
 import { formatWhen, useApi, type FollowUpListItem, type Me } from "@/lib/api";
+import { byPopularity, topicShelves, type SeeAll, type Shelf } from "@/lib/topicShelves";
 
 const trackLabel: Record<Lesson["track"], string> = {
   core: "For everyone",
@@ -21,7 +22,7 @@ const trackLabel: Record<Lesson["track"], string> = {
   briefing: "Policy briefings",
 };
 
-type Sort = "subject" | "recommended" | "newest" | "az" | "za" | "path" | "shortest" | "longest";
+type Sort = "subject" | "recommended" | "newest" | "popular" | "az" | "za" | "path" | "shortest" | "longest";
 type Status = "any" | "not-started" | "in-progress" | "completed";
 type Length = "any" | "short" | "medium" | "long";
 type View = "grid" | "list";
@@ -35,6 +36,7 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: "subject", label: "By subject" },
   { value: "recommended", label: "Suggested for you" },
   { value: "newest", label: "Newest first" },
+  { value: "popular", label: "Most popular" },
   { value: "az", label: "Title A–Z" },
   { value: "za", label: "Title Z–A" },
   { value: "path", label: "Learning path" },
@@ -48,6 +50,8 @@ const LENGTHS: { value: Length; label: string; test: (m: number) => boolean }[] 
   { value: "long", label: "Over 10 min", test: (m) => m > 10 },
 ];
 const PAGE = 24;
+/** By subject shows this many under each heading, with "See all" for the rest. */
+const GROUP_PREVIEW = 8;
 /** The same fields as the admin Topics page. */
 const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
 
@@ -74,11 +78,13 @@ function byPath(shown: TopicSummary[], paths: PathTopics[]) {
 }
 
 /*
-  The Learning page's catalogue, built for hundreds of topics: search, a subject to browse by,
-  filters for who it's for, progress and length, sorting, a grid or a compact list, and "Show more".
+  The Learning page's catalogue, built for hundreds of topics. Search sits at the top; under it, rows to
+  browse (recently added, popular, for your role, quick wins: lib/topicShelves) and the subjects as tiles.
+  Searching or filtering swaps those for results. Then everything, with filters for who it's for, progress
+  and length, sorting, a grid or a compact list, a few per subject heading, and "Show more".
   The choices live in the page address, so a filtered view can be bookmarked or shared.
 */
-export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; paths?: PathTopics[] }) {
+export function LessonList({ topics, paths = [], popularity = {} }: { topics: TopicSummary[]; paths?: PathTopics[]; popularity?: Record<string, number> }) {
   const hydrated = useHydrated();
   const attempts = useHub((s) => s.lessons);
   const me = useApi<Me>("/api/me").data;
@@ -186,6 +192,7 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
     if (sort === "shortest") return a.minutes - b.minutes || a.title.localeCompare(b.title);
     if (sort === "longest") return b.minutes - a.minutes || a.title.localeCompare(b.title);
     if (sort === "newest") return (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "") || a.title.localeCompare(b.title);
+    if (sort === "popular") return byPopularity(popularity)(a, b);
     return rank(a) - rank(b) || subjectOrder(a) - subjectOrder(b) || a.title.localeCompare(b.title);
   });
   const filtering = Boolean(words.length) || subject !== "all" || track !== "all" || status !== "any" || length !== "any";
@@ -200,6 +207,35 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
     setShown(PAGE);
   };
   const tracks = (["core", "partner", "coordinator", "briefing"] as const).filter((tr) => topics.some((t) => t.track === tr));
+
+  // The rows to browse leave out what's already in front of them: assigned, enrolled, started or finished.
+  // Their progress is only known once the page has loaded it, so the rows wait for that rather than jump.
+  const shelves: Shelf[] = hydrated
+    ? topicShelves({
+        topics,
+        popularity,
+        audience: me?.user.audience,
+        exclude: new Set([...assigned.map((t) => t.slug), ...enrolledSlugs, ...Object.keys(attempts)]),
+      })
+    : [];
+  const allTopics = useRef<HTMLElement>(null);
+  const showAll = () => requestAnimationFrame(() => allTopics.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  const seeAll = (s: SeeAll) => {
+    reset();
+    if (s.sort) setSort(s.sort);
+    if (s.track) setTrack(s.track);
+    if (s.length) setLength(s.length);
+    showAll();
+  };
+  const chooseSubject = (id: string) => {
+    setSubject(id);
+    setShown(PAGE);
+    showAll();
+  };
+  // Subjects with topics in them, for the tiles (topics with no subject come last, as "Other").
+  const subjectTiles = [...SUBJECTS, { id: "other", label: "Other", icon: "folder" as const }]
+    .map((s) => ({ ...s, count: topics.filter((t) => (t.subject ?? "other") === s.id).length }))
+    .filter((s) => s.count > 0);
 
   return (
     <div className="mt-8 flex flex-col gap-12">
@@ -268,21 +304,19 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
         </section>
       )}
 
-      <section aria-labelledby="all-topics">
-        <h2 id="all-topics" className="font-serif text-2xl font-semibold">
-          All topics <span className="text-base font-normal text-ink-muted">({topics.length})</span>
-        </h2>
-
-        {/* Search, filters and sort: the same toolbar as the admin Topics page. */}
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
-            Search
+      <section aria-labelledby="browse-topics" className="flex flex-col gap-10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <h2 id="browse-topics" className="font-serif text-2xl font-semibold">
+            Browse topics <span className="text-base font-normal text-ink-muted">({topics.length})</span>
+          </h2>
+          <label className="flex w-full flex-col gap-1 text-sm font-semibold sm:max-w-md">
+            <span className="sr-only">Search topics</span>
             <span className="relative">
-              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+              <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-ink-muted" />
               <input
                 type="search"
-                className={cx(field, "pl-9")}
-                placeholder="Topic title or subject"
+                className={cx(field, "min-h-12 rounded-full pl-11 text-base")}
+                placeholder="Search by title, subject or what it covers"
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
@@ -291,6 +325,53 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
               />
             </span>
           </label>
+        </div>
+
+        {/* The rows and subject tiles step aside while searching or filtering: the results are what matter then. */}
+        {!filtering &&
+          shelves.map((s) => (
+            <ShelfRow key={s.id} shelf={s} onSeeAll={() => seeAll(s.seeAll)}>
+              {(l) => tile(l, "w-[15rem] shrink-0 snap-start sm:w-[17rem]")}
+            </ShelfRow>
+          ))}
+
+        {!filtering && subjectTiles.length > 1 && (
+          <section aria-labelledby="browse-subjects">
+            <h3 id="browse-subjects" className="font-serif text-xl font-semibold">
+              Browse by subject
+            </h3>
+            <ul className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {subjectTiles.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => chooseSubject(s.id)}
+                    className="flex h-full w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-left transition hover:border-action hover:shadow-sm sm:p-4"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-tealtint text-accent">
+                      <Icon name={s.icon} className="size-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold leading-snug">{s.label}</span>
+                      <span className="block text-sm text-ink-muted">
+                        {s.count} {s.count === 1 ? "topic" : "topics"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </section>
+
+      <section ref={allTopics} aria-labelledby="all-topics" className="scroll-mt-24">
+        <h2 id="all-topics" className="font-serif text-2xl font-semibold">
+          {filtering ? "Results" : "All topics"} <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : topics.length})</span>
+        </h2>
+
+        {/* Filters and sort: the same toolbar as the admin Topics page (search is at the top of the page). */}
+        <div className="mt-4 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Audience
             <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(PAGE))}>
@@ -446,8 +527,17 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
                 <span className="font-sans text-sm font-normal text-ink-muted">
                   {g.topics.length} {g.topics.length === 1 ? "topic" : "topics"}
                 </span>
+                {g.topics.length > GROUP_PREVIEW && (
+                  <button
+                    type="button"
+                    onClick={() => chooseSubject(g.id)}
+                    className="ml-auto inline-flex min-h-11 items-center gap-1 font-sans text-base font-semibold text-accent hover:underline"
+                  >
+                    See all {g.topics.length} <Icon name="arrow-right" className="size-4" />
+                  </button>
+                )}
               </h3>
-              {topicList(g.topics)}
+              {topicList(g.topics.slice(0, GROUP_PREVIEW))}
             </section>
           ))
         ) : sort === "path" ? (
@@ -487,39 +577,37 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
     </div>
   );
 
+  /** One topic as a tile: in the grid, and in the rows to browse (which pass their own width). */
+  function tile(l: TopicSummary, className?: string) {
+    const s = label(l);
+    return (
+      <li key={l.slug} className={cx("group relative flex flex-col gap-3", className)}>
+        <StoryVisual {...l.visual} alt="" className="aspect-[16/10] rounded-2xl" />
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
+            {subjectLabel(l.subject)} · {l.minutes} min{enrolledSlugs.has(l.slug) && " · Enrolled"}
+          </p>
+          <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-3" />
+        </div>
+        <h3 className="font-serif text-xl font-semibold leading-snug">
+          <Link href={`/topics/${l.slug}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+            {l.title}
+          </Link>
+        </h3>
+        <p className="line-clamp-3 text-ink-muted">{l.summary}</p>
+        <p className="flex items-center gap-2 font-mulish text-sm font-semibold">
+          {s?.done && <Icon name="check" className="size-4 text-accent" />}
+          {s?.text ?? " "}
+        </p>
+        {spaced[l.slug] && <SpacedStatus stages={spaced[l.slug]} steps={stepsFor(l.slug)} signoff={signoffs[l.slug]} slug={l.slug} />}
+      </li>
+    );
+  }
+
   /** Topics as tiles or as a compact list. */
   function topicList(items: TopicSummary[]) {
     return view === "grid" ? (
-          <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-            {items.map((l) => {
-              const s = label(l);
-              return (
-                <li key={l.slug} className="group relative flex flex-col gap-3">
-                  <StoryVisual {...l.visual} alt="" className="aspect-[16/10] rounded-2xl" />
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                      {subjectLabel(l.subject)} · {l.minutes} min{enrolledSlugs.has(l.slug) && " · Enrolled"}
-                    </p>
-                    <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-3" />
-                  </div>
-                  <h3 className="font-serif text-xl font-semibold leading-snug">
-                    <Link
-                      href={`/topics/${l.slug}`}
-                      className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
-                    >
-                      {l.title}
-                    </Link>
-                  </h3>
-                  <p className="text-ink-muted">{l.summary}</p>
-                  <p className="flex items-center gap-2 font-mulish text-sm font-semibold">
-                    {s?.done && <Icon name="check" className="size-4 text-accent" />}
-                    {s?.text ?? " "}
-                  </p>
-                  {spaced[l.slug] && <SpacedStatus stages={spaced[l.slug]} steps={stepsFor(l.slug)} signoff={signoffs[l.slug]} slug={l.slug} />}
-                </li>
-              );
-            })}
-          </ul>
+          <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{items.map((l) => tile(l))}</ul>
         ) : (
           <ul className="mt-5 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
             {items.map((l) => {
@@ -553,6 +641,63 @@ export function LessonList({ topics, paths = [] }: { topics: TopicSummary[]; pat
           </ul>
         );
   }
+}
+
+/**
+  A row of topics to browse, scrolling sideways (by touch, trackpad or the arrow buttons), with "See all"
+  opening the full list sorted or filtered the same way.
+*/
+function ShelfRow({ shelf, onSeeAll, children }: { shelf: Shelf; onSeeAll: () => void; children: (t: TopicSummary) => React.ReactNode }) {
+  const row = useRef<HTMLUListElement>(null);
+  const [edges, setEdges] = useState({ start: true, end: false });
+  const measure = () => {
+    const el = row.current;
+    if (el) setEdges({ start: el.scrollLeft <= 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
+  };
+  useEffect(measure, [shelf.topics.length]);
+  const page = (dir: 1 | -1) => {
+    const el = row.current;
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: reduce ? "auto" : "smooth" });
+  };
+  const id = `shelf-${shelf.id}`;
+  return (
+    <section aria-labelledby={id}>
+      <div className="flex items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 id={id} className="font-serif text-xl font-semibold">
+            {shelf.title}
+          </h3>
+          <p className="text-sm text-ink-muted">{shelf.blurb}</p>
+        </div>
+        <div className="hidden gap-1 sm:flex">
+          {([-1, 1] as const).map((dir) => (
+            <button
+              key={dir}
+              type="button"
+              onClick={() => page(dir)}
+              disabled={dir === -1 ? edges.start : edges.end}
+              aria-label={`${dir === -1 ? "Back" : "More"}: ${shelf.title}`}
+              className="grid size-10 place-items-center rounded-full border border-line-strong hover:bg-muted disabled:opacity-30"
+            >
+              <Icon name={dir === -1 ? "arrow-left" : "arrow-right"} className="size-4" />
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onSeeAll} className="inline-flex min-h-11 shrink-0 items-center gap-1 font-semibold text-accent hover:underline">
+          See all <Icon name="arrow-right" className="size-4" />
+        </button>
+      </div>
+      <ul
+        ref={row}
+        onScroll={measure}
+        className="-mx-4 mt-4 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-4 px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {shelf.topics.map((t) => children(t))}
+      </ul>
+    </section>
+  );
 }
 
 /** Where a learner is in a lesson's spaced follow ups. The next one ready links straight to it. */

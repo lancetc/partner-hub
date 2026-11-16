@@ -5,6 +5,22 @@ import type { Db } from "./db";
 import { missionSlugs } from "./challenges";
 import { topicDates, topicSubjects } from "./topicSubjects";
 import { myTopicAssignments } from "./people";
+import { demoAddedAt, demoCompletions } from "@/content/catalogueDemo";
+
+/** How far back "Popular with your colleagues" looks. */
+export const POPULAR_DAYS = 30;
+/** Fewer real completions than this in that time is too little to rank by, so the demo figures stand in. */
+export const POPULAR_REAL_MIN = 20;
+
+/** How many people finished each topic in the last POPULAR_DAYS days (or the demo figures, before there's enough). */
+export function topicPopularity(db: Db, now: Date): Record<string, number> {
+  const since = new Date(now.getTime() - POPULAR_DAYS * 86_400_000).toISOString();
+  const rows = db
+    .prepare("SELECT lesson_slug AS slug, COUNT(DISTINCT user_id) AS n FROM lesson_completions WHERE completed_at >= ? GROUP BY lesson_slug")
+    .all(since) as { slug: string; n: number }[];
+  const total = rows.reduce((sum, r) => sum + r.n, 0);
+  return total >= POPULAR_REAL_MIN ? Object.fromEntries(rows.map((r) => [r.slug, r.n])) : demoCompletions;
+}
 
 /**
   Every topic in the catalogue, summarised for the homepage, Learning and Learning paths. Follow ups
@@ -14,7 +30,7 @@ import { myTopicAssignments } from "./people";
 */
 export function catalogueTopics(db: Db, userId?: string) {
   const subjects = topicSubjects(db);
-  const dates = topicDates(db);
+  const dates = { ...demoAddedAt, ...topicDates(db) };
   const missions = missionSlugs(db);
   const assigned = userId ? myTopicAssignments(db, userId) : new Map<string, string | null>();
   return lessons
