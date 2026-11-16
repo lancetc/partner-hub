@@ -65,6 +65,7 @@ import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
 import { Confetti } from "../Confetti";
 import { finishOpenTopic, readOpen } from "@/lib/openProgress";
+import { bookmarksOn } from "@/lib/features";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -648,7 +649,7 @@ export function LessonPlayer({
       headerAction={
         reviewToken ? (
           <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} />
-        ) : preview || anonymous ? undefined : (
+        ) : preview || anonymous || !bookmarksOn() ? undefined : (
           <CardBookmark lesson={lesson.slug} lessonTitle={lesson.title} card={node.id} label={node.label} heading={node.heading} />
         )
       }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon, type IconName } from "./Icon";
+import { bookmarksOn } from "@/lib/features";
 
 /*
   The site footer, matching trilogycare.com.au: the logo and contact details, the same link columns
@@ -18,7 +19,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Topics", href: "/topics" },
       { label: "Webinars", href: "/webinars" },
       { label: "Resources", href: "/resources" },
-      { label: "Saved", href: "/saved" },
+      ...(bookmarksOn() ? [{ label: "Saved", href: "/saved" }] : []),
       { label: "Profile and settings", href: "/settings" },
     ],
   },

@@ -11,6 +11,7 @@ import { LANGUAGES } from "@/lib/languages";
 import { pendingFor } from "@/lib/outbox";
 import { clearOfflineData } from "@/lib/offlineLessons";
 import { confirmAction } from "@/lib/confirm";
+import { bookmarksOn } from "@/lib/features";
 
 export function AccountMenu() {
   const [open, setOpen] = useState(false);
@@ -79,9 +80,11 @@ export function AccountMenu() {
               </span>
             )}
           </Link>
-          <Link href="/saved" className={item} onClick={() => setOpen(false)}>
-            <Icon name="bookmark" /> Saved items {savedCount > 0 && <span className="ml-auto text-sm text-ink-muted">{savedCount}</span>}
-          </Link>
+          {bookmarksOn() && (
+            <Link href="/saved" className={item} onClick={() => setOpen(false)}>
+              <Icon name="bookmark" /> Saved items {savedCount > 0 && <span className="ml-auto text-sm text-ink-muted">{savedCount}</span>}
+            </Link>
+          )}
           <Link href="/onboarding" className={item} onClick={() => setOpen(false)}>
             <Icon name="list" /> My onboarding
           </Link>

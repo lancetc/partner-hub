@@ -11,3 +11,15 @@
 */
 
 export const spacedLearningOn = () => process.env.NEXT_PUBLIC_SPACED_LEARNING === "on";
+
+/*
+  Bookmarks (the save button on topic, resource and news tiles, the bookmark on a card inside a topic,
+  and the Saved items links) are hidden for now. To bring them back, add this line to .env.local and
+  restart the server:
+
+    NEXT_PUBLIC_BOOKMARKS=on
+
+  Anything already saved is kept while they're hidden, and the Saved items page still works by address.
+*/
+
+export const bookmarksOn = () => process.env.NEXT_PUBLIC_BOOKMARKS === "on";

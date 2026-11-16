@@ -3,20 +3,28 @@
 import { Icon } from "./Icon";
 import { toggleSaved, useHub } from "@/lib/store";
 import { cx } from "@/lib/format";
+import { bookmarksOn } from "@/lib/features";
 
-export function SaveButton({
-  id,
-  title,
-  className,
-  withLabel = false,
-  onDark = false,
-}: {
+type Props = {
   id: string;
   title: string;
   className?: string;
   withLabel?: boolean;
   onDark?: boolean;
-}) {
+};
+
+/** The bookmark on a tile or story. Hidden while bookmarks are switched off (lib/features). */
+export function SaveButton(props: Props) {
+  return bookmarksOn() ? <SaveToggle {...props} /> : null;
+}
+
+function SaveToggle({
+  id,
+  title,
+  className,
+  withLabel = false,
+  onDark = false,
+}: Props) {
   const saved = useHub((s) => s.saved.includes(id));
   return (
     <button
