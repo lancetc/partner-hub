@@ -88,6 +88,8 @@ export function WebinarIndex() {
                 <img
                   src={w.thumbnail}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className="absolute inset-0 size-full object-cover object-[50%_25%] transition-transform group-hover:scale-[1.02]"
                 />
               )}

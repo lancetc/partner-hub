@@ -145,9 +145,9 @@ export function SiteFooter() {
           <div>
             <Link href="/" aria-label="Trilogy Care Partner Hub home" className="inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/trilogy-logo.svg" alt="Trilogy Care" width={1789} height={576} className="h-9 w-auto dark:hidden" />
+              <img src="/brand/trilogy-logo.svg" alt="Trilogy Care" width={1789} height={576} loading="lazy" decoding="async" className="h-9 w-auto dark:hidden" />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/trilogy-logo-dark.svg" alt="Trilogy Care" width={1789} height={576} className="hidden h-9 w-auto dark:block" />
+              <img src="/brand/trilogy-logo-dark.svg" alt="Trilogy Care" width={1789} height={576} loading="lazy" decoding="async" className="hidden h-9 w-auto dark:block" />
             </Link>
             <h2 className="mt-6 font-serif text-lg font-semibold">Contact</h2>
             <ul className="mt-3 flex flex-col gap-2.5 text-[0.95rem] text-ink-muted">

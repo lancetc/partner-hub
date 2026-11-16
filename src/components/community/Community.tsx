@@ -199,7 +199,7 @@ function Avatar({ person, size = "md", ring, level }: { person: Person; size?: "
     <span className="relative inline-flex shrink-0">
       {person.photo ? (
         // eslint-disable-next-line @next/next/no-img-element -- the person's own picture from this hub's avatar endpoint
-        <img src={person.photo} alt="" className={cx("rounded-full object-cover ring-2", sizes[size], ring ?? "ring-surface")} />
+        <img src={person.photo} alt="" loading="lazy" decoding="async" className={cx("rounded-full object-cover ring-2", sizes[size], ring ?? "ring-surface")} />
       ) : (
         <span
           className={cx("grid place-items-center rounded-full font-mulish font-extrabold text-white ring-2", sizes[size], ring ?? "ring-surface")}
