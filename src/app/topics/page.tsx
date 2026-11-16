@@ -10,6 +10,8 @@ import { catalogueTopics, topicPopularity } from "@/server/catalogue";
 import { now } from "@/server/clock";
 import { currentUser } from "@/server/auth";
 import { pathTopicOrder } from "@/server/learningPaths";
+import { HeroStats, PageHero } from "@/components/PageHero";
+import { SUBJECTS } from "@/lib/subjects";
 
 export const metadata: Metadata = {
   title: "Topics",
@@ -24,9 +26,18 @@ export const metadata: Metadata = {
 */
 export default function LearningPage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Topics</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Short, practical topics you can finish between visits. Your place is saved as you go.</p>
+    <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+      <PageHero
+        eyebrow="Trilogy Care learning"
+        title="Topics"
+        aside={
+          <Suspense>
+            <TopicStats />
+          </Suspense>
+        }
+      >
+        Short, practical topics you can finish between visits. Your place is saved as you go.
+      </PageHero>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
       </Suspense>
@@ -40,6 +51,23 @@ export default function LearningPage() {
         <Catalogue />
       </Suspense>
     </div>
+  );
+}
+
+/** The catalogue at a glance, for the banner. */
+async function TopicStats() {
+  await connection();
+  const topics = catalogueTopics(getDb());
+  const minutes = topics.length ? Math.round(topics.reduce((n, t) => n + t.minutes, 0) / topics.length) : 0;
+  const subjects = SUBJECTS.filter((s) => topics.some((t) => t.subject === s.id)).length;
+  return (
+    <HeroStats
+      stats={[
+        { label: "topics", value: topics.length },
+        { label: "subjects", value: subjects },
+        { label: "minutes on average", value: minutes },
+      ]}
+    />
   );
 }
 

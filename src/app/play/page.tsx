@@ -3,6 +3,7 @@ import Link from "next/link";
 import { badges, quests } from "@/content/explorer";
 import { cards, themes } from "@/content/conversations";
 import { Icon } from "@/components/Icon";
+import { HeroStats, PageHero } from "@/components/PageHero";
 
 export const metadata: Metadata = {
   title: "Play",
@@ -17,13 +18,22 @@ export const metadata: Metadata = {
 export default function PlayPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:pt-8">
-      <header className="max-w-3xl">
-        <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Play</h1>
-        <p className="mt-2 text-lg text-ink-muted">
-          Two games for learning by doing. One puts you on a street full of clients who need a hand; the other gets people talking about the moments
-          that matter in care.
-        </p>
-      </header>
+      <PageHero
+        eyebrow="Learn by doing"
+        title="Play"
+        aside={
+          <HeroStats
+            stats={[
+              { label: "games", value: 2 },
+              { label: "quests to play", value: quests.length },
+              { label: "conversation cards", value: cards.length },
+            ]}
+          />
+        }
+      >
+        Two games for learning by doing. One puts you on a street full of clients who need a hand; the other gets people talking about the moments that
+        matter in care.
+      </PageHero>
 
       <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         {/* Neighbourhood Explorer */}

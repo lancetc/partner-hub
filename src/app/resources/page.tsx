@@ -5,6 +5,7 @@ import { resources } from "@/content/resources";
 import { SaveButton } from "@/components/SaveButton";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDate } from "@/lib/format";
+import { HeroStats, PageHero } from "@/components/PageHero";
 
 export const metadata: Metadata = {
   title: "Resources",
@@ -19,9 +20,21 @@ const kindIcon: Record<string, IconName> = { Guide: "book", Template: "doc", Pro
 
 export default function ResourcesPage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Resources</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Guides, templates, webinars, the client journey, challenges and contacts you can come back to. Demonstration content.</p>
+    <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+      <PageHero
+        eyebrow="Look it up"
+        title="Resources"
+        aside={
+          <HeroStats
+            stats={[
+              { label: "guides and templates", value: resources.length },
+              { label: "glossary terms", value: glossaryCount },
+            ]}
+          />
+        }
+      >
+        Guides, templates, webinars, the client journey, challenges and contacts you can come back to. Demonstration content.
+      </PageHero>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
       <Link
         href="/resources/glossary"

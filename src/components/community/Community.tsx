@@ -1,5 +1,6 @@
 "use client";
 
+import { HeroStats, PageHero } from "../PageHero";
 import { useId, useState, useSyncExternalStore } from "react";
 import { useApi, type Me } from "@/lib/api";
 import { useHydrated } from "@/lib/store";
@@ -105,30 +106,28 @@ export function Community() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       {/* The community at a glance. */}
-      <header className="relative overflow-hidden rounded-3xl bg-[#008282] px-5 py-6 text-white sm:px-8 sm:py-8">
-        <Pattern />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#bdeeee]">Trilogy Care Community</p>
-            <h1 className="mt-1 font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Learn from each other</h1>
-            <p className="mt-2 text-lg text-white/90">
-              Care Partners and coordinators from every corner of Australia, sharing what works, asking what doesn’t, and cheering each other on.
-            </p>
-          </div>
+      <PageHero
+        eyebrow="Trilogy Care Community"
+        title="Learn from each other"
+        aside={
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex -space-x-2" aria-hidden>
               {members.slice(0, 6).map((m) => (
                 <Avatar key={m.id} person={m} size="sm" ring="ring-[#008282]" />
               ))}
             </div>
-            <dl className="flex gap-6 font-mulish">
-              <Stat label="members" value={COMMUNITY_SIZE.toLocaleString("en-AU")} />
-              <Stat label="online now" value={String(online.length + 1)} dot />
-              <Stat label="posts this week" value={String(posts.filter((p) => p.hoursAgo < 24 * 7).length + mine.posts.length + 57)} />
-            </dl>
+            <HeroStats
+              stats={[
+                { label: "members", value: COMMUNITY_SIZE },
+                { label: "online now", value: online.length + 1, dot: true },
+                { label: "posts this week", value: posts.filter((p) => p.hoursAgo < 24 * 7).length + mine.posts.length + 57 },
+              ]}
+            />
           </div>
-        </div>
-      </header>
+        }
+      >
+        Care Partners and coordinators from every corner of Australia, sharing what works, asking what doesn’t, and cheering each other on.
+      </PageHero>
 
       {/* Tabs. */}
       <div role="tablist" aria-label="Community" className="mt-4 flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)]">
@@ -159,32 +158,6 @@ export function Community() {
         {tab === "leaderboard" && <Leaderboard you={you} yourPoints={yourPoints} />}
       </div>
     </div>
-  );
-}
-
-function Stat({ label, value, dot }: { label: string; value: string; dot?: boolean }) {
-  return (
-    <div>
-      <dt className="sr-only">{label}</dt>
-      <dd className="flex items-center gap-1.5 text-2xl font-extrabold tabular-nums">
-        {dot && <span className="size-2.5 rounded-full bg-[#7ef0a6]" aria-hidden />}
-        {value}
-      </dd>
-      <dd className="text-sm text-white/80" aria-hidden>
-        {label}
-      </dd>
-    </div>
-  );
-}
-
-/** Soft circles in the brand colours behind the heading. */
-function Pattern() {
-  return (
-    <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="xMaxYMid slice" viewBox="0 0 800 240">
-      <circle cx="720" cy="40" r="120" fill="#3cb8b9" opacity="0.35" />
-      <circle cx="610" cy="230" r="80" fill="#fab53d" opacity="0.25" />
-      <circle cx="790" cy="210" r="46" fill="#c7393e" opacity="0.3" />
-    </svg>
   );
 }
 

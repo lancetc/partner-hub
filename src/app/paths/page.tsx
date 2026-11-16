@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import type { Metadata } from "next";
 import { getDb } from "@/server/db";
 import { currentUser } from "@/server/auth";
-import { browseLearningPaths, slugsFor } from "@/server/learningPaths";
+import { browseLearningPaths, myCertificates, slugsFor } from "@/server/learningPaths";
+import { HeroStats, PageHero } from "@/components/PageHero";
 import { lessonBySlug } from "@/content/lessons";
 import { PathsBrowser } from "@/components/PathsBrowser";
 import { HomeLearning } from "@/components/HomeLearning";
@@ -20,9 +21,18 @@ export const metadata: Metadata = {
 /* Laid out like Learning: the heading, the "Your learning" panel, then every path to browse with the same search and filters. */
 export default function LearningPathsPage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:pt-10">
-      <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Discovery Paths</h1>
-      <p className="mt-2 max-w-2xl text-lg text-ink-muted">Build your knowledge and skills through training programs made up of short, practical topics. Complete each topic in order to earn your certificate.</p>
+    <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+      <PageHero
+        eyebrow="Trilogy Care learning"
+        title="Discovery Paths"
+        aside={
+          <Suspense>
+            <PathStats />
+          </Suspense>
+        }
+      >
+        Build your knowledge and skills through training programs made up of short, practical topics. Complete each topic in order to earn your certificate.
+      </PageHero>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
       </Suspense>
@@ -30,6 +40,24 @@ export default function LearningPathsPage() {
         <Paths />
       </Suspense>
     </div>
+  );
+}
+
+/** The paths at a glance, for the banner: how many, the topics in them, and the person's certificates. */
+async function PathStats() {
+  await connection();
+  const db = getDb();
+  const user = await currentUser(db);
+  const paths = browseLearningPaths(db, user, missionSlugs(db));
+  const topics = new Set(paths.flatMap((p) => slugsFor(db, p.id)));
+  return (
+    <HeroStats
+      stats={[
+        { label: "paths", value: paths.length },
+        { label: "topics in them", value: topics.size },
+        { label: "your certificates", value: myCertificates(db, user).length },
+      ]}
+    />
   );
 }
 
