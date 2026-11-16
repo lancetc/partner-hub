@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "../Icon";
 import { ONBOARDING, type OnboardingModelId } from "@/content/partnerOnboarding";
-import { PartnerOnboardingDiagram, PartnerRoles } from "./PartnerOnboarding";
+import { PartnerOnboardingDiagram } from "./PartnerOnboarding";
 
 /* A partner model's onboarding page (P1, Brokered, Coordinator managed), reached from its box on Resources. */
 export function OnboardingPage({ model }: { model: OnboardingModelId }) {
@@ -20,10 +20,6 @@ export function OnboardingPage({ model }: { model: OnboardingModelId }) {
       </div>
       <div className="mt-8">
         <PartnerOnboardingDiagram model={model} />
-      </div>
-      <h2 className="mt-10 font-serif text-2xl font-semibold">Who you’ll work with</h2>
-      <div className="mt-4">
-        <PartnerRoles model={model} />
       </div>
     </div>
   );

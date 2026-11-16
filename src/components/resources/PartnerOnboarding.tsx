@@ -22,7 +22,7 @@ const toneClass = {
 };
 
 export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingModelId }) {
-  const { nodes: NODES, edges: EDGES, description, key } = ONBOARDING[model];
+  const { nodes: NODES, edges: EDGES, description, key, height = 700 } = ONBOARDING[model];
   const titleId = `onboarding-diagram-${model}`;
   const box = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
@@ -64,7 +64,7 @@ export function PartnerOnboardingDiagram({ model = "p1" }: { model?: OnboardingM
       </ol>
 
       <svg
-        viewBox="0 0 1200 700"
+        viewBox={`0 0 1200 ${height}`}
         role="img"
         aria-labelledby={titleId}
         className={cx("onboarding-diagram hidden w-full sm:block", shown && "is-shown")}
@@ -153,30 +153,5 @@ function MiniNode({ node: n }: { node: Node }) {
         {n.title} {n.sub && <span className="font-normal text-ink-muted">{n.sub}</span>}
       </span>
     </span>
-  );
-}
-
-/** The people a partner works with, for their model, joined in a row. */
-export function PartnerRoles({ model = "p1" }: { model?: OnboardingModelId }) {
-  const ROLES = ONBOARDING[model].roles;
-  return (
-    <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {ROLES.map((r, i) => (
-        <li key={r.title} className="relative flex flex-col items-center rounded-3xl bg-surface px-5 pb-7 pt-6 text-center shadow-sm ring-1 ring-line">
-          <span className={cx("grid size-20 place-items-center rounded-full", r.circle)} aria-hidden>
-            <Icon name={r.icon} className="size-9" />
-          </span>
-          <h3 className="mt-4 font-serif text-xl font-semibold leading-tight">{r.title}</h3>
-          <p className="mt-1 text-ink-muted">{r.body}</p>
-          <span aria-hidden className={cx("absolute inset-x-0 bottom-0 h-2 rounded-b-3xl", r.bar)} />
-          {/* The joins between cards, on a computer where they sit in a row. */}
-          {i < ROLES.length - 1 && (
-            <span aria-hidden className="absolute -right-[19px] top-[3.75rem] z-10 hidden size-[22px] place-items-center rounded-full bg-surface ring-2 ring-[#3cb8b9] lg:grid">
-              <span className="size-2.5 rounded-full bg-[#3cb8b9]" />
-            </span>
-          )}
-        </li>
-      ))}
-    </ol>
   );
 }
