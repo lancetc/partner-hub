@@ -1,55 +1,64 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Board, Move } from "@/lib/coordinatorsDay";
+import { allSlides, type Board, type Move } from "@/lib/coordinatorsDay";
 import { cx } from "@/lib/format";
 
 /*
-  The Coordinator's Day board: the squares of the day in a winding path from the bottom left, the
-  ladders (opportunities) and the marked slides (setbacks), and the learner's token. A move walks the
-  token square by square, or glides up a ladder or down a slide; with reduced motion it simply appears
-  there. Every square says what kind it is in words as well as colour.
+  The Coordinator's Day board, like a snakes and ladders board on a painted Australian street: a
+  wooden frame, a cream path winding up from Start, cream squares with gold edges, teal ladders
+  (opportunities), orange slides (setbacks) and a teal pawn. A move walks the pawn square by square,
+  or glides it up a ladder or down a slide; with reduced motion it simply appears there. Every square
+  says what kind it is in words as well as colour.
+
+  BOARD_IMAGE: a painted background, when there is one (public/images/coordinators-day). Until then
+  the scene is drawn here.
 */
 
-const COLS = 5;
-const CW = 150;
-const CH = 128;
-const PAD = 14;
+/** Four across, so a ladder up four squares always climbs straight up to the next row. */
+const COLS = 4;
+const CW = 168;
+const CH = 122;
+const PAD = 26;
+const BOARD_IMAGE: string | null = null;
 
 export type SquareKind = "start" | "handover" | "ladder" | "top" | "slide" | "work";
 
 export function squareKinds(board: Board): SquareKind[] {
   const end = board.squares.length - 1;
-  const heads = new Set(board.checkpoints.flatMap((c) => c.events.map((e) => e.from)));
+  const heads = new Set(allSlides(board).map((s) => s.from));
   return board.squares.map((_, i) =>
-    i === 0 ? "start" : i === end ? "handover" : board.ladders.some((l) => l.from === i) ? "ladder" : board.ladders.some((l) => l.to === i) ? "top" : heads.has(i) ? "slide" : "work",
+    i === 0 ? "start" : i === end ? "handover" : heads.has(i) ? "slide" : board.ladders.some((l) => l.from === i) ? "ladder" : board.ladders.some((l) => l.to === i) ? "top" : "work",
   );
 }
 
-/** Where each square's centre sits. */
+/**
+  Where each square's centre sits: left to right along each row, from the bottom up. A ladder (up four)
+  climbs straight up its column, and a slide (back three) is a short drop.
+*/
 function layout(n: number) {
   const rows = Math.ceil(n / COLS);
   const at = (i: number) => {
     const row = Math.floor(i / COLS);
-    const col = row % 2 === 0 ? i % COLS : COLS - 1 - (i % COLS);
+    const col = i % COLS;
     return { x: PAD + col * CW + CW / 2, y: PAD + (rows - 1 - row) * CH + CH / 2 };
   };
   return { rows, at, width: COLS * CW + PAD * 2, height: rows * CH + PAD * 2 };
 }
 
-const fill: Record<SquareKind, string> = {
-  start: "#e8f3f3",
-  handover: "#fde9c4",
-  ladder: "#dff3ea",
-  top: "#dff3ea",
-  slide: "#fbe3e1",
-  work: "#ffffff",
+const tile: Record<SquareKind, { fill: string; edge: string }> = {
+  start: { fill: "#e2f3f1", edge: "#2a9d8f" },
+  handover: { fill: "#fde4b2", edge: "#d9a441" },
+  ladder: { fill: "#fbf1df", edge: "#d9a441" },
+  top: { fill: "#fbf1df", edge: "#d9a441" },
+  slide: { fill: "#f8d6c8", edge: "#d9774a" },
+  work: { fill: "#fbf1df", edge: "#d9a441" },
 };
 const kindLabel: Record<SquareKind, string> = {
   start: "Start",
   handover: "Finish",
   ladder: "Opportunity",
-  top: "Milestone",
+  top: "",
   slide: "Setback risk",
   work: "",
 };
@@ -57,13 +66,10 @@ const kindLabel: Record<SquareKind, string> = {
 export function DayBoard({ board, square, move, className, label }: { board: Board; square: number; move?: Move; className?: string; label?: string }) {
   const { at, width, height } = layout(board.squares.length);
   const kinds = useMemo(() => squareKinds(board), [board]);
-  const slides = useMemo(() => {
-    const seen = new Map<string, { from: number; to: number }>();
-    for (const c of board.checkpoints) for (const e of c.events) seen.set(`${e.from}-${e.to}`, { from: e.from, to: e.to });
-    return [...seen.values()];
-  }, [board]);
+  const slides = useMemo(() => allSlides(board), [board]);
+  const id = `cd-${board.level}`;
 
-  // Where the token is drawn. It follows `square`: a new move walks it a square at a time, or glides it up a
+  // Where the pawn is drawn. It follows `square`: a new move walks it a square at a time, or glides it up a
   // ladder or down a slide; anything else (a resumed game, another level) puts it straight there.
   const handled = useRef(move?.n ?? 0);
   const [pos, setPos] = useState(square);
@@ -88,7 +94,7 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
       } else {
         for (let i = 1, s = move.from + 1; s <= move.to; i++, s++) {
           const step = s;
-          later(i * 260, () => {
+          later(i * 240, () => {
             setGlide(false);
             setPos(step);
           });
@@ -98,50 +104,49 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [move, square]);
 
-  const token = at(pos);
+  const pawn = at(pos);
+  const path = board.squares.map((_, i) => at(i));
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className={cx("block w-full", className)} role="img" aria-label={label ?? `${board.title} board: ${board.squares.length} squares, from Start of day to Handover.`}>
       <defs>
-        <marker id={`cd-slide-${board.level}`} viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0 0 L10 5 L0 10 z" fill="#c7393e" />
+        <clipPath id={`${id}-frame`}>
+          <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" />
+        </clipPath>
+        <filter id={`${id}-lift`} x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#5b4220" floodOpacity="0.25" />
+        </filter>
+        <marker id={`${id}-chute`} viewBox="0 0 10 10" refX="6" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="#c4562a" />
         </marker>
       </defs>
 
-      {/* The path between squares. */}
-      <polyline
-        points={board.squares.map((_, i) => `${at(i).x},${at(i).y}`).join(" ")}
-        fill="none"
-        stroke="#9fc7c6"
-        strokeWidth="6"
-        strokeDasharray="2 12"
-        strokeLinecap="round"
-      />
+      {/* The scene behind, inside the wooden frame. */}
+      <g clipPath={`url(#${id}-frame)`}>
+        {BOARD_IMAGE ? <image href={BOARD_IMAGE} x="0" y="0" width={width} height={height} preserveAspectRatio="xMidYMid slice" /> : <HomeScene width={width} height={height} />}
+        <rect width={width} height={height} fill="#fffaf0" opacity="0.18" />
+      </g>
+      <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" fill="none" stroke="#c99a5b" strokeWidth="12" />
+      <rect x="15" y="15" width={width - 30} height={height - 30} rx="20" fill="none" stroke="#e9c994" strokeWidth="2" />
 
-      {board.squares.map((name, i) => {
+      {/* The path between squares: a cream ribbon. */}
+      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="30" strokeLinejoin="round" strokeLinecap="round" />
+
+      {board.squares.map((_, i) => {
         const c = at(i);
         const k = kinds[i];
         const here = i === square;
-
         return (
-          <g key={i}>
+          <g key={i} filter={`url(#${id}-lift)`}>
             <rect
-              x={c.x - CW / 2 + 6}
-              y={c.y - CH / 2 + 6}
-              width={CW - 12}
-              height={CH - 12}
-              rx="18"
-              fill={fill[k]}
-              stroke={here ? "#008282" : "#cfdedf"}
-              strokeWidth={here ? 4 : 1.5}
+              x={c.x - CW / 2 + 20}
+              y={c.y - CH / 2 + 12}
+              width={CW - 40}
+              height={CH - 24}
+              rx="16"
+              fill={tile[k].fill}
+              stroke={here ? "#008282" : tile[k].edge}
+              strokeWidth={here ? 5 : 3}
             />
-            <text x={c.x - CW / 2 + 18} y={c.y - CH / 2 + 30} fontSize="16" fontWeight="800" fill="#102a43" fontFamily="var(--font-mulish, sans-serif)">
-              {i + 1}
-            </text>
-            {kindLabel[k] && (
-              <text x={c.x + CW / 2 - 16} y={c.y - CH / 2 + 28} fontSize="11" fontWeight="700" fill={k === "slide" ? "#a12d31" : "#0f5b5b"} textAnchor="end" fontFamily="var(--font-mulish, sans-serif)">
-                {kindLabel[k].toUpperCase()}
-              </text>
-            )}
           </g>
         );
       })}
@@ -151,82 +156,175 @@ export function DayBoard({ board, square, move, className, label }: { board: Boa
         const a = at(l.from);
         const b = at(l.to);
         const len = Math.hypot(b.x - a.x, b.y - a.y);
-        const nx = (-(b.y - a.y) / len) * 9;
-        const ny = ((b.x - a.x) / len) * 9;
-        const rungs = Math.max(2, Math.floor(len / 26));
+        const nx = (-(b.y - a.y) / len) * 10;
+        const ny = ((b.x - a.x) / len) * 10;
+        const rungs = Math.max(3, Math.floor(len / 22));
+        const ox = 56;
         return (
-          <g key={`l${l.from}`} opacity="0.9" pointerEvents="none">
+          <g key={`l${l.from}`} pointerEvents="none">
             <title>{`Ladder from ${board.squares[l.from]} up to ${board.squares[l.to]}`}</title>
-            <line x1={a.x + nx} y1={a.y + ny} x2={b.x + nx} y2={b.y + ny} stroke="#2a9d8f" strokeWidth="5" strokeLinecap="round" />
-            <line x1={a.x - nx} y1={a.y - ny} x2={b.x - nx} y2={b.y - ny} stroke="#2a9d8f" strokeWidth="5" strokeLinecap="round" />
+            {[1, -1].map((side) => (
+              <line key={side} x1={a.x + ox + nx * side} y1={a.y + ny * side} x2={b.x + ox + nx * side} y2={b.y + ny * side} stroke="#1f8a7e" strokeWidth="6" strokeLinecap="round" />
+            ))}
             {Array.from({ length: rungs }, (_, r) => {
               const t = (r + 1) / (rungs + 1);
-              const x = a.x + (b.x - a.x) * t;
+              const x = a.x + ox + (b.x - a.x) * t;
               const y = a.y + (b.y - a.y) * t;
-              return <line key={r} x1={x + nx} y1={y + ny} x2={x - nx} y2={y - ny} stroke="#2a9d8f" strokeWidth="3.5" />;
+              return <line key={r} x1={x + nx} y1={y + ny} x2={x - nx} y2={y - ny} stroke="#2fa595" strokeWidth="4" strokeLinecap="round" />;
             })}
-            <Tag x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 16} text={`↑ to ${board.squares[l.to]}`} tone="#0f5b5b" bg="#dff3ea" />
           </g>
         );
       })}
 
-      {/* Slides: a curve from the setback square down to the work to redo. */}
+      {/* Slides: an orange chute from the setback square down to the work to redo. */}
       {slides.map((s, i) => {
         const a = at(s.from);
         const b = at(s.to);
         const sameRow = Math.abs(a.y - b.y) < 1;
-        const mx = (a.x + b.x) / 2 + (sameRow ? 0 : i % 2 ? -50 : 50);
-        const my = sameRow ? a.y + 62 : (a.y + b.y) / 2;
+        // Along a row, the chute dips into the gap below the squares rather than crossing their names.
+        const d = sameRow
+          ? `M${a.x - 20} ${a.y + 40} Q${(a.x + b.x) / 2} ${a.y + 104} ${b.x + 20} ${b.y + 40}`
+          : `M${a.x - 14} ${a.y + 6} Q${(a.x + b.x) / 2 + (i % 2 ? -46 : 46)} ${(a.y + b.y) / 2} ${b.x + 10} ${b.y + 14}`;
         return (
           <g key={`s${s.from}-${s.to}`} pointerEvents="none">
             <title>{`Possible setback: slide from ${board.squares[s.from]} down to ${board.squares[s.to]}`}</title>
-            <path d={`M${a.x} ${a.y} Q${mx} ${my} ${b.x} ${b.y}`} fill="none" stroke="#c7393e" strokeOpacity="0.75" strokeWidth="9" strokeLinecap="round" markerEnd={`url(#cd-slide-${board.level})`} />
-            <path d={`M${a.x} ${a.y} Q${mx} ${my} ${b.x} ${b.y}`} fill="none" stroke="#fff" strokeOpacity="0.8" strokeWidth="2" strokeDasharray="6 8" />
-            <Tag x={mx} y={sameRow ? a.y + 36 : my} text={`↓ to ${board.squares[s.to]}`} tone="#a12d31" bg="#fbe3e1" />
+            <path d={d} fill="none" stroke="#c4562a" strokeWidth="18" strokeLinecap="round" opacity="0.9" markerEnd={`url(#${id}-chute)`} />
+            <path d={d} fill="none" stroke="#f0a27a" strokeWidth="7" strokeLinecap="round" opacity="0.95" />
           </g>
         );
       })}
 
-      {/* The names, over the ladders and slides. */}
+      {/* Numbers and names, over the ladders and slides. */}
       {board.squares.map((name, i) => {
         const c = at(i);
+        const k = kinds[i];
         return (
-          <foreignObject key={`n${i}`} x={c.x - CW / 2 + 12} y={c.y - 16} width={CW - 24} height={52} pointerEvents="none">
-            <p className="flex h-full items-start justify-center">
-              <span className="rounded-lg bg-white/85 px-1.5 py-0.5 text-center text-[15px] font-semibold leading-tight text-[#102a43] [box-decoration-break:clone]">{name}</span>
-            </p>
-          </foreignObject>
+          <g key={`n${i}`} pointerEvents="none">
+            <text x={c.x} y={c.y - 12} textAnchor="middle" fontSize="28" fontWeight="800" fill="#1d2b4f" fontFamily="var(--font-mulish, sans-serif)">
+              {i + 1}
+            </text>
+            <foreignObject x={c.x - CW / 2 + 22} y={c.y - 2} width={CW - 44} height={40}>
+              <p className="flex h-full items-start justify-center">
+                <span className="rounded-md bg-[#fffaf0]/90 px-1 text-center text-[12.5px] font-semibold leading-tight text-[#1d2b4f]">{name}</span>
+              </p>
+            </foreignObject>
+            {kindLabel[k] && (
+              <g>
+                <rect x={c.x - 44} y={c.y + 31} width="88" height="17" rx="8.5" fill={k === "slide" ? "#c4562a" : k === "handover" ? "#b88320" : "#1f8a7e"} />
+                <text x={c.x} y={c.y + 43.5} textAnchor="middle" fontSize="10.5" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
+                  {kindLabel[k].toUpperCase()}
+                </text>
+              </g>
+            )}
+          </g>
         );
       })}
 
-      {/* The token. */}
-      <g
-        className={cx("cd-token", glide && "cd-token-glide")}
-        style={{ transform: `translate(${token.x + 34}px, ${token.y + 30}px)` }}
-        aria-hidden
-      >
-        <circle r="21" fill="#008282" stroke="#fff" strokeWidth="4" />
-        <text textAnchor="middle" dy="5" fontSize="13" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
-          You
-        </text>
+      {/* The pawn. */}
+      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 52}px, ${pawn.y - 30}px)` }} aria-hidden>
+        <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
+        <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
+        <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
       </g>
     </svg>
   );
 }
 
-function Tag({ x, y, text, tone, bg }: { x: number; y: number; text: string; tone: string; bg: string }) {
-  const w = Math.min(190, 18 + text.length * 7.2);
+/** The cream path: straight along each row, then a sweep up and back to the start of the next row. */
+function ribbon(p: { x: number; y: number }[]) {
+  let d = `M${p[0].x} ${p[0].y}`;
+  for (let i = 1; i < p.length; i++) {
+    const a = p[i - 1];
+    const b = p[i];
+    if (Math.abs(a.y - b.y) < 1) d += ` L${b.x} ${b.y}`;
+    else {
+      const mid = (a.y + b.y) / 2;
+      d += ` C${a.x + 70} ${a.y} ${a.x + 70} ${mid} ${a.x} ${mid} L${b.x} ${mid} C${b.x - 70} ${mid} ${b.x - 70} ${b.y} ${b.x} ${b.y}`;
+    }
+  }
+  return d;
+}
+
+/** The drawn street behind the board: sky, gum trees, a Queenslander and a brick house, a fence and lawn. */
+function HomeScene({ width: w, height: h }: { width: number; height: number }) {
   return (
     <g>
-      <rect x={x - w / 2} y={y - 13} width={w} height={24} rx="12" fill={bg} stroke={tone} strokeOpacity="0.35" />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={tone} fontFamily="var(--font-mulish, sans-serif)">
-        {text}
-      </text>
+      <defs>
+        <linearGradient id="cd-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#cfe6ee" />
+          <stop offset="0.55" stopColor="#eef3e6" />
+          <stop offset="1" stopColor="#dfe8c9" />
+        </linearGradient>
+      </defs>
+      <rect width={w} height={h} fill="url(#cd-sky)" />
+      {/* Distant gums. */}
+      {[60, 210, 380, 560, 720].map((x, i) => (
+        <g key={x} opacity="0.55">
+          <ellipse cx={x} cy={150 + (i % 2) * 20} rx="90" ry="70" fill="#9fb98f" />
+          <ellipse cx={x + 40} cy={120 + (i % 2) * 20} rx="60" ry="50" fill="#b3c7a2" />
+        </g>
+      ))}
+      {/* A Queenslander: white weatherboards, red tin roof, verandah. */}
+      <g opacity="0.85">
+        <polygon points={`20,${h - 260} 150,${h - 330} 280,${h - 260}`} fill="#b8483a" />
+        <rect x="35" y={h - 262} width="230" height="120" fill="#f6f1e6" />
+        {Array.from({ length: 9 }, (_, i) => (
+          <line key={i} x1="35" y1={h - 250 + i * 13} x2="265" y2={h - 250 + i * 13} stroke="#e2dccd" strokeWidth="1.5" />
+        ))}
+        <rect x="25" y={h - 160} width="250" height="10" fill="#e9e1cf" />
+        {Array.from({ length: 8 }, (_, i) => (
+          <rect key={i} x={30 + i * 34} y={h - 200} width="4" height="42" fill="#e9e1cf" />
+        ))}
+        <rect x="70" y={h - 235} width="36" height="44" fill="#8fb0b8" />
+        <rect x="190" y={h - 235} width="36" height="44" fill="#8fb0b8" />
+      </g>
+      {/* A brick house with a tiled roof. */}
+      <g opacity="0.8">
+        <polygon points={`${w - 280},${h - 230} ${w - 170},${h - 290} ${w - 60},${h - 230}`} fill="#c0643f" />
+        <rect x={w - 268} y={h - 232} width="196" height="104" fill="#c98b6b" />
+        <rect x={w - 230} y={h - 205} width="40" height="36" fill="#94b2bb" />
+        <rect x={w - 150} y={h - 205} width="40" height="36" fill="#94b2bb" />
+      </g>
+      {/* Lawn and a picket fence. */}
+      <rect x="0" y={h - 140} width={w} height="140" fill="#b7cc8d" />
+      <g opacity="0.9">
+        <rect x="0" y={h - 112} width={w} height="5" fill="#fbf8f1" />
+        {Array.from({ length: Math.ceil(w / 22) }, (_, i) => (
+          <path key={i} d={`M${i * 22 + 4} ${h - 84} V${h - 124} l4 -6 l4 6 V${h - 84} Z`} fill="#fbf8f1" />
+        ))}
+      </g>
+      {/* Gum leaves framing the top corners, shrubs at the bottom. */}
+      {[
+        [10, 10, 1],
+        [w - 10, 10, -1],
+      ].map(([x, y, dir]) => (
+        <g key={x} opacity="0.75">
+          {Array.from({ length: 7 }, (_, i) => (
+            <ellipse
+              key={i}
+              cx={x + dir * (20 + i * 22)}
+              cy={y + 18 + (i % 3) * 14}
+              rx="22"
+              ry="7"
+              fill={i % 2 ? "#6f8f63" : "#86a676"}
+              transform={`rotate(${dir * (25 + i * 9)} ${x + dir * (20 + i * 22)} ${y + 18 + (i % 3) * 14})`}
+            />
+          ))}
+        </g>
+      ))}
+      {[40, w - 60].map((x) => (
+        <g key={x} opacity="0.8">
+          <ellipse cx={x} cy={h - 20} rx="70" ry="40" fill="#7d9c64" />
+          <ellipse cx={x + 30} cy={h - 40} rx="40" ry="28" fill="#93b179" />
+          <circle cx={x - 20} cy={h - 50} r="5" fill="#d1495b" />
+          <circle cx={x + 14} cy={h - 58} r="5" fill="#d1495b" />
+        </g>
+      ))}
     </g>
   );
 }
 
-/** On a phone: the token's square and the next few, in a row. */
+/** On a phone: the pawn's square and the next few, in a row. */
 export function DayTrack({ board, square }: { board: Board; square: number }) {
   const kinds = squareKinds(board);
   const from = Math.max(0, square - 1);
@@ -242,12 +340,12 @@ export function DayTrack({ board, square }: { board: Board; square: number }) {
             key={i}
             aria-current={i === square ? "step" : undefined}
             className={cx(
-              "relative flex min-w-0 flex-1 flex-col rounded-2xl p-2 text-[0.72rem] leading-tight ring-1 transition-colors duration-300",
-              i === square ? "bg-[#008282] text-white ring-[#008282]" : "text-[#102a43] ring-line",
+              "relative flex min-w-0 flex-1 flex-col rounded-2xl border-2 p-2 text-[0.72rem] leading-tight transition-colors duration-300",
+              i === square ? "border-[#008282] bg-[#008282] text-white" : "text-[#1d2b4f]",
             )}
-            style={i === square ? undefined : { background: fill[k] }}
+            style={i === square ? undefined : { background: tile[k].fill, borderColor: tile[k].edge }}
           >
-            <span className="font-mulish font-extrabold">{i + 1}</span>
+            <span className="font-mulish text-base font-extrabold">{i + 1}</span>
             <span className="mt-0.5 font-semibold">{board.squares[i]}</span>
             {kindLabel[k] && <span className={cx("mt-auto pt-1 font-mulish text-[0.62rem] font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>}
             {ladder && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {board.squares[ladder.to]}</span>}

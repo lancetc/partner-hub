@@ -12,8 +12,9 @@
     keeps going, and a recovery card opens there.
   - An opportunity handled well climbs the ladder at the token's square. Turning down an unsuitable
     one well moves on one square.
-  - The handover opens when the token reaches the last square (any cards left are optional ones that
-    didn't come up), or when the day's cards run out (the token walks to Handover at 4.30).
+  - Reaching the last square early skips the optional cards still to come (they didn't come up), but any
+    required ones are still played there before the handover opens. If the day's cards run out first,
+    4.30 comes round and the token walks to Handover.
   Each choice and each event resolves once: choosing again during feedback, or continuing twice, does
   nothing, so a double tap or a refresh never repeats a move or redraws a setback.
 */
@@ -92,13 +93,18 @@ export type Board = {
   squares: string[];
   ladders: { from: number; to: number }[];
   story: StoryItem[];
-  /** After the story card at index `after` is resolved, one of these may happen: a slide from `from` to `to`. */
-  checkpoints: { after: number; events: { event: string; from: number; to: number }[] }[];
+  /**
+    After the story card at index `after` is resolved, one of `events` may happen. The token goes down the
+    marked slide from the square it's on (there's one for each square it could be on by then).
+  */
+  checkpoints: { after: number; events: string[]; slides: { from: number; to: number }[] }[];
   handover: string;
 };
 
 export type Content = {
   version: string;
+  /** Pictures of the people on the cards, by speaker name. */
+  avatars?: Record<string, string>;
   scenarios: Record<string, Scenario>;
   events: Record<string, GameEvent>;
   boards: Record<Level, Board>;
@@ -138,6 +144,19 @@ export const clock = (min: number) => {
 
 /** The options this learner sees on a card, given what's happened. */
 export const optionsFor = (s: Scenario, flags: Flags) => s.options.filter((o) => matches(flags, o.when));
+/**
+  The options in the order this learner sees them: shuffled once per run and card, so the best answer
+  isn't always first, and the order stays put across a refresh.
+*/
+export function shuffledFor(s: Scenario, run: Pick<Run, "seed" | "flags">) {
+  const opts = optionsFor(s, run.flags);
+  let salt = 0;
+  for (const ch of s.id) salt = (salt * 31 + ch.charCodeAt(0)) >>> 0;
+  return opts
+    .map((o, i) => ({ o, k: random(run.seed, salt + i) }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.o);
+}
 export const contextFor = (s: Scenario, flags: Flags) => (s.context ?? []).filter((c) => matches(flags, c.when)).map((c) => c.text);
 
 /** A small seeded random number generator: the same seed and checkpoint always draw the same event. */
@@ -185,7 +204,7 @@ export function choose(content: Content, run: Run, optionId: string): Run {
   let climbed = run.climbed;
   if (o.outcome === "accept" || o.outcome === "advance") {
     to = Math.min(last(b), run.square + 1);
-    kind = "step";
+    kind = to === run.square ? "stay" : "step";
   } else if (o.outcome === "climb") {
     const ladder = b.ladders.find((l) => l.from === run.square);
     to = ladder ? ladder.to : Math.min(last(b), run.square + 1);
@@ -215,8 +234,8 @@ export function proceed(content: Content, run: Run): Run {
     const e = content.events[run.card.id];
     const cp = run.events.find((x) => x.event === e.id);
     const board = content.boards[run.level];
-    const slide = board.checkpoints.flatMap((c) => c.events).find((x) => x.event === e.id && x.from === run.square);
-    const to = slide ? slide.to : Math.max(0, run.square - 2);
+    const slide = slideFor(board, cp?.checkpoint ?? -1, run.square);
+    const to = slide ? slide.to : Math.max(0, run.square - 3);
     return {
       ...run,
       square: to,
@@ -239,12 +258,13 @@ export function proceed(content: Content, run: Run): Run {
   // A setback, if this is one of the day's checkpoints and one hasn't been drawn here yet.
   const resolvedIndex = run.next - 1;
   const cpIndex = board.checkpoints.findIndex((c) => c.after === resolvedIndex);
-  if (cpIndex !== -1 && !run.events.some((x) => x.checkpoint === cpIndex) && !resolved?.recovery) {
+  // No setbacks once at Handover: the day's nearly done.
+  if (cpIndex !== -1 && !run.events.some((x) => x.checkpoint === cpIndex) && !resolved?.recovery && run.square < last(board)) {
     const used = new Set(run.events.map((x) => x.event));
-    const pool = board.checkpoints[cpIndex].events.filter((x) => !used.has(x.event) && matches(run.flags, content.events[x.event].eligible));
+    const pool = board.checkpoints[cpIndex].events.filter((id) => !used.has(id) && matches(run.flags, content.events[id].eligible));
     if (pool.length) {
       const pick = pool[Math.floor(random(run.seed, cpIndex) * pool.length)];
-      const e = content.events[pick.event];
+      const e = content.events[pick];
       return {
         ...base,
         phase: "card",
@@ -256,10 +276,15 @@ export function proceed(content: Content, run: Run): Run {
     }
   }
 
-  // At Handover already: the cards left were optional, and the day wraps up.
+  // At Handover already: optional cards are skipped, required ones still come up there, then the handover.
   const end = last(board);
   const handover = content.scenarios[board.handover];
   if (run.square >= end) {
+    const due = board.story.findIndex((x, i) => i >= run.next && !x.optional);
+    if (due !== -1) {
+      const s = content.scenarios[board.story[due].card];
+      return { ...base, phase: "card", card: { type: "scenario", id: s.id }, next: due + 1, time: Math.max(run.time, s.time), move: undefined, shown: [...run.shown, s.id] };
+    }
     return { ...base, phase: "card", card: { type: "scenario", id: handover.id }, time: Math.max(run.time, handover.time), move: undefined, shown: [...run.shown, handover.id] };
   }
   // Out of cards: 4.30 comes round and the token walks to Handover.
@@ -279,68 +304,69 @@ export function proceed(content: Content, run: Run): Run {
   return { ...base, phase: "card", card: { type: "scenario", id: s.id }, next: run.next + 1, time: Math.max(run.time, s.time), move: undefined, shown: [...run.shown, s.id] };
 }
 
+/** The marked slide down from this square at a checkpoint, if there is one. */
+export const slideFor = (board: Board, checkpoint: number, square: number) => board.checkpoints[checkpoint]?.slides.find((x) => x.from === square);
+/** Every marked slide on the board, once each. */
+export const allSlides = (board: Board) => [...new Map(board.checkpoints.flatMap((c) => c.slides).map((x) => [`${x.from}-${x.to}`, x])).values()];
+
 /** The open card's time on the clock. */
 export const now = (run: Run) => clock(run.time);
 
 /*
-  Checks a board against its content: every card and event exists, every slide starts where the
-  token will be when its checkpoint comes, every climb has a ladder, and on every route (each
-  setback that could be drawn, each opportunity climbed or turned down) every required card comes
-  out before the token reaches Handover.
+  Checks a board against its content: every card and event exists, ladders go up and slides go down
+  within the board, and on every route (each setback that could be drawn, each opportunity climbed or
+  turned down) there's a marked slide wherever the token can be at a checkpoint and a ladder wherever
+  an opportunity can be climbed, and the day reaches Handover with every required card played.
 */
 export function validateBoard(content: Content, level: Level): string[] {
   const b = content.boards[level];
   const errors: string[] = [];
+  const end = last(b);
   const need = (id: string, what: string) => {
     if (!content.scenarios[id]) errors.push(`${level}: ${what} "${id}" doesn't exist`);
   };
   b.story.forEach((x) => need(x.card, "card"));
   need(b.handover, "handover");
-  b.checkpoints.forEach((c) =>
-    c.events.forEach((x) => {
-      if (!content.events[x.event]) errors.push(`${level}: event "${x.event}" doesn't exist`);
-      else need(content.events[x.event].recovery, "recovery");
-      if (x.to >= x.from) errors.push(`${level}: the slide for "${x.event}" doesn't go down`);
-    }),
-  );
-  b.ladders.forEach((l) => l.to <= l.from && errors.push(`${level}: the ladder from ${l.from} doesn't go up`));
+  b.checkpoints.forEach((c) => {
+    c.events.forEach((id) => (content.events[id] ? need(content.events[id].recovery, "recovery") : errors.push(`${level}: event "${id}" doesn't exist`)));
+    c.slides.forEach((x) => x.to >= x.from && errors.push(`${level}: the slide from ${x.from} doesn't go down`));
+  });
+  b.ladders.forEach((l) => (l.to <= l.from || l.to > end) && errors.push(`${level}: the ladder from ${l.from} doesn't go up within the board`));
   if (errors.length) return errors;
 
-  const end = last(b);
   const required = b.story.filter((x) => !x.optional).map((x) => x.card);
-  const routes = new Set<string>();
   type S = { square: number; next: number; used: string[]; drawn: number[]; shown: string[]; path: string[] };
   const walk = (s: S): void => {
-    // After the card at s.next - 1: a checkpoint?
     const cp = b.checkpoints.findIndex((c, i) => c.after === s.next - 1 && !s.drawn.includes(i));
-    if (cp !== -1) {
-      const pool = b.checkpoints[cp].events.filter((x) => !s.used.includes(x.event));
+    if (cp !== -1 && s.square < end) {
+      const pool = b.checkpoints[cp].events.filter((id) => !s.used.includes(id));
       if (pool.length) {
-        for (const x of pool) {
-          if (x.from !== s.square) errors.push(`${level}: "${x.event}" slides from ${x.from} but the token is on ${s.square} (${s.path.join(" > ")})`);
-          // The recovery card moves on one.
-          walk({ ...s, square: Math.min(end, x.to + 1), used: [...s.used, x.event], drawn: [...s.drawn, cp], path: [...s.path, x.event] });
-        }
+        const slide = slideFor(b, cp, s.square);
+        if (!slide) errors.push(`${level}: no slide from square ${s.square} at checkpoint ${cp} (${s.path.join(" > ")})`);
+        for (const id of pool) walk({ ...s, square: Math.min(end, (slide?.to ?? s.square) + 1), used: [...s.used, id], drawn: [...s.drawn, cp], path: [...s.path, id] });
         return;
       }
     }
-    if (s.square >= end || s.next >= b.story.length) {
+    if (s.next >= b.story.length) {
       const missing = required.filter((r) => !s.shown.includes(r));
-      if (missing.length) errors.push(`${level}: the route ${s.path.join(" > ")} reaches Handover without ${missing.join(", ")}`);
-      routes.add(s.path.join(" > "));
+      if (missing.length) errors.push(`${level}: the route ${s.path.join(" > ")} finishes without ${missing.join(", ")}`);
       return;
     }
-    const card = content.scenarios[b.story[s.next].card];
+    const item = b.story[s.next];
+    // At Handover, optional cards are skipped.
+    if (s.square >= end && item.optional) return walk({ ...s, next: s.next + 1 });
+    const card = content.scenarios[item.card];
     const shown = [...s.shown, card.id];
     const outcomes = new Set(card.options.map((o) => o.outcome));
+    const step = Math.min(end, s.square + 1);
     if (card.kind === "opportunity" && outcomes.has("climb")) {
       const ladder = b.ladders.find((l) => l.from === s.square);
-      if (!ladder) errors.push(`${level}: "${card.id}" can be climbed but there's no ladder on square ${s.square} (${s.path.join(" > ")})`);
-      else walk({ ...s, square: ladder.to, next: s.next + 1, shown, path: [...s.path, `${card.id}:climb`] });
-      if (outcomes.has("advance")) walk({ ...s, square: s.square + 1, next: s.next + 1, shown, path: [...s.path, `${card.id}:advance`] });
+      if (!ladder && s.square < end) errors.push(`${level}: "${card.id}" can be climbed but there's no ladder on square ${s.square} (${s.path.join(" > ")})`);
+      walk({ ...s, square: ladder ? ladder.to : step, next: s.next + 1, shown, path: [...s.path, `${card.id}:climb`] });
+      if (outcomes.has("advance")) walk({ ...s, square: step, next: s.next + 1, shown, path: [...s.path, `${card.id}:advance`] });
       return;
     }
-    walk({ ...s, square: s.square + 1, next: s.next + 1, shown, path: [...s.path, card.id] });
+    walk({ ...s, square: step, next: s.next + 1, shown, path: [...s.path, card.id] });
   };
   walk({ square: 1, next: 1, used: [], drawn: [], shown: [b.story[0].card], path: [b.story[0].card] });
   return [...new Set(errors)];

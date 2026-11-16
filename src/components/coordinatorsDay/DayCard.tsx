@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { clock, contextFor, optionsFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
+import { clock, contextFor, shuffledFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
 import { cx } from "@/lib/format";
 import { Icon, type IconName } from "../Icon";
 
@@ -90,7 +90,7 @@ export function DayCard({
   }
 
   const s = content.scenarios[run.card.id];
-  const options = optionsFor(s, run.flags);
+  const options = shuffledFor(s, run);
   const context = contextFor(s, run.flags);
   const fb = run.phase === "feedback" ? run.feedback : undefined;
   const chosen = fb ? options.find((o) => o.id === fb.option) : undefined;
@@ -110,9 +110,14 @@ export function DayCard({
       </header>
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">
-          <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1d2b4f] font-mulish text-sm font-extrabold text-white">
-            {initials(s.speaker) || "·"}
-          </span>
+          {content.avatars?.[s.speaker] ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images
+            <img src={content.avatars[s.speaker]} alt="" className="size-12 shrink-0 rounded-full object-cover ring-2 ring-[#fab53d]" />
+          ) : (
+            <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1d2b4f] font-mulish text-sm font-extrabold text-white">
+              {initials(s.speaker) || "·"}
+            </span>
+          )}
           <span className="min-w-0 leading-tight">
             <span className="block font-semibold">{s.speaker}</span>
             <span className="block text-sm text-ink-muted">{s.role}</span>

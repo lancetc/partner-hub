@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { coordinatorsDay as content } from "@/content/coordinatorsDay";
-import { choose, clock, LEVELS, proceed, recap, startRun, type Level, type Move, type Run } from "@/lib/coordinatorsDay";
+import { choose, clock, LEVELS, proceed, recap, slideFor, startRun, type Level, type Move, type Run } from "@/lib/coordinatorsDay";
 import { useApi, type Me } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm";
 import { cx } from "@/lib/format";
@@ -164,7 +164,8 @@ export function CoordinatorsDay() {
 
   const board = content.boards[run.level];
   const name = (i: number) => board.squares[i];
-  const slide = run.card.type === "event" ? board.checkpoints.flatMap((c) => c.events).find((x) => x.event === run.card.id && x.from === run.square) : undefined;
+  const drawn = run.card.type === "event" ? run.events.find((x) => x.event === run.card.id) : undefined;
+  const slide = drawn ? slideFor(board, drawn.checkpoint, run.square) : undefined;
 
   if (run.phase === "done") return <Recap run={run} onAgain={() => start(run.level)} onLevels={() => setView("levels")} />;
 
