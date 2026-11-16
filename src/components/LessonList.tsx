@@ -50,6 +50,12 @@ const LENGTHS: { value: Length; label: string; test: (m: number) => boolean }[] 
   { value: "medium", label: "6 to 10 min", test: (m) => m >= 6 && m <= 10 },
   { value: "long", label: "Over 10 min", test: (m) => m > 10 },
 ];
+/*
+  Every topic starts as one row (four tiles on a computer) under the rows to browse; "Show more" adds
+  three rows at a time. Search and filter results start with a fuller page, since they're the point then.
+*/
+const ROW = 4;
+const MORE = 12;
 const PAGE = 24;
 /** The same fields as the admin Topics page. */
 const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
@@ -87,7 +93,7 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
   const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "subject");
   const [view, setView] = useState<View>((params.get("view") as View) || "grid");
-  const [shown, setShown] = useState(PAGE);
+  const [shown, setShown] = useState(ROW);
   // The subject chips fold away behind the current one until it's pressed.
   const [subjectsOpen, setSubjectsOpen] = useState(false);
   // While they fold away: the subject that was current, so the chips leaving stay the ones that were shown.
@@ -187,13 +193,15 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
     return rank(a) - rank(b) || subjectOrder(a) - subjectOrder(b) || a.title.localeCompare(b.title);
   });
   const filtering = Boolean(words.length) || subject !== "all" || track !== "all" || status !== "any" || length !== "any";
+  // How many of the list to show: one row to start, a fuller page while searching or filtering.
+  const visible = filtering ? Math.max(shown, PAGE) : shown;
   const reset = () => {
     setQ("");
     setSubject("all");
     setTrack("all");
     setStatusFilter("any");
     setLength("any");
-    setShown(PAGE);
+    setShown(ROW);
   };
   const tracks = (["core", "partner", "coordinator", "briefing"] as const).filter((tr) => topics.some((t) => t.track === tr));
 
@@ -301,14 +309,14 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
-                  setShown(PAGE);
+                  setShown(ROW);
                 }}
               />
             </span>
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Audience
-            <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(PAGE))}>
+            <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(ROW))}>
               <option value="all">All audiences</option>
               {tracks.map((tr) => (
                 <option key={tr} value={tr}>
@@ -319,7 +327,7 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Your progress
-            <select className={cx(field, "w-auto")} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(PAGE))}>
+            <select className={cx(field, "w-auto")} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(ROW))}>
               <option value="any">Any progress</option>
               <option value="not-started">Not started</option>
               <option value="in-progress">In progress</option>
@@ -328,7 +336,7 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Length
-            <select className={cx(field, "w-auto")} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(PAGE))}>
+            <select className={cx(field, "w-auto")} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(ROW))}>
               {LENGTHS.map((x) => (
                 <option key={x.value} value={x.value}>
                   {x.label}
@@ -421,7 +429,7 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
                             onClick={() => {
                               closeSubjects(current.id);
                               setSubject(s.id);
-                              setShown(PAGE);
+                              setShown(ROW);
                             }}
                             // In one after another from the current chip; out in reverse, the furthest first.
                             style={{ animationDelay: `${subjectsClosing ? (list.length - 1 - i) * 25 : i * 45}ms` }}
@@ -484,17 +492,17 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
             </section>
           ))
         ) : (
-          topicList(sorted.slice(0, shown))
+          topicList(sorted.slice(0, visible))
         )}
 
-        {sort !== "path" && sorted.length > shown && (
+        {sort !== "path" && sorted.length > visible && (
           <div className="mt-8 flex justify-center">
             <button
               type="button"
-              onClick={() => setShown((n) => n + PAGE)}
+              onClick={() => setShown(visible + MORE)}
               className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-5 font-semibold hover:bg-muted"
             >
-              Show more <span className="font-normal text-ink-muted">({sorted.length - shown} more)</span>
+              Show more <span className="font-normal text-ink-muted">({sorted.length - visible} more)</span>
             </button>
           </div>
         )}

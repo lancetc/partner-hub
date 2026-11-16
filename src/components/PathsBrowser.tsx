@@ -65,6 +65,10 @@ const LENGTHS: { value: Length; label: string; test: (m: number) => boolean }[] 
   { value: "medium", label: "1 to 3 hours", test: (m) => m >= 60 && m <= 180 },
   { value: "long", label: "Over 3 hours", test: (m) => m > 180 },
 ];
+/** Every path starts as one row (four on a computer); "Show more" adds three rows at a time, as on Topics. */
+const ROW = 4;
+const MORE = 12;
+
 /** The same fields as Learning and the admin Topics page. */
 const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
 
@@ -81,6 +85,7 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
   const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "az");
   const [view, setView] = useState<View>((params.get("view") as View) || "grid");
+  const [shown, setShown] = useState(ROW);
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
   useEffect(() => {
@@ -118,7 +123,10 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
     return rank(a) - rank(b) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9") || a.name.localeCompare(b.name);
   });
   const filtering = Boolean(words.length) || audience !== "all" || status !== "any" || length !== "any";
+  // Search and filter results show in full: they're the point then.
+  const visible = filtering ? sorted.length : shown;
   const reset = () => {
+    setShown(ROW);
     setQ("");
     setAudience("all");
     setStatus("any");
@@ -248,7 +256,18 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
 
         {sorted.length ? (
           <div className="mt-5">
-            <PathGrid paths={sorted} view={view} />
+            <PathGrid paths={sorted.slice(0, visible)} view={view} />
+            {sorted.length > visible && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShown(visible + MORE)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-5 font-semibold hover:bg-muted"
+                >
+                  Show more <span className="font-normal text-ink-muted">({sorted.length - visible} more)</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-8 text-center text-ink-muted">
