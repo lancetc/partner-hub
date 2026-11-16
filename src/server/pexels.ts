@@ -26,7 +26,7 @@ type PexelsPhoto = {
 
 export const pexelsConfigured = () => Boolean(process.env.PEXELS_API_KEY);
 
-async function call<T>(pathAndQuery: string): Promise<T> {
+export async function call<T>(pathAndQuery: string): Promise<T> {
   const key = process.env.PEXELS_API_KEY;
   if (!key) throw new HttpError(503, "Pexels isn’t connected. Add PEXELS_API_KEY to .env.local and restart the server.");
   let res: Response;
