@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+const CLIENTS = [
+  { name: "Dot", src: "/images/coordinators-day/dot-avatar.webp", alt: "Dot, smiling, on the phone at home", note: "Your client on every level" },
+  { name: "Mr Tan", src: "/images/coordinators-day/mr-tan-avatar.webp", alt: "Mr Tan, smiling, in his armchair at home", note: "Joins from Practising up" },
+];
+
 /* The Coordinator's Day: a solo board game, reached from Challenges. */
 export default function CoordinatorsDayPage() {
   return (
@@ -25,21 +30,19 @@ export default function CoordinatorsDayPage() {
             handled well let you climb. What you learn early in the day can help you later.
           </p>
         </div>
-        {/* Dot, the client at the heart of the day. */}
-        <figure className="flex shrink-0 items-center gap-3 sm:flex-col sm:gap-2 sm:text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images */}
-          <img
-            src="/images/coordinators-day/dot-avatar.webp"
-            alt="Dot, smiling, on the phone at home"
-            width={320}
-            height={320}
-            className="size-20 rounded-full object-cover shadow-md ring-4 ring-[#fab53d] sm:size-32"
-          />
-          <figcaption className="text-sm leading-snug">
-            <span className="block font-serif text-lg font-semibold text-ink">Meet Dot</span>
-            <span className="text-ink-muted">One of your clients today</span>
-          </figcaption>
-        </figure>
+        {/* The clients at the heart of the day: Dot on every level, Mr Tan from Practising up. */}
+        <div className="flex shrink-0 gap-6 sm:gap-8">
+          {CLIENTS.map((c) => (
+            <figure key={c.name} className="flex flex-col items-center gap-2 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images */}
+              <img src={c.src} alt={c.alt} width={320} height={320} className="size-20 rounded-full object-cover shadow-md ring-4 ring-[#fab53d] sm:size-28" />
+              <figcaption className="text-sm leading-snug">
+                <span className="block font-serif text-lg font-semibold text-ink">Meet {c.name}</span>
+                <span className="text-ink-muted">{c.note}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
       </div>
       <CoordinatorsDay />
     </div>
