@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": ["./snapshot/**/*"],
   },
+  // The server reads files relative to the project folder, so its bundle picks up whatever sits there. Leave out
+  // what it never reads: the Git history (it grows with every push) and the loose working images in the top
+  // folder. Netlify allows 250 MB for the server.
+  outputFileTracingExcludes: {
+    "/*": ["./.git/**/*", "./*.png", "./*.jpg", "./*.jpeg", "./*.webp"],
+  },
   partialPrefetching: true,
   // Topics used to live at /learning. Old links keep working: shared and QR links (/learning/s/…),
   // emails, Inbox items, bookmarks and search results all land on the same page under /topics.
