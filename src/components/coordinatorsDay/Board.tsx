@@ -435,11 +435,12 @@ export function DayBoard({
 
 type Pt = { x: number; y: number };
 
-/** The snakes in Trilogy red, yellow and teal, taking turns: body shading, outline, back markings, head and tongue. */
+/** The snakes in Trilogy red, yellow and teal, and black, taking turns: body shading, outline, back markings, head and tongue. */
 const SNAKES = [
   { body: ["#e65a5a", "#d32f2f", "#9c1f1f"], edge: "#6b1414", dots: "#ffd2c8", head: "#b72424", tongue: "#5c0d0d" },
   { body: ["#ffdb6e", "#ffc72c", "#d9a000"], edge: "#8a6400", dots: "#fff4c7", head: "#eeb31a", tongue: "#c0392b" },
   { body: ["#2aa6a4", "#0e7c7b", "#085756"], edge: "#053b3a", dots: "#bff0ee", head: "#0b6a69", tongue: "#c0392b" },
+  { body: ["#3d4148", "#1d2026", "#08090b"], edge: "#000000", dots: "#aab4c0", head: "#16181d", tongue: "#e04848" },
 ];
 
 /**
