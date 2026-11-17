@@ -75,6 +75,7 @@ export function DayBoard({
   label,
   names = false,
   time = 9 * 60,
+  player,
 }: {
   board: Board;
   square: number;
@@ -85,6 +86,8 @@ export function DayBoard({
   names?: boolean;
   /** The game clock, in minutes: the light shifts from cool morning to golden afternoon. */
   time?: number;
+  /** The learner, who plays as themselves: their photo (or initials) instead of a pawn. */
+  player?: { name: string; avatar: string | null };
 }) {
   const named = (i: number) => (names ? board.squares[i] : `square ${i + 1}`);
   // Opportunity and Setback risk hint at what's coming too, so they show only with the names.
@@ -421,12 +424,34 @@ export function DayBoard({
         </g>
       )}
 
-      {/* The pawn: moved by the code above; it bobs gently while it waits. */}
+      {/* The pawn, which is you: your photo (or initials) in a ring. Moved by the code above; it bobs gently while it waits. */}
       <g ref={pawnRef} transform={`translate(${start.x} ${start.y})`} aria-hidden>
         <g className={cx("cd-pawn", moving && "cd-pawn-moving")}>
-          <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
-          <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
-          <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
+          <ellipse cx="0" cy="28" rx="18" ry="5" fill="#3b2a12" opacity="0.25" />
+          {player ? (
+            <>
+              <clipPath id={`${id}-me`}>
+                <circle r="21" />
+              </clipPath>
+              <circle r="25" fill="#fff" filter={`url(#${id}-lift)`} />
+              {player.avatar ? (
+                <image href={player.avatar} x="-21" y="-21" width="42" height="42" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${id}-me)`} />
+              ) : (
+                <>
+                  <circle r="21" fill="#1d2b4f" />
+                  <text y="6" textAnchor="middle" fontSize="16" fontWeight="800" fill="#fff" fontFamily="var(--font-mulish, sans-serif)">
+                    {initialsOf(player.name)}
+                  </text>
+                </>
+              )}
+              <circle r="23" fill="none" stroke="#008282" strokeWidth="3.5" />
+            </>
+          ) : (
+            <>
+              <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
+              <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
+            </>
+          )}
         </g>
       </g>
     </svg>
@@ -434,6 +459,15 @@ export function DayBoard({
 }
 
 type Pt = { x: number; y: number };
+
+/** Up to two initials from a name, for a player without a photo. */
+const initialsOf = (name: string) =>
+  name
+    .split(/s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
 
 /** The snakes in Trilogy red, yellow and teal, and black, taking turns: body shading, outline, back markings, head and tongue. */
 const SNAKES = [

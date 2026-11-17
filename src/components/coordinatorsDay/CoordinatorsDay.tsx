@@ -175,7 +175,7 @@ export function CoordinatorsDay() {
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Board preview · {board.title}</p>
             <NamesSwitch on={names} onChange={setNames} />
           </div>
-          <DayBoard key={level} board={board} square={0} names={names} />
+          <DayBoard key={level} board={board} square={0} names={names} player={me?.user} />
         </section>
       </div>
     );
@@ -251,7 +251,7 @@ export function CoordinatorsDay() {
             </button>
           </div>
           <div className={cx("rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5", !boardOpen && "hidden lg:block")}>
-            <DayBoard board={board} square={run.square} move={run.move} time={dayTime(run.square, board.squares.length)} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
+            <DayBoard board={board} square={run.square} move={run.move} time={dayTime(run.square, board.squares.length)} names={names} player={me?.user} label={`${board.title} board. You are on ${place(run.square)}.`} />
             <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
               <BoardKey />
               <NamesSwitch on={names} onChange={setNames} />
