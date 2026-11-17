@@ -1263,9 +1263,9 @@ const scenarios: Scenario[] = [
     speaker: "Priya",
     role: "Tomorrow’s coordinator",
     channel: "note",
-    time: t(16, 30),
+    time: t(17, 30),
     title: "Hand over to Priya",
-    prompt: "It’s 4.30. Priya covers your clients tomorrow.",
+    prompt: "It’s 5.30. Priya covers your clients tomorrow.",
     question: "Which handover do you send?",
     options: [
       {
@@ -1308,9 +1308,9 @@ const scenarios: Scenario[] = [
     speaker: "Priya",
     role: "Tomorrow’s coordinator",
     channel: "note",
-    time: t(16, 30),
+    time: t(17, 30),
     title: "Hand over to Priya",
-    prompt: "It’s 4.30. Priya covers Dot and Mr Tan tomorrow.",
+    prompt: "It’s 5.30. Priya covers Dot and Mr Tan tomorrow.",
     question: "Which handover do you send?",
     options: [
       {

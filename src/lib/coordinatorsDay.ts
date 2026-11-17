@@ -14,7 +14,7 @@
     one well moves on one square.
   - Reaching the last square early skips the optional cards still to come (they didn't come up), but any
     required ones are still played there before the handover opens. If the day's cards run out first,
-    4.30 comes round and the token walks to Handover.
+    5.30 comes round and the token walks to Handover.
   Each choice and each event resolves once: choosing again during feedback, or continuing twice, does
   nothing, so a double tap or a refresh never repeats a move or redraws a setback.
 */
@@ -312,7 +312,7 @@ export function proceed(content: Content, run: Run): Run {
     }
     return { ...base, phase: "card", card: { type: "scenario", id: handover.id }, time: Math.max(run.time, handover.time), move: undefined, shown: [...run.shown, handover.id] };
   }
-  // Out of cards: 4.30 comes round and the token walks to Handover.
+  // Out of cards: 5.30 comes round and the token walks to Handover.
   if (run.next >= board.story.length) {
     return {
       ...base,
