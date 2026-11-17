@@ -1668,7 +1668,7 @@ const boards: Board[] = [
 
 export const coordinatorsDay: Content = {
   version: "2026-11-17d",
-  avatars: { Dot: "/images/coordinators-day/dot-avatar.webp", "Mr Tan": "/images/coordinators-day/mr-tan-avatar.webp", Fiona: "/images/coordinators-day/fiona-avatar.webp", "Brightside Cleaning": "/images/coordinators-day/brightside-avatar.webp" },
+  avatars: { Dot: "/images/coordinators-day/dot-avatar.webp", "Mr Tan": "/images/coordinators-day/mr-tan-avatar.webp", Fiona: "/images/coordinators-day/fiona-avatar.webp", "Brightside Cleaning": "/images/coordinators-day/brightside-avatar.webp", Joan: "/images/coordinators-day/joan-avatar.webp" },
   scenarios: Object.fromEntries(scenarios.map((s) => [s.id, s])),
   events: Object.fromEntries(events.map((e) => [e.id, e])),
   boards: { new: boards[0], practising: boards[1], experienced: boards[2] },
