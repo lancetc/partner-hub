@@ -155,11 +155,15 @@ export function DayBoard({
     if (move.kind === "step" || move.kind === "walk") {
       for (let s = move.from; s < move.to; s++) legs.push(walk(s, move.kind === "walk" ? 0.75 : 1));
     } else if (move.kind === "ladder") {
-      const from = spot(move.from);
-      const to = spot(move.to);
+      const li = board.ladders.findIndex((l) => l.from === move.from && l.to === move.to);
+      const ends = li >= 0 ? ladderEnds(board, board.ladders[li], li) : null;
+      // Up the ladder itself, from its foot to its top, rung by rung: a little lift at each one.
+      const along = alongLine(ends ? [spot(move.from), ends.foot, ends.top, spot(move.to)] : [spot(move.from), spot(move.to)]);
       legs.push({
-        // Up the ladder rung by rung: a little lift at each one.
-        at: (t) => ({ x: from.x + (to.x - from.x) * t + Math.sin(t * Math.PI * 10) * 2, y: from.y + (to.y - from.y) * t - Math.abs(Math.sin(t * Math.PI * 6)) * 6 }),
+        at: (t) => {
+          const p = along(t);
+          return { x: p.x, y: p.y - Math.abs(Math.sin(t * Math.PI * 6)) * 6 };
+        },
         ms: 2000,
         ease: inOut,
         sound: cardSounds.ready,
@@ -167,18 +171,9 @@ export function DayBoard({
     } else if (move.kind === "slide") {
       const snake = boardSnakes(board).find((x) => x.from === move.from && x.to === move.to);
       const ride = snake ? [spot(move.from), ...snake.shape.points, spot(move.to)] : [spot(move.from), spot(move.to)];
-      // Distances along the ride, so the pawn travels it at an even pace (speeding up as it goes).
-      const lens = [0];
-      for (let j = 1; j < ride.length; j++) lens.push(lens[j - 1] + Math.hypot(ride[j].x - ride[j - 1].x, ride[j].y - ride[j - 1].y));
-      const total = lens[lens.length - 1] || 1;
       legs.push({
-        at: (t) => {
-          const d = t * total;
-          let j = 1;
-          while (j < lens.length - 1 && lens[j] < d) j++;
-          const k = (d - lens[j - 1]) / (lens[j] - lens[j - 1] || 1);
-          return { x: ride[j - 1].x + (ride[j].x - ride[j - 1].x) * k, y: ride[j - 1].y + (ride[j].y - ride[j - 1].y) * k };
-        },
+        // At an even pace along the snake (speeding up as it goes).
+        at: alongLine(ride),
         ms: 2200,
         ease: easeIn,
         sound: () => cardSounds.swipe("next"),
@@ -321,24 +316,22 @@ export function DayBoard({
         />
       )}
 
-      {/* Ladders: two rails and rungs, foot to top, */}
-      {board.ladders.map((l) => {
-        const a = at(l.from);
-        const b = at(l.to);
+      {/* Ladders: two rails and rungs, from the middle of one square to the middle of the one above, leaning a little. */}
+      {board.ladders.map((l, li) => {
+        const { foot: a, top: b } = ladderEnds(board, l, li);
         const len = Math.hypot(b.x - a.x, b.y - a.y);
-        const nx = (-(b.y - a.y) / len) * 10;
-        const ny = ((b.x - a.x) / len) * 10;
+        const nx = (-(b.y - a.y) / len) * 11;
+        const ny = ((b.x - a.x) / len) * 11;
         const rungs = Math.max(3, Math.floor(len / 22));
-        const ox = 62;
         return (
           <g key={`l${l.from}`} pointerEvents="none">
             <title>{`Ladder from ${named(l.from)} up to ${named(l.to)}`}</title>
             {[1, -1].map((side) => (
-              <line key={side} x1={a.x + ox + nx * side} y1={a.y + ny * side} x2={b.x + ox + nx * side} y2={b.y + ny * side} stroke="#1f8a7e" strokeWidth="6" strokeLinecap="round" />
+              <line key={side} x1={a.x + nx * side} y1={a.y + ny * side} x2={b.x + nx * side} y2={b.y + ny * side} stroke="#1f8a7e" strokeWidth="6" strokeLinecap="round" />
             ))}
             {Array.from({ length: rungs }, (_, r) => {
               const t = (r + 1) / (rungs + 1);
-              const x = a.x + ox + (b.x - a.x) * t;
+              const x = a.x + (b.x - a.x) * t;
               const y = a.y + (b.y - a.y) * t;
               return <line key={r} x1={x + nx} y1={y + ny} x2={x - nx} y2={y - ny} stroke="#2fa595" strokeWidth="4" strokeLinecap="round" />;
             })}
@@ -436,6 +429,32 @@ export function DayBoard({
 }
 
 type Pt = { x: number; y: number };
+
+/**
+  A ladder runs from the middle of its foot square to the middle of its top square, leaning a little
+  (one way, then the other, from ladder to ladder) so it looks set against the board by hand.
+*/
+function ladderEnds(board: Board, l: { from: number; to: number }, i: number) {
+  const { at } = layout(board.squares.length);
+  const a = at(l.from);
+  const b = at(l.to);
+  const lean = i % 2 ? 9 : -9;
+  return { foot: { x: a.x - lean, y: a.y + 4 }, top: { x: b.x + lean, y: b.y - 4 } };
+}
+
+/** A point at fraction t of the way along a line through these points, measured by distance. */
+function alongLine(points: Pt[]) {
+  const lens = [0];
+  for (let j = 1; j < points.length; j++) lens.push(lens[j - 1] + Math.hypot(points[j].x - points[j - 1].x, points[j].y - points[j - 1].y));
+  const total = lens[lens.length - 1] || 1;
+  return (t: number): Pt => {
+    const d = t * total;
+    let j = 1;
+    while (j < lens.length - 1 && lens[j] < d) j++;
+    const k = (d - lens[j - 1]) / (lens[j] - lens[j - 1] || 1);
+    return { x: points[j - 1].x + (points[j].x - points[j - 1].x) * k, y: points[j - 1].y + (points[j].y - points[j - 1].y) * k };
+  };
+}
 
 /** Where the pawn waits on a square: its middle, over the number. */
 function pawnSpot(board: Board, i: number): Pt {
