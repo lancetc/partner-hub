@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cardSounds } from "@/lib/sfx";
 import { allSlides, type Board, type Move } from "@/lib/coordinatorsDay";
 import { cx } from "@/lib/format";
 
@@ -73,6 +74,7 @@ export function DayBoard({
   className,
   label,
   names = false,
+  time = 9 * 60,
 }: {
   board: Board;
   square: number;
@@ -81,54 +83,140 @@ export function DayBoard({
   label?: string;
   /** Show each square's name. Off by default: the names hint at what's coming. */
   names?: boolean;
+  /** The game clock, in minutes: the light shifts from cool morning to golden afternoon. */
+  time?: number;
 }) {
   const named = (i: number) => (names ? board.squares[i] : `square ${i + 1}`);
   // Opportunity and Setback risk hint at what's coming too, so they show only with the names.
   const showKind = (k: SquareKind) => Boolean(kindLabel[k]) && (names || k === "start" || k === "handover");
   const { at, width, height } = layout(board.squares.length);
-  const kinds = useMemo(() => squareKinds(board), [board]);
-  const slides = useMemo(() => allSlides(board), [board]);
+  const kinds = squareKinds(board);
   const id = `cd-${board.level}`;
+  const spot = (i: number) => pawnSpot(board, i);
 
-  // Where the pawn is drawn. It follows `square`: a new move walks it a square at a time, or glides it up a
-  // ladder or down a slide; anything else (a resumed game, another level) puts it straight there.
+  // The snakes: drawn below, and ridden by the pawn when it slides.
+  const snakes = boardSnakes(board);
+
+  /*
+    The pawn moves itself, frame by frame, without re-rendering the board: a hop in a small arc for
+    each square (slowly, so you can follow it), a steady climb up a ladder, or a ride down a snake's
+    body. A sound for each (if sound effects are on), and a burst where it lands. With reduced motion
+    it simply appears on its new square.
+  */
+  const pawnRef = useRef<SVGGElement>(null);
   const handled = useRef(move?.n ?? 0);
-  const [pos, setPos] = useState(square);
-  const [glide, setGlide] = useState(false);
-  useEffect(() => {
-    const timers: number[] = [];
-    const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+  const [fx, setFx] = useState<{ kind: "ladder" | "slide" | "land"; x: number; y: number; n: number } | null>(null);
+  const [moving, setMoving] = useState(false);
+  useLayoutEffect(() => {
+    const el = pawnRef.current;
+    const spot = (i: number) => pawnSpot(board, i);
+    const put = (p: Pt) => el?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
     if (!move || move.n === handled.current) {
-      later(0, () => {
-        setGlide(false);
-        setPos(square);
-      });
-    } else {
-      handled.current = move.n;
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const walking = (move.kind === "step" || move.kind === "walk") && Math.abs(move.to - move.from) > 1;
-      if (reduce || !walking) {
-        later(0, () => {
-          setGlide(move.kind === "ladder" || move.kind === "slide");
-          setPos(move.to);
-        });
-      } else {
-        for (let i = 1, s = move.from + 1; s <= move.to; i++, s++) {
-          const step = s;
-          later(i * 240, () => {
-            setGlide(false);
-            setPos(step);
-          });
-        }
-      }
+      put(spot(square));
+      return;
     }
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [move, square]);
+    handled.current = move.n;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || move.kind === "stay") {
+      put(spot(move.to));
+      return;
+    }
+    // The legs of the journey: each a function from 0..1 to a point, with how long it takes.
+    type Leg = { at: (t: number) => Pt; ms: number; ease: (t: number) => number; sound?: () => void };
+    const inOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+    const easeIn = (t: number) => t * t * (1.4 - 0.4 * t);
+    const legs: Leg[] = [];
+    const hop = (from: Pt, to: Pt, ms: number): Leg => ({
+      at: (t) => ({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * 30 }),
+      ms,
+      ease: inOut,
+      sound: cardSounds.pickUp,
+    });
+    if (move.kind === "step" || move.kind === "walk") {
+      for (let s = move.from; s < move.to; s++) legs.push(hop(spot(s), spot(s + 1), move.kind === "walk" ? 700 : 1100));
+    } else if (move.kind === "ladder") {
+      const from = spot(move.from);
+      const to = spot(move.to);
+      legs.push({
+        // Up the ladder rung by rung: a little lift at each one.
+        at: (t) => ({ x: from.x + (to.x - from.x) * t + Math.sin(t * Math.PI * 10) * 2, y: from.y + (to.y - from.y) * t - Math.abs(Math.sin(t * Math.PI * 6)) * 6 }),
+        ms: 2000,
+        ease: inOut,
+        sound: cardSounds.ready,
+      });
+    } else if (move.kind === "slide") {
+      const snake = boardSnakes(board).find((x) => x.from === move.from && x.to === move.to);
+      const ride = snake ? [spot(move.from), ...snake.shape.points, spot(move.to)] : [spot(move.from), spot(move.to)];
+      // Distances along the ride, so the pawn travels it at an even pace (speeding up as it goes).
+      const lens = [0];
+      for (let j = 1; j < ride.length; j++) lens.push(lens[j - 1] + Math.hypot(ride[j].x - ride[j - 1].x, ride[j].y - ride[j - 1].y));
+      const total = lens[lens.length - 1] || 1;
+      legs.push({
+        at: (t) => {
+          const d = t * total;
+          let j = 1;
+          while (j < lens.length - 1 && lens[j] < d) j++;
+          const k = (d - lens[j - 1]) / (lens[j] - lens[j - 1] || 1);
+          return { x: ride[j - 1].x + (ride[j].x - ride[j - 1].x) * k, y: ride[j - 1].y + (ride[j].y - ride[j - 1].y) * k };
+        },
+        ms: 2200,
+        ease: easeIn,
+        sound: () => cardSounds.swipe("next"),
+      });
+    }
+    let raf = 0;
+    let leg = 0;
+    let started = 0;
+    put(legs[0]?.at(0) ?? spot(move.to));
+    const tick = (now: number) => {
+      if (!started) {
+        started = now;
+        legs[leg]?.sound?.();
+      }
+      const L = legs[leg];
+      const t = Math.min(1, (now - started) / L.ms);
+      put(L.at(L.ease(t)));
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      leg++;
+      if (leg < legs.length) {
+        started = now;
+        legs[leg].sound?.();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      put(spot(move.to));
+      setMoving(false);
+      const end = spot(move.to);
+      setFx({ kind: move.kind === "ladder" ? "ladder" : move.kind === "slide" ? "slide" : "land", x: end.x, y: end.y + 22, n: move.n });
+    };
+    raf = requestAnimationFrame((now) => {
+      setMoving(true);
+      tick(now);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      setMoving(false);
+    };
+  }, [move, square, board]);
+  // A burst lasts a moment.
+  useEffect(() => {
+    if (!fx) return;
+    const t = window.setTimeout(() => setFx(null), 1100);
+    return () => window.clearTimeout(t);
+  }, [fx]);
 
-  const pawn = at(pos);
+  // The light through the day: cool in the morning, clear at midday, golden by late afternoon.
+  const day = Math.min(1, Math.max(0, (time - 9 * 60) / (16.5 * 60 - 9 * 60)));
+  const light = day < 0.5 ? { c: "#bcd6ea", o: 0.16 * (1 - day * 2) } : { c: "#ffb35c", o: 0.2 * (day - 0.5) * 2 };
+
   const path = board.squares.map((_, i) => at(i));
+  const route = ribbon(path);
+  const start = spot(square);
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cx("block w-full", className)} role="img" aria-label={label ?? `${board.title} board: ${board.squares.length} squares, from Start of day to Handover.`}>
+    <svg viewBox={`0 0 ${width} ${height}`} className={cx("cd-board block w-full", className)} role="img" aria-label={label ?? `${board.title} board: ${board.squares.length} squares, from Start of day to Handover.`}>
       <defs>
         <clipPath id={`${id}-frame`}>
           <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" />
@@ -136,24 +224,47 @@ export function DayBoard({
         <filter id={`${id}-lift`} x="-20%" y="-20%" width="140%" height="150%">
           <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#5b4220" floodOpacity="0.25" />
         </filter>
+        <filter id={`${id}-glow`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
         <linearGradient id={`${id}-scales`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#6b4527" />
           <stop offset="0.5" stopColor="#4a2f1b" />
           <stop offset="1" stopColor="#2e1c10" />
         </linearGradient>
+        <radialGradient id={`${id}-sun`}>
+          <stop offset="0" stopColor="#fff6d8" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff6d8" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* The scene behind, inside the wooden frame. */}
+      {/* The scene behind, inside the wooden frame, with drifting gum leaves, dappled sun and the light of the hour. */}
       <g clipPath={`url(#${id}-frame)`}>
         {BOARD_IMAGE ? <image href={BOARD_IMAGE} x="0" y="0" width={width} height={height} preserveAspectRatio="xMidYMid slice" /> : <HomeScene width={width} height={height} />}
         <rect width={width} height={height} fill="#fffaf0" opacity="0.06" />
+        <g className="cd-dapples" aria-hidden>
+          <circle className="cd-dapple" cx={width * 0.25} cy={height * 0.3} r="120" fill={`url(#${id}-sun)`} />
+          <circle className="cd-dapple cd-dapple-b" cx={width * 0.72} cy={height * 0.55} r="140" fill={`url(#${id}-sun)`} />
+          <circle className="cd-dapple cd-dapple-c" cx={width * 0.45} cy={height * 0.82} r="110" fill={`url(#${id}-sun)`} />
+        </g>
+        <g className="cd-leaves" aria-hidden>
+          {[0.12, 0.38, 0.63, 0.88].map((x, i) => (
+            <g key={x} className={`cd-leaf cd-leaf-${i}`} style={{ "--x": `${x * width}px` } as React.CSSProperties}>
+              <path d="M0 0 C6 -10 18 -12 26 -8 C18 -2 8 2 0 0 Z" fill={i % 2 ? "#7f9a62" : "#a4b77a"} opacity="0.85" />
+              <path d="M0 0 L24 -7" stroke="#5f7748" strokeWidth="0.8" />
+            </g>
+          ))}
+        </g>
+        <rect width={width} height={height} fill={light.c} opacity={light.o} className="cd-hour" />
       </g>
       <rect x="8" y="8" width={width - 16} height={height - 16} rx="26" fill="none" stroke="#c99a5b" strokeWidth="12" />
       <rect x="15" y="15" width={width - 30} height={height - 30} rx="20" fill="none" stroke="#e9c994" strokeWidth="2" />
 
-      {/* The path between squares: a thin cream line with a dash flowing along it, from Start to Handover. */}
-      <path d={ribbon(path)} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round" />
-      <path d={ribbon(path)} className="cd-path" fill="none" stroke="#1f8a7e" strokeOpacity="0.75" strokeWidth="2.5" strokeDasharray="3 9" strokeLinecap="round" />
+      {/* The path: a thin cream line, dashes flowing from Start to Handover, and a glow that travels it on a loop. */}
+      <path d={route} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={route} className="cd-path" fill="none" stroke="#1f8a7e" strokeOpacity="0.75" strokeWidth="2.5" strokeDasharray="3 9" strokeLinecap="round" />
+      <path d={route} pathLength={1} className="cd-comet" fill="none" stroke="#fff3b0" strokeWidth="9" strokeLinecap="round" strokeDasharray="0.05 0.95" filter={`url(#${id}-glow)`} />
+      <path d={route} pathLength={1} className="cd-comet" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeDasharray="0.03 0.97" />
 
       {board.squares.map((_, i) => {
         const c = at(i);
@@ -174,8 +285,23 @@ export function DayBoard({
           </g>
         );
       })}
+      {/* Where you are: a soft ring pulsing out from your square (once the pawn has arrived). */}
+      {!moving && (
+        <rect
+          key={`here${square}`}
+          className="cd-here"
+          x={at(square).x - TW / 2}
+          y={at(square).y - TH / 2}
+          width={TW}
+          height={TH}
+          rx="14"
+          fill="none"
+          stroke="#00a3a3"
+          strokeWidth="3"
+        />
+      )}
 
-      {/* Ladders: two rails and rungs, foot to top. */}
+      {/* Ladders: two rails and rungs, foot to top, */}
       {board.ladders.map((l) => {
         const a = at(l.from);
         const b = at(l.to);
@@ -201,22 +327,14 @@ export function DayBoard({
       })}
 
       {/* Slides: a snake, its head on the setback square and its tail on the work to redo. */}
-      {slides.map((sl, i) => {
-        const a = at(sl.from);
-        const b = at(sl.to);
-        const sameRow = Math.abs(a.y - b.y) < 1;
-        // Along a row the snake dips into the gap below the squares; between rows it curves to one side.
-        const head = sameRow ? { x: a.x - 22, y: a.y + 26 } : { x: a.x - 26, y: a.y + 20 };
-        const tail = sameRow ? { x: b.x + 22, y: b.y + 30 } : { x: b.x + 18, y: b.y + 26 };
-        const bend = sameRow ? { x: (head.x + tail.x) / 2, y: a.y + 104 } : { x: (head.x + tail.x) / 2 + (i % 2 ? -50 : 50), y: (head.y + tail.y) / 2 };
-        const snake = snakeShape(head, bend, tail, i);
-        return (
-          <g key={`s${sl.from}-${sl.to}`} pointerEvents="none">
-            <title>{`Possible setback: slide from ${named(sl.from)} down to ${named(sl.to)}`}</title>
-            <path d={snake.body} fill={`url(#${id}-scales)`} stroke="#22140a" strokeWidth="1.2" strokeLinejoin="round" />
-            <path d={snake.spine} fill="none" stroke="#c9a05e" strokeWidth="3" strokeDasharray="1.5 7" strokeLinecap="round" opacity="0.9" />
-            <g transform={`translate(${snake.head.x} ${snake.head.y}) rotate(${snake.head.angle})`}>
-              <path d="M10 0 l9 -3 M10 0 l9 3" stroke="#c0392b" strokeWidth="1.6" strokeLinecap="round" />
+      {snakes.map((sn) => (
+        <g key={`s${sn.from}-${sn.to}`} pointerEvents="none">
+          <title>{`Possible setback: slide from ${named(sn.from)} down to ${named(sn.to)}`}</title>
+          <path d={sn.shape.body} fill={`url(#${id}-scales)`} stroke="#22140a" strokeWidth="1.2" strokeLinejoin="round" />
+          <path d={sn.shape.spine} fill="none" stroke="#c9a05e" strokeWidth="3" strokeDasharray="1.5 7" strokeLinecap="round" opacity="0.9" />
+          <g transform={`translate(${sn.shape.head.x} ${sn.shape.head.y}) rotate(${sn.shape.head.angle})`}>
+            <g className="cd-snake-head" style={{ animationDelay: `${-sn.i * 0.7}s` }}>
+              <path className="cd-tongue" style={{ animationDelay: `${-sn.i * 0.9}s` }} d="M10 0 l9 -3 M10 0 l9 3" stroke="#c0392b" strokeWidth="1.6" strokeLinecap="round" />
               <ellipse cx="0" cy="0" rx="13.5" ry="10.5" fill="#3b2416" stroke="#22140a" strokeWidth="1.2" />
               <circle cx="4" cy="-4.2" r="2.6" fill="#f6e7c1" />
               <circle cx="4" cy="4.2" r="2.6" fill="#f6e7c1" />
@@ -224,8 +342,8 @@ export function DayBoard({
               <circle cx="4.8" cy="4.2" r="1.2" fill="#111" />
             </g>
           </g>
-        );
-      })}
+        </g>
+      ))}
 
       {/* Numbers and names, over the ladders and slides. */}
       {board.squares.map((name, i) => {
@@ -263,17 +381,62 @@ export function DayBoard({
         );
       })}
 
-      {/* The pawn. */}
-      <g className={cx("cd-token", glide && "cd-token-glide")} style={{ transform: `translate(${pawn.x + 44}px, ${pawn.y - 30}px)` }} aria-hidden>
-        <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
-        <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
-        <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
+      {/* A burst where the pawn lands: sparkles up a ladder, dust off a snake, a ripple for a step. */}
+      {fx && (
+        <g key={fx.n} transform={`translate(${fx.x} ${fx.y})`} pointerEvents="none" aria-hidden>
+          {fx.kind === "land" ? (
+            <ellipse className="cd-ripple" rx="22" ry="7" fill="none" stroke="#1f8a7e" strokeWidth="2" />
+          ) : (
+            Array.from({ length: 10 }, (_, j) => {
+              const ang = (j / 10) * Math.PI * 2;
+              return (
+                <circle
+                  key={j}
+                  className="cd-burst"
+                  r={fx.kind === "ladder" ? 3.2 : 4.5}
+                  fill={fx.kind === "ladder" ? (j % 2 ? "#fab53d" : "#3cb8b9") : "#a07a52"}
+                  style={{ "--dx": `${Math.cos(ang) * 30}px`, "--dy": `${Math.sin(ang) * 22 - (fx.kind === "ladder" ? 10 : 0)}px` } as React.CSSProperties}
+                />
+              );
+            })
+          )}
+        </g>
+      )}
+
+      {/* The pawn: moved by the code above; it bobs gently while it waits. */}
+      <g ref={pawnRef} transform={`translate(${start.x} ${start.y})`} aria-hidden>
+        <g className={cx("cd-pawn", moving && "cd-pawn-moving")}>
+          <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
+          <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
+          <ellipse cx="-4" cy="-14" rx="3.5" ry="5" fill="#fff" opacity="0.35" />
+        </g>
       </g>
     </svg>
   );
 }
 
 type Pt = { x: number; y: number };
+
+/** Where the pawn stands on a square: its top-right corner. */
+function pawnSpot(board: Board, i: number): Pt {
+  const c = layout(board.squares.length).at(i);
+  return { x: c.x + 44, y: c.y - 30 };
+}
+
+/** The board's snakes, one for each slide: head on the setback square, tail on the work to redo. */
+function boardSnakes(board: Board) {
+  const { at } = layout(board.squares.length);
+  return allSlides(board).map((sl, i) => {
+    const a = at(sl.from);
+    const b = at(sl.to);
+    const sameRow = Math.abs(a.y - b.y) < 1;
+    // Along a row the snake dips into the gap below the squares; between rows it curves to one side.
+    const head = sameRow ? { x: a.x - 22, y: a.y + 26 } : { x: a.x - 26, y: a.y + 20 };
+    const tail = sameRow ? { x: b.x + 22, y: b.y + 30 } : { x: b.x + 18, y: b.y + 26 };
+    const bend = sameRow ? { x: (head.x + tail.x) / 2, y: a.y + 104 } : { x: (head.x + tail.x) / 2 + (i % 2 ? -50 : 50), y: (head.y + tail.y) / 2 };
+    return { ...sl, i, shape: snakeShape(head, bend, tail, i) };
+  });
+}
 function snakeShape(head: Pt, bend: Pt, tail: Pt, seed: number) {
   const N = 48;
   const q = (t: number) => ({
@@ -311,6 +474,7 @@ function snakeShape(head: Pt, bend: Pt, tail: Pt, seed: number) {
     body: `M${pts(left)} L${pts(right.reverse())} Z`,
     spine: `M${pts(spine.slice(2, -3))}`,
     head: { x: h.x, y: h.y, angle },
+    points: spine,
   };
 }
 

@@ -574,15 +574,51 @@ input[type="range"].brand-range::-moz-range-thumb {
 /* One dot every 90 units, moving one gap per loop, so the flow is seamless and the same speed on every line. */
 @keyframes onb-flow { to { stroke-dashoffset: -90; } }
 
-/* The Coordinator's Day: the token walks a square at a time, and glides up ladders and down slides. */
-.cd-token { transition: transform 240ms cubic-bezier(0.33, 1, 0.68, 1); }
-.cd-token-glide { transition-duration: 900ms; transition-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
-@media (prefers-reduced-motion: reduce) {
-  .cd-token { transition: none; }
-}
 
 /* The Coordinator's Day: a dash flowing along the path, Start to Handover. */
 @media (prefers-reduced-motion: no-preference) {
-  .cd-path { animation: cd-path 1.4s linear infinite; }
+  .cd-path { animation: cd-path 4s linear infinite; }
 }
 @keyframes cd-path { to { stroke-dashoffset: -24; } }
+
+/*
+  The Coordinator's Day board, alive: a glow looping along the path, the pawn bobbing while it waits,
+  a ring pulsing from its square, snakes swaying and flicking their tongues,
+  gum leaves drifting down, dappled sun, and a burst where the pawn lands. All off with reduced motion.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .cd-comet { animation: cd-comet 16s linear infinite; }
+  .cd-pawn { animation: cd-bob 2.4s ease-in-out infinite; }
+  .cd-pawn-moving { animation: none; }
+  .cd-here { animation: cd-here 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  .cd-snake-head { animation: cd-sway 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 30% 50%; }
+  .cd-tongue { animation: cd-tongue 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 0% 50%; }
+  .cd-leaf { animation: cd-leaf 18s linear infinite; }
+  .cd-leaf-1 { animation-duration: 22s; animation-delay: -7s; }
+  .cd-leaf-2 { animation-duration: 20s; animation-delay: -13s; }
+  .cd-leaf-3 { animation-duration: 25s; animation-delay: -3s; }
+  .cd-dapple { animation: cd-dapple 9s ease-in-out infinite; }
+  .cd-dapple-b { animation-duration: 11s; animation-delay: -4s; }
+  .cd-dapple-c { animation-duration: 13s; animation-delay: -8s; }
+  .cd-hour { transition: fill 2s ease, opacity 2s ease; }
+  .cd-burst { animation: cd-burst 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .cd-ripple { animation: cd-ripple 0.8s ease-out both; transform-box: fill-box; transform-origin: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cd-comet, .cd-leaves, .cd-burst, .cd-ripple { display: none; }
+}
+@keyframes cd-comet { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes cd-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes cd-here { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.22); } }
+@keyframes cd-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+@keyframes cd-tongue { 0%, 70%, 100% { transform: scaleX(0); } 78%, 90% { transform: scaleX(1); } }
+@keyframes cd-leaf {
+  0% { transform: translate(var(--x), -40px) rotate(0deg); opacity: 0; }
+  8% { opacity: 0.9; }
+  50% { transform: translate(calc(var(--x) + 60px), 50%) rotate(200deg); }
+  92% { opacity: 0.9; }
+  100% { transform: translate(calc(var(--x) - 30px), 110%) rotate(400deg); opacity: 0; }
+}
+@keyframes cd-dapple { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes cd-burst { from { opacity: 1; transform: translate(0, 0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); } }
+@keyframes cd-ripple { from { opacity: 0.9; transform: scale(0.5); } to { opacity: 0; transform: scale(1.6); } }

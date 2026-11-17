@@ -247,7 +247,7 @@ export function CoordinatorsDay() {
             </button>
           </div>
           <div className={cx("rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5", !boardOpen && "hidden lg:block")}>
-            <DayBoard board={board} square={run.square} move={run.move} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
+            <DayBoard board={board} square={run.square} move={run.move} time={run.time} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
             <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
               <BoardKey />
               <NamesSwitch on={names} onChange={setNames} />
