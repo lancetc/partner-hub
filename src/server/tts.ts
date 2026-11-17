@@ -10,7 +10,7 @@ import { editorLesson } from "./authoredLessons";
 import { factValues } from "./facts";
 import { applyFacts } from "@/lib/facts";
 import { wordsFromAlignment, type Alignment, type WordTiming } from "@/lib/wordTimings";
-import { cardScript } from "@/lib/coordinatorsDay";
+import { answerScript, cardScript } from "@/lib/coordinatorsDay";
 import { coordinatorsDay } from "@/content/coordinatorsDay";
 
 /*
@@ -28,7 +28,8 @@ export const ttsConfig = () => ({
 
 /**
   Resolves a card key to its approved script: `lesson:<slug>:<nodeId>`, `followup:<id>:<version>` or
-  `cday:<scenario|event>:<id>` (a card in The Coordinator's Day).
+  `cday:<scenario|event>:<id>` (a card in The Coordinator's Day) or `cday:answer:<scenario>:<option>` (what's said
+  about the answer chosen).
   `drafts` (authors only) also reads saved drafts, so an author previewing a lesson hears the real voice.
 */
 export function scriptFor(db: Db, key: string, drafts = false): string {
@@ -39,6 +40,10 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const node = lesson && applyFacts(lesson, factValues(db)).nodes[b];
     const text = node && (node.type === "presenter" ? node.transcript : node.type === "audio" || node.type === "listen" ? node.script : node.narration);
     if (text) return text;
+  }
+  if (kind === "cday" && a === "answer") {
+    const script = answerScript(coordinatorsDay, b, key.split(":")[3] ?? "");
+    if (script) return script.text;
   }
   if (kind === "cday" && (a === "scenario" || a === "event")) {
     const script = cardScript(coordinatorsDay, { type: a, id: b });

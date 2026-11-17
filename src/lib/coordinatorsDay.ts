@@ -126,7 +126,7 @@ export type Run = {
   time: number;
   flags: Flags;
   attempt: number;
-  log: { card: string; option: string; outcome: Outcome; attempt: number; time: number }[];
+  log: { card: string; option: string; outcome: Outcome; attempt: number; time: number; square?: number }[];
   events: { checkpoint: number; event: string; recovered: boolean }[];
   /** Story cards that came out (for the recap and validation). */
   shown: string[];
@@ -142,6 +142,9 @@ export const clock = (min: number) => {
   const m = min % 60;
   return `${((h + 11) % 12) + 1}.${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 };
+
+/** The day clock on a square, in minutes: 9.00 am on Start to 5.30 pm on Handover, evenly between. */
+export const dayTime = (square: number, squares: number) => 9 * 60 + (Math.max(0, Math.min(square, squares - 1)) / Math.max(1, squares - 1)) * (8.5 * 60);
 
 /** The options this learner sees on a card, given what's happened. */
 export const optionsFor = (s: Scenario, flags: Flags) => s.options.filter((o) => matches(flags, o.when));
@@ -218,7 +221,7 @@ export function choose(content: Content, run: Run, optionId: string): Run {
     phase: "feedback",
     attempt,
     flags: o.outcome === "retry" ? run.flags : { ...run.flags, ...o.set },
-    log: [...run.log, { card: s.id, option: o.id, outcome: o.outcome, attempt, time: run.time }],
+    log: [...run.log, { card: s.id, option: o.id, outcome: o.outcome, attempt, time: run.time, square: run.square }],
     feedback: { option: o.id, outcome: o.outcome },
     square: to,
     move: { from: run.square, to, kind, n: run.moves + 1 },
@@ -327,13 +330,39 @@ export function cardScript(content: Content, card: { type: "scenario" | "event";
       ? [content.events[card.id]?.title, content.events[card.id]?.text]
       : [content.scenarios[card.id]?.title, content.scenarios[card.id]?.prompt, content.scenarios[card.id]?.question];
   if (parts.some((p) => !p)) return null;
+  return script(parts as string[]);
+}
+
+/** What an answer's outcome is called on the card. */
+export function outcomeLabel(outcome: Outcome, handover = false) {
+  if (handover && outcome === "accept") return "Handover accepted. That’s your day done.";
+  return {
+    accept: "Good call. You move forward one square.",
+    climb: "Handled well. You climb the ladder.",
+    advance: "A fair call. You move on one square.",
+    retry: "Not quite. You stay on this square: try again.",
+  }[outcome];
+}
+
+/**
+  What's read aloud once an answer is chosen: how it went, why, and the tip to take away. Read as the
+  learner sees it on the card, in the same parts so the card can follow along.
+*/
+export function answerScript(content: Content, scenario: string, option: string) {
+  const s = content.scenarios[scenario];
+  const o = s?.options.find((x) => x.id === option);
+  if (!s || !o) return null;
+  return script([outcomeLabel(o.outcome, s.kind === "handover"), o.feedback, ...(o.tip ? [`Try this: ${o.tip}`] : [])]);
+}
+
+/** Joins the parts of a script, noting where each sits; the first part gets a full stop so the voice pauses. */
+function script(parts: string[]) {
   let text = "";
   const spans = parts.map((p, i) => {
-    // The title gets a full stop so the voice pauses after it.
     const sep = i === 0 ? "" : " ";
     const from = text.length + sep.length;
-    text += sep + p + (i === 0 && !/[.!?]$/.test(p!) ? "." : "");
-    return { from, to: from + p!.length };
+    text += sep + p + (i === 0 && !/[.!?]$/.test(p) ? "." : "");
+    return { from, to: from + p.length };
   });
   return { text, spans };
 }

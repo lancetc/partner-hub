@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { coordinatorsDay as content } from "@/content/coordinatorsDay";
-import { choose, clock, LEVELS, proceed, recap, slideFor, startRun, type Level, type Move, type Run } from "@/lib/coordinatorsDay";
+import { choose, clock, dayTime, LEVELS, proceed, recap, slideFor, startRun, type Level, type Move, type Run } from "@/lib/coordinatorsDay";
 import { useApi, type Me } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm";
 import { cx } from "@/lib/format";
@@ -12,6 +12,7 @@ import { Icon } from "../Icon";
 import { Confetti } from "../Confetti";
 import { DayBoard, DayTrack } from "./Board";
 import { DayCard } from "./DayCard";
+import { DayClock, DayClockRunner } from "./dayClock";
 
 /*
   The Coordinator's Day: choose a level (the board preview changes with it), play the day card by
@@ -115,7 +116,7 @@ export function CoordinatorsDay() {
                 Your day is in progress
               </h2>
               <p className="mt-1 text-white/85">
-                {levelName[resumable.level]} · {clock(resumable.time)} · square {resumable.square + 1} of {content.boards[resumable.level].squares.length}
+                {levelName[resumable.level]} · {clock(Math.floor(dayTime(resumable.square, content.boards[resumable.level].squares.length)))} · square {resumable.square + 1} of {content.boards[resumable.level].squares.length}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -204,9 +205,12 @@ export function CoordinatorsDay() {
 
   return (
     <div className="mt-4">
+      {/* The day's clock, racing ahead as you go and turned back when you slide. */}
+      <DayClockRunner runKey={`${run.level}:${run.seed}`} square={run.square} squares={board.squares.length} move={run.move} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface/90 px-4 py-2.5 ring-1 ring-line">
         <span className="inline-flex items-center gap-1.5 font-mulish text-lg font-extrabold tabular-nums">
-          <Icon name="clock" className="size-5 text-accent" /> {clock(run.time)}
+          <Icon name="clock" className="size-5 text-accent" /> <DayClock big />
+          <span className="sr-only">{clock(Math.floor(dayTime(run.square, board.squares.length)))}</span>
         </span>
         <span className="text-sm text-ink-muted">
           Square {run.square + 1} of {board.squares.length}
@@ -247,7 +251,7 @@ export function CoordinatorsDay() {
             </button>
           </div>
           <div className={cx("rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5", !boardOpen && "hidden lg:block")}>
-            <DayBoard board={board} square={run.square} move={run.move} time={run.time} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
+            <DayBoard board={board} square={run.square} move={run.move} time={dayTime(run.square, board.squares.length)} names={names} label={`${board.title} board. You are on ${place(run.square)}.`} />
             <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
               <BoardKey />
               <NamesSwitch on={names} onChange={setNames} />
@@ -255,7 +259,7 @@ export function CoordinatorsDay() {
           </div>
           {!cardOpen && (
             <div className="rounded-3xl bg-surface p-4 ring-1 ring-line lg:hidden">
-              <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Up next · {clock(run.time)}</p>
+              <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Up next · <DayClock /></p>
               <p className="mt-1 font-serif text-xl font-semibold">{upNext.title}</p>
               <button type="button" onClick={() => setCardOpen(true)} className="mt-3 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#008282] px-6 font-semibold text-white">
                 Open <Icon name="arrow-right" className="size-4" />
@@ -274,6 +278,7 @@ export function CoordinatorsDay() {
               onChoose={onChoose}
               onContinue={onContinue}
               onClose={() => setCardOpen(false)}
+              you={me?.user}
             />
           </div>
         </div>
@@ -398,7 +403,7 @@ function Recap({ run, onAgain, onLevels }: { run: Run; onAgain: () => void; onLe
             const n = tries(l.card);
             return (
               <li key={l.card} className="flex items-center gap-3 py-2.5">
-                <span className="w-20 shrink-0 font-mulish text-sm font-extrabold tabular-nums text-ink-muted">{clock(l.time)}</span>
+                <span className="w-20 shrink-0 font-mulish text-sm font-extrabold tabular-nums text-ink-muted">{clock(l.square === undefined ? l.time : Math.floor(dayTime(l.square, board.squares.length)))}</span>
                 <span className="min-w-0 flex-1">{s.title}</span>
                 <span className={cx("shrink-0 rounded-full px-2.5 py-0.5 font-mulish text-xs font-bold", n === 1 ? "bg-[#e3f4f3] text-[#0f5b5b]" : "bg-[#fdf1e4] text-[#7a4a00]")}>
                   {n === 1 ? "First time" : `${n} tries`}

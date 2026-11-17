@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coordinatorsDay as content } from "@/content/coordinatorsDay";
-import { allSlides, cardScript, choose, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
+import { allSlides, answerScript, cardScript, choose, dayTime, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
 
 /* The Coordinator's Day: the rules, against the authored day. */
 
@@ -204,5 +204,23 @@ describe("The Coordinator's Day", () => {
     for (const id of Object.keys(content.scenarios)) expect(cardScript(content, { type: "scenario", id })).not.toBeNull();
     for (const id of Object.keys(content.events)) expect(cardScript(content, { type: "event", id })?.text).toContain(content.events[id].text);
     expect(cardScript(content, { type: "scenario", id: "nope" })).toBeNull();
+  });
+
+  it("runs the day clock from 9.00 am on Start to 5.30 pm on Handover, evenly by square", () => {
+    expect(dayTime(0, 20)).toBe(9 * 60);
+    expect(dayTime(19, 20)).toBe(17.5 * 60);
+    expect(dayTime(4, 20) - dayTime(0, 20)).toBeCloseTo((8.5 * 60 * 4) / 19);
+    expect(dayTime(25, 20)).toBe(17.5 * 60);
+  });
+
+  it("reads an answer aloud: how it went, why, and the tip, each part findable in the script", () => {
+    for (const s of Object.values(content.scenarios))
+      for (const o of s.options) {
+        const a = answerScript(content, s.id, o.id)!;
+        expect(a.text).toContain(o.feedback);
+        expect(a.text.slice(a.spans[1].from, a.spans[1].to)).toBe(o.feedback);
+        if (o.tip) expect(a.text.slice(a.spans[2].from + 10, a.spans[2].to)).toBe(o.tip);
+      }
+    expect(answerScript(content, "d-call", "nope")).toBeNull();
   });
 });

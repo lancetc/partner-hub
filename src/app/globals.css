@@ -622,3 +622,9 @@ input[type="range"].brand-range::-moz-range-thumb {
 @keyframes cd-dapple { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @keyframes cd-burst { from { opacity: 1; transform: translate(0, 0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); } }
 @keyframes cd-ripple { from { opacity: 0.9; transform: scale(0.5); } to { opacity: 0; transform: scale(1.6); } }
+
+/* The Coordinator's Day clock: a gentle pulse on the racing seconds. */
+@media (prefers-reduced-motion: no-preference) {
+  .cd-clock-sec { animation: cd-tick 1s steps(2, jump-none) infinite; }
+}
+@keyframes cd-tick { 50% { opacity: 0.55; } }

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { cardScript, clock, contextFor, shuffledFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
+import { answerScript, cardScript, contextFor, outcomeLabel, shuffledFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
 import { cx } from "@/lib/format";
 import { stopAudio } from "@/lib/audioPrefs";
 import { Icon, type IconName } from "../Icon";
 import { Narration, useNarration } from "../player/Narration";
+import { DayClock } from "./dayClock";
 import { SpokenText } from "../player/SpokenText";
 
 /*
@@ -23,10 +24,10 @@ const channel: Record<Channel, { label: string; icon: IconName }> = {
 };
 
 const result = {
-  accept: { label: "Good call. You move forward one square.", tone: "bg-[#e3f4f3] text-[#0f5b5b] ring-[#bfe3e1]", icon: "check" as IconName },
-  climb: { label: "Handled well. You climb the ladder.", tone: "bg-[#dff3ea] text-[#0f5b5b] ring-[#b7e2cd]", icon: "star" as IconName },
-  advance: { label: "A fair call. You move on one square.", tone: "bg-[#eef3f8] text-[#1d2b4f] ring-[#d4dfeb]", icon: "arrow-right" as IconName },
-  retry: { label: "Not quite. You stay on this square: try again.", tone: "bg-[#fdf1e4] text-[#7a4a00] ring-[#f3d7b2]", icon: "refresh" as IconName },
+  accept: { tone: "bg-[#e3f4f3] text-[#0f5b5b] ring-[#bfe3e1]", icon: "check" as IconName },
+  climb: { tone: "bg-[#dff3ea] text-[#0f5b5b] ring-[#b7e2cd]", icon: "star" as IconName },
+  advance: { tone: "bg-[#eef3f8] text-[#1d2b4f] ring-[#d4dfeb]", icon: "arrow-right" as IconName },
+  retry: { tone: "bg-[#fdf1e4] text-[#7a4a00] ring-[#f3d7b2]", icon: "refresh" as IconName },
 };
 
 /** A portrait for whoever a card is from: the person, or their things ("Dot’s shopping" shows Dot). */
@@ -50,6 +51,7 @@ export function DayCard({
   onChoose,
   onContinue,
   onClose,
+  you,
 }: {
   content: Content;
   run: Run;
@@ -60,6 +62,8 @@ export function DayCard({
   onContinue: () => void;
   /** On a phone: back to the board without choosing. */
   onClose?: () => void;
+  /** The learner: cards from "Your day", "Your inbox" and "Your notes" show their own picture. */
+  you?: { name: string; avatar: string | null };
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -95,7 +99,7 @@ export function DayCard({
       <article className="rounded-3xl bg-surface shadow-lg ring-1 ring-[#f1c4c1]">
         <header className="flex items-center gap-2 rounded-t-3xl bg-[#c7393e] px-5 py-3 text-white">
           <Icon name="alert" className="size-5" />
-          <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em]">Setback · {clock(run.time)}</span>
+          <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em]">Setback · <DayClock /></span>
           {onClose && <CloseButton onClose={onClose} light />}
         </header>
         <div className="p-5 sm:p-6">
@@ -127,13 +131,19 @@ export function DayCard({
   const chosen = fb ? options.find((o) => o.id === fb.option) : undefined;
   const r = fb ? result[fb.outcome] : undefined;
   const handover = s.kind === "handover";
+  // Once an answer is chosen, what's said about it is read aloud too: on its own for an answer that
+  // moves you on, at a press for one to try again.
+  const answer = fb ? answerScript(content, s.id, fb.option) : null;
+  const answerKey = fb ? `cday:answer:${s.id}:${fb.option}` : "";
+  // "Your day", "Your inbox": the learner's own cards.
+  const mine = /^Your /.test(s.speaker);
   return (
     <article className="rounded-3xl bg-surface shadow-lg ring-1 ring-line">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-5 py-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm font-semibold">
           <Icon name={channel[s.channel].icon} className="size-4" /> {channel[s.channel].label}
         </span>
-        <span className="font-mulish text-sm font-extrabold tabular-nums">{clock(run.time)}</span>
+        <DayClock className="font-mulish text-sm font-extrabold" />
         {s.kind === "recovery" && <span className="rounded-full bg-[#fbe3e1] px-2.5 py-0.5 font-mulish text-xs font-bold text-[#a12d31]">Recovery</span>}
         {s.kind === "opportunity" && <span className="rounded-full bg-[#dff3ea] px-2.5 py-0.5 font-mulish text-xs font-bold text-[#0f5b5b]">Opportunity</span>}
         {handover && <span className="rounded-full bg-[#fde9c4] px-2.5 py-0.5 font-mulish text-xs font-bold text-[#7a4a00]">Handover</span>}
@@ -141,12 +151,12 @@ export function DayCard({
       </header>
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">
-          {avatarFor(content, s.speaker) ? (
+          {(mine ? you?.avatar : avatarFor(content, s.speaker)) ? (
             // eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images
-            <img src={avatarFor(content, s.speaker)} alt="" className="size-12 shrink-0 rounded-full object-cover ring-2 ring-[#fab53d]" />
+            <img src={(mine ? you?.avatar : avatarFor(content, s.speaker)) ?? undefined} alt="" className="size-12 shrink-0 rounded-full object-cover ring-2 ring-[#fab53d]" />
           ) : (
             <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1d2b4f] font-mulish text-sm font-extrabold text-white">
-              {initials(s.speaker) || "·"}
+              {initials(mine && you ? you.name : s.speaker) || "·"}
             </span>
           )}
           <span className="min-w-0 leading-tight">
@@ -202,13 +212,23 @@ export function DayCard({
 
         {chosen && r && (
           <div ref={feedbackRef} tabIndex={-1} role="status" className={cx("mt-5 rounded-2xl p-4 ring-1 outline-none", r.tone)}>
-            <p className="flex items-center gap-2 font-semibold">
-              <Icon name={r.icon} className="size-5" /> {handover && fb?.outcome === "accept" ? "Handover accepted. That’s your day done." : r.label}
+            <div className="flex items-center gap-3">
+              <p className="flex items-center gap-2 font-semibold">
+                <Icon name={r.icon} className="size-5" /> <AnswerPart script={answer} part={0} ttsKey={answerKey} fallback={outcomeLabel(fb!.outcome, handover)} />
+              </p>
+              {answer && (
+                <div className="ml-auto">
+                  <Narration key={answerKey} text={answer.text} ttsKey={answerKey} label="Listen to the feedback" panel="below" autoPlay={fb?.outcome !== "retry"} />
+                </div>
+              )}
+            </div>
+            <p className="mt-2 text-[#102a43]">
+              <AnswerPart script={answer} part={1} ttsKey={answerKey} fallback={chosen.feedback} />
             </p>
-            <p className="mt-2 text-[#102a43]">{chosen.feedback}</p>
             {chosen.tip && (
               <p className="mt-2 text-sm text-[#102a43]">
-                <strong>Try this:</strong> {chosen.tip}
+                {/* "Try this: " is part of what's read; it's shown in bold. */}
+                <strong>Try this:</strong> <AnswerPart script={answer} part={2} skip={10} ttsKey={answerKey} fallback={chosen.tip} />
               </p>
             )}
             <button
@@ -223,6 +243,15 @@ export function DayCard({
       </div>
     </article>
   );
+}
+
+/** Part of the answer's script, with the word being spoken highlighted (skipping a lead-in shown separately). */
+function AnswerPart({ script, part, ttsKey, fallback, skip = 0 }: { script: ReturnType<typeof answerScript>; part: number; ttsKey: string; fallback: string; skip?: number }) {
+  const voice = useNarration(ttsKey);
+  const word = voice && (voice.state === "playing" || voice.state === "paused") ? voice.word : null;
+  const span = script?.spans[part];
+  if (!script || !span) return <>{fallback}</>;
+  return <SpokenText text={script.text} range={{ from: span.from + skip, to: span.to }} word={word} />;
 }
 
 function CloseButton({ onClose, light }: { onClose: () => void; light?: boolean }) {
