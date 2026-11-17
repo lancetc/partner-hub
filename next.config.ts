@@ -17,6 +17,8 @@ const nextConfig: NextConfig = {
   // The online demo's starting content (see src/server/snapshot.ts), shipped with the server code.
   outputFileTracingIncludes: {
     "/*": ["./snapshot/**/*"],
+    // The SCORM runtime the eLearning player shell loads (read from disk by its route).
+    "/api/elearning/runtime/*": ["./node_modules/scorm-again/dist/scorm12.min.js", "./node_modules/scorm-again/dist/scorm2004.min.js"],
   },
   // The server reads files relative to the project folder, so its bundle picks up whatever sits there. Leave out
   // what it never reads: the Git history (it grows with every push) and the loose working images in the top

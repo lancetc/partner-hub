@@ -12,13 +12,16 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
+    "fast-xml-parser": "5.12.1",
     "next": "16.4.6",
     "pdfjs-dist": "6.3.289",
     "pixelfx": "github:patch-gg/pixelfx#044e12a45dc9cc312cec50ee606dfc98afe5adc2",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "sharp": "0.35.5"
+    "scorm-again": "3.5.0",
+    "sharp": "0.35.5",
+    "yauzl": "3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -26,8 +29,10 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/yauzl": "3.4.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "fflate": "0.8.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.4"

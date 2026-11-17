@@ -36,6 +36,7 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       { href: "/admin/webinars", label: "Webinars", icon: "play", description: "Recordings, their details, and the Webinars page.", authorOnly: true },
+      { href: "/admin/elearning", label: "eLearning", icon: "layers", description: "SCORM courses from Articulate Rise and Storyline: import, preview, publish.", authorOnly: true },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
         href: "/admin/comments",

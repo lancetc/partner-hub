@@ -83,6 +83,10 @@ The hub currently uses **Charlie** (`IKne3meq5aSn9XLyUdCD`), the premade Austral
 
 The browser asks `/api/tts?key=lesson:<slug>:<card>` for a card's approved script (never free text). Each script is synthesised once per voice and model, cached in `data/tts/`, then replayed from the cache. Change `ELEVENLABS_VOICE_ID` or `ELEVENLABS_MODEL_ID` to try another voice or model; the cache key includes both. Delete `data/tts/` after editing a script if you want to clear old audio.
 
+## eLearning (SCORM)
+
+SCORM courses exported from Articulate Rise 360 and Storyline 360 can be imported at **Admin › eLearning**, previewed, published and played at `/elearning`, with completion, pass/fail, score, bookmark and resume data tracked from what the course reports. Course content runs on a separate origin (`127.0.0.1:3000` beside `localhost:3000` in development; `HUB_CONTENT_ORIGIN` where hosted). Phase 1 (core player, SCORM 1.2 first) is built; see [docs/elearning.md](docs/elearning.md) for how it works, its security, what's verified and what's still to come.
+
 ## Prototype limits
 
 - Lesson progress, saved items and onboarding are still stored in this browser's `localStorage` (per demo account) behind a simulated server write (`src/lib/store.ts`). Lesson *completion* and everything about follow ups go to the server.

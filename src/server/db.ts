@@ -451,6 +451,53 @@ CREATE TABLE IF NOT EXISTS conversation_rooms (
   position INTEGER NOT NULL DEFAULT 0, flipped INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, ended_at TEXT
 );
+-- eLearning (SCORM). A package is an imported Articulate (or other) SCORM course; each upload of it is an
+-- immutable version, stored by server/elearning/storage. A course is what learners see, pointing at the
+-- version in use. See server/elearning.
+CREATE TABLE IF NOT EXISTS scorm_packages (
+  id TEXT PRIMARY KEY, identifier TEXT NOT NULL, standard TEXT NOT NULL CHECK (standard IN ('scorm12','scorm2004')),
+  created_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scorm_package_versions (
+  id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES scorm_packages(id), version INTEGER NOT NULL,
+  title TEXT NOT NULL, identifier TEXT NOT NULL, standard TEXT NOT NULL, edition TEXT NOT NULL, launch_href TEXT NOT NULL,
+  file_count INTEGER NOT NULL, bytes INTEGER NOT NULL, zip_bytes INTEGER NOT NULL, zip_sha256 TEXT NOT NULL,
+  -- What the import found: warnings (JSON list) and the manifest's organisation of items.
+  report TEXT NOT NULL DEFAULT '{}',
+  uploaded_by TEXT NOT NULL REFERENCES users(id), uploaded_at TEXT NOT NULL,
+  UNIQUE (package_id, version)
+);
+CREATE TABLE IF NOT EXISTS scorm_courses (
+  id TEXT PRIMARY KEY, package_id TEXT NOT NULL UNIQUE REFERENCES scorm_packages(id),
+  title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
+  version_id TEXT NOT NULL REFERENCES scorm_package_versions(id),
+  created_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, published_by TEXT, published_at TEXT
+);
+-- One learner's attempt at a course, tied to the version it started on. Preview attempts (an author
+-- trying a draft) are kept apart from learner records.
+CREATE TABLE IF NOT EXISTS scorm_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id TEXT NOT NULL REFERENCES scorm_courses(id), version_id TEXT NOT NULL REFERENCES scorm_package_versions(id),
+  user_id TEXT NOT NULL REFERENCES users(id), number INTEGER NOT NULL, preview INTEGER NOT NULL DEFAULT 0,
+  outcome TEXT NOT NULL DEFAULT 'not_started' CHECK (outcome IN ('not_started','in_progress','completed','passed','failed')),
+  completion_status TEXT, success_status TEXT, score_raw REAL, score_min REAL, score_max REAL, score_scaled REAL,
+  location TEXT, total_seconds INTEGER NOT NULL DEFAULT 0, launches INTEGER NOT NULL DEFAULT 0,
+  -- Only the most recent launch may save, so two tabs can't overwrite each other; seq makes retried saves safe.
+  session TEXT, last_seq INTEGER NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL, last_activity_at TEXT, completed_at TEXT, passed_at TEXT, failed_at TEXT, ended_at TEXT,
+  UNIQUE (course_id, user_id, number, preview)
+);
+CREATE INDEX IF NOT EXISTS scorm_attempts_user ON scorm_attempts (user_id, course_id);
+-- The SCORM data model as the package last committed it (JSON), restored when the attempt resumes.
+CREATE TABLE IF NOT EXISTS scorm_runtime_data (
+  attempt_id INTEGER PRIMARY KEY REFERENCES scorm_attempts(id), cmi TEXT NOT NULL, bytes INTEGER NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scorm_audit_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, event TEXT NOT NULL,
+  course_id TEXT, version_id TEXT, attempt_id INTEGER, detail TEXT NOT NULL DEFAULT '{}'
+);
 `;
 
 export const demoOrgs = [
