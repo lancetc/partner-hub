@@ -14,12 +14,12 @@ const CLIENTS = [
   { name: "Mr Tan", src: "/images/coordinators-day/mr-tan-avatar.webp", alt: "Mr Tan, smiling, in his armchair at home", note: "Joins from Practising up" },
 ];
 
-/* The Coordinator's Day: a solo board game, reached from Challenges. */
+/* The Coordinator's Day: a solo board game, reached from Play. */
 export default function CoordinatorsDayPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:pt-8">
-      <Link href="/challenges" className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent hover:underline">
-        <Icon name="arrow-left" className="size-4" /> Challenges
+      <Link href="/play" className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent hover:underline">
+        <Icon name="arrow-left" className="size-4" /> Play
       </Link>
       <div className="flex flex-col-reverse gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div>

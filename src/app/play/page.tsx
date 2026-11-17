@@ -7,13 +7,14 @@ import { HeroStats, PageHero } from "@/components/PageHero";
 
 export const metadata: Metadata = {
   title: "Play",
-  description: "Two ways to learn by playing: walk a pixel-art neighbourhood helping clients, or draw conversation cards and learn from each other.",
+  description:
+    "Three ways to learn by playing: spend a care coordinator's day on a board, walk a pixel-art neighbourhood helping clients, or draw conversation cards and learn from each other.",
   alternates: { canonical: "/play" },
 };
 
 /*
-  Play: the hub's games, introduced side by side. Neighbourhood Explorer is for practising decisions
-  on your own; Care Conversations is for reflecting and talking it over with others.
+  Play: the hub's games, introduced side by side. The Coordinator's Day and Neighbourhood Explorer are for
+  practising decisions on your own; Care Conversations is for reflecting and talking it over with others.
 */
 export default function PlayPage() {
   return (
@@ -24,19 +25,63 @@ export default function PlayPage() {
         aside={
           <HeroStats
             stats={[
-              { label: "games", value: 2 },
+              { label: "games", value: 3 },
               { label: "quests to play", value: quests.length },
               { label: "conversation cards", value: cards.length },
             ]}
           />
         }
       >
-        Two games for learning by doing. One puts you on a street full of clients who need a hand; the other gets people talking about the moments that
-        matter in care.
+        Three games for learning by doing. Work through a coordinator’s day from the first call to handover, walk a street full of clients who need a
+        hand, or get people talking about the moments that matter in care.
       </PageHero>
 
-      {/* Three across on a computer (the two games, then why play); the games side by side on a tablet. */}
+      {/* The three games across on a computer, two on a tablet, with why play underneath. */}
       <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* The Coordinator's Day */}
+        <article className="flex flex-col overflow-hidden rounded-3xl border border-line bg-surface">
+          <div className="relative h-56 overflow-hidden bg-[#c99a5b]">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a static poster from public/images */}
+            <img
+              src="/images/coordinators-day/cover.webp"
+              alt=""
+              width={697}
+              height={632}
+              loading="lazy"
+              className="absolute inset-0 size-full object-cover object-center"
+            />
+            <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]">
+              Solo · about 15 minutes
+            </span>
+          </div>
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <div>
+              <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Plan the day</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold">The Coordinator’s Day</h2>
+              <p className="mt-2 text-ink-muted">
+                A board game through a care coordinator’s day, from the first call to handover. Good decisions move you forward, setbacks send you back to
+                replan, and opportunities handled well let you climb.
+              </p>
+            </div>
+            <ul className="grid gap-2 text-sm sm:grid-cols-2 md:grid-cols-1">
+              <Feature icon="layers">3 levels, from New coordinator to Experienced</Feature>
+              <Feature icon="route">20 squares, from 9.00 am to 5.30 pm</Feature>
+              <Feature icon="star">Ladders for openings handled well, snakes for setbacks</Feature>
+              <Feature icon="volume">Every card read aloud, with a running day clock</Feature>
+            </ul>
+            <p className="text-sm text-ink-muted">
+              <span className="font-semibold text-ink">How to play:</span> read each card and choose what you’d do. Good calls move you on; the clock keeps
+              running either way.
+            </p>
+            <Link
+              href="/play/coordinators-day"
+              className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-full bg-[#008282] px-6 font-semibold text-white hover:bg-[#006b6b]"
+            >
+              Play the day <Icon name="arrow-right" className="size-4" />
+            </Link>
+          </div>
+        </article>
+
         {/* Neighbourhood Explorer */}
         <article className="flex flex-col overflow-hidden rounded-3xl border border-line bg-surface">
           <div className="relative h-56 overflow-hidden bg-[#9fd8a0]">
@@ -125,7 +170,7 @@ export default function PlayPage() {
           </div>
         </article>
 
-        <section className="flex flex-col gap-4 rounded-3xl bg-muted p-6 md:col-span-2 md:grid md:grid-cols-3 lg:col-span-1 lg:flex">
+        <section className="flex flex-col gap-4 rounded-3xl bg-muted p-6 md:col-span-2 md:grid md:grid-cols-3 lg:col-span-3">
           <h2 className="font-serif text-2xl font-semibold md:col-span-3">Why play?</h2>
         <p>
           <span className="block font-semibold">Practise safely</span>
@@ -137,7 +182,7 @@ export default function PlayPage() {
         </p>
         <p>
           <span className="block font-semibold">Short and flexible</span>
-          <span className="text-ink-muted">A card takes two minutes; a quest about five. Play between visits or in a team meeting.</span>
+          <span className="text-ink-muted">A card takes two minutes, a quest about five and a day about fifteen. Play between visits or in a team meeting.</span>
         </p>
         </section>
       </div>

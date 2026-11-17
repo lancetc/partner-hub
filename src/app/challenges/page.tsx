@@ -65,13 +65,13 @@ async function Challenges() {
   list.sort((a, b) => order[a.state as keyof typeof order] - order[b.state as keyof typeof order]);
   return (
     <>
-      {/* The solo game first (it's always open), then the team challenges. */}
-      <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <GameTile />
-        {list.map((c) => (
-          <ChallengeTile key={c.id} c={c} />
-        ))}
-      </ul>
+      {list.length > 0 && (
+        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {list.map((c) => (
+            <ChallengeTile key={c.id} c={c} />
+          ))}
+        </ul>
+      )}
       {!list.length && (
         <p className="mt-10 max-w-2xl rounded-3xl border border-line p-6 text-ink-muted">
           You’re not in a team challenge right now. When one starts for your team, it will appear here and on your Learning page.
@@ -86,52 +86,6 @@ async function Challenges() {
         </p>
       )}
     </>
-  );
-}
-
-/** The Coordinator's Day: a solo board game, shown like a challenge but open to play any time. */
-function GameTile() {
-  return (
-    <li className="group relative flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white">
-      {/* The board itself, as the game's poster. */}
-      {/* eslint-disable-next-line @next/next/no-img-element -- a static poster from public/images */}
-      <img
-        src="/images/coordinators-day/cover.webp"
-        alt=""
-        width={697}
-        height={632}
-        loading="lazy"
-        className="-mx-5 -mt-5 block aspect-[16/9] w-[calc(100%+2.5rem)] max-w-none object-cover object-center"
-      />
-      <div className="min-w-0">
-        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-white/75">
-          Solo board game · <span className="text-[#ffd27a]">Play any time</span>
-        </p>
-        <h2 className="mt-1 font-serif text-xl font-semibold leading-tight">
-          <Link href="/challenges/coordinators-day" className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
-            The Coordinator’s Day
-          </Link>
-        </h2>
-        <p className="mt-1 text-white/85">From the first call to handover: decide, replan when things change, and climb when you handle an opening well.</p>
-      </div>
-      <dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        <div>
-          <dt className="text-white/70">Levels</dt>
-          <dd className="font-mulish text-xl font-extrabold">3</dd>
-        </div>
-        <div>
-          <dt className="text-white/70">Squares</dt>
-          <dd className="font-mulish text-xl font-extrabold">20</dd>
-        </div>
-        <div>
-          <dt className="text-white/70">Minutes</dt>
-          <dd className="font-mulish text-xl font-extrabold">15</dd>
-        </div>
-      </dl>
-      <span className="mt-auto inline-flex items-center gap-1 font-semibold">
-        Play the day <Icon name="arrow-right" className="size-4" />
-      </span>
-    </li>
   );
 }
 

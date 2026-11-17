@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/learning", destination: "/topics", permanent: true },
       { source: "/learning/:path*", destination: "/topics/:path*", permanent: true },
+      // The Coordinator's Day moved from Challenges to Play.
+      { source: "/challenges/coordinators-day", destination: "/play/coordinators-day", permanent: true },
     ];
   },
   experimental: {
