@@ -242,11 +242,13 @@ export function DayBoard({
         <filter id={`${id}-glow`} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" />
         </filter>
-        <linearGradient id={`${id}-scales`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6b4527" />
-          <stop offset="0.5" stopColor="#4a2f1b" />
-          <stop offset="1" stopColor="#2e1c10" />
-        </linearGradient>
+        {SNAKES.map((c, k) => (
+          <linearGradient key={k} id={`${id}-scales-${k}`} x1="0" y1="0" x2="1" y2="1">
+            {c.body.map((stop, j) => (
+              <stop key={j} offset={j / (c.body.length - 1)} stopColor={stop} />
+            ))}
+          </linearGradient>
+        ))}
         <radialGradient id={`${id}-sun`}>
           <stop offset="0" stopColor="#fff6d8" stopOpacity="0.55" />
           <stop offset="1" stopColor="#fff6d8" stopOpacity="0" />
@@ -340,23 +342,26 @@ export function DayBoard({
       })}
 
       {/* Slides: a snake, its head on the setback square and its tail on the work to redo. */}
-      {snakes.map((sn) => (
-        <g key={`s${sn.from}-${sn.to}`} pointerEvents="none">
-          <title>{`Possible setback: slide from ${named(sn.from)} down to ${named(sn.to)}`}</title>
-          <path d={sn.shape.body} fill={`url(#${id}-scales)`} stroke="#22140a" strokeWidth="1.2" strokeLinejoin="round" />
-          <path d={sn.shape.spine} fill="none" stroke="#c9a05e" strokeWidth="3" strokeDasharray="1.5 7" strokeLinecap="round" opacity="0.9" />
-          <g transform={`translate(${sn.shape.head.x} ${sn.shape.head.y}) rotate(${sn.shape.head.angle})`}>
-            <g className="cd-snake-head" style={{ animationDelay: `${-sn.i * 0.7}s` }}>
-              <path className="cd-tongue" style={{ animationDelay: `${-sn.i * 0.9}s` }} d="M10 0 l9 -3 M10 0 l9 3" stroke="#c0392b" strokeWidth="1.6" strokeLinecap="round" />
-              <ellipse cx="0" cy="0" rx="13.5" ry="10.5" fill="#3b2416" stroke="#22140a" strokeWidth="1.2" />
-              <circle cx="4" cy="-4.2" r="2.6" fill="#f6e7c1" />
-              <circle cx="4" cy="4.2" r="2.6" fill="#f6e7c1" />
-              <circle cx="4.8" cy="-4.2" r="1.2" fill="#111" />
-              <circle cx="4.8" cy="4.2" r="1.2" fill="#111" />
+      {snakes.map((sn) => {
+        const c = SNAKES[sn.i % SNAKES.length];
+        return (
+          <g key={`s${sn.from}-${sn.to}`} pointerEvents="none">
+            <title>{`Possible setback: slide from ${named(sn.from)} down to ${named(sn.to)}`}</title>
+            <path d={sn.shape.body} fill={`url(#${id}-scales-${sn.i % SNAKES.length})`} stroke={c.edge} strokeWidth="1.2" strokeLinejoin="round" />
+            <path d={sn.shape.spine} fill="none" stroke={c.dots} strokeWidth="3" strokeDasharray="1.5 7" strokeLinecap="round" opacity="0.9" />
+            <g transform={`translate(${sn.shape.head.x} ${sn.shape.head.y}) rotate(${sn.shape.head.angle})`}>
+              <g className="cd-snake-head" style={{ animationDelay: `${-sn.i * 0.7}s` }}>
+                <path className="cd-tongue" style={{ animationDelay: `${-sn.i * 0.9}s` }} d="M10 0 l9 -3 M10 0 l9 3" stroke={c.tongue} strokeWidth="1.6" strokeLinecap="round" />
+                <ellipse cx="0" cy="0" rx="13.5" ry="10.5" fill={c.head} stroke={c.edge} strokeWidth="1.2" />
+                <circle cx="4" cy="-4.2" r="2.6" fill="#fffaf0" />
+                <circle cx="4" cy="4.2" r="2.6" fill="#fffaf0" />
+                <circle cx="4.8" cy="-4.2" r="1.2" fill="#111" />
+                <circle cx="4.8" cy="4.2" r="1.2" fill="#111" />
+              </g>
             </g>
           </g>
-        </g>
-      ))}
+        );
+      })}
 
       {/* Numbers and names, over the ladders and slides. */}
       {board.squares.map((name, i) => {
@@ -429,6 +434,13 @@ export function DayBoard({
 }
 
 type Pt = { x: number; y: number };
+
+/** The snakes in Trilogy red, yellow and teal, taking turns: body shading, outline, back markings, head and tongue. */
+const SNAKES = [
+  { body: ["#e65a5a", "#d32f2f", "#9c1f1f"], edge: "#6b1414", dots: "#ffd2c8", head: "#b72424", tongue: "#5c0d0d" },
+  { body: ["#ffdb6e", "#ffc72c", "#d9a000"], edge: "#8a6400", dots: "#fff4c7", head: "#eeb31a", tongue: "#c0392b" },
+  { body: ["#2aa6a4", "#0e7c7b", "#085756"], edge: "#053b3a", dots: "#bff0ee", head: "#0b6a69", tongue: "#c0392b" },
+];
 
 /**
   A ladder runs from the middle of its foot square to the middle of its top square, leaning a little
