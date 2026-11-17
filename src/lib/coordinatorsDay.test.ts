@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coordinatorsDay as content } from "@/content/coordinatorsDay";
-import { allSlides, choose, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
+import { allSlides, cardScript, choose, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
 
 /* The Coordinator's Day: the rules, against the authored day. */
 
@@ -194,5 +194,15 @@ describe("The Coordinator's Day", () => {
     expect(sum.setbacks.every((s) => s.recovered)).toBe(true);
     expect(sum.ladders).toBeGreaterThanOrEqual(2);
     expect(sum.firstTry).toBe(sum.cards - 1);
+  });
+
+  it("reads each card aloud: its title, what is said and the question, with each part findable in the script", () => {
+    const s = cardScript(content, { type: "scenario", id: "d-call" })!;
+    const d = content.scenarios["d-call"];
+    expect(s.text).toBe(`${d.title}. ${d.prompt} ${d.question}`);
+    expect(s.spans.map((p) => s.text.slice(p.from, p.to))).toEqual([d.title, d.prompt, d.question]);
+    for (const id of Object.keys(content.scenarios)) expect(cardScript(content, { type: "scenario", id })).not.toBeNull();
+    for (const id of Object.keys(content.events)) expect(cardScript(content, { type: "event", id })?.text).toContain(content.events[id].text);
+    expect(cardScript(content, { type: "scenario", id: "nope" })).toBeNull();
   });
 });

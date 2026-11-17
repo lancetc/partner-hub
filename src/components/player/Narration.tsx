@@ -115,6 +115,7 @@ export function Narration({
   captionTarget,
   ttsKey,
   controls = true,
+  panel = "above",
 }: {
   text: string;
   label?: string;
@@ -129,6 +130,8 @@ export function Narration({
   ttsKey?: string;
   /** false hides the footer orb: the card has its own play button (the dedicated audio card). */
   controls?: boolean;
+  /** Where the controls open: above the button (in a footer), or below it, aligned to its right edge. */
+  panel?: "above" | "below";
 }) {
   const parts = useMemo(() => sentences(text), [text]);
   // Where each sentence sits in the script.
@@ -450,7 +453,10 @@ export function Narration({
           id={`${id}-panel`}
           role="group"
           aria-label={`${label} audio`}
-          className="animate-card-in absolute bottom-full left-1/2 z-20 mb-5 flex w-[min(24rem,calc(100vw-3rem))] -translate-x-1/2 flex-col gap-2 rounded-2xl border border-line bg-surface p-3 shadow-xl"
+          className={cx(
+            "animate-card-in absolute z-20 flex w-[min(24rem,calc(100vw-3rem))] flex-col gap-2 rounded-2xl border border-line bg-surface p-3 shadow-xl",
+            panel === "below" ? "right-0 top-full mt-3" : "bottom-full left-1/2 mb-5 -translate-x-1/2",
+          )}
         >
           {playable && (
             <>

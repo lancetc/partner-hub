@@ -317,6 +317,27 @@ export const slideFor = (board: Board, checkpoint: number, square: number) => bo
 /** Every marked slide on the board, once each. */
 export const allSlides = (board: Board) => [...new Map(board.checkpoints.flatMap((c) => c.slides).map((x) => [`${x.from}-${x.to}`, x])).values()];
 
+/**
+  What's read aloud when a card opens: its title, what's said, and the question (the choices are left to
+  read on the card). The parts are returned with where each sits in the script, so the card can follow along.
+*/
+export function cardScript(content: Content, card: { type: "scenario" | "event"; id: string }) {
+  const parts =
+    card.type === "event"
+      ? [content.events[card.id]?.title, content.events[card.id]?.text]
+      : [content.scenarios[card.id]?.title, content.scenarios[card.id]?.prompt, content.scenarios[card.id]?.question];
+  if (parts.some((p) => !p)) return null;
+  let text = "";
+  const spans = parts.map((p, i) => {
+    // The title gets a full stop so the voice pauses after it.
+    const sep = i === 0 ? "" : " ";
+    const from = text.length + sep.length;
+    text += sep + p + (i === 0 && !/[.!?]$/.test(p!) ? "." : "");
+    return { from, to: from + p!.length };
+  });
+  return { text, spans };
+}
+
 /** The open card's time on the clock. */
 export const now = (run: Run) => clock(run.time);
 

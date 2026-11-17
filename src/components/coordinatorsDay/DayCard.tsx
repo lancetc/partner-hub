@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { clock, contextFor, shuffledFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
+import { cardScript, clock, contextFor, shuffledFor, type Channel, type Content, type Run } from "@/lib/coordinatorsDay";
 import { cx } from "@/lib/format";
+import { stopAudio } from "@/lib/audioPrefs";
 import { Icon, type IconName } from "../Icon";
+import { Narration, useNarration } from "../player/Narration";
+import { SpokenText } from "../player/SpokenText";
 
 /*
   The open card in The Coordinator's Day: a call, a message, a note, or a setback. The learner picks
@@ -61,27 +64,50 @@ export function DayCard({
     (run.phase === "feedback" ? feedbackRef.current : heading.current)?.focus({ preventScroll: false });
   }, [cardKey, run.phase]);
 
+  // The card's intro, read aloud like a topic card's (starting on its own if auto-play is on).
+  const script = cardScript(content, run.card);
+  const ttsKey = `cday:${run.card.type}:${run.card.id}`;
+  const voice = useNarration(ttsKey);
+  const word = voice && (voice.state === "playing" || voice.state === "paused") ? voice.word : null;
+  /** Part `i` of the script, with the word being spoken highlighted. */
+  const said = (i: number, fallback: string) => (script ? <SpokenText text={script.text} range={script.spans[i]} word={word} /> : fallback);
+  const listen = script && (
+    <Narration key={ttsKey} text={script.text} ttsKey={ttsKey} label="Listen to this card" panel="below" />
+  );
+  // Picking an answer, or moving on, stops the reading.
+  const pick = (id: string) => {
+    stopAudio();
+    onChoose(id);
+  };
+  const next = () => {
+    stopAudio();
+    onContinue();
+  };
+
   if (run.card.type === "event") {
     const e = content.events[run.card.id];
     return (
-      <article className="overflow-hidden rounded-3xl bg-surface shadow-lg ring-1 ring-[#f1c4c1]">
-        <header className="flex items-center gap-2 bg-[#c7393e] px-5 py-3 text-white">
+      <article className="rounded-3xl bg-surface shadow-lg ring-1 ring-[#f1c4c1]">
+        <header className="flex items-center gap-2 rounded-t-3xl bg-[#c7393e] px-5 py-3 text-white">
           <Icon name="alert" className="size-5" />
           <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em]">Setback · {clock(run.time)}</span>
           {onClose && <CloseButton onClose={onClose} light />}
         </header>
         <div className="p-5 sm:p-6">
-          <p className="flex items-center gap-2 text-sm text-ink-muted">
-            <Icon name={channel[e.channel].icon} className="size-4" /> {channel[e.channel].label} from {e.speaker}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="flex items-center gap-2 text-sm text-ink-muted">
+              <Icon name={channel[e.channel].icon} className="size-4" /> {channel[e.channel].label} from {e.speaker}
+            </p>
+            <div className="ml-auto">{listen}</div>
+          </div>
           <h2 ref={heading} tabIndex={-1} className="mt-2 font-serif text-2xl font-semibold leading-tight outline-none">
-            {e.title}
+            {said(0, e.title)}
           </h2>
-          <p className="mt-3 text-lg">{e.text}</p>
+          <p className="mt-3 text-lg">{said(1, e.text)}</p>
           <p className="mt-4 rounded-2xl bg-[#fbe3e1] p-3 text-sm text-[#7a1f23]">
             The clock keeps going, and everything you’ve learnt today still applies. You slide back to <strong>{squareName(slideTo ?? 0)}</strong> to replan.
           </p>
-          <button type="button" onClick={onContinue} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#c7393e] px-6 font-semibold text-white hover:bg-[#a92f33] sm:w-auto">
+          <button type="button" onClick={next} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#c7393e] px-6 font-semibold text-white hover:bg-[#a92f33] sm:w-auto">
             Slide back to {squareName(slideTo ?? 0)} <Icon name="arrow-right" className="size-4 rotate-90" />
           </button>
         </div>
@@ -97,7 +123,7 @@ export function DayCard({
   const r = fb ? result[fb.outcome] : undefined;
   const handover = s.kind === "handover";
   return (
-    <article className="overflow-hidden rounded-3xl bg-surface shadow-lg ring-1 ring-line">
+    <article className="rounded-3xl bg-surface shadow-lg ring-1 ring-line">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-5 py-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm font-semibold">
           <Icon name={channel[s.channel].icon} className="size-4" /> {channel[s.channel].label}
@@ -122,11 +148,12 @@ export function DayCard({
             <span className="block font-semibold">{s.speaker}</span>
             <span className="block text-sm text-ink-muted">{s.role}</span>
           </span>
+          <div className="ml-auto">{listen}</div>
         </div>
         <h2 ref={heading} tabIndex={-1} className="mt-4 font-serif text-2xl font-semibold leading-tight outline-none">
-          {s.title}
+          {said(0, s.title)}
         </h2>
-        <p className={cx("mt-3 text-lg", (s.channel === "call" || s.channel === "text") && "rounded-2xl rounded-tl-sm bg-[#eef3f8] p-4")}>{s.prompt}</p>
+        <p className={cx("mt-3 text-lg", (s.channel === "call" || s.channel === "text") && "rounded-2xl rounded-tl-sm bg-[#eef3f8] p-4")}>{said(1, s.prompt)}</p>
 
         {context.length > 0 && (
           <div className="mt-4 rounded-2xl bg-[#fdf6e6] p-3 ring-1 ring-[#f3e2b8]">
@@ -141,7 +168,7 @@ export function DayCard({
           </div>
         )}
 
-        <p className="mt-5 font-semibold">{s.question}</p>
+        <p className="mt-5 font-semibold">{said(2, s.question)}</p>
         <ul className="mt-3 flex flex-col gap-2.5">
           {options.map((o, i) => {
             const picked = chosen?.id === o.id;
@@ -151,7 +178,7 @@ export function DayCard({
                   type="button"
                   disabled={Boolean(fb)}
                   aria-pressed={picked}
-                  onClick={() => onChoose(o.id)}
+                  onClick={() => pick(o.id)}
                   className={cx(
                     "flex w-full items-start gap-3 rounded-2xl p-3.5 text-left ring-1 transition",
                     picked ? "bg-[#e3f4f3] ring-2 ring-[#008282]" : "ring-line enabled:hover:bg-muted enabled:hover:ring-[#008282]",
@@ -181,7 +208,7 @@ export function DayCard({
             )}
             <button
               type="button"
-              onClick={onContinue}
+              onClick={next}
               className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#008282] px-6 font-semibold text-white hover:bg-[#006b6b]"
             >
               {fb?.outcome === "retry" ? "Try again" : handover ? "See how your day went" : "Continue"} <Icon name="arrow-right" className="size-4" />

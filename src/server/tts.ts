@@ -10,6 +10,8 @@ import { editorLesson } from "./authoredLessons";
 import { factValues } from "./facts";
 import { applyFacts } from "@/lib/facts";
 import { wordsFromAlignment, type Alignment, type WordTiming } from "@/lib/wordTimings";
+import { cardScript } from "@/lib/coordinatorsDay";
+import { coordinatorsDay } from "@/content/coordinatorsDay";
 
 /*
   Live narration through ElevenLabs. The browser asks for a card by key, never with free
@@ -25,7 +27,8 @@ export const ttsConfig = () => ({
 });
 
 /**
-  Resolves a card key to its approved script: `lesson:<slug>:<nodeId>` or `followup:<id>:<version>`.
+  Resolves a card key to its approved script: `lesson:<slug>:<nodeId>`, `followup:<id>:<version>` or
+  `cday:<scenario|event>:<id>` (a card in The Coordinator's Day).
   `drafts` (authors only) also reads saved drafts, so an author previewing a lesson hears the real voice.
 */
 export function scriptFor(db: Db, key: string, drafts = false): string {
@@ -36,6 +39,10 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const node = lesson && applyFacts(lesson, factValues(db)).nodes[b];
     const text = node && (node.type === "presenter" ? node.transcript : node.type === "audio" || node.type === "listen" ? node.script : node.narration);
     if (text) return text;
+  }
+  if (kind === "cday" && (a === "scenario" || a === "event")) {
+    const script = cardScript(coordinatorsDay, { type: a, id: b });
+    if (script) return script.text;
   }
   if (kind === "followup") {
     const text = followUp(db, a, Number(b))?.explain?.script;
