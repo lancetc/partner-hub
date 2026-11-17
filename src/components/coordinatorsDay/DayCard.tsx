@@ -137,6 +137,11 @@ export function DayCard({
   const answerKey = fb ? `cday:answer:${s.id}:${fb.option}` : "";
   // "Your day", "Your inbox": the learner's own cards.
   const mine = /^Your /.test(s.speaker);
+  // A word about the square you are on: a ladder to climb if this opportunity goes well, or a snake
+  // that a setback still to come would send you down.
+  const board = content.boards[run.level];
+  const ladderHere = s.kind === "opportunity" && board.ladders.some((l) => l.from === run.square);
+  const snakeHere = board.checkpoints.some((c, i) => !run.events.some((e) => e.checkpoint === i) && c.slides.some((x) => x.from === run.square));
   return (
     <article className="rounded-3xl bg-surface shadow-lg ring-1 ring-line">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-5 py-3">
@@ -150,6 +155,20 @@ export function DayCard({
         {onClose && <CloseButton onClose={onClose} />}
       </header>
       <div className="p-5 sm:p-6">
+        {(ladderHere || snakeHere) && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {ladderHere && (
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-[#dff3ea] px-3 py-1 text-sm font-semibold text-[#0f5b5b]">
+                <Icon name="arrow-right" className="size-4 -rotate-90" /> Ladder here: handle this well to climb
+              </p>
+            )}
+            {snakeHere && (
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-[#fbe3e1] px-3 py-1 text-sm font-semibold text-[#a12d31]">
+                <Icon name="alert" className="size-4" /> Snake here: a setback would slide you back
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-3">
           {(mine ? you?.avatar : avatarFor(content, s.speaker)) ? (
             // eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images
