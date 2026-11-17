@@ -12,7 +12,7 @@ import { Icon } from "../Icon";
 import { Confetti } from "../Confetti";
 import { DayBoard, DayTrack } from "./Board";
 import { DayCard } from "./DayCard";
-import { DayClock, DayClockRunner } from "./dayClock";
+import { clockNow, DayClock, DayClockRunner, savedClock, useClockTens } from "./dayClock";
 
 /*
   The Coordinator's Day: choose a level (the board preview changes with it), play the day card by
@@ -57,6 +57,8 @@ function announce(move: Move | undefined, place: (i: number) => string) {
 export function CoordinatorsDay() {
   const hydrated = useHydrated();
   const me = useApi<Me>("/api/me").data;
+  // The day clock to the nearest ten minutes (the board's light follows it).
+  const clockTens = useClockTens();
   const who = me?.user.id ?? "guest";
   const [kept, setKept] = useState<Record<string, Saved>>({});
   const saved = kept[who] ?? (hydrated ? load(who) : { run: null });
@@ -116,7 +118,7 @@ export function CoordinatorsDay() {
                 Your day is in progress
               </h2>
               <p className="mt-1 text-white/85">
-                {levelName[resumable.level]} · {clock(Math.floor(dayTime(resumable.square, content.boards[resumable.level].squares.length)))} · square {resumable.square + 1} of {content.boards[resumable.level].squares.length}
+                {levelName[resumable.level]} · {clock(Math.floor(Math.max(savedClock(`${resumable.level}:${resumable.seed}`) ?? 0, resumable.clock ?? 0, dayTime(resumable.square, content.boards[resumable.level].squares.length))))} · square {resumable.square + 1} of {content.boards[resumable.level].squares.length}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -191,7 +193,12 @@ export function CoordinatorsDay() {
   if (run.phase === "done") return <Recap run={run} onAgain={() => start(run.level)} onLevels={() => setView("levels")} />;
 
   const isPhone = () => window.matchMedia("(max-width: 1023px)").matches;
-  const onChoose = (id: string) => put(choose(content, run, id));
+  // Each answer notes the clock, for the recap and for picking up the day after a break.
+  const onChoose = (id: string) => {
+    const next = choose(content, run, id);
+    const at = clockNow();
+    put({ ...next, clock: at, log: next.log.map((l, i) => (i === next.log.length - 1 ? { ...l, clock: at } : l)) });
+  };
   const onContinue = () => {
     const retry = run.phase === "feedback" && run.feedback?.outcome === "retry";
     put(proceed(content, run));
@@ -202,15 +209,17 @@ export function CoordinatorsDay() {
     }
   };
   const upNext = run.card.type === "event" ? content.events[run.card.id] : content.scenarios[run.card.id];
+  // The time of day to the nearest ten minutes: for the board's light and for screen readers.
+  const tens = clockTens;
 
   return (
     <div className="mt-4">
       {/* The day's clock, racing ahead as you go and turned back when you slide. */}
-      <DayClockRunner runKey={`${run.level}:${run.seed}`} square={run.square} squares={board.squares.length} move={run.move} />
+      <DayClockRunner runKey={`${run.level}:${run.seed}`} square={run.square} squares={board.squares.length} move={run.move} start={run.clock} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface/90 px-4 py-2.5 ring-1 ring-line">
         <span className="inline-flex items-center gap-1.5 font-mulish text-lg font-extrabold tabular-nums">
           <Icon name="clock" className="size-5 text-accent" /> <DayClock big />
-          <span className="sr-only">{clock(Math.floor(dayTime(run.square, board.squares.length)))}</span>
+          <span className="sr-only">{clock(tens)}</span>
         </span>
         <span className="text-sm text-ink-muted">
           Square {run.square + 1} of {board.squares.length}
@@ -251,7 +260,7 @@ export function CoordinatorsDay() {
             </button>
           </div>
           <div className={cx("rounded-3xl bg-surface/80 p-3 ring-1 ring-line sm:p-5", !boardOpen && "hidden lg:block")}>
-            <DayBoard board={board} square={run.square} move={run.move} time={dayTime(run.square, board.squares.length)} names={names} player={me?.user} label={`${board.title} board. You are on ${place(run.square)}.`} />
+            <DayBoard board={board} square={run.square} move={run.move} time={tens} names={names} player={me?.user} label={`${board.title} board. You are on ${place(run.square)}.`} />
             <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
               <BoardKey />
               <NamesSwitch on={names} onChange={setNames} />
@@ -403,7 +412,7 @@ function Recap({ run, onAgain, onLevels }: { run: Run; onAgain: () => void; onLe
             const n = tries(l.card);
             return (
               <li key={l.card} className="flex items-center gap-3 py-2.5">
-                <span className="w-20 shrink-0 font-mulish text-sm font-extrabold tabular-nums text-ink-muted">{clock(l.square === undefined ? l.time : Math.floor(dayTime(l.square, board.squares.length)))}</span>
+                <span className="w-20 shrink-0 font-mulish text-sm font-extrabold tabular-nums text-ink-muted">{clock(Math.floor(l.clock ?? (l.square === undefined ? l.time : dayTime(l.square, board.squares.length))))}</span>
                 <span className="min-w-0 flex-1">{s.title}</span>
                 <span className={cx("shrink-0 rounded-full px-2.5 py-0.5 font-mulish text-xs font-bold", n === 1 ? "bg-[#e3f4f3] text-[#0f5b5b]" : "bg-[#fdf1e4] text-[#7a4a00]")}>
                   {n === 1 ? "First time" : `${n} tries`}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coordinatorsDay as content } from "@/content/coordinatorsDay";
-import { allSlides, answerScript, cardScript, choose, dayTime, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
+import { allSlides, answerScript, cardScript, choose, clockAfterMove, dayTime, LEVELS, optionsFor, proceed, recap, shuffledFor, startRun, validateBoard, type Run } from "./coordinatorsDay";
 
 /* The Coordinator's Day: the rules, against the authored day. */
 
@@ -222,5 +222,25 @@ describe("The Coordinator's Day", () => {
         if (o.tip) expect(a.text.slice(a.spans[2].from + 10, a.spans[2].to)).toBe(o.tip);
       }
     expect(answerScript(content, "d-call", "nope")).toBeNull();
+  });
+
+  it("only moves the clock forward: a slide keeps the time, and the day still ends at 5.30 pm", () => {
+    const end = 17.5 * 60;
+    // A step from Start shares the day evenly.
+    expect(clockAfterMove(9 * 60, 0, 1, 20)).toBeCloseTo(dayTime(1, 20));
+    // Down a snake: no time back.
+    expect(clockAfterMove(12 * 60, 9, 6, 20)).toBe(12 * 60);
+    // After the slide, the rest of the day is shared across the squares still to go, never going back.
+    let now = 12 * 60;
+    for (let sq = 6; sq < 19; sq++) {
+      const next = clockAfterMove(now, sq, sq + 1, 20);
+      expect(next).toBeGreaterThan(now);
+      now = next;
+    }
+    expect(now).toBeCloseTo(end);
+    // Up a ladder: four squares' worth at once.
+    expect(clockAfterMove(10 * 60, 3, 7, 20)).toBeCloseTo(10 * 60 + ((end - 10 * 60) * 4) / 16);
+    // Already past 5.30 pm (a long wait): it stays put.
+    expect(clockAfterMove(18 * 60, 18, 19, 20)).toBe(18 * 60);
   });
 });

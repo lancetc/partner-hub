@@ -126,7 +126,9 @@ export type Run = {
   time: number;
   flags: Flags;
   attempt: number;
-  log: { card: string; option: string; outcome: Outcome; attempt: number; time: number; square?: number }[];
+  log: { card: string; option: string; outcome: Outcome; attempt: number; time: number; square?: number; clock?: number }[];
+  /** The day clock (minutes) when the last answer was given. It only goes forward. */
+  clock?: number;
   events: { checkpoint: number; event: string; recovered: boolean }[];
   /** Story cards that came out (for the recap and validation). */
   shown: string[];
@@ -145,6 +147,18 @@ export const clock = (min: number) => {
 
 /** The day clock on a square, in minutes: 9.00 am on Start to 5.30 pm on Handover, evenly between. */
 export const dayTime = (square: number, squares: number) => 9 * 60 + (Math.max(0, Math.min(square, squares - 1)) / Math.max(1, squares - 1)) * (8.5 * 60);
+
+/**
+  Where the day clock goes after a move: forward by this move's share of what's left of the day (so it
+  reaches 5.30 pm on Handover however the day has gone), and nowhere for a slide. Time never goes back.
+*/
+export function clockAfterMove(now: number, from: number, to: number, squares: number) {
+  const last = squares - 1;
+  const end = dayTime(last, squares);
+  if (to <= from) return now;
+  if (to >= last || from >= last) return Math.max(now, end);
+  return now + (Math.max(0, end - now) * (to - from)) / (last - from);
+}
 
 /** The options this learner sees on a card, given what's happened. */
 export const optionsFor = (s: Scenario, flags: Flags) => s.options.filter((o) => matches(flags, o.when));
