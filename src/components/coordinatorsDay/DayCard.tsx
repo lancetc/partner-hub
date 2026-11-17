@@ -29,6 +29,11 @@ const result = {
   retry: { label: "Not quite. You stay on this square: try again.", tone: "bg-[#fdf1e4] text-[#7a4a00] ring-[#f3d7b2]", icon: "refresh" as IconName },
 };
 
+/** A portrait for whoever a card is from: the person, or their things ("Dot’s shopping" shows Dot). */
+const avatarFor = (content: Content, speaker: string) =>
+  content.avatars?.[speaker] ??
+  Object.entries(content.avatars ?? {}).find(([name]) => speaker.startsWith(`${name}’s `) || speaker.startsWith(`${name}'s `))?.[1];
+
 const initials = (name: string) =>
   name
     .split(/[\s,]+/)
@@ -136,9 +141,9 @@ export function DayCard({
       </header>
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">
-          {content.avatars?.[s.speaker] ? (
+          {avatarFor(content, s.speaker) ? (
             // eslint-disable-next-line @next/next/no-img-element -- a small square portrait from public/images
-            <img src={content.avatars[s.speaker]} alt="" className="size-12 shrink-0 rounded-full object-cover ring-2 ring-[#fab53d]" />
+            <img src={avatarFor(content, s.speaker)} alt="" className="size-12 shrink-0 rounded-full object-cover ring-2 ring-[#fab53d]" />
           ) : (
             <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1d2b4f] font-mulish text-sm font-extrabold text-white">
               {initials(s.speaker) || "·"}

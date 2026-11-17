@@ -112,10 +112,10 @@ export function DayBoard({
     const route = routeRef.current;
     const { at } = layout(board.squares.length);
     const track = route ? measure(route, board.squares.map((_, i) => at(i))) : null;
-    /** Where the pawn waits on square i: on the path, just past the tile. */
-    const spot = (i: number) => (track ? track.point(track.along[i] + REST) : pawnSpot(board, i));
-    // The pawn is drawn around its middle; its feet are 22 below.
-    const put = (p: Pt) => el?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${(p.y - 22).toFixed(1)})`);
+    /** Where the pawn waits on square i: in the middle of the square, over its number. */
+    const spot = (i: number) => (track ? track.point(track.along[i]) : pawnSpot(board, i));
+    // The pawn is drawn around its middle, so it travels centred on the path.
+    const put = (p: Pt) => el?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
     if (!move || move.n === handled.current) {
       put(spot(square));
       return;
@@ -136,8 +136,8 @@ export function DayBoard({
       waits on the next, following every curve of the line, with a small lift at each step.
     */
     const walk = (s: number, pace: number): Leg => {
-      const a = track ? track.along[s] + REST : 0;
-      const b = track ? track.along[s + 1] + REST : 0;
+      const a = track ? track.along[s] : 0;
+      const b = track ? track.along[s + 1] : 0;
       const from = spot(s);
       const to = spot(s + 1);
       const len = track ? b - a : Math.hypot(to.x - from.x, to.y - from.y);
@@ -210,7 +210,7 @@ export function DayBoard({
       put(spot(move.to));
       setMoving(false);
       const end = spot(move.to);
-      setFx({ kind: move.kind === "ladder" ? "ladder" : move.kind === "slide" ? "slide" : "land", x: end.x, y: end.y, n: move.n });
+      setFx({ kind: move.kind === "ladder" ? "ladder" : move.kind === "slide" ? "slide" : "land", x: end.x, y: end.y + 24, n: move.n });
     };
     raf = requestAnimationFrame((now) => {
       setMoving(true);
@@ -424,7 +424,7 @@ export function DayBoard({
       )}
 
       {/* The pawn: moved by the code above; it bobs gently while it waits. */}
-      <g ref={pawnRef} transform={`translate(${start.x} ${start.y - 22})`} aria-hidden>
+      <g ref={pawnRef} transform={`translate(${start.x} ${start.y})`} aria-hidden>
         <g className={cx("cd-pawn", moving && "cd-pawn-moving")}>
           <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
           <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
@@ -437,12 +437,9 @@ export function DayBoard({
 
 type Pt = { x: number; y: number };
 
-/** How far along the path, past a square's centre, the pawn waits: just beyond the tile's edge. */
-const REST = 58;
-/** Where the pawn's feet are when it waits on a square, before the path has been measured. */
+/** Where the pawn waits on a square: its middle, over the number. */
 function pawnSpot(board: Board, i: number): Pt {
-  const c = layout(board.squares.length).at(i);
-  return { x: c.x + REST, y: c.y };
+  return layout(board.squares.length).at(i);
 }
 
 /**
