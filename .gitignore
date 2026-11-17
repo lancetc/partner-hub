@@ -43,3 +43,6 @@ next-env.d.ts
 # local prototype database
 /data/
 !.env.local.example
+
+# Local Netlify folder
+.netlify
