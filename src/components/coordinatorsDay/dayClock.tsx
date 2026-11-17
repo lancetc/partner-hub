@@ -45,7 +45,7 @@ export function DayClockRunner({ runKey, square, squares, move }: { runKey: stri
     const fresh = shown.current !== runKey;
     shown.current = runKey;
     const from = fresh ? base : minutes;
-    const ms = fresh || reduce || Math.abs(from - base) < 0.5 ? 0 : move?.kind === "slide" ? 2200 : move?.kind === "ladder" ? 2000 : 1800;
+    const ms = fresh || reduce || Math.abs(from - base) < 0.5 ? 0 : move?.kind === "slide" ? 4400 : move?.kind === "ladder" ? 4000 : 3600;
     if (ms) {
       mode = base < from ? "back" : move?.kind === "ladder" ? "ahead" : "step";
       delta = Math.round(base - from);

@@ -147,7 +147,7 @@ export function DayBoard({
           const p = track ? track.point(a + (b - a) * t) : { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
           return { x: p.x, y: p.y - Math.abs(Math.sin(Math.PI * t * steps)) * 4 };
         },
-        ms: (1500 + len * 1.6) * pace,
+        ms: (3000 + len * 3.2) * pace,
         ease: inOut,
         sound: cardSounds.pickUp,
       };
@@ -164,7 +164,7 @@ export function DayBoard({
           const p = along(t);
           return { x: p.x, y: p.y - Math.abs(Math.sin(t * Math.PI * 6)) * 6 };
         },
-        ms: 2000,
+        ms: 4000,
         ease: inOut,
         sound: cardSounds.ready,
       });
@@ -174,7 +174,7 @@ export function DayBoard({
       legs.push({
         // At an even pace along the snake (speeding up as it goes).
         at: alongLine(ride),
-        ms: 2200,
+        ms: 4400,
         ease: easeIn,
         sound: () => cardSounds.swipe("next"),
       });
