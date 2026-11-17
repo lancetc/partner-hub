@@ -92,7 +92,6 @@ export function DayBoard({
   const { at, width, height } = layout(board.squares.length);
   const kinds = squareKinds(board);
   const id = `cd-${board.level}`;
-  const spot = (i: number) => pawnSpot(board, i);
 
   // The snakes: drawn below, and ridden by the pawn when it slides.
   const snakes = boardSnakes(board);
@@ -104,13 +103,19 @@ export function DayBoard({
     it simply appears on its new square.
   */
   const pawnRef = useRef<SVGGElement>(null);
+  const routeRef = useRef<SVGPathElement>(null);
   const handled = useRef(move?.n ?? 0);
   const [fx, setFx] = useState<{ kind: "ladder" | "slide" | "land"; x: number; y: number; n: number } | null>(null);
   const [moving, setMoving] = useState(false);
   useLayoutEffect(() => {
     const el = pawnRef.current;
-    const spot = (i: number) => pawnSpot(board, i);
-    const put = (p: Pt) => el?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+    const route = routeRef.current;
+    const { at } = layout(board.squares.length);
+    const track = route ? measure(route, board.squares.map((_, i) => at(i))) : null;
+    /** Where the pawn waits on square i: on the path, just past the tile. */
+    const spot = (i: number) => (track ? track.point(track.along[i] + REST) : pawnSpot(board, i));
+    // The pawn is drawn around its middle; its feet are 22 below.
+    const put = (p: Pt) => el?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${(p.y - 22).toFixed(1)})`);
     if (!move || move.n === handled.current) {
       put(spot(square));
       return;
@@ -126,14 +131,29 @@ export function DayBoard({
     const inOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
     const easeIn = (t: number) => t * t * (1.4 - 0.4 * t);
     const legs: Leg[] = [];
-    const hop = (from: Pt, to: Pt, ms: number): Leg => ({
-      at: (t) => ({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * 30 }),
-      ms,
-      ease: inOut,
-      sound: cardSounds.pickUp,
-    });
+    /*
+      One square along the path, at an unhurried walk: from where the pawn waits on one square to where it
+      waits on the next, following every curve of the line, with a small lift at each step.
+    */
+    const walk = (s: number, pace: number): Leg => {
+      const a = track ? track.along[s] + REST : 0;
+      const b = track ? track.along[s + 1] + REST : 0;
+      const from = spot(s);
+      const to = spot(s + 1);
+      const len = track ? b - a : Math.hypot(to.x - from.x, to.y - from.y);
+      const steps = Math.max(3, Math.round(len / 36));
+      return {
+        at: (t) => {
+          const p = track ? track.point(a + (b - a) * t) : { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+          return { x: p.x, y: p.y - Math.abs(Math.sin(Math.PI * t * steps)) * 4 };
+        },
+        ms: (1500 + len * 1.6) * pace,
+        ease: inOut,
+        sound: cardSounds.pickUp,
+      };
+    };
     if (move.kind === "step" || move.kind === "walk") {
-      for (let s = move.from; s < move.to; s++) legs.push(hop(spot(s), spot(s + 1), move.kind === "walk" ? 700 : 1100));
+      for (let s = move.from; s < move.to; s++) legs.push(walk(s, move.kind === "walk" ? 0.75 : 1));
     } else if (move.kind === "ladder") {
       const from = spot(move.from);
       const to = spot(move.to);
@@ -190,7 +210,7 @@ export function DayBoard({
       put(spot(move.to));
       setMoving(false);
       const end = spot(move.to);
-      setFx({ kind: move.kind === "ladder" ? "ladder" : move.kind === "slide" ? "slide" : "land", x: end.x, y: end.y + 22, n: move.n });
+      setFx({ kind: move.kind === "ladder" ? "ladder" : move.kind === "slide" ? "slide" : "land", x: end.x, y: end.y, n: move.n });
     };
     raf = requestAnimationFrame((now) => {
       setMoving(true);
@@ -214,7 +234,7 @@ export function DayBoard({
 
   const path = board.squares.map((_, i) => at(i));
   const route = ribbon(path);
-  const start = spot(square);
+  const start = pawnSpot(board, square);
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className={cx("cd-board block w-full", className)} role="img" aria-label={label ?? `${board.title} board: ${board.squares.length} squares, from Start of day to Handover.`}>
       <defs>
@@ -261,7 +281,7 @@ export function DayBoard({
       <rect x="15" y="15" width={width - 30} height={height - 30} rx="20" fill="none" stroke="#e9c994" strokeWidth="2" />
 
       {/* The path: a thin cream line, dashes flowing from Start to Handover, and a glow that travels it on a loop. */}
-      <path d={route} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round" />
+      <path ref={routeRef} d={route} fill="none" stroke="#fffaf0" strokeOpacity="0.9" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round" />
       <path d={route} className="cd-path" fill="none" stroke="#1f8a7e" strokeOpacity="0.75" strokeWidth="2.5" strokeDasharray="3 9" strokeLinecap="round" />
       <path d={route} pathLength={1} className="cd-comet" fill="none" stroke="#fff3b0" strokeWidth="9" strokeLinecap="round" strokeDasharray="0.05 0.95" filter={`url(#${id}-glow)`} />
       <path d={route} pathLength={1} className="cd-comet" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeDasharray="0.03 0.97" />
@@ -404,7 +424,7 @@ export function DayBoard({
       )}
 
       {/* The pawn: moved by the code above; it bobs gently while it waits. */}
-      <g ref={pawnRef} transform={`translate(${start.x} ${start.y})`} aria-hidden>
+      <g ref={pawnRef} transform={`translate(${start.x} ${start.y - 22})`} aria-hidden>
         <g className={cx("cd-pawn", moving && "cd-pawn-moving")}>
           <ellipse cx="0" cy="26" rx="17" ry="5" fill="#3b2a12" opacity="0.25" />
           <path d="M-15 24 C-15 12 -9 6 -6 2 C-11 -1 -12 -6 -12 -10 C-12 -18 -7 -24 0 -24 C7 -24 12 -18 12 -10 C12 -6 11 -1 6 2 C9 6 15 12 15 24 Z" fill="#0b8b88" stroke="#fff" strokeWidth="2.5" />
@@ -417,10 +437,38 @@ export function DayBoard({
 
 type Pt = { x: number; y: number };
 
-/** Where the pawn stands on a square: its top-right corner. */
+/** How far along the path, past a square's centre, the pawn waits: just beyond the tile's edge. */
+const REST = 58;
+/** Where the pawn's feet are when it waits on a square, before the path has been measured. */
 function pawnSpot(board: Board, i: number): Pt {
   const c = layout(board.squares.length).at(i);
-  return { x: c.x + 44, y: c.y - 30 };
+  return { x: c.x + REST, y: c.y };
+}
+
+/**
+  The path as drawn, measured: where along it each square's centre falls, and the point at any distance
+  along it. Past the end it carries straight on to the right (the top row runs left to right).
+*/
+function measure(el: SVGPathElement, centres: Pt[]) {
+  const total = el.getTotalLength();
+  const samples: Pt[] = [];
+  for (let d = 0; d <= total; d += 2) samples.push(el.getPointAtLength(d));
+  const along: number[] = [];
+  let from = 0;
+  for (const c of centres) {
+    let best = from;
+    for (let j = from; j < samples.length; j++) {
+      if (Math.hypot(samples[j].x - c.x, samples[j].y - c.y) < Math.hypot(samples[best].x - c.x, samples[best].y - c.y)) best = j;
+    }
+    along.push(best * 2);
+    from = best;
+  }
+  const point = (d: number): Pt => {
+    if (d <= total) return el.getPointAtLength(Math.max(0, d));
+    const end = el.getPointAtLength(total);
+    return { x: end.x + (d - total), y: end.y };
+  };
+  return { along, point };
 }
 
 /** The board's snakes, one for each slide: head on the setback square, tail on the work to redo. */
