@@ -8,6 +8,7 @@ import { HttpError, requireAuthor, type User } from "./auth";
 import { lessons as contentLessons } from "@/content/lessons";
 import { toWebp } from "./imageCompress";
 import { refreshPublishedLessons } from "./lessonRegistry";
+import { snapshotFile } from "./snapshot";
 
 /* Card images, videos and PDFs uploaded by authors. Checked by content, renamed, and stored outside the public folder. */
 
@@ -148,7 +149,9 @@ function readFile(row: UploadRow) {
   try {
     return { body: fs.readFileSync(path.join(DIR, row.filename)), mime: row.mime, name: row.original_name };
   } catch {
-    return null;
+    // On the online demo, a file from the shipped content.
+    const body = snapshotFile("uploads", row.filename);
+    return body ? { body, mime: row.mime, name: row.original_name } : null;
   }
 }
 

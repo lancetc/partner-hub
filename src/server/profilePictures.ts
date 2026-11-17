@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import sharp from "sharp";
 import { audit, type Db } from "./db";
 import { HttpError, type User } from "./auth";
+import { snapshotFile } from "./snapshot";
 
 /*
   Profile pictures: each person can upload a photo of themselves, shown instead of their initials in
@@ -72,6 +73,7 @@ export function readPicture(file: string) {
   try {
     return fs.readFileSync(path.join(DIR, file));
   } catch {
-    return undefined;
+    // On the online demo, a picture from the shipped content.
+    return snapshotFile("avatars", file);
   }
 }

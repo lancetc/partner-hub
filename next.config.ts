@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   // and wired), read when the server starts. Without it the page never starts in their browser.
   allowedDevOrigins: localAddresses(),
   cacheComponents: true,
+  // The online demo's starting content (see src/server/snapshot.ts), shipped with the server code.
+  outputFileTracingIncludes: {
+    "/*": ["./snapshot/**/*"],
+  },
   partialPrefetching: true,
   // Topics used to live at /learning. Old links keep working: shared and QR links (/learning/s/…),
   // emails, Inbox items, bookmarks and search results all land on the same page under /topics.

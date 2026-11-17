@@ -6,6 +6,7 @@ import { seedFollowUps, seedPath, seedSequencePath, type PathStep } from "@/cont
 import { demoSurveys } from "@/content/surveys";
 import { syncPublishedLessons } from "./lessonRegistry";
 import { syncStories } from "./storyRegistry";
+import { restoreDatabase } from "./snapshot";
 
 /*
   Local relational store for the prototype server (Node's built-in SQLite).
@@ -730,7 +731,10 @@ const globalForDb = globalThis as unknown as { __hubDb?: Db };
 
 export function getDb(): Db {
   if (!globalForDb.__hubDb) {
-    globalForDb.__hubDb = openDb(process.env.HUB_DB_PATH ?? path.join(process.cwd(), "data", "hub.sqlite"));
+    const file = process.env.HUB_DB_PATH ?? path.join(process.cwd(), "data", "hub.sqlite");
+    // On the online demo, a fresh server starts from the shipped content rather than the bare demo.
+    restoreDatabase(file);
+    globalForDb.__hubDb = openDb(file);
   }
   // Lessons published from the editor replace (or join) the ones in the content files.
   syncPublishedLessons(globalForDb.__hubDb);
