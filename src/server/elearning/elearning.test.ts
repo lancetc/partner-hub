@@ -8,7 +8,7 @@ import { userById, type User } from "../auth";
 import { parseManifest, ManifestError } from "./manifest";
 import { safePath, unzip, UnzipError } from "./unzip";
 import { formatTotal, outcomeAfter, restorable, RuntimeError, seconds12, seconds2004, startingData, tracked, validateSave } from "./runtime";
-import { importPackage, launch, saveAttempt, setCourseStatus, courseForPlayer, learnerCourses, deleteCourse, adminCourses } from "./service";
+import { importPackage, launch, saveAttempt, setCourseStatus, setCoursePoster, courseForPlayer, learnerCourses, deleteCourse, adminCourses } from "./service";
 import { contentOriginFor, launchToken, readLaunchToken } from "./launchToken";
 import { storage } from "./storage";
 
@@ -278,6 +278,20 @@ describe("import, launch and save", () => {
     expect(storage.readFile(versionId, "../../hub.sqlite")).toBeNull();
     expect(() => storage.readFile("../etc", "x")).toThrow();
   });
+  it("sets and clears a course's poster, accepting only pictures uploaded to the Hub", async () => {
+    const r = await importPackage(db, author, demoZip(), "poster.zip", now);
+    setCourseStatus(db, author, r.courseId, "published", now);
+    const src = "/api/uploads/0f8e7d6c-5b4a-4321-8fed-cba987654321.webp";
+    expect(() => setCoursePoster(db, learner, r.courseId, src, now)).toThrow(/authors/);
+    for (const bad of ["https://example.com/a.jpg", "/api/uploads/../secret.jpg", "/api/uploads/0f8e7d6c-5b4a-4321-8fed-cba987654321.pdf", "javascript:alert(1)"])
+      expect(() => setCoursePoster(db, author, r.courseId, bad, now)).toThrow(/uploaded to the Hub/);
+    expect(setCoursePoster(db, author, r.courseId, src, now).poster).toBe(src);
+    expect(learnerCourses(db, learner).courses.find((c) => c.id === r.courseId)?.poster).toBe(src);
+    expect(setCoursePoster(db, author, r.courseId, null, now).poster).toBeNull();
+    const events = db.prepare("SELECT event FROM scorm_audit_events WHERE course_id = ? AND event LIKE 'course.poster%'").all(r.courseId) as { event: string }[];
+    expect(events.map((e) => e.event)).toEqual(["course.poster_set", "course.poster_cleared"]);
+  });
+
   it("deletes a course for good when no learner has tried it, and keeps learners' records when they have", async () => {
     // Untried (an author's preview doesn't count): the course, its rows and its files go.
     const a = await importPackage(db, author, demoZip(), "untried.zip", now);

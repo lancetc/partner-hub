@@ -17,6 +17,8 @@ export type BrowseCourse = {
   id: string;
   title: string;
   description: string;
+  /** The course's poster picture; without one, a teal cover with a screen. */
+  poster: string | null;
   edition: string;
   publishedAt: string | null;
   attempt: {
@@ -251,8 +253,11 @@ const meta = (c: BrowseCourse) =>
     .filter(Boolean)
     .join(" · ");
 
-/** A course has no picture of its own yet: a teal cover with a screen, in the banner's colours. */
-function Cover({ className }: { className?: string }) {
+/** The course's poster, or without one a teal cover with a screen, in the banner's colours. */
+function Cover({ poster, className }: { poster: string | null; className?: string }) {
+  if (poster)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={poster} alt="" loading="lazy" className={cx("bg-muted object-cover", className)} />;
   return (
     <div className={cx("relative grid place-items-center overflow-hidden bg-[#008282] text-white", className)} aria-hidden>
       <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="xMaxYMid slice" viewBox="0 0 320 200">
@@ -268,7 +273,7 @@ function Cover({ className }: { className?: string }) {
 function CourseRow({ course: c }: { course: BrowseCourse }) {
   return (
     <li className="group relative flex items-center gap-4 p-3 sm:px-4">
-      <Cover className="size-16 shrink-0 rounded-xl" />
+      <Cover poster={c.poster} className="size-16 shrink-0 rounded-xl" />
       <div className="min-w-0 flex-1">
         <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">{meta(c)}</p>
         <h3 className="font-semibold leading-snug">
@@ -289,7 +294,7 @@ function CourseRow({ course: c }: { course: BrowseCourse }) {
 function CourseTile({ course: c }: { course: BrowseCourse }) {
   return (
     <li className="group relative flex flex-col gap-3">
-      <Cover className="aspect-[16/10] rounded-2xl" />
+      <Cover poster={c.poster} className="aspect-[16/10] w-full rounded-2xl" />
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{meta(c)}</p>
       <h3 className="font-serif text-xl font-semibold leading-snug">
         <Link href={`/elearning/${c.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">

@@ -652,6 +652,9 @@ export function migrate(db: Db) {
   if (!completionCols.includes("via")) db.exec("ALTER TABLE lesson_completions ADD COLUMN via TEXT");
   // First-try results and assessment scores when they finished (JSON), so a later attempt can't erase them.
   if (!completionCols.includes("evidence")) db.exec("ALTER TABLE lesson_completions ADD COLUMN evidence TEXT");
+  const courseCols = (db.prepare("PRAGMA table_info(scorm_courses)").all() as { name: string }[]).map((c) => c.name);
+  // The eLearning course's poster (an uploaded picture, /api/uploads/…); null shows the plain cover.
+  if (!courseCols.includes("poster")) db.exec("ALTER TABLE scorm_courses ADD COLUMN poster TEXT");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.

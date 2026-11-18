@@ -6,6 +6,7 @@ import { api, useApi } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
 import { AdminShell, Badge, btn, ErrorNote } from "./ui";
+import { ImageDropZone } from "./ImagePicker";
 import { Icon } from "../Icon";
 
 /* eLearning: import SCORM ZIPs exported from Articulate Rise or Storyline, preview them, and publish. */
@@ -13,6 +14,7 @@ import { Icon } from "../Icon";
 type Course = {
   id: string;
   title: string;
+  poster: string | null;
   status: "draft" | "published" | "archived";
   standard: "scorm12" | "scorm2004";
   edition: string;
@@ -68,6 +70,20 @@ export function ElearningAdmin() {
     try {
       await api(`/api/admin/elearning/${c.id}`, { method: "DELETE" });
       setNote({ tone: "good", text: keep ? `Deleted “${c.title}”. Learners’ records on it are kept.` : `Deleted “${c.title}” and its files.` });
+      reload();
+    } catch (e) {
+      setNote({ tone: "bad", text: e instanceof Error ? e.message : "That didn’t work." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // The poster saves as soon as it's chosen, replaced or removed.
+  const setPoster = async (c: Course, poster: string | null) => {
+    setBusy(c.id);
+    try {
+      await api(`/api/admin/elearning/${c.id}`, { body: { action: "poster", poster } });
+      setNote({ tone: "good", text: poster ? `Poster saved for “${c.title}”.` : `Poster removed from “${c.title}”.` });
       reload();
     } catch (e) {
       setNote({ tone: "bad", text: e instanceof Error ? e.message : "That didn’t work." });
@@ -134,6 +150,13 @@ export function ElearningAdmin() {
         <ul className="mt-6 grid gap-4 md:grid-cols-2">
           {data.courses.map((c) => (
             <li key={c.id} className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5">
+              {/* The poster learners see on the course's tile in eLearn. */}
+              <ImageDropZone
+                picture={c.poster ? { src: c.poster, width: 1600, height: 1000 } : undefined}
+                label="Drag a poster here"
+                aspect="aspect-[16/10]"
+                onChange={(p) => setPoster(c, p?.src ?? null)}
+              />
               <div className="flex flex-wrap gap-1.5">
                 <Badge tone={c.status === "published" ? "good" : "neutral"}>{c.status === "published" ? "Published" : "Draft"}</Badge>
                 <Badge tone="info">SCORM {c.edition}</Badge>

@@ -23,6 +23,7 @@ type CourseRow = {
   description: string;
   status: "draft" | "published" | "archived";
   version_id: string;
+  poster: string | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
@@ -170,6 +171,8 @@ const courseView = (db: Db, c: CourseRow) => {
     id: c.id,
     title: c.title,
     description: c.description,
+    /** The poster picture on the course's tile; null shows the plain cover. */
+    poster: c.poster ?? null,
     status: c.status,
     standard: v.standard,
     edition: v.edition,
@@ -243,6 +246,28 @@ export function setCourseStatus(db: Db, actor: User, courseId: string, status: "
     courseId,
   );
   event(db, { actor: actor.id, event: `course.${status}`, course: courseId, version: c.version_id, at: now });
+  return courseView(db, courseRow(db, courseId)!);
+}
+
+/** Only pictures uploaded to the Hub can be a poster. */
+const POSTER = /^\/api\/uploads\/[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
+
+/** Sets or clears (null) the picture on a course's tile. */
+export function setCoursePoster(db: Db, actor: User, courseId: string, poster: unknown, now: Date) {
+  requireAuthor(actor);
+  const c = courseRow(db, courseId);
+  if (!c || c.status === "archived") throw new HttpError(404, "Course not found.");
+  const src = poster == null || poster === "" ? null : String(poster);
+  if (src !== null && !POSTER.test(src)) throw new HttpError(400, "Choose a picture uploaded to the Hub for the poster.");
+  db.prepare("UPDATE scorm_courses SET poster = ?, updated_by = ?, updated_at = ? WHERE id = ?").run(src, actor.id, now.toISOString(), courseId);
+  event(db, {
+    actor: actor.id,
+    event: src ? "course.poster_set" : "course.poster_cleared",
+    course: courseId,
+    version: c.version_id,
+    detail: src ? { poster: src } : undefined,
+    at: now,
+  });
   return courseView(db, courseRow(db, courseId)!);
 }
 

@@ -48,6 +48,7 @@ async function courses(): Promise<BrowseCourse[]> {
     id: c.id,
     title: c.title,
     description: c.description,
+    poster: c.poster,
     edition: c.edition,
     publishedAt: c.publishedAt,
     attempt: c.attempt && {
