@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
-import { AdminShell, Badge, btn, ErrorNote } from "./ui";
+import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { ImageDropZone } from "./ImagePicker";
 import { Icon } from "../Icon";
 
@@ -14,6 +14,7 @@ import { Icon } from "../Icon";
 type Course = {
   id: string;
   title: string;
+  description: string;
   poster: string | null;
   status: "draft" | "published" | "archived";
   standard: "scorm12" | "scorm2004";
@@ -36,6 +37,8 @@ export function ElearningAdmin() {
   const { data, error, reload } = useApi<Data>("/api/admin/elearning");
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "good" | "bad"; text: string; warnings?: string[] } | null>(null);
+  // The course whose name and description are being edited: opened straight after an upload, so it gets named.
+  const [editing, setEditing] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const upload = async (f: File) => {
@@ -45,9 +48,10 @@ export function ElearningAdmin() {
       const form = new FormData();
       form.append("file", f);
       const res = await fetch("/api/admin/elearning", { method: "POST", body: form });
-      const out = (await res.json()) as { error?: string; title?: string; edition?: string; warnings?: string[] };
+      const out = (await res.json()) as { error?: string; courseId?: string; title?: string; edition?: string; warnings?: string[] };
       if (!res.ok) throw new Error(out.error ?? "The upload didn’t work.");
-      setNote({ tone: "good", text: `Imported “${out.title}” (SCORM ${out.edition}) as a draft. Preview it, then publish.`, warnings: out.warnings });
+      setNote({ tone: "good", text: `Imported SCORM ${out.edition} as a draft. Name the course below, then preview and publish it.`, warnings: out.warnings });
+      if (out.courseId) setEditing(out.courseId);
       reload();
     } catch (e) {
       setNote({ tone: "bad", text: e instanceof Error ? e.message : "The upload didn’t work." });
@@ -163,7 +167,31 @@ export function ElearningAdmin() {
                 <Badge tone="info">SCORM {c.edition}</Badge>
                 <Badge>Version {c.version}</Badge>
               </div>
-              <h2 className="font-serif text-xl font-semibold leading-snug">{c.title}</h2>
+              {editing === c.id ? (
+                <CourseDetailsForm
+                  course={c}
+                  onCancel={() => setEditing(null)}
+                  onSaved={() => {
+                    setEditing(null);
+                    setNote({ tone: "good", text: "Course name and description saved." });
+                    reload();
+                  }}
+                />
+              ) : (
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-serif text-xl font-semibold leading-snug">{c.title}</h2>
+                    {c.description ? (
+                      <p className="mt-1 text-sm text-ink-muted">{c.description}</p>
+                    ) : (
+                      <p className="mt-1 text-sm italic text-ink-muted">No description yet.</p>
+                    )}
+                  </div>
+                  <button type="button" className={btn.quiet + " shrink-0"} onClick={() => setEditing(c.id)}>
+                    <Icon name="pen" className="size-4" /> Edit name
+                  </button>
+                </div>
+              )}
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                 <dt className="text-ink-muted">Launch file</dt>
                 <dd className="break-all font-mono text-xs leading-5">{c.launchHref}</dd>
@@ -219,5 +247,45 @@ export function ElearningAdmin() {
         </section>
       )}
     </AdminShell>
+  );
+}
+
+/** The course's name and description, as learners see them in eLearn. */
+function CourseDetailsForm({ course, onCancel, onSaved }: { course: Course; onCancel: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState(course.title);
+  const [description, setDescription] = useState(course.description);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setProblem(null);
+    try {
+      await api(`/api/admin/elearning/${course.id}`, { body: { action: "details", title, description } });
+      onSaved();
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : "That didn’t save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form onSubmit={save} className="flex flex-col gap-3 rounded-2xl bg-tealtint p-4">
+      <Field label="Course name" hint="What learners see on its tile in eLearn.">
+        <input className={input} value={title} maxLength={160} required autoFocus onFocus={(e) => e.target.select()} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
+      <Field label="Description" hint="Optional. A line or two on what the course covers.">
+        <textarea className={input + " min-h-24 py-2"} value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} />
+      </Field>
+      {problem && <ErrorNote text={problem} />}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={btn.primary} disabled={saving || title.trim().length < 2}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className={btn.quiet} onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

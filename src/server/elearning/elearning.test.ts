@@ -8,7 +8,7 @@ import { userById, type User } from "../auth";
 import { parseManifest, ManifestError } from "./manifest";
 import { safePath, unzip, UnzipError } from "./unzip";
 import { formatTotal, outcomeAfter, restorable, RuntimeError, seconds12, seconds2004, startingData, tracked, validateSave } from "./runtime";
-import { importPackage, launch, saveAttempt, setCourseStatus, setCoursePoster, courseForPlayer, learnerCourses, deleteCourse, adminCourses } from "./service";
+import { importPackage, launch, saveAttempt, setCourseStatus, setCoursePoster, setCourseDetails, courseForPlayer, learnerCourses, deleteCourse, adminCourses } from "./service";
 import { contentOriginFor, launchToken, readLaunchToken } from "./launchToken";
 import { storage } from "./storage";
 
@@ -278,6 +278,20 @@ describe("import, launch and save", () => {
     expect(storage.readFile(versionId, "../../hub.sqlite")).toBeNull();
     expect(() => storage.readFile("../etc", "x")).toThrow();
   });
+  it("lets authors name a course and describe it", async () => {
+    const r = await importPackage(db, author, demoZip(), "named.zip", now);
+    expect(adminCourses(db, author).courses.find((c) => c.id === r.courseId)?.title).toBe("Hub test course (SCORM 1.2)");
+    expect(() => setCourseDetails(db, learner, r.courseId, { title: "Mine" }, now)).toThrow(/authors/);
+    expect(() => setCourseDetails(db, author, r.courseId, { title: " " }, now)).toThrow(/name/);
+    expect(() => setCourseDetails(db, author, r.courseId, { title: "x".repeat(161) }, now)).toThrow(/160/);
+    const c = setCourseDetails(db, author, r.courseId, { title: "  Manual   handling basics ", description: " Lifting safely at home. " }, now);
+    expect(c).toMatchObject({ title: "Manual handling basics", description: "Lifting safely at home." });
+    setCourseStatus(db, author, r.courseId, "published", now);
+    expect(learnerCourses(db, learner).courses.find((x) => x.id === r.courseId)).toMatchObject({ title: "Manual handling basics" });
+    const e = db.prepare("SELECT detail FROM scorm_audit_events WHERE course_id = ? AND event = 'course.details'").get(r.courseId) as { detail: string };
+    expect(JSON.parse(e.detail)).toMatchObject({ title: "Manual handling basics", previousTitle: "Hub test course (SCORM 1.2)" });
+  });
+
   it("sets and clears a course's poster, accepting only pictures uploaded to the Hub", async () => {
     const r = await importPackage(db, author, demoZip(), "poster.zip", now);
     setCourseStatus(db, author, r.courseId, "published", now);

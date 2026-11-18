@@ -1,15 +1,21 @@
 import { body, handle } from "@/server/http";
 import { HttpError } from "@/server/auth";
-import { deleteCourse, setCoursePoster, setCourseStatus } from "@/server/elearning/service";
+import { deleteCourse, setCourseDetails, setCoursePoster, setCourseStatus } from "@/server/elearning/service";
 
 const ACTIONS = { publish: "published", unpublish: "draft" } as const;
 
-/** Publish a course to learners, take it back to draft, or set its poster (null clears it). */
+/** Publish a course to learners, take it back to draft, name it ("details"), or set its poster (null clears it). */
 export async function POST(req: Request, ctx: RouteContext<"/api/admin/elearning/[id]">) {
   const { id } = await ctx.params;
   return handle(async ({ db, user, now }) => {
-    const { action, poster } = await body<{ action: keyof typeof ACTIONS | "poster"; poster?: string | null }>(req);
+    const { action, poster, title, description } = await body<{
+      action: keyof typeof ACTIONS | "poster" | "details";
+      poster?: string | null;
+      title?: string;
+      description?: string;
+    }>(req);
     if (action === "poster") return setCoursePoster(db, user, id, poster ?? null, now);
+    if (action === "details") return setCourseDetails(db, user, id, { title, description }, now);
     if (!(action in ACTIONS)) throw new HttpError(400, "Unknown action.");
     return setCourseStatus(db, user, id, ACTIONS[action], now);
   });

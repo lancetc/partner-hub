@@ -249,6 +249,34 @@ export function setCourseStatus(db: Db, actor: User, courseId: string, status: "
   return courseView(db, courseRow(db, courseId)!);
 }
 
+export const MAX_COURSE_TITLE = 160;
+export const MAX_COURSE_DESCRIPTION = 1000;
+
+/**
+  Names a course and says what it's about, as learners see it in eLearn. A new import takes the title in
+  the package's manifest, which is often a working title from Articulate ("New Course Example").
+*/
+export function setCourseDetails(db: Db, actor: User, courseId: string, input: { title?: unknown; description?: unknown }, now: Date) {
+  requireAuthor(actor);
+  const c = courseRow(db, courseId);
+  if (!c || c.status === "archived") throw new HttpError(404, "Course not found.");
+  const title = String(input.title ?? "").replace(/\s+/g, " ").trim();
+  const description = String(input.description ?? "").trim();
+  if (title.length < 2) throw new HttpError(400, "Give the course a name.");
+  if (title.length > MAX_COURSE_TITLE) throw new HttpError(400, `Keep the name to ${MAX_COURSE_TITLE} characters.`);
+  if (description.length > MAX_COURSE_DESCRIPTION) throw new HttpError(400, `Keep the description to ${MAX_COURSE_DESCRIPTION} characters.`);
+  db.prepare("UPDATE scorm_courses SET title = ?, description = ?, updated_by = ?, updated_at = ? WHERE id = ?").run(title, description, actor.id, now.toISOString(), courseId);
+  event(db, {
+    actor: actor.id,
+    event: "course.details",
+    course: courseId,
+    version: c.version_id,
+    detail: { title, previousTitle: c.title, descriptionChanged: description !== c.description },
+    at: now,
+  });
+  return courseView(db, courseRow(db, courseId)!);
+}
+
 /** Only pictures uploaded to the Hub can be a poster. */
 const POSTER = /^\/api\/uploads\/[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 
