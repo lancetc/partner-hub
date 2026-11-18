@@ -9,10 +9,12 @@ import { EnrolButton } from "./EnrolButton";
 import { PublicQr } from "./PublicQr";
 import { Icon, type IconName } from "./Icon";
 import { btn } from "./admin/ui";
+import { StoryVisual } from "./StoryVisual";
+import type { Thumbnail } from "@/lib/pathThumbnail";
 import type { QuizOffer } from "./PathQuiz";
 import { minutesLabel } from "@/lib/pathQuizSettings";
 
-type PathData = MyPath & { assigned: boolean; selfEnrolled: boolean; minutes: number; done: boolean; quiz: QuizOffer | null };
+type PathData = MyPath & { assigned: boolean; selfEnrolled: boolean; minutes: number; done: boolean; quiz: QuizOffer | null; thumbnail: Thumbnail | null };
 
 /* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the topics. */
 export function PathPage({ id, preview = false }: { id: string; preview?: boolean }) {
@@ -158,6 +160,18 @@ function Overview({ path: p }: { path: PathData }) {
           )}
           {p.reward && (
             <section className="relative isolate overflow-hidden rounded-3xl bg-[linear-gradient(160deg,#ffd968_0%,#ffc72c_100%)] p-5 text-[#102a43]">
+              {/* The path's poster behind the panel, under a gold wash: deepest behind the words, lightest at the bottom. */}
+              {p.thumbnail && (
+                <>
+                  <div aria-hidden className="absolute inset-0 -z-20">
+                    <StoryVisual {...p.thumbnail} alt="" className="size-full" />
+                  </div>
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(255_217_104/0.95)_0%,rgb(255_199_44/0.85)_45%,rgb(255_199_44/0.35)_100%)]"
+                  />
+                </>
+              )}
               <CertificateArt className="absolute -bottom-3 -right-3 -z-10 w-32 rotate-[-8deg] drop-shadow-md" />
               <span className="grid size-11 place-items-center rounded-2xl bg-[#102a43] text-[#ffc72c] shadow-sm">
                 <Icon name="star" className="size-5" />

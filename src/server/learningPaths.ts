@@ -664,6 +664,11 @@ export function learnerPath(db: Db, user: User, id: string) {
     dueDate: a?.due_date ?? null,
     minutes: slugs.reduce((n, s) => n + lessonLookup(db)(s).minutes, 0),
     chapters: chaptersFor(db, id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
+    // The path's poster: the picture from its first published topic, as on its tile.
+    thumbnail: (() => {
+      const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
+      return first ? thumbnailFor(first) : null;
+    })(),
     ...progress(db, user.id, slugs, Boolean(p.in_order)),
   };
 }
