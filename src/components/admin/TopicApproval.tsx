@@ -16,6 +16,8 @@ export type ApprovalStage = "draft" | "review" | "changes" | "compliance" | "app
 export type Approval = {
   stage: ApprovalStage;
   stale: boolean;
+  /** False while the review is optional: any author can publish the saved draft straight away. */
+  reviewRequired: boolean;
   state: "unpublished" | "live" | "changes";
   version: string;
   submission: {
@@ -44,6 +46,7 @@ type Published = { version: string; status: { state: "unpublished" | "live" | "c
 /** The label on the editor's header button, by stage. */
 export function approvalButton(a: Approval | null) {
   if (!a) return "Submit for review";
+  if (!a.reviewRequired && a.stage !== "live") return "Publish";
   if (a.stage === "draft") return a.stale ? "Submit again" : "Submit for review";
   if (a.stage === "changes") return "Changes asked for";
   if (a.stage === "review") return a.you.canReview ? "Your review" : "In review";
@@ -107,7 +110,8 @@ export function TopicApproval({
   onComments: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // What went wrong, and whether it was publishing (shown in the Publish now box) or a review step.
+  const [problem, setProblem] = useState<{ text: string; publish: boolean } | null>(null);
   const [reviewer, setReviewer] = useState<string>("");
   const [compliance, setCompliance] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
@@ -134,7 +138,7 @@ export function TopicApproval({
       } else setData(r);
       setNote("");
     } catch (e) {
-      setProblem((e as Error).message);
+      setProblem({ text: (e as Error).message, publish: body.action === "publish" });
     } finally {
       setBusy(false);
     }
@@ -211,6 +215,39 @@ export function TopicApproval({
     </div>
   );
 
+  // While review is optional, unsaved edits are saved first and published with the rest.
+  const quick = !a.reviewRequired;
+  const publishForm = (
+    <div className="flex flex-col gap-3">
+      <Field label="What changed in this version" hint="Kept in the version history. For an important change, learners see it too.">
+        <textarea
+          rows={3}
+          className={textarea}
+          value={changeNote}
+          onChange={(e) => setChangeNote(e.target.value)}
+          placeholder="For example: Updated the example rate and the worked amounts."
+        />
+      </Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={important} onChange={(e) => setImportant(e.target.checked)} />
+        <span>
+          <span className="font-semibold">Important change</span>
+          <span className="block text-ink-muted">People who did an earlier version see this note next time they open the topic.</span>
+        </span>
+      </label>
+      <button
+        type="button"
+        className={cx(btn.primary, "self-start")}
+        disabled={busy || (dirty && !quick)}
+        title={dirty && !quick ? "Unsaved edits would need another review." : undefined}
+        onClick={() => send({ action: "publish", notes: changeNote, kind: important ? "important" : "minor" }, { saveFirst: quick })}
+      >
+        <Icon name="check" className="size-4" /> {busy ? "Publishing…" : quick ? "Publish now" : "Publish"}
+      </button>
+      <p className="text-xs text-ink-muted">Learners who already finished keep their completion. Publishing starts a new version.</p>
+    </div>
+  );
+
   const waiting = (who: string, since: string | undefined) => (
     <div className="flex flex-col gap-3">
       <p>
@@ -236,7 +273,11 @@ export function TopicApproval({
             The topic changed after it went to {a.submission?.reviewer?.name ?? "the reviewer"}, so that review no longer counts. Submit it again when you’re ready.
           </p>
         )}
-        {!a.stale && <p className="mb-3 text-ink-muted">When the draft is ready, send it to a reviewer. It can’t be published until it’s approved.</p>}
+        {!a.stale && (
+          <p className="mb-3 text-ink-muted">
+            {quick ? "Send the draft to a reviewer if you’d like it checked before it goes live." : "When the draft is ready, send it to a reviewer. It can’t be published until it’s approved."}
+          </p>
+        )}
         {submitForm}
       </>
     );
@@ -265,34 +306,7 @@ export function TopicApproval({
   } else if (a.stage === "approved") {
     title = a.you.canPublish ? "Approved: ready to publish" : "Approved";
     body = a.you.canPublish ? (
-      <div className="flex flex-col gap-3">
-        <Field label="What changed in this version" hint="Kept in the version history. For an important change, learners see it too.">
-          <textarea
-            rows={3}
-            className={textarea}
-            value={changeNote}
-            onChange={(e) => setChangeNote(e.target.value)}
-            placeholder="For example: Updated the example rate and the worked amounts."
-          />
-        </Field>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={important} onChange={(e) => setImportant(e.target.checked)} />
-          <span>
-            <span className="font-semibold">Important change</span>
-            <span className="block text-ink-muted">People who did an earlier version see this note next time they open the topic.</span>
-          </span>
-        </label>
-        <button
-          type="button"
-          className={cx(btn.primary, "self-start")}
-          disabled={busy || dirty}
-          title={dirty ? "Unsaved edits would need another review." : undefined}
-          onClick={() => send({ action: "publish", notes: changeNote, kind: important ? "important" : "minor" })}
-        >
-          <Icon name="check" className="size-4" /> {busy ? "Publishing…" : "Publish"}
-        </button>
-        <p className="text-xs text-ink-muted">Learners who already finished keep their completion. Publishing starts a new version.</p>
-      </div>
+      publishForm
     ) : (
       waiting(a.publishers.join(" or ") || "the Hub owner", undefined)
     );
@@ -303,6 +317,20 @@ export function TopicApproval({
 
   return (
     <div className="flex flex-col gap-5">
+      {quick && a.you.canPublish && a.stage !== "approved" && (
+        <section className="rounded-3xl border-2 border-action bg-surface p-5">
+          <h3 className="font-serif text-xl font-semibold">Publish now</h3>
+          <p className="mb-4 mt-1 text-ink-muted">
+            Review is optional for now, so you can put this draft live straight away. To have it checked first, send it to a reviewer below instead.
+          </p>
+          {publishForm}
+          {problem?.publish && (
+            <div className="mt-3">
+              <ErrorNote text={problem.text} />
+            </div>
+          )}
+        </section>
+      )}
       <section className="rounded-3xl border border-line bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-serif text-xl font-semibold">{title}</h3>
@@ -320,9 +348,9 @@ export function TopicApproval({
           </p>
         )}
         <div className="mt-4">{body}</div>
-        {problem && (
+        {problem && !(problem.publish && quick && a.stage !== "approved") && (
           <div className="mt-3">
-            <ErrorNote text={problem} />
+            <ErrorNote text={problem.text} />
           </div>
         )}
       </section>

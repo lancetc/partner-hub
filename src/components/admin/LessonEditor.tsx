@@ -826,7 +826,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         <span>
           <Icon name="info" className="mr-1 inline size-4 align-[-3px]" />
           {isNew
-            ? "Save once to keep this topic as a draft; after that, changes save automatically. Learners won’t see it until it’s reviewed, approved and published."
+            ? "Save once to keep this topic as a draft; after that, changes save automatically. Learners won’t see it until it’s published."
             : busy === "save"
               ? "Saving…"
               : dirty
@@ -836,9 +836,9 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
                     ? "Not saved yet. Press Save draft to try again."
                     : "Saving your changes…"
                 : status?.state === "unpublished"
-                  ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until it’s approved and published.`
+                  ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners won’t see it until it’s published.`
                   : status?.state === "changes"
-                    ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until the changes are approved and published.`
+                    ? `All changes saved${status.updatedAt ? ` at ${savedTime(status.updatedAt)}` : ""}. Learners still see version ${status.version} until the changes are published.`
                     : "Everything is published."}
         </span>
         {!isNew && !dirty && status && status.state !== "live" && (

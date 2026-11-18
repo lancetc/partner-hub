@@ -22,7 +22,14 @@ import { openReports } from "./contentReports";
 
   An approval is for the exact draft that was submitted: if the draft is edited after that, it has to be
   submitted again, so what's published is always what was reviewed.
+
+  For now the review is optional, so content can go live quickly: any author can publish a saved draft
+  straight away, from whatever stage it's at. The review steps all still work, for anyone who wants a
+  topic checked first. Set HUB_TOPIC_REVIEW=required to make approval (and the Hub owner) a must again.
 */
+
+/** Whether a topic has to be approved, and published by the Hub owner, before it goes live. Off for now. */
+export const reviewRequired = () => process.env.HUB_TOPIC_REVIEW === "required";
 
 export type ReviewRole = "sme" | "compliance" | "publisher";
 export type Stage = "draft" | "review" | "changes" | "compliance" | "approved" | "live";
@@ -169,10 +176,17 @@ export function withdraw(db: Db, actor: User, slug: string, now: Date) {
   return approvalFor(db, actor, slug, now);
 }
 
-/** Step 6: the Hub owner publishes the approved draft. Only the exact draft that was approved can go live. */
+/**
+  Step 6: the Hub owner publishes the approved draft. Only the exact draft that was approved can go live.
+  While the review is optional (see reviewRequired), any author can publish the saved draft as it is.
+*/
 export function publishApproved(db: Db, actor: User, slug: string, now: Date, opts: { notes?: string; kind?: "minor" | "important" } = {}) {
   requireAuthor(actor);
   requireTopic(db, slug);
+  if (!reviewRequired()) {
+    if (stageOf(db, slug).stage === "live") throw new HttpError(409, "There are no saved changes to publish. Edit the topic first.");
+    return publishNow(db, actor, slug, now, opts);
+  }
   if (!canPublishTopics(db, actor)) throw new HttpError(403, "Only the Hub owner or an authorised publisher can publish topics.");
   const { stage, stale } = stageOf(db, slug);
   if (stale) throw new HttpError(409, "The topic was edited after it was approved. Submit it for review again.");
@@ -187,6 +201,11 @@ export function publishApproved(db: Db, actor: User, slug: string, now: Date, op
             : "Submit it for review first.";
     throw new HttpError(409, `This topic hasn’t been approved yet. ${why}`);
   }
+  return publishNow(db, actor, slug, now, opts);
+}
+
+/** Makes the saved draft live, closes any submission for it, and records who published it. */
+function publishNow(db: Db, actor: User, slug: string, now: Date, opts: { notes?: string; kind?: "minor" | "important" }) {
   const result = publishLesson(db, actor, slug, now, opts);
   db.prepare("DELETE FROM topic_approvals WHERE slug = ?").run(slug);
   record(db, slug, "published", actor, now, { note: opts.notes?.trim() ?? "", version: result.version });
@@ -238,9 +257,12 @@ export function approvalFor(db: Db, actor: User, slug: string, now: Date) {
   const reviewer = row && (db.prepare("SELECT id, name, review_role, review_area FROM users WHERE id = ?").get(row.reviewer_id) as StaffRow | undefined);
   const publisher = canPublishTopics(db, actor);
   const status = lessonStatus(db, slug);
+  const required = reviewRequired();
   return {
     stage,
     stale,
+    /** False while the review is optional: then any author can publish the saved draft from any stage. */
+    reviewRequired: required,
     state: status.state,
     version: status.version,
     submission: row
@@ -258,7 +280,7 @@ export function approvalFor(db: Db, actor: User, slug: string, now: Date) {
       canSubmit: stage === "draft" || stage === "changes",
       canReview: stage === "review" && row?.reviewer_id === actor.id && row.submitted_by !== actor.id,
       canApproveCompliance: stage === "compliance" && isCompliance(db, actor) && row?.submitted_by !== actor.id,
-      canPublish: stage === "approved" && publisher,
+      canPublish: required ? stage === "approved" && publisher : stage !== "live",
       canWithdraw: Boolean(row) && stage !== "live" && (row?.submitted_by === actor.id || publisher),
     },
     reviewers: reviewersFor(db, actor),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { blankLesson } from "@/content/blankLesson";
@@ -6,12 +6,20 @@ import { createLesson, editorLesson, lessonStatus, saveDraft } from "./authoredL
 import { syncPublishedLessons } from "./lessonRegistry";
 import { approvalFor, approvalQueue, decide, publishApproved, submitForReview, withdraw } from "./topicApproval";
 
-/* A person in the loop: topics go draft → review → (Compliance) → approved → published, and only what was approved goes live. */
+/*
+  A person in the loop: topics go draft → review → (Compliance) → approved → published, and only what
+  was approved goes live. That's with the review required (HUB_TOPIC_REVIEW=required); for now it's
+  optional, and any author can publish a draft straight away (the last group of tests).
+*/
 
 let db: Db;
 beforeEach(() => {
   db = openDb(":memory:");
   syncPublishedLessons(db);
+  process.env.HUB_TOPIC_REVIEW = "required";
+});
+afterEach(() => {
+  delete process.env.HUB_TOPIC_REVIEW;
 });
 const u = (id: string) => userById(db, id)!;
 const t = (minutes: number) => new Date(Date.UTC(2026, 10, 13, 1, minutes));
@@ -135,5 +143,40 @@ describe("the Approvals page", () => {
     submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
     expect(() => withdraw(db, u("dana"), slug, t(2))).toThrow(/Only the author/);
     expect(withdraw(db, u("jordan"), slug, t(2)).stage).toBe("draft");
+  });
+});
+
+describe("while the review is optional", () => {
+  beforeEach(() => {
+    delete process.env.HUB_TOPIC_REVIEW;
+  });
+
+  it("lets any author publish a draft straight away", () => {
+    const slug = newTopic();
+    const a = approvalFor(db, u("dana"), slug, t(1));
+    expect(a).toMatchObject({ stage: "draft", reviewRequired: false, you: { canPublish: true, canSubmit: true } });
+    // Dana is a reviewer, not the Hub owner, and can still publish.
+    const p = publishApproved(db, u("dana"), slug, t(2), { notes: "First version" });
+    expect(p.version).toBe("1.0");
+    expect(p.approval.stage).toBe("live");
+    expect(p.approval.you.canPublish).toBe(false);
+    expect(p.approval.history.map((h) => h.action)).toEqual(["published"]);
+    expect(() => publishApproved(db, u("dana"), slug, t(3))).toThrow(/no saved changes/);
+  });
+
+  it("publishes a draft that's with a reviewer, and closes the submission", () => {
+    const slug = newTopic();
+    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    edit(slug, "A change after submitting", t(2));
+    const p = publishApproved(db, u("jordan"), slug, t(3));
+    expect(p.approval).toMatchObject({ stage: "live", submission: null });
+    expect(editorLesson(db, slug)!.lesson.summary).toBe("A change after submitting");
+    expect(approvalQueue(db, u("dana"), t(3)).yours).toEqual([]);
+  });
+
+  it("still keeps learners from publishing", () => {
+    const slug = newTopic();
+    expect(() => publishApproved(db, u("sam"), slug, t(1))).toThrow(/authors/);
+    expect(lessonStatus(db, slug).state).toBe("unpublished");
   });
 });

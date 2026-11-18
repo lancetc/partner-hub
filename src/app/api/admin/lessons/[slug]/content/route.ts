@@ -27,7 +27,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/admin/lessons/[
   const { slug } = await ctx.params;
   return handle(async ({ db, user, now }) => {
     const { action, notes, kind, version } = await body<{ action: string; notes?: string; kind?: "minor" | "important"; version?: string }>(req);
-    // Only an approved draft can be published (see server/topicApproval).
+    // The approval rules apply when the review is required (see server/topicApproval).
     if (action === "publish") return publishApproved(db, user, slug, now, { notes, kind });
     if (action === "restore_version" && version) return restoreVersion(db, user, slug, version, now);
     if (action === "discard") {
