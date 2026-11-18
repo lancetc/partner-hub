@@ -60,7 +60,8 @@ export type IconName =
   | "monitor"
   | "inbox"
   | "mobile"
-  | "collapse";
+  | "collapse"
+  | "print";
 
 const paths: Record<IconName, React.ReactNode> = {
   /** An in-tray: the Inbox of notices and actions. */
@@ -88,6 +89,14 @@ const paths: Record<IconName, React.ReactNode> = {
   expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   /** Leave full screen: four corners pointing in. */
   collapse: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />,
+  /** A printer, for Print buttons. */
+  print: (
+    <>
+      <path d="M7 8V3h10v5" />
+      <rect x="3" y="8" width="18" height="9" rx="2" />
+      <path d="M7 14h10v7H7z" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />

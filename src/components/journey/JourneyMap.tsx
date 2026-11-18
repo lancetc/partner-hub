@@ -50,21 +50,63 @@ const MOTION = `
 
 export function JourneyMap() {
   return (
-    <div className="pb-14">
-      <style>{MOTION}</style>
-      <Hero />
-      <Road />
+    <div className="pb-14 print:pb-0">
+      <style>{MOTION + PRINT}</style>
+      <div className="print:hidden">
+        <Hero />
+        <Road />
+      </div>
+      <JourneyPrint />
     </div>
   );
 }
 
-/** Just the road, filling its own browser tab (opened from the Full screen link). */
+/** Just the road, filling its own browser window (opened from the Full screen button). */
 export function JourneyFull() {
   return (
     <>
-      <style>{MOTION}</style>
-      <Road standalone />
+      <style>{MOTION + PRINT}</style>
+      <div className="print:hidden">
+        <Road standalone />
+      </div>
+      <JourneyPrint />
     </>
+  );
+}
+
+/*
+  Printing: the road is one long row, far wider than a page, so paper gets its own layout (JourneyPrint)
+  instead: landscape A4, the stages three across, in fixed colours so it prints the same in dark mode.
+  Only the page's own content prints, not the site's header, menus or footer.
+*/
+const PRINT = `
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { overflow: visible !important; height: auto !important; background: #fff !important; padding: 0 !important; }
+  body > *:not(main) { display: none !important; }
+  .jm-print, .jm-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+`;
+
+/** Opens the road in its own browser window; if pop-ups are blocked, it opens in this one instead. */
+function openJourneyWindow(e: React.MouseEvent<HTMLAnchorElement>, fallback: () => void) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  const w = Math.round(window.screen.availWidth * 0.92);
+  const h = Math.round(window.screen.availHeight * 0.9);
+  const left = Math.round((window.screen.availWidth - w) / 2);
+  const top = Math.round((window.screen.availHeight - h) / 2);
+  const opened = window.open("/journey/full", "tc-journey", `popup,width=${w},height=${h},left=${left},top=${top}`);
+  if (opened) opened.focus();
+  else fallback();
+}
+
+/** The Print button: the page swaps to its paper layout while it prints. */
+function PrintButton({ className }: { className: string }) {
+  return (
+    <button type="button" onClick={() => window.print()} className={className}>
+      <Icon name="print" className="size-4" /> Print
+    </button>
   );
 }
 
@@ -317,7 +359,7 @@ function Road({ standalone = false }: { standalone?: boolean }) {
   };
 
   /*
-    Full screen: the Full screen link opens the road in its own tab (/journey/full), where the box covers
+    Full screen: the Full screen button opens the road in its own window (/journey/full), where the box covers
     the whole window, above the site's header and menus. There, the browser's own full screen is a click
     away too (computers and Android; iPhones only allow it for video).
   */
@@ -380,13 +422,15 @@ function Road({ standalone = false }: { standalone?: boolean }) {
               </a>
             ))}
           </nav>
+          <PrintButton className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted" />
           <a
             href="/journey/full"
             target="_blank"
             rel="noopener"
+            onClick={(e) => openJourneyWindow(e, () => router.push("/journey/full"))}
             className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
           >
-            <Icon name="expand" className="size-4" /> Full screen<span className="sr-only"> (opens in a new tab)</span>
+            <Icon name="expand" className="size-4" /> Full screen<span className="sr-only"> (opens in a new window)</span>
           </a>
         </div>
       </div>
@@ -404,6 +448,7 @@ function Road({ standalone = false }: { standalone?: boolean }) {
           <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-bg/95 px-4 py-2 backdrop-blur sm:px-6">
             <h1 className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</h1>
             <span className="flex shrink-0 gap-2">
+              <PrintButton className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted" />
               <button
                 type="button"
                 onClick={toggleBrowserFull}
@@ -823,5 +868,123 @@ function Mood({ score }: { score: number }) {
         <path d={`M7.5 15.5 Q12 ${15.5 + (score - 3) * 2.2} 16.5 15.5`} fill="none" stroke="#102a43" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     </span>
+  );
+}
+
+/*
+  The journey on paper (hidden on screen): the title and phases, then every stage three across with the
+  moment before it, then where the road splits. Fixed colours, so it prints the same whatever the theme.
+*/
+function JourneyPrint() {
+  const label = "font-mulish text-[7pt] font-extrabold uppercase tracking-[0.12em]";
+  return (
+    <div className="jm-print hidden bg-white text-[8.5pt] leading-snug text-[#102a43] print:block">
+      <header className="flex items-end justify-between gap-6 border-b-2 border-[#102a43] pb-2">
+        <div>
+          <p className={cx(label, "text-[#008282]")}>Trilogy Care · Client journey map</p>
+          <h1 className="font-serif text-[18pt] font-semibold leading-tight">The client journey, from first call to exit</h1>
+          <p className="text-[9pt] text-[#486581]">
+            What the client does, what Trilogy Care does, and how it feels at each stage, including the waits in between.
+          </p>
+        </div>
+        <ul className="flex shrink-0 flex-wrap justify-end gap-x-3 gap-y-1">
+          {phases.map((p) => (
+            <li key={p.name} className="inline-flex items-center gap-1.5 font-semibold">
+              <span className="size-2.5 rounded-full" style={{ background: p.colour }} aria-hidden />
+              {p.name}{" "}
+              <span className="font-normal text-[#486581]">
+                · {p.stages.length > 1 ? `Stages ${p.stages[0]}–${p.stages[p.stages.length - 1]}` : `Stage ${p.stages[0]}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </header>
+
+      <ol className="mt-3 grid grid-cols-3 gap-2.5">
+        {stages.map((s) => {
+          const phase = phaseOf(s.n);
+          const fork = forkAt(s.n);
+          const before = between.find((b) => b.after === s.n - 1);
+          return (
+            <li key={s.n} className="flex break-inside-avoid flex-col gap-1.5">
+              {before && (
+                <div className="rounded-lg border border-dashed border-[#9fb3c8] px-2 py-1">
+                  <p className={cx(label, "text-[#486581]")}>
+                    {before.after === 0 ? "Before it starts" : `Between ${before.after} and ${before.after + 1}`}
+                    {before.wait && " · Waiting"}
+                  </p>
+                  <p>
+                    <span className="font-semibold">{before.title}.</span> {before.text}
+                  </p>
+                </div>
+              )}
+              <article className="flex-1 rounded-lg border border-[#d9e2ec] p-2" style={{ borderTop: `4px solid ${phase.colour}` }}>
+                <p className={cx(label, "flex items-center gap-1.5")}>
+                  <span className="grid size-5 place-items-center rounded-full font-serif text-[9pt] text-white" style={{ background: phase.colour }}>
+                    {s.n}
+                  </span>
+                  <span className="text-[#008282]">Stage {s.n}</span>
+                  <span className="text-[#486581]">· {phase.name}</span>
+                </p>
+                <h2 className="mt-0.5 font-serif text-[11pt] font-semibold leading-tight">{s.title}</h2>
+                <p className="mt-0.5 text-[#486581]">
+                  {!s.role.confirm && <span className="font-semibold text-[#102a43]">{s.role.text}</span>}
+                  {!s.role.confirm && " · "}
+                  Touchpoint: <Txt parts={s.touchpoint} />
+                  {fork && ` · Varies by ${fork.by.toLowerCase()}`}
+                  {s.n === 9 && " · Can happen at any stage"}
+                </p>
+                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">
+                  <dt className="font-semibold">Client</dt>
+                  <dd>
+                    <Txt parts={s.client} />
+                  </dd>
+                  <dt className="font-semibold">Trilogy</dt>
+                  <dd>
+                    <Txt parts={s.trilogy} />
+                  </dd>
+                  <dt className="font-semibold">Feeling</dt>
+                  <dd>
+                    <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: dotColour(s.score) }} aria-hidden />
+                    <span className="font-semibold">{s.mood}.</span> <Txt parts={s.feeling} />
+                  </dd>
+                  <dt className="font-semibold text-[#c2410c]">Pain</dt>
+                  <dd>
+                    <Txt parts={s.pain} />
+                  </dd>
+                  <dt className="font-semibold">Involved</dt>
+                  <dd className="text-[#486581]">
+                    <Txt parts={s.involved} />
+                  </dd>
+                </dl>
+              </article>
+            </li>
+          );
+        })}
+      </ol>
+
+      {forks.map((f) => (
+        <section key={f.id} className="mt-3 break-inside-avoid rounded-lg border border-dashed border-[#9fb3c8] p-2">
+          <p className={cx(label, "text-[#008282]")}>
+            Where the road splits · Stages {f.from}–{f.to} · Rejoins at stage {f.to + 1}
+          </p>
+          <h2 className="font-serif text-[11pt] font-semibold">Two ways through, by {f.by.toLowerCase()}</h2>
+          <p className="text-[#486581]">{f.intro}</p>
+          <div className="mt-1.5 grid grid-cols-2 gap-2.5">
+            {f.paths.map((p) => (
+              <div key={p.name} className="rounded-lg border border-[#d9e2ec] p-2" style={{ borderLeft: `4px solid ${p.colour}` }}>
+                <p className="font-semibold">
+                  {p.name} <span className="font-normal text-[#486581]">· {p.who}</span>
+                </p>
+                <p>
+                  <Txt parts={p.text} />
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      <p className="mt-3 text-[7.5pt] text-[#486581]">The end of the journey. Trilogy Care Partner Hub · Client journey map.</p>
+    </div>
   );
 }
