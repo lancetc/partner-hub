@@ -154,6 +154,7 @@ export function ElearningAdmin() {
               <ImageDropZone
                 picture={c.poster ? { src: c.poster, width: 1600, height: 1000 } : undefined}
                 label="Drag a poster here"
+                addLabel="Add poster image"
                 aspect="aspect-[16/10]"
                 onChange={(p) => setPoster(c, p?.src ?? null)}
               />

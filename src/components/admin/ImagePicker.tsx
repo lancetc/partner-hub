@@ -152,12 +152,15 @@ export function ImageDropZone({
   label = "Drag an image here",
   aspect = "aspect-[16/10]",
   preview,
+  addLabel,
 }: {
   picture?: Picture;
   onChange: (p: Picture | undefined) => void;
   label?: string;
   aspect?: string;
   preview?: React.ReactNode;
+  /** With no picture yet, a button that says what to add (e.g. "Add poster image"), beside Image library. */
+  addLabel?: string;
 }) {
   const [over, setOver] = useState(false);
   const [library, setLibrary] = useState(false);
@@ -202,6 +205,12 @@ export function ImageDropZone({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
+        {!picture && addLabel && (
+          <label className={cx(btn.primary, "cursor-pointer", busy && "pointer-events-none opacity-60")}>
+            <Icon name="plus" className="size-4" /> {busy ? "Uploading…" : addLabel}
+            <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
+          </label>
+        )}
         {picture && (
           <label className={cx(btn.secondary, "cursor-pointer")}>
             <Icon name="upload" className="size-4" /> Replace
