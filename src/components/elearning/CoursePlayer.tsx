@@ -31,7 +31,11 @@ type Attempt = {
   passedAt: string | null;
   endedAt: string | null;
 };
-type Info = { course: { id: string; title: string; description: string; edition: string; status: string }; preview: boolean; attempt: Attempt | null };
+type Info = {
+  course: { id: string; title: string; description: string; edition: string; status: string; poster: string | null };
+  preview: boolean;
+  attempt: Attempt | null;
+};
 type Launch = {
   attempt: { id: number; number: number; session: string; resumed: boolean };
   contentOrigin: string;
@@ -229,7 +233,12 @@ export function CoursePlayer({ id }: { id: string }) {
           allowFullScreen
         />
       ) : (
-        <section className="mx-auto mt-8 w-full max-w-2xl rounded-3xl bg-surface p-6 ring-1 ring-line">
+        <section className="mx-auto mt-8 w-full max-w-2xl overflow-hidden rounded-3xl bg-surface p-6 ring-1 ring-line">
+          {/* The course's poster across the top of the card, as on its tile in eLearn. */}
+          {info.course.poster && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={info.course.poster} alt="" className="-mx-6 -mt-6 mb-5 aspect-[16/7] w-[calc(100%+3rem)] max-w-none bg-muted object-cover" />
+          )}
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">eLearning · SCORM {info.course.edition}</p>
           <h1 className="mt-1 font-serif text-3xl font-semibold">{info.course.title}</h1>
           {info.course.description && <p className="mt-2 text-ink-muted">{info.course.description}</p>}
