@@ -3,8 +3,8 @@ import type { IconName } from "./Icon";
 /**
   The Community first, then in the order people use them: learn (Topics, then Discovery Paths: the learning paths, then eLearn: the
   Articulate courses), put it into practice
-  (the Play games, then Challenges), and look things up (Resources, which holds the journey map, webinars and the
-  glossary). News is the homepage; the header leaves it out because the logo goes there.
+  (the Play games), and look things up (Resources, which holds the journey map, webinars, the glossary and
+  Challenges). News is the homepage; the header leaves it out because the logo goes there.
   `short`: the label under the icon on a phone, where space is tight.
 */
 export const navItems: { href: string; label: string; short?: string; icon: IconName }[] = [
@@ -14,7 +14,6 @@ export const navItems: { href: string; label: string; short?: string; icon: Icon
   { href: "/paths", label: "Discovery Paths", short: "Discovery", icon: "route" },
   { href: "/elearning", label: "eLearn", icon: "monitor" },
   { href: "/play", label: "Play", icon: "home" },
-  { href: "/challenges", label: "Challenges", icon: "flag" },
   { href: "/resources", label: "Resources", icon: "folder" },
 ];
 
@@ -22,9 +21,8 @@ export function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/" || pathname.startsWith("/news");
   // The games: Neighbourhood Explorer lives at /explorer, Care Conversations under /play.
   if (href === "/play") return pathname.startsWith("/play") || pathname.startsWith("/explorer");
-  // Challenges, and a single challenge at /challenge/[id].
-  if (href === "/challenges") return pathname.startsWith("/challenges") || pathname.startsWith("/challenge/");
-  // Webinars and the journey map sit under Resources.
-  if (href === "/resources") return pathname.startsWith("/resources") || pathname.startsWith("/webinars") || pathname.startsWith("/journey");
+  // Webinars, the journey map and Challenges (with a single challenge at /challenge/[id]) sit under Resources.
+  if (href === "/resources")
+    return ["/resources", "/webinars", "/journey", "/challenges", "/challenge/"].some((p) => pathname.startsWith(p));
   return pathname.startsWith(href);
 }

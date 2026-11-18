@@ -31,7 +31,7 @@ export function BottomNav() {
                 <span className={cx("rounded-full px-3 py-1", active && "bg-tealtint")}>
                   <Icon name={item.icon} className="size-5" />
                 </span>
-                {/* Eight items across a phone: a touch smaller, and never narrower than the label, so they don’t run together; the row scrolls instead. */}
+                {/* Seven items across a phone: a touch smaller, and never narrower than the label, so they don’t run together; the row scrolls instead. */}
                 <span className="whitespace-nowrap text-center text-[0.66rem] leading-tight tracking-tight">{item.short ?? item.label}</span>
                 <NavPending className="inset-x-3 top-0" />
               </Link>
