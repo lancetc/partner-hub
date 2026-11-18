@@ -176,7 +176,7 @@ export function CoursePlayer({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface/90 px-4 py-2.5 ring-1 ring-line">
         <nav aria-label="Breadcrumb" className="min-w-0 flex-1 text-sm">
           <Link href="/elearning" className="font-semibold text-accent hover:underline">
-            eLearning
+            eLearn
           </Link>{" "}
           <span className="text-ink-muted">›</span> <span className="font-semibold">{info.course.title}</span>
           {info.preview && <span className="ml-2 rounded-full bg-gold/25 px-2 py-0.5 text-xs font-bold">Preview: draft, not counted</span>}
@@ -273,7 +273,7 @@ function Message({ title, text }: { title: string; text: string }) {
       <h1 className="font-serif text-3xl font-semibold">{title}</h1>
       <p className="mt-2 text-ink-muted">{text}</p>
       <Link href="/elearning" className="mt-4 inline-block font-semibold text-accent hover:underline">
-        Back to eLearning
+        Back to eLearn
       </Link>
     </div>
   );

@@ -22,16 +22,16 @@ export function BottomNav() {
         {navItems.map((item) => {
           const active = isActive(pathname, item.href);
           return (
-            <li key={item.href} className="min-w-0 flex-1">
+            <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={cx("relative flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-medium", active ? "text-action" : "text-ink-muted")}
+                className={cx("relative flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-xs font-medium", active ? "text-action" : "text-ink-muted")}
               >
                 <span className={cx("rounded-full px-3 py-1", active && "bg-tealtint")}>
                   <Icon name={item.icon} className="size-5" />
                 </span>
-                {/* Seven items across a phone: a touch smaller so they all fit without scrolling. */}
+                {/* Eight items across a phone: a touch smaller, and never narrower than the label, so they don’t run together; the row scrolls instead. */}
                 <span className="whitespace-nowrap text-center text-[0.66rem] leading-tight tracking-tight">{item.short ?? item.label}</span>
                 <NavPending className="inset-x-3 top-0" />
               </Link>
