@@ -181,8 +181,39 @@ const courseView = (db: Db, c: CourseRow) => {
     warnings: report.warnings ?? [],
     uploadedAt: v.uploaded_at,
     publishedAt: c.published_at,
+    /** Learner attempts (not authors' previews): with any, deleting keeps their records. */
+    learnerAttempts: (db.prepare("SELECT COUNT(*) AS n FROM scorm_attempts WHERE course_id = ? AND preview = 0").get(c.id) as { n: number }).n,
   };
 };
+
+/**
+  Deletes a course. With no learner attempts (previews don't count), it's removed for good: the course,
+  its versions, preview attempts and the package files. Once learners have tried it, their attempts are
+  training records, so the course is removed from eLearning for everyone but those records (and the
+  package they were made on) are kept. Either way the deletion is in the audit trail.
+*/
+export async function deleteCourse(db: Db, actor: User, courseId: string, now: Date) {
+  requireAuthor(actor);
+  const c = courseRow(db, courseId);
+  if (!c) throw new HttpError(404, "Course not found.");
+  const learnerAttempts = (db.prepare("SELECT COUNT(*) AS n FROM scorm_attempts WHERE course_id = ? AND preview = 0").get(courseId) as { n: number }).n;
+  if (learnerAttempts) {
+    db.prepare("UPDATE scorm_courses SET status = 'archived', updated_by = ?, updated_at = ? WHERE id = ?").run(actor.id, now.toISOString(), courseId);
+    event(db, { actor: actor.id, event: "course.deleted", course: courseId, version: c.version_id, detail: { title: c.title, permanently: false, learnerAttempts }, at: now });
+    return { deleted: "kept-records" as const, learnerAttempts };
+  }
+  const versions = (db.prepare("SELECT id FROM scorm_package_versions WHERE package_id = ?").all(c.package_id) as { id: string }[]).map((v) => v.id);
+  tx(db, () => {
+    db.prepare("DELETE FROM scorm_runtime_data WHERE attempt_id IN (SELECT id FROM scorm_attempts WHERE course_id = ?)").run(courseId);
+    db.prepare("DELETE FROM scorm_attempts WHERE course_id = ?").run(courseId);
+    db.prepare("DELETE FROM scorm_courses WHERE id = ?").run(courseId);
+    db.prepare("DELETE FROM scorm_package_versions WHERE package_id = ?").run(c.package_id);
+    db.prepare("DELETE FROM scorm_packages WHERE id = ?").run(c.package_id);
+    event(db, { actor: actor.id, event: "course.deleted", course: courseId, detail: { title: c.title, permanently: true, versions }, at: now });
+  });
+  for (const v of versions) await storage.remove(v);
+  return { deleted: "permanently" as const, learnerAttempts: 0 };
+}
 
 export function adminCourses(db: Db, actor: User) {
   requireAuthor(actor);

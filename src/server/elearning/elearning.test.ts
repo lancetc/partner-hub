@@ -8,7 +8,7 @@ import { userById, type User } from "../auth";
 import { parseManifest, ManifestError } from "./manifest";
 import { safePath, unzip, UnzipError } from "./unzip";
 import { formatTotal, outcomeAfter, restorable, RuntimeError, seconds12, seconds2004, startingData, tracked, validateSave } from "./runtime";
-import { importPackage, launch, saveAttempt, setCourseStatus, courseForPlayer, learnerCourses } from "./service";
+import { importPackage, launch, saveAttempt, setCourseStatus, courseForPlayer, learnerCourses, deleteCourse, adminCourses } from "./service";
 import { contentOriginFor, launchToken, readLaunchToken } from "./launchToken";
 import { storage } from "./storage";
 
@@ -277,5 +277,30 @@ describe("import, launch and save", () => {
     expect(storage.readFile(versionId, "../package.zip")).toBeNull();
     expect(storage.readFile(versionId, "../../hub.sqlite")).toBeNull();
     expect(() => storage.readFile("../etc", "x")).toThrow();
+  });
+  it("deletes a course for good when no learner has tried it, and keeps learners' records when they have", async () => {
+    // Untried (an author's preview doesn't count): the course, its rows and its files go.
+    const a = await importPackage(db, author, demoZip(), "untried.zip", now);
+    launch(db, author, a.courseId, { hubOrigin: HUB }, now);
+    const versionA = (db.prepare("SELECT version_id FROM scorm_courses WHERE id = ?").get(a.courseId) as { version_id: string }).version_id;
+    await expect(deleteCourse(db, learner, a.courseId, now)).rejects.toThrow(/authors/);
+    expect(await deleteCourse(db, author, a.courseId, now)).toEqual({ deleted: "permanently", learnerAttempts: 0 });
+    expect(db.prepare("SELECT 1 FROM scorm_courses WHERE id = ?").get(a.courseId)).toBeUndefined();
+    expect(db.prepare("SELECT 1 FROM scorm_attempts WHERE course_id = ?").get(a.courseId)).toBeUndefined();
+    expect(fs.existsSync(path.join(dir, versionA))).toBe(false);
+    expect(adminCourses(db, author).courses.some((c) => c.id === a.courseId)).toBe(false);
+
+    // Tried by a learner: gone from eLearning for everyone, but the attempt and its data stay.
+    const b = await importPackage(db, author, demoZip(), "tried.zip", now);
+    setCourseStatus(db, author, b.courseId, "published", now);
+    const l = launch(db, learner, b.courseId, { hubOrigin: HUB }, now);
+    saveAttempt(db, learner, l.attempt.id, { session: l.attempt.session, seq: 1, data: { "cmi.core.lesson_status": "incomplete" } }, now);
+    expect(await deleteCourse(db, author, b.courseId, now)).toEqual({ deleted: "kept-records", learnerAttempts: 1 });
+    expect(adminCourses(db, author).courses.some((c) => c.id === b.courseId)).toBe(false);
+    expect(learnerCourses(db, learner).courses.some((c) => c.id === b.courseId)).toBe(false);
+    expect(() => launch(db, learner, b.courseId, { hubOrigin: HUB }, now)).toThrow(/not found/);
+    expect(db.prepare("SELECT outcome FROM scorm_attempts WHERE id = ?").get(l.attempt.id)).toEqual({ outcome: "in_progress" });
+    const deletions = db.prepare("SELECT detail FROM scorm_audit_events WHERE event = 'course.deleted'").all() as { detail: string }[];
+    expect(deletions.map((d) => JSON.parse(d.detail).permanently)).toEqual([true, false]);
   });
 });

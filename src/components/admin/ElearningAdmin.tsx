@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { confirmAction } from "@/lib/confirm";
 import { AdminShell, Badge, btn, ErrorNote } from "./ui";
 import { Icon } from "../Icon";
 
@@ -23,6 +24,7 @@ type Course = {
   warnings: string[];
   uploadedAt: string;
   publishedAt: string | null;
+  learnerAttempts: number;
 };
 type Data = { courses: Course[]; rejected: { at: string; fileName: string; reason: string }[] };
 
@@ -53,7 +55,28 @@ export function ElearningAdmin() {
     }
   };
 
-  const act = async (id: string, action: "publish" | "unpublish" | "archive") => {
+  const remove = async (c: Course) => {
+    const keep = c.learnerAttempts > 0;
+    const ok = await confirmAction(
+      keep
+        ? `${c.learnerAttempts} learner ${c.learnerAttempts === 1 ? "attempt is" : "attempts are"} recorded on this course. It will be removed from eLearning for everyone, and those training records kept for reporting.`
+        : "No learner has tried it, so the course and its files are removed for good. This can’t be undone.",
+      { title: `Delete “${c.title}”?`, confirmLabel: "Delete course", danger: true },
+    );
+    if (!ok) return;
+    setBusy(c.id);
+    try {
+      await api(`/api/admin/elearning/${c.id}`, { method: "DELETE" });
+      setNote({ tone: "good", text: keep ? `Deleted “${c.title}”. Learners’ records on it are kept.` : `Deleted “${c.title}” and its files.` });
+      reload();
+    } catch (e) {
+      setNote({ tone: "bad", text: e instanceof Error ? e.message : "That didn’t work." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const act = async (id: string, action: "publish" | "unpublish") => {
     setBusy(id);
     try {
       await api(`/api/admin/elearning/${id}`, { body: { action } });
@@ -150,6 +173,9 @@ export function ElearningAdmin() {
                     Publish
                   </button>
                 )}
+                <button type="button" className={btn.quiet + " ml-auto"} disabled={busy === c.id} onClick={() => remove(c)}>
+                  <Icon name="trash" className="size-4" /> Delete
+                </button>
               </div>
             </li>
           ))}
