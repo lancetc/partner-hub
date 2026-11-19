@@ -1,4 +1,6 @@
 import "server-only";
+import { questionsInLesson } from "@/lib/questionPool";
+import { afterPublish, publishGate } from "./questionPool";
 import { lessons, type Lesson } from "@/content/lessons";
 import type { Db } from "./db";
 import { audit } from "./db";
@@ -190,6 +192,8 @@ export function publishLesson(db: Db, actor: User, slug: string, now: Date, opts
   const live = r.published ? (JSON.parse(r.published) as Lesson) : undefined;
   const draft = JSON.parse(r.draft) as Lesson;
   const lesson = { ...draft, version: nextVersion(live?.version, !live) };
+  // The Question Pool's gate (only when "require approval" is on): every question an approved version.
+  publishGate(db, questionsInLesson({ ...draft, slug }, true), now);
   const at = now.toISOString();
   db.prepare("UPDATE authored_lessons SET draft = ?, published = ?, published_at = ?, updated_at = ?, updated_by = ? WHERE slug = ?").run(
     JSON.stringify(lesson),
@@ -209,6 +213,7 @@ export function publishLesson(db: Db, actor: User, slug: string, now: Date, opts
     baselineAt: r.published_at,
   });
   syncPublishedLessons(db);
+  afterPublish(db, actor, now);
   return { slug, version: lesson.version, status: lessonStatus(db, slug) };
 }
 

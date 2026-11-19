@@ -27,6 +27,9 @@ import {
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 import { quizOffer } from "./pathQuiz";
+import { liveItems } from "@/lib/magazineReview";
+import { questionsInGuide } from "@/lib/questionPool";
+import { afterPublish, publishGate } from "./questionPool";
 import { reviewRequired } from "./topicApproval";
 
 /*
@@ -177,6 +180,29 @@ function servedRevision(db: Db, user: User, g: GuideRow) {
   return revisionById(db, g.revision_id!)!;
 }
 
+/** The edition this person reads of a course, with its document: for self-review, which checks the same way. */
+export function readerEdition(db: Db, user: User, slugOrId: string) {
+  const { guide, revision } = publishedFor(db, user, slugOrId);
+  return {
+    guide: { id: guide.id, slug: guide.slug, title: guide.title },
+    revision: { id: revision.id, number: revision.number },
+    doc: readGuideDoc(JSON.parse(revision.doc), { draft: true }),
+  };
+}
+
+/**
+  What a reader is told about self-review: whether it's on, and how many questions each page has. Never the
+  questions themselves: they (and their answers) come one review at a time from the server.
+*/
+export function practiceSummary(doc: GuideDoc) {
+  if (!doc.review?.enabled) return null;
+  const pages: Record<string, number> = {};
+  for (const it of liveItems(doc)) pages[it.pageId] = (pages[it.pageId] ?? 0) + 1;
+  return { pages };
+}
+/** The document without its self-review questions, for a reader. */
+const withoutPractice = (doc: GuideDoc): GuideDoc => ({ schema: doc.schema, pages: doc.pages, ...(doc.audio && { audio: doc.audio }) });
+
 /** A published course the person may read, or 404: outside the audience looks the same as not existing. */
 function publishedFor(db: Db, user: User, slugOrId: string) {
   const g = guideBySlug(db, slugOrId) ?? guideById(db, slugOrId);
@@ -273,7 +299,9 @@ export function readGuide(db: Db, user: User, slug: string) {
     pageMinutes: Object.fromEntries(doc.pages.map((pg) => [pg.id, pageMinutes(pg)])),
     publishedAt: r.published_at,
     completion: r.completion,
-    doc,
+    doc: withoutPractice(doc),
+    /** Self-review: on, and how many questions each page has (null when it's off). */
+    practice: practiceSummary(doc),
     progress: {
       lastPage: onThis && doc.pages.some((x) => x.id === p.last_page) ? p.last_page : null,
       lastSection: onThis && doc.pages.some((x) => x.sections.some((s) => s.id === p.last_section)) ? p.last_section : null,
@@ -834,6 +862,8 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     throw Object.assign(new HttpError(400, `Resolve ${blocking.length === 1 ? "1 check" : `${blocking.length} checks`} before publishing.`), {
       problems: blocking,
     });
+  // The Question Pool's gate (only when "require approval" is on): every question an approved version.
+  publishGate(db, questionsInGuide({ id: a.id, title: a.title, audience: "" }, readGuideDoc(a.doc, { draft: true }), "next", true), now);
   const prev = a.publishedRevisionId ? revisionById(db, a.publishedRevisionId) : undefined;
   const number = (prev?.number ?? 0) + 1;
   const revisionId = `${a.id}-r${number}`;
@@ -883,6 +913,7 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
       at: now,
     });
   });
+  afterPublish(db, actor, now);
   return authorGuide(db, actor, id);
 }
 
@@ -981,7 +1012,9 @@ export function previewGuide(db: Db, actor: User, id: string): ReaderGuide {
     pageMinutes: Object.fromEntries(a.doc.pages.map((pg) => [pg.id, pageMinutes(pg)])),
     publishedAt: a.savedAt,
     completion: a.completion,
+    // An author's preview keeps the questions: it runs reviews in the browser, recording nothing.
     doc: a.doc,
+    practice: practiceSummary(a.doc),
     progress: { lastPage: null, lastSection: null, answers: {}, finished: [], started: false, reflections: {} },
     completed: null,
     quizzes: quizStates(db, actor, a.doc),

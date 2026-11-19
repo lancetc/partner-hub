@@ -47,9 +47,10 @@ import { AudioGuidePanel, NarrationReview, PageNarrationStrip } from "./Magazine
 import { canConvert, convertBlock, convertLoses, CONVERTIBLE, type ConvertibleType } from "@/lib/magazineConvert";
 import { DEFAULT_AUDIO } from "@/lib/magazineNarration";
 import { MagazineRevise, type RevisionChange } from "./MagazineRevise";
+import { SelfReviewManager, SelfReviewPanel } from "./MagazineSelfReview";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
 import { Icon, type IconName } from "../Icon";
-import { InlineText, MediaSlot, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
+import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
 import { RecordingStudio } from "./RecordingStudio";
 import { MagazineApproval } from "./MagazineApproval";
@@ -577,6 +578,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
   const [selected, setSelected] = useState<Selection>({ kind: "guide" });
   const [save, setSave] = useState<Save>({ state: "saved" });
   const [previewing, setPreviewing] = useState(false);
+  const [practicing, setPracticing] = useState(false);
   const [narrating, setNarrating] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -1116,6 +1118,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
             <PageSettings page={page} pages={pages} updatePage={updatePage} onDuplicate={() => duplicatePage(page.id)} onRemove={() => removePage(page.id)} />
             <GuideSettings guide={server} draft={draft} change={change} onAct={act} />
             <AudioGuidePanel draft={draft} change={change} onOpenReview={() => setNarrating(true)} />
+            <SelfReviewPanel draft={draft} change={change} onOpen={() => setPracticing(true)} />
           </div>
         )}
         {!page ? (
@@ -1296,12 +1299,28 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
               <>
                 <GuideSettings guide={server} draft={draft} change={change} onAct={act} />
                 <AudioGuidePanel draft={draft} change={change} onOpenReview={() => setNarrating(true)} />
+                <SelfReviewPanel draft={draft} change={change} onOpen={() => setPracticing(true)} />
               </>
             )}
           </aside>
         )}
       </div>
       {narrating && <NarrationReview guideId={id} draft={draft} change={change} onClose={() => setNarrating(false)} />}
+      {practicing && (
+        <SelfReviewManager
+          guideId={id}
+          draft={draft}
+          change={change}
+          onClose={() => setPracticing(false)}
+          onPreview={() => {
+            // The preview shows the saved draft: save first, then open it on a reading page.
+            void flush().then(() => {
+              setPracticing(false);
+              setPreviewing(true);
+            });
+          }}
+        />
+      )}
       {previewing && (
         <PreviewDialog id={id} pageId={page && pages.length > 1 ? page.id : undefined} savedAt={server.savedAt} onClose={() => setPreviewing(false)} />
       )}
@@ -1890,7 +1909,16 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
     case "image":
       return (
         <figure className={cx(b.width === "column" ? column : "w-full")}>
-          <MediaSlot media={b.media} crop={false} onPick={(src) => update<typeof b>(b.id, (x) => void (x.media.src = src ?? ""))} />
+          <MediaSlot
+            media={b.media}
+            crop={false}
+            onPick={(src) => update<typeof b>(b.id, (x) => void (x.media.src = src ?? ""))}
+            framing={{
+              frame: b.frame,
+              onFrame: (f) => update<typeof b>(b.id, (x) => void (f ? (x.frame = f) : delete x.frame)),
+              onMove: (p) => update<typeof b>(b.id, (x) => void (p ? (x.media.position = p) : delete x.media.position)),
+            }}
+          />
           {b.media.src && (
             <InlineText
               value={b.media.caption ?? ""}
@@ -2422,7 +2450,16 @@ function TextMediaSide({ block: b, update, className }: { block: TextMediaBlock;
         <VideoEdit block={vid} update={videoUpdate(b.id, update)} className="" compact />
       ) : (
         <figure>
-          <MediaSlot media={b.media} crop={false} onPick={(src) => update<TextMediaBlock>(b.id, (x) => void (x.media.src = src ?? ""))} />
+          <MediaSlot
+            media={b.media}
+            crop={false}
+            onPick={(src) => update<TextMediaBlock>(b.id, (x) => void (x.media.src = src ?? ""))}
+            framing={{
+              frame: b.frame,
+              onFrame: (f) => update<TextMediaBlock>(b.id, (x) => void (f ? (x.frame = f) : delete x.frame)),
+              onMove: (p) => update<TextMediaBlock>(b.id, (x) => void (p ? (x.media.position = p) : delete x.media.position)),
+            }}
+          />
           {b.media.src && (
             <InlineText
               value={b.media.caption ?? ""}
@@ -2708,8 +2745,13 @@ function DecisionEdit({ block: b, update }: { block: Extract<Block, { type: "dec
         </button>
       )}
       {b.media?.src && b.mediaStyle === "wide" && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={b.media.src} alt={b.media.alt} className="mb-5 aspect-[16/9] w-full rounded-2xl bg-muted object-cover" />
+        <div className="mb-5">
+          <RepositionPicture
+            media={b.media}
+            className="aspect-[320/117] w-full rounded-2xl bg-muted object-cover"
+            onMove={(p) => update<typeof b>(b.id, (x) => void (p ? (x.media!.position = p) : delete x.media!.position))}
+          />
+        </div>
       )}
       <p className="mb-1 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
         <Icon name="target" className="size-5" /> Your decision

@@ -51,6 +51,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/questions",
+        label: "Questions",
+        icon: "clipboard",
+        description: "The Question Pool: every quiz and practice question, where it’s used, its source and who approved it. Review, flag and export.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/images",
         label: "Image library",
         icon: "image",

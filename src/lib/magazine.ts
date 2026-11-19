@@ -1,6 +1,7 @@
 import { safeHref } from "./richText";
 import { parseVideoLink } from "./videoLinks";
 import { narrationState, pageSnapshot } from "./magazineNarration";
+import { reviewChecks } from "./magazineReview";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -107,11 +108,38 @@ export type Flag = { kind: "verify" | "illustrative"; note: string };
 export const REVEALS = { rise: "Rise", fade: "Fade", slide: "Slide in", zoom: "Zoom", none: "None" } as const;
 export type Reveal = keyof typeof REVEALS;
 type Base = { id: string; note?: string; evidence?: Evidence[]; flag?: Flag; reveal?: Exclude<Reveal, "rise"> };
-export type Media = { src: string; alt: string; decorative?: boolean; caption?: string };
+/**
+  `position`: which part of the picture shows when it's cropped to its frame (a wide strip, a circle), as
+  "x% y%" (CSS object-position). The author drags the picture to choose it; centred when not set.
+*/
+export type Media = { src: string; alt: string; decorative?: boolean; caption?: string; position?: string };
+
+const POSITION = /^(\d{1,3}(?:\.\d)?)% (\d{1,3}(?:\.\d)?)%$/;
+/** A picture's position as [x, y] percentages, centred when it has none (or a bad one). */
+export function picturePosition(p: string | undefined): [number, number] {
+  const m = p ? POSITION.exec(p) : null;
+  return m ? [Math.min(100, Number(m[1])), Math.min(100, Number(m[2]))] : [50, 50];
+}
+export const positionText = (x: number, y: number) =>
+  `${Math.round(Math.min(100, Math.max(0, x)) * 10) / 10}% ${Math.round(Math.min(100, Math.max(0, y)) * 10) / 10}%`;
 export type Width = "column" | "wide" | "full";
 
 export type TextBlock = Base & { type: "text"; heading?: string; level?: 2 | 3; body: string };
-export type ImageBlock = Base & { type: "image"; media: Media; width: Width; enlarge?: boolean };
+/**
+  The frame a picture is cropped to (its `position` says which part shows). No frame: the whole picture, at its own shape.
+*/
+export type Frame = "landscape" | "wide" | "square";
+export const FRAMES: { value: Frame | undefined; label: string; aspect: string }[] = [
+  { value: undefined, label: "Original", aspect: "" },
+  { value: "landscape", label: "Landscape", aspect: "aspect-[16/9]" },
+  { value: "wide", label: "Wide", aspect: "aspect-[320/117]" },
+  { value: "square", label: "Square", aspect: "aspect-square" },
+];
+/** The classes that crop a picture to its frame (none for the whole picture). */
+export const frameClass = (f: Frame | undefined) => (f ? `${FRAMES.find((x) => x.value === f)!.aspect} object-cover` : "");
+const frameOf = (v: unknown): Frame | undefined => (v === "landscape" || v === "wide" || v === "square" ? v : undefined);
+
+export type ImageBlock = Base & { type: "image"; media: Media; width: Width; enlarge?: boolean; frame?: Frame };
 /**
   A video on YouTube, Vimeo or Loom, played in their own player. `hash`: the private part of an unlisted Vimeo
   link. `portrait`: a YouTube Short.
@@ -152,6 +180,8 @@ export type TextMediaBlock = Base & {
   video?: VideoFields;
   /** Readers can open the picture full size (for detail like a document). */
   enlarge?: boolean;
+  /** The frame the picture is cropped to; the whole picture when not set. */
+  frame?: Frame;
   layout: "media-left" | "media-right";
   wrap?: false;
 };
@@ -355,7 +385,39 @@ export type GuideAudio = {
   /** The course introduction. */
   intro?: Narration;
 };
-export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio };
+/*
+  Self-review ("Test myself", lib/magazineReview): practice questions learners can try while reading. Kept in
+  the document, so each edition keeps the questions it was published with. Never part of completion.
+*/
+export type PracticeChoice = { id: string; text: string; feedback?: string };
+export type PracticeItem = {
+  id: string;
+  /** "scenario": the best response to a situation. "spot": which detail in a short example needs attention. */
+  kind: "scenario" | "spot";
+  /** The page it's about, and the section "See this in the course" opens. */
+  pageId: string;
+  sectionId?: string;
+  prompt: string;
+  /** For "spot": the short (fictional) example the issue is in. */
+  example?: string;
+  choices: PracticeChoice[];
+  /** The best answer's choice id. */
+  answer: string;
+  /** Why the best answer is right, and what's behind the most tempting wrong one. */
+  explanation: string;
+  /** Only approved questions are served; a retired one never is, but stays on record. */
+  status: "draft" | "approved" | "retired";
+  /** The page as it was when the question was approved, to notice it has changed since. */
+  basis?: NarrationSnapshot;
+  /** Who approved which version, when. Editing it afterwards makes it a draft again. */
+  approved?: { by: string; at: string; version: string };
+  /** Where it came from: written by an author, or drafted by AI from the page and the course's sources. */
+  origin?: { kind: "author" | "ai"; by: string; at: string; note?: string };
+  /** The source document (and place in it) the answer rests on, if any. */
+  source?: string;
+};
+export type SelfReview = { enabled: boolean; items: PracticeItem[] };
+export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio; review?: SelfReview };
 
 /**
   Whether the reader has worked through a block: null for blocks that are only read (text, pictures,
@@ -603,6 +665,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       alt: str(o.alt, `${where} description`, { max: 400 }) ?? "",
       ...(o.decorative === true && { decorative: true }),
       ...(str(o.caption, `${where} caption`, { max: 400 }) && { caption: str(o.caption, `${where} caption`)! }),
+      // Kept only when it's a real position and not simply the centre.
+      ...(typeof o.position === "string" && POSITION.test(o.position) && o.position !== "50% 50%" && { position: o.position }),
     };
   };
   // The optional photo in a circle beside the question: kept once one is chosen.
@@ -682,7 +746,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       }
       case "image": {
         const width = o.width === "wide" || o.width === "full" ? o.width : "column";
-        return { ...base, type: "image", media: media(o.media, where), width, ...(o.enlarge === true && { enlarge: true }) };
+        const frame = frameOf(o.frame);
+        return { ...base, type: "image", media: media(o.media, where), width, ...(o.enlarge === true && { enlarge: true }), ...(frame && { frame }) };
       }
       case "video": {
         // On YouTube, Vimeo or Loom: only the provider and the video's id are kept, never an address.
@@ -765,6 +830,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           media: video && !(typeof m?.src === "string" && m.src) ? { src: "", alt: "" } : media(o.media, where),
           ...(video && { video }),
           ...(!video && o.enlarge === true && { enlarge: true }),
+          ...(!video && frameOf(o.frame) && { frame: frameOf(o.frame) }),
           layout: o.layout === "media-left" ? "media-left" : "media-right",
           // Wrapping is the default; only turning it off is kept.
           ...(o.wrap === false && { wrap: false as const }),
@@ -1209,7 +1275,59 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     };
   };
 
-  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown };
+  // Self-review's questions. Lenient like a draft: an unfinished question is kept (it's a draft until approved).
+  const selfReview = (v: unknown): SelfReview | undefined => {
+    const o = v as Record<string, unknown> | undefined;
+    if (!o || typeof o !== "object") return undefined;
+    const raw = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : [];
+    if (raw.length > 300) problems.push("Self-review can have up to 300 questions.");
+    const at = (x: unknown) => (typeof x === "string" && !Number.isNaN(Date.parse(x)) ? new Date(x).toISOString() : new Date(0).toISOString());
+    const items = raw.slice(0, 300).map((it, i): PracticeItem => {
+      const where = `Self-review question ${i + 1}`;
+      const keep = (x: unknown, max: number) => (typeof x === "string" ? x.slice(0, max) : "");
+      const choices = (Array.isArray(it?.choices) ? (it.choices as Record<string, unknown>[]) : []).slice(0, 5).map((c, j) => {
+        const id = typeof c?.id === "string" && ID.test(c.id) ? c.id : `c${j + 1}`;
+        const feedback = keep(c?.feedback, 800);
+        return { id, text: keep(c?.text, 400), ...(feedback && { feedback }) };
+      });
+      if (new Set(choices.map((c) => c.id)).size !== choices.length) problems.push(`${where} repeats an answer id.`);
+      const b = it?.basis as Record<string, unknown> | undefined;
+      const basis =
+        b && typeof b.hash === "string" && typeof b.key === "string" && Array.isArray(b.sig)
+          ? { hash: b.hash.slice(0, 40), key: b.key.slice(0, 40), sig: (b.sig as unknown[]).slice(0, 64).map((n) => Number(n) || 0) }
+          : undefined;
+      const ap = it?.approved as Record<string, unknown> | undefined;
+      const og = it?.origin as Record<string, unknown> | undefined;
+      const example = keep(it?.example, 1500);
+      const sectionId = typeof it?.sectionId === "string" && ID.test(it.sectionId) ? it.sectionId : undefined;
+      const source = keep(it?.source, 300);
+      const note = keep(og?.note, 300);
+      return {
+        id: idOf(it?.id, where),
+        kind: it?.kind === "spot" ? "spot" : "scenario",
+        pageId: typeof it?.pageId === "string" ? it.pageId.slice(0, 80) : "",
+        ...(sectionId && { sectionId }),
+        prompt: keep(it?.prompt, 600),
+        ...(example && { example }),
+        choices,
+        answer: typeof it?.answer === "string" ? it.answer.slice(0, 80) : "",
+        explanation: keep(it?.explanation, 1500),
+        status: it?.status === "approved" ? "approved" : it?.status === "retired" ? "retired" : "draft",
+        ...(basis && { basis }),
+        ...(ap &&
+          typeof ap.by === "string" &&
+          typeof ap.version === "string" && { approved: { by: ap.by.slice(0, 80), at: at(ap.at), version: ap.version.slice(0, 40) } }),
+        ...(og &&
+          typeof og.by === "string" && {
+            origin: { kind: og.kind === "ai" ? ("ai" as const) : ("author" as const), by: og.by.slice(0, 80), at: at(og.at), ...(note && { note }) },
+          }),
+        ...(source && { source }),
+      };
+    });
+    return { enabled: o.enabled === true, items };
+  };
+
+  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown; review?: unknown };
   // Schema 1: one list of sections. It becomes a one-page course.
   if (doc.schema === 1 && Array.isArray(doc.sections))
     doc = {
@@ -1222,8 +1340,9 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
   if (!pages.length) unfinished("The guide needs at least one page.");
   if (pages.length > 30) problems.push("A course can have up to 30 pages.");
   const audio = audioSettings(doc.audio);
+  const review = selfReview(doc.review);
   if (problems.length) throw new GuideDocError(problems);
-  return { schema: GUIDE_SCHEMA, pages, ...(audio && { audio }) };
+  return { schema: GUIDE_SCHEMA, pages, ...(audio && { audio }), ...(review && (review.enabled || review.items.length) && { review }) };
 }
 
 export const pageBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks);
@@ -1322,6 +1441,10 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
   if (mode === "decision" && !blocks.some((b) => b.type === "decision")) blocking.push("A decision activity guide needs at least one decision question.");
   if (!blocks.some((b) => b.type === "checklist" || b.type === "callout"))
     suggestions.push("Consider ending with key points or a checklist people can use at work.");
+  // Self-review: approved questions for every reading page, none left behind by a page that changed.
+  const practice = reviewChecks(doc);
+  blocking.push(...practice.blocking);
+  suggestions.push(...practice.suggestions);
   if (doc.audio?.intro) {
     const n = doc.audio.intro;
     if (n.status === "approved" && n.audio && narrationState({ ...n, basis: undefined }, { hash: "", key: "", sig: [] }, doc.audio) === "rerecord")

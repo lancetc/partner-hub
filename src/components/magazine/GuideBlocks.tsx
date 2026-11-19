@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useId, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import {
+  frameClass,
   CALLOUTS,
   EMBED_NAME,
   VERDICTS,
@@ -65,7 +66,7 @@ export function GuideBlock({ block: b, ctx }: { block: Block; ctx: BlockContext 
     case "image":
       return (
         <figure className={cx(b.width === "column" ? column : "w-full", b.width === "full" && "lg:-mx-4")}>
-          <Picture media={b.media} enlarge={b.enlarge} className="w-full rounded-2xl" />
+          <Picture media={b.media} enlarge={b.enlarge} className={cx("w-full rounded-2xl", frameClass(b.frame))} />
           {b.media.caption && <figcaption className={cx("mt-2 text-sm text-ink-muted", b.width !== "column" && column)}>{b.media.caption}</figcaption>}
         </figure>
       );
@@ -87,7 +88,7 @@ export function GuideBlock({ block: b, ctx }: { block: Block; ctx: BlockContext 
               />
             ) : (
               <figure className={cx("mb-4 md:mb-3 md:w-[45%]", b.layout === "media-left" ? "md:float-left md:mr-6" : "md:float-right md:ml-6")}>
-                <Picture media={b.media} enlarge={b.enlarge} className="w-full rounded-2xl" />
+                <Picture media={b.media} enlarge={b.enlarge} className={cx("w-full rounded-2xl", frameClass(b.frame))} />
                 {b.media.caption && <figcaption className="mt-2 text-sm text-ink-muted">{b.media.caption}</figcaption>}
               </figure>
             )}
@@ -105,7 +106,7 @@ export function GuideBlock({ block: b, ctx }: { block: Block; ctx: BlockContext 
             <Video block={vid} ctx={ctx} className={cx(b.layout === "media-left" && "md:order-first")} />
           ) : (
             <figure className={cx(b.layout === "media-left" && "md:order-first")}>
-              <Picture media={b.media} enlarge={b.enlarge} className="w-full rounded-2xl" />
+              <Picture media={b.media} enlarge={b.enlarge} className={cx("w-full rounded-2xl", frameClass(b.frame))} />
               {b.media.caption && <figcaption className="mt-2 text-sm text-ink-muted">{b.media.caption}</figcaption>}
             </figure>
           )}
@@ -258,8 +259,16 @@ function Picture({ media, enlarge, className }: { media: Media; enlarge?: boolea
   // A draft may not have its picture yet.
   if (!media.src) return null;
   const alt = media.decorative ? "" : media.alt;
-  // eslint-disable-next-line @next/next/no-img-element
-  const img = <img src={media.src} alt={alt} loading="lazy" className={cx("bg-muted", className)} />;
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={media.src}
+      alt={alt}
+      loading="lazy"
+      className={cx("bg-muted", className)}
+      style={media.position ? { objectPosition: media.position } : undefined}
+    />
+  );
   if (!enlarge) return img;
   return (
     <>
@@ -524,7 +533,7 @@ function Decision({ block: b, ctx }: { block: DecisionBlock; ctx: BlockContext }
       {b.media?.src && b.mediaStyle === "wide" && (
         <Picture
           media={b.media}
-          className="-mx-5 -mt-5 mb-5 aspect-[16/9] w-[calc(100%+2.5rem)] max-w-none rounded-t-[calc(1.5rem-1px)] object-cover sm:-mx-7 sm:-mt-7 sm:w-[calc(100%+3.5rem)]"
+          className="-mx-5 -mt-5 mb-5 aspect-[320/117] w-[calc(100%+2.5rem)] max-w-none rounded-t-[calc(1.5rem-1px)] object-cover sm:-mx-7 sm:-mt-7 sm:w-[calc(100%+3.5rem)]"
         />
       )}
       <fieldset disabled={busy}>

@@ -19,6 +19,70 @@ import { readGuideDoc, readingMinutes } from "@/lib/magazine";
 
 export type Db = DatabaseSync;
 
+/*
+  The Question Pool (lib/questionPool, server/questionPool): every native question with a stable id, a version
+  per wording (approved on its own), and each place it's used pinned to that version and release. Also run on
+  first use by server/questionPool, so a server that was already running picks the tables up.
+*/
+export const POOL_SCHEMA = `
+CREATE TABLE IF NOT EXISTS pool_questions (
+  id TEXT PRIMARY KEY, origin_key TEXT UNIQUE, title TEXT NOT NULL, kind TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '', skill TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '', programme TEXT NOT NULL DEFAULT '',
+  intended_use TEXT NOT NULL DEFAULT 'formative', risk TEXT NOT NULL DEFAULT 'standard' CHECK (risk IN ('standard', 'high')),
+  owner TEXT, tags TEXT NOT NULL DEFAULT '[]', next_review TEXT, review_trigger TEXT NOT NULL DEFAULT '',
+  source_id TEXT, source_ref TEXT NOT NULL DEFAULT '', rationale TEXT NOT NULL DEFAULT '',
+  -- Kept in step with the versions and placements, so the table can filter and sort in the database.
+  current_version INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'draft', stem TEXT NOT NULL DEFAULT '', search TEXT NOT NULL DEFAULT '',
+  approved_version INTEGER, approved_at TEXT, unreviewed INTEGER NOT NULL DEFAULT 0, live_uses INTEGER NOT NULL DEFAULT 0, total_uses INTEGER NOT NULL DEFAULT 0,
+  live_unapproved INTEGER NOT NULL DEFAULT 0, surfaces TEXT NOT NULL DEFAULT '', last_attempt TEXT, dup_group TEXT,
+  created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- A wording of a question. Never edited once written: a change is a new version, approved on its own.
+CREATE TABLE IF NOT EXISTS pool_versions (
+  question_id TEXT NOT NULL REFERENCES pool_questions(id), version INTEGER NOT NULL, hash TEXT NOT NULL, kind TEXT NOT NULL, content TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft', 'in_review', 'approved', 'needs_review', 'retired')),
+  -- 1: approved when the pool was set up because it was already live; not yet reviewed here.
+  migrated INTEGER NOT NULL DEFAULT 0, change_note TEXT NOT NULL DEFAULT '',
+  author TEXT, created_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT,
+  PRIMARY KEY (question_id, version), UNIQUE (question_id, hash)
+);
+-- Each place a version is (or was) used: a Topic card, a Magazine block, a self-review question, a follow-up.
+CREATE TABLE IF NOT EXISTS pool_placements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, question_id TEXT NOT NULL REFERENCES pool_questions(id), version INTEGER NOT NULL,
+  surface TEXT NOT NULL, designation TEXT NOT NULL, container_id TEXT NOT NULL, container_title TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL, location_title TEXT NOT NULL DEFAULT '', release TEXT NOT NULL,
+  live INTEGER NOT NULL, current INTEGER NOT NULL DEFAULT 1, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  UNIQUE (question_id, version, surface, container_id, location, release, live)
+);
+CREATE INDEX IF NOT EXISTS pool_placements_question ON pool_placements (question_id, current);
+-- Append-only: who submitted, approved, flagged, retired or changed what, and when.
+CREATE TABLE IF NOT EXISTS pool_review_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, question_id TEXT NOT NULL REFERENCES pool_questions(id), version INTEGER,
+  action TEXT NOT NULL, from_status TEXT, to_status TEXT, actor TEXT, note TEXT NOT NULL DEFAULT '', at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pool_review_events_question ON pool_review_events (question_id, id);
+-- The documents answers rest on. Superseding one flags every approved question that cites it.
+CREATE TABLE IF NOT EXISTS pool_sources (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', effective TEXT, authority TEXT NOT NULL DEFAULT '',
+  owner TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'current' CHECK (status IN ('current', 'superseded')), superseded_by TEXT,
+  note TEXT NOT NULL DEFAULT '', created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- First answers per question, assessed, knowledge check and practice kept apart. Totals only.
+CREATE TABLE IF NOT EXISTS pool_signals (
+  question_id TEXT NOT NULL REFERENCES pool_questions(id), designation TEXT NOT NULL, attempts INTEGER NOT NULL, correct INTEGER NOT NULL,
+  last_at TEXT, picks TEXT NOT NULL DEFAULT '{}', PRIMARY KEY (question_id, designation)
+);
+-- Imported SCORM courses: how far their questions are known to the Hub. The Hub can't see inside a package.
+CREATE TABLE IF NOT EXISTS pool_external (
+  course_id TEXT PRIMARY KEY, coverage TEXT NOT NULL DEFAULT 'unavailable' CHECK (coverage IN ('unavailable', 'supplied', 'reconciled')),
+  has_assessment TEXT NOT NULL DEFAULT 'unknown' CHECK (has_assessment IN ('unknown', 'yes', 'no')),
+  owner TEXT NOT NULL DEFAULT '', question_count INTEGER, review_date TEXT, note TEXT NOT NULL DEFAULT '', updated_by TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS pool_views (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, name TEXT NOT NULL, query TEXT NOT NULL, created_at TEXT NOT NULL);
+-- Each reconciliation of the pool with the Hub's content: what it counted, and its exceptions.
+CREATE TABLE IF NOT EXISTS pool_reconciliations (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, by_user TEXT, report TEXT NOT NULL);
+`;
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS orgs (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, timezone TEXT NOT NULL
@@ -594,6 +658,23 @@ CREATE TABLE IF NOT EXISTS magazine_reflections (
   revision_id TEXT NOT NULL, block_id TEXT NOT NULL, response TEXT NOT NULL, feedback TEXT, at TEXT NOT NULL,
   PRIMARY KEY (guide_id, user_id, revision_id, block_id)
 );
+-- Self-review ("Test myself"): a learner's practice, kept apart from everything that counts towards
+-- completion. A review is the questions it asked, as they were then (items: JSON snapshots with their version),
+-- and where the learner is in it. Only the learner sees their own; authors see totals per question.
+CREATE TABLE IF NOT EXISTS magazine_practice_sessions (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
+  revision_id TEXT NOT NULL, scope TEXT NOT NULL CHECK (scope IN ('page', 'course')), page_id TEXT NOT NULL,
+  pages TEXT NOT NULL, items TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, repeats INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'completed', 'ended')),
+  started_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS magazine_practice_sessions_user ON magazine_practice_sessions (guide_id, user_id, started_at);
+-- One answer per question per review: answering again (a slow network, a retry) returns the first.
+CREATE TABLE IF NOT EXISTS magazine_practice_responses (
+  session_id TEXT NOT NULL REFERENCES magazine_practice_sessions(id), item_id TEXT NOT NULL, version TEXT NOT NULL,
+  choice_id TEXT NOT NULL, correct INTEGER NOT NULL, at TEXT NOT NULL,
+  PRIMARY KEY (session_id, item_id)
+);
 -- Each page someone finished (an explicit choice), against the version they read.
 CREATE TABLE IF NOT EXISTS magazine_page_finishes (
   guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
@@ -738,6 +819,7 @@ export function seedStaff(db: Db) {
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
+  db.exec(POOL_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

@@ -10,6 +10,7 @@ import { Icon } from "../Icon";
 import { GuideBlock, column, type BlockContext } from "./GuideBlocks";
 import type { ReflectionSaved } from "./InteractiveBlocks";
 import { AudioGuideCard } from "./AudioGuide";
+import { useSelfReview } from "./SelfReview";
 import { playable } from "@/lib/magazineNarration";
 
 /*
@@ -290,6 +291,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     useCallback(() => setStale(true), []),
   );
   const audioGuide = useAudioGuide(guide, send);
+  // Self-review: "Test myself" in the rail (floating on a phone), and its Quick review dialog.
+  const selfReview = useSelfReview({ guide, pageId: page.id, base, preview });
 
   // Opening the page is recorded (it's not a finish).
   useEffect(() => {
@@ -452,7 +455,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       <Notices guide={guide} preview={preview} stale={stale} />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
-        <Rail guide={guide} page={page} base={base} active={active} finished={finished} />
+        <Rail guide={guide} page={page} base={base} active={active} finished={finished} extra={selfReview.button("rail")} />
         <div className="flex min-w-0 flex-col gap-16">
           {page.sections.map((s, i) => (
             <section key={s.id} id={`section-${s.id}`} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8">
@@ -485,12 +488,29 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           />
         </div>
       </div>
+      {selfReview.button("float")}
+      {selfReview.dialog}
     </article>
   );
 }
 
 /** The course's pages (where you are, what's finished), then this page's sections. One menu on a phone. */
-function Rail({ guide, page, base, active, finished }: { guide: ReaderGuide; page: Page; base: string; active: string; finished: string[] }) {
+function Rail({
+  guide,
+  page,
+  base,
+  active,
+  finished,
+  extra,
+}: {
+  guide: ReaderGuide;
+  page: Page;
+  base: string;
+  active: string;
+  finished: string[];
+  /** Kept in reach at the end of the rail (self-review's Test myself). */
+  extra?: React.ReactNode;
+}) {
   const course = guide.doc.pages.length > 1;
   const close = (e: React.MouseEvent<HTMLAnchorElement>) => e.currentTarget.closest("details")?.removeAttribute("open");
   const pageList = (onPick?: (e: React.MouseEvent<HTMLAnchorElement>) => void) => (
@@ -569,6 +589,7 @@ function Rail({ guide, page, base, active, finished }: { guide: ReaderGuide; pag
             </p>
             {sectionList()}
           </nav>
+          {extra && <div className="px-1 pb-1">{extra}</div>}
         </div>
       </div>
       <details className="rounded-2xl border border-line bg-surface lg:hidden">
