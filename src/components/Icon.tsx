@@ -47,6 +47,7 @@ export type IconName =
   | "pin"
   | "file"
   | "copy"
+  | "crop"
   | "trash"
   | "sliders"
   | "image"
@@ -61,7 +62,22 @@ export type IconName =
   | "inbox"
   | "mobile"
   | "collapse"
-  | "print";
+  | "print"
+  | "magazine"
+  | "accordion"
+  | "carousel"
+  | "arrow-up"
+  | "arrow-down"
+  | "flashcards"
+  | "tabs"
+  | "timeline"
+  | "steps"
+  | "branch"
+  | "gauge"
+  | "sorting"
+  | "sequencing"
+  | "matching"
+  | "blank";
 
 const paths: Record<IconName, React.ReactNode> = {
   /** An in-tray: the Inbox of notices and actions. */
@@ -89,6 +105,110 @@ const paths: Record<IconName, React.ReactNode> = {
   expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   /** Leave full screen: four corners pointing in. */
   collapse: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />,
+  /** An open magazine: Magazine, the desk-reading guides. */
+  magazine: (
+    <>
+      <path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5z" />
+      <path d="M12 6.5v13M6 9h3M6 12h3M15 9h3M15 12h3" />
+    </>
+  ),
+  /** Folds of text, one open: the Accordion block. */
+  accordion: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="5" rx="1.5" />
+      <rect x="3.5" y="10.5" width="17" height="10" rx="1.5" />
+      <path d="M15.5 5.25l1.25 1.25 1.25-1.25M7 14h8M7 17h6" />
+    </>
+  ),
+  "arrow-up": <path d="M12 19V5M6 11l6-6 6 6" />,
+  "arrow-down": <path d="M12 5v14M6 13l6 6 6-6" />,
+  /** A card turning over: the Flashcards block. */
+  flashcards: (
+    <>
+      <rect x="3.5" y="6.5" width="11" height="14" rx="2" />
+      <path d="M8 3.5h10.5a2 2 0 0 1 2 2V15M11 10.5h.01" />
+    </>
+  ),
+  /** Folder tabs over a panel: the Tabs block. */
+  tabs: (
+    <>
+      <path d="M3.5 9.5v9a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-9z" />
+      <path d="M3.5 9.5v-4a1.5 1.5 0 0 1 1.5-1.5h4.5a1.5 1.5 0 0 1 1.5 1.5v4M11 6.5h4a1.5 1.5 0 0 1 1.5 1.5v1.5" />
+    </>
+  ),
+  /** A line with events along it: the Timeline block. */
+  timeline: (
+    <>
+      <path d="M6 3.5v17" />
+      <circle cx="6" cy="7" r="1.75" />
+      <circle cx="6" cy="17" r="1.75" />
+      <path d="M10 7h10M10 17h7M10 12h8" />
+    </>
+  ),
+  /** Numbered steps: the Process steps block. */
+  steps: (
+    <>
+      <circle cx="5.5" cy="6" r="2" />
+      <circle cx="5.5" cy="18" r="2" />
+      <path d="M5.5 8v8M10 6h10M10 18h8" />
+    </>
+  ),
+  /** A path that forks: the Branching scenario block. */
+  branch: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="18" cy="7" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <path d="M6 7v10M18 9c0 4-6 3-11.2 8.6" />
+    </>
+  ),
+  /** Items going into two trays: the Sorting block. */
+  sorting: (
+    <>
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+      <path d="M12 3.5v4M12 7.5l-5 4M12 7.5l5 4" />
+    </>
+  ),
+  /** Numbered lines in order: the Sequencing block. */
+  sequencing: (
+    <>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M4 5l1-1v4M3.5 11.5a1 1 0 0 1 2 .5l-2 2h2M3.5 17h2l-1 1.2a1 1 0 1 1-1 1.3" />
+    </>
+  ),
+  /** Two columns joined: the Matching block. */
+  matching: (
+    <>
+      <circle cx="5" cy="6" r="1.8" />
+      <circle cx="5" cy="18" r="1.8" />
+      <circle cx="19" cy="6" r="1.8" />
+      <circle cx="19" cy="18" r="1.8" />
+      <path d="M6.8 6.5l10.4 11M6.8 17.5l10.4-11" />
+    </>
+  ),
+  /** A line with a gap: the Fill in the blank block. */
+  blank: (
+    <>
+      <path d="M3.5 12h4M16.5 12h4" />
+      <rect x="9" y="9" width="6" height="6" rx="1" strokeDasharray="2 1.5" />
+      <path d="M3.5 7h17M3.5 17h12" />
+    </>
+  ),
+  /** A dial: the Confidence check block. */
+  gauge: (
+    <>
+      <path d="M3.5 16a8.5 8.5 0 1 1 17 0" />
+      <path d="M12 16l4-5M3.5 19.5h17" />
+    </>
+  ),
+  /** A picture with its neighbours peeking in: the Carousel block. */
+  carousel: (
+    <>
+      <rect x="6.5" y="5" width="11" height="12" rx="2" />
+      <path d="M3 7.5v7M21 7.5v7M10 20h.01M12 20h.01M14 20h.01" />
+    </>
+  ),
   /** A printer, for Print buttons. */
   print: (
     <>
@@ -179,6 +299,7 @@ const paths: Record<IconName, React.ReactNode> = {
       <path d="M14 3v4h4" />
     </>
   ),
+  crop: <path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2" />,
   copy: (
     <>
       <rect x="8" y="8" width="12" height="12" rx="2" />

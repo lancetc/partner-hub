@@ -4,7 +4,8 @@ import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { saveUpload } from "./uploads";
 import { jpegSize } from "./pexels";
-import { HOUSE_STYLE, imageModel, IMAGE_MODELS } from "@/lib/imageModels";
+import { DEFAULT_IMAGE_MODEL, HOUSE_STYLE, imageModel, IMAGE_MODELS, OPENAI_DIRECT } from "@/lib/imageModels";
+import { randomUUID } from "node:crypto";
 
 /*
   AI pictures for lesson posters, made through ElevenLabs' Image & Video API (the same account as
@@ -18,6 +19,9 @@ export const MAX_PROMPT = 2000;
 const PER_HOUR = 30;
 
 export const imageGenConfigured = () => Boolean(process.env.ELEVENLABS_API_KEY);
+/** OpenAI's image model with the hub's own key, no ElevenLabs needed. OPENAI_IMAGE_MODEL picks the model (default gpt-image-2). */
+export const openaiConfigured = () => Boolean(process.env.OPENAI_API_KEY);
+const OPENAI_SIZES: Record<string, string> = { "3:2": "1536x1024", "1:1": "1024x1024", "2:3": "1024x1536" };
 
 type GenRow = {
   id: string;
@@ -111,7 +115,95 @@ export function requestFor(input: { model?: unknown; prompt?: unknown; aspect?: 
 
 export function imageGenOptions(actor: User) {
   requireAuthor(actor);
-  return { configured: imageGenConfigured(), models: IMAGE_MODELS };
+  const openai = openaiConfigured();
+  const eleven = imageGenConfigured();
+  return {
+    configured: openai || eleven,
+    models: [...(openai ? [OPENAI_DIRECT] : []), ...(eleven ? IMAGE_MODELS : [])],
+    defaultModel: openai ? OPENAI_DIRECT.id : DEFAULT_IMAGE_MODEL,
+  };
+}
+
+/** OpenAI's refusals, in words an author can act on. */
+async function openaiRefusal(res: Response) {
+  const d = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string; type?: string } };
+  const message = d.error?.message ?? "";
+  if (res.status === 401) return new HttpError(502, "OpenAI didn’t accept the API key. Check OPENAI_API_KEY in .env.local, then restart the server.");
+  if (d.error?.type === "insufficient_quota" || ["insufficient_quota", "billing_hard_limit_reached", "credit_balance_exhausted"].includes(d.error?.code ?? ""))
+    return new HttpError(
+      402,
+      "The OpenAI account has no credit for pictures. Add credit (or raise the spending limit) at platform.openai.com under Billing, then try again.",
+    );
+  if (res.status === 429) return new HttpError(429, "OpenAI’s rate limit for this key has been reached. Wait a minute and try again.");
+  if (res.status === 403 && /verif/i.test(message))
+    return new HttpError(
+      403,
+      "OpenAI needs the organisation verified before it will use this image model. Verify it at platform.openai.com under Settings, then try again.",
+    );
+  if (d.error?.code === "moderation_blocked" || /safety|policy/i.test(message))
+    return new HttpError(400, "OpenAI wouldn’t make that picture because of its content rules. Try rewording the description.");
+  return new HttpError(502, `OpenAI couldn’t make the picture${message ? `: ${message}` : "."}`);
+}
+
+/** Makes the picture with OpenAI in one go, keeps it in the image library, and returns it ready to use. */
+async function generateWithOpenAI(db: Db, actor: User, input: { prompt: string; aspect: string; quality: string; lesson: string | null }, now: Date) {
+  let res: Response;
+  try {
+    res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+        prompt: input.prompt,
+        size: OPENAI_SIZES[input.aspect] ?? "1536x1024",
+        quality: input.quality,
+        n: 1,
+      }),
+      signal: AbortSignal.timeout(180_000),
+      cache: "no-store",
+    });
+  } catch {
+    throw new HttpError(502, "Couldn’t reach OpenAI, or it took too long. Check the connection and try again.");
+  }
+  if (!res.ok) throw await openaiRefusal(res);
+  const d = (await res.json()) as { data?: { b64_json?: string }[] };
+  const b64 = d.data?.[0]?.b64_json;
+  if (!b64) throw new HttpError(502, "OpenAI didn’t send a picture back. Try again.");
+  const bytes = new Uint8Array(Buffer.from(b64, "base64"));
+  const size = imageSize(bytes);
+  if (!size) throw new HttpError(502, "OpenAI sent a picture the hub can’t read.");
+  const mime = bytes[0] === 0x89 ? "image/png" : bytes[0] === 0xff ? "image/jpeg" : "image/webp";
+  const label = input.prompt
+    .replace(/[^\w .,()-]/g, "")
+    .slice(0, 60)
+    .trim();
+  const saved = await saveUpload(db, actor, new File([bytes], `AI OpenAI – ${label}.${EXT[mime]}`, { type: mime }), size, now);
+  const id = `oa-${randomUUID()}`;
+  const at = now.toISOString();
+  db.prepare(
+    `INSERT INTO image_generations (id, lesson_slug, model, prompt, settings, status, created_by, created_at, upload_src, width, height, finished_at)
+     VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    input.lesson,
+    OPENAI_DIRECT.id,
+    input.prompt,
+    JSON.stringify({ aspect: input.aspect, quality: input.quality }),
+    actor.id,
+    at,
+    saved.src,
+    size.width,
+    size.height,
+    at,
+  );
+  audit(db, {
+    actor: actor.id,
+    event: "image_generation.completed",
+    entity: `image_generation:${id}`,
+    next: { model: "openai", lesson: input.lesson },
+    at: now,
+  });
+  return { id, status: "completed" as const, photo: { src: saved.src, width: size.width, height: size.height }, prompt: input.prompt };
 }
 
 /** Starts a picture. Returns its id, to check on with checkGeneration. */
@@ -121,6 +213,11 @@ export async function startGeneration(db: Db, actor: User, input: Parameters<typ
   const since = new Date(now.getTime() - 3600_000).toISOString();
   const recent = db.prepare("SELECT COUNT(*) AS n FROM image_generations WHERE created_by = ? AND created_at > ?").get(actor.id, since) as { n: number };
   if (recent.n >= PER_HOUR) throw new HttpError(429, "That’s a lot of pictures in an hour. Take a short break, then try again.");
+  if (model.id === OPENAI_DIRECT.id) {
+    if (!openaiConfigured()) throw new HttpError(503, "OpenAI isn’t connected. Add OPENAI_API_KEY to .env.local and restart the server.");
+    const lessonSlug = typeof input.lesson === "string" && /^[\w-]{1,120}$/.test(input.lesson) ? input.lesson : null;
+    return generateWithOpenAI(db, actor, { prompt: body.prompt, aspect: body.aspect_ratio, quality: body.quality ?? "medium", lesson: lessonSlug }, now);
+  }
   const d = await flowsCall(API, { method: "POST", body: JSON.stringify(body) });
   const id = String(d.id ?? "");
   if (!/^[\w-]{4,100}$/.test(id)) throw new HttpError(502, "ElevenLabs didn’t start the picture. Try again.");

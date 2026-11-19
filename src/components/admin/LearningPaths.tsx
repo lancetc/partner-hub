@@ -9,6 +9,7 @@ import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx, formatHoursMinutes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
+import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
 import { Icon } from "../Icon";
 import { confirmAction } from "@/lib/confirm";
 import { QrShare } from "./QrShare";
@@ -125,10 +126,14 @@ export function LearningPathList() {
   const me = useApi<Me>("/api/me").data;
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [showDeleted, setShowDeleted] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [audience, setAudience] = useState("all");
+  const [sort, setSort] = useState<PathSort>("attention");
   const error = actionError ?? loadError;
   async function remove(p: PathSummary) {
     setActionError(null);
+    setBusy(p.id);
     try {
       if (await deletePath(p)) {
         setNotice(`“${p.name}” deleted.`);
@@ -136,236 +141,190 @@ export function LearningPathList() {
       }
     } catch (e) {
       setActionError((e as Error).message);
+    } finally {
+      setBusy(null);
     }
   }
-  async function restore(p: DeletedPath) {
+  async function restore(id: string) {
+    const p = (data?.deleted ?? []).find((x) => x.id === id);
+    if (!p) return;
     setActionError(null);
+    setBusy(id);
     try {
       await api(`/api/admin/learning-paths/${encodeURIComponent(p.id)}`, { body: { action: "restore" } });
       setNotice(`“${p.name}” restored.`);
       reload();
     } catch (e) {
       setActionError((e as Error).message);
+    } finally {
+      setBusy(null);
     }
   }
-  const deleted = data?.deleted ?? [];
+  const paths = data?.paths ?? [];
+  const audiences = [...new Set(paths.map((p) => p.audience).filter(Boolean))].sort();
+  const needle = q.trim().toLowerCase();
+  const shown = paths
+    .filter(
+      (p) =>
+        (audience === "all" || (audience === "none" ? !p.audience : p.audience === audience)) &&
+        (!needle || `${p.name} ${p.description} ${p.lessons.map((l) => l.title).join(" ")}`.toLowerCase().includes(needle)),
+    )
+    .sort(PATH_COMPARE[sort]);
   return (
     <AdminShell title="Discovery Paths">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <p className="max-w-3xl text-ink-muted">
-          A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Discovery Paths page with
-          their progress and what’s next.
-        </p>
-        <Link href="/admin/learning-paths/new" className={btn.primary}>
-          <Icon name="plus" className="size-4" /> New learning path
-        </Link>
-      </div>
+      <AdminListHeader
+        title="Learning paths"
+        action={
+          <Link href="/admin/learning-paths/new" className={btn.primary}>
+            <Icon name="plus" className="size-4" /> New learning path
+          </Link>
+        }
+      >
+        A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Discovery Paths page with their
+        progress and what’s next.
+      </AdminListHeader>
       {error && (
         <div className="mt-4">
           <ErrorNote text={error} />
         </div>
-      )}
-      {!data ? (
-        <p className="mt-6 text-ink-muted">Loading…</p>
-      ) : !data.paths.length ? (
-        <p className="mt-6 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">No learning paths yet.</p>
-      ) : (
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {data.paths.map((p) => (
-            <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} onDelete={() => remove(p)} />
-          ))}
-        </ul>
       )}
       {notice && (
         <p role="status" className="mt-4 rounded-2xl bg-tealtint px-4 py-2 text-sm">
           {notice}
         </p>
       )}
-      {deleted.length > 0 && (
-        <section className="mt-8">
-          <button
-            type="button"
-            aria-expanded={showDeleted}
-            onClick={() => setShowDeleted((s) => !s)}
-            className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink-muted hover:text-ink"
-          >
-            <Icon name="trash" className="size-4" /> Deleted learning paths ({deleted.length})
-            <Icon name="chevron-down" className={cx("size-4 transition-transform", showDeleted && "rotate-180")} />
-          </button>
-          {showDeleted && (
-            <ul className="mt-2 flex flex-col divide-y divide-line rounded-2xl border border-line bg-surface">
-              {deleted.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{p.name}</span>
-                    <span className="text-sm text-ink-muted">
-                      {p.lessons} {p.lessons === 1 ? "topic" : "topics"}
-                      {p.assigned ? ` · was assigned to ${p.assigned}` : ""} · deleted{" "}
-                      {new Date(p.deletedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
-                    </span>
-                  </span>
-                  {p.canEdit && (
-                    <button type="button" className={btn.secondary} onClick={() => restore(p)}>
-                      <Icon name="refresh" className="size-4" /> Restore
-                    </button>
-                  )}
-                </li>
+      {!data ? (
+        <p className="mt-6 text-ink-muted">Loading learning paths…</p>
+      ) : (
+        <>
+          <AdminToolbar
+            search={{ value: q, onChange: setQ, placeholder: "Path name or a topic in it" }}
+            selects={[
+              {
+                label: "Audience",
+                value: audience,
+                onChange: setAudience,
+                options: [{ value: "all", label: "All audiences" }, ...audiences.map((a) => ({ value: a, label: a })), { value: "none", label: "Not set yet" }],
+              },
+              { label: "Sort by", value: sort, onChange: (v) => setSort(v as PathSort), options: (Object.keys(PATH_SORTS) as PathSort[]).map((s) => ({ value: s, label: PATH_SORTS[s] })) },
+            ]}
+            count={shown.length === paths.length ? `${paths.length} ${paths.length === 1 ? "path" : "paths"}` : `Showing ${shown.length} of ${paths.length}`}
+          />
+          {shown.length ? (
+            <AdminGrid>
+              {shown.map((p) => (
+                <PathTile key={p.id} path={p} canPreview={Boolean(me?.canAuthor)} busy={busy} onDelete={() => void remove(p)} />
               ))}
-            </ul>
+            </AdminGrid>
+          ) : paths.length ? (
+            <AdminEmpty
+              text="No learning paths match."
+              onClear={() => {
+                setQ("");
+                setAudience("all");
+              }}
+            />
+          ) : (
+            <AdminEmpty text="No learning paths yet. Start one with New learning path." />
           )}
-        </section>
+          <DeletedList
+            title="Deleted learning paths"
+            note="Hidden from learners. The topics themselves aren’t touched and completions are kept. Restore one to put it back as it was."
+            items={(data.deleted ?? []).map((p) => ({
+              id: p.id,
+              title: p.name,
+              detail: `${p.lessons} ${p.lessons === 1 ? "topic" : "topics"}${p.assigned ? ` · was assigned to ${p.assigned}` : ""} · ${deletedOn(p.deletedAt)}`,
+              canRestore: p.canEdit,
+            }))}
+            onRestore={(id) => void restore(id)}
+            busyId={busy}
+          />
+        </>
       )}
     </AdminShell>
   );
 }
 
+const PATH_SORTS = {
+  attention: "Needs attention first",
+  az: "Name A–Z",
+  za: "Name Z–A",
+  assigned: "Most assigned",
+  shortest: "Shortest first",
+  longest: "Longest first",
+} as const;
+type PathSort = keyof typeof PATH_SORTS;
+/** Lower comes first: planned paths with no topics, then ones with topics still in draft, then the rest. */
+const pathAttention = (p: PathSummary) => (!p.lessons.length ? 0 : p.lessons.some((l) => l.draft) ? 1 : 2);
+const byName = (a: PathSummary, b: PathSummary) => a.name.localeCompare(b.name, "en-AU", { sensitivity: "base" });
+const PATH_COMPARE: Record<PathSort, (a: PathSummary, b: PathSummary) => number> = {
+  attention: (a, b) => pathAttention(a) - pathAttention(b) || byName(a, b),
+  az: byName,
+  za: (a, b) => byName(b, a),
+  assigned: (a, b) => b.assigned - a.assigned || byName(a, b),
+  shortest: (a, b) => a.minutes - b.minutes || byName(a, b),
+  longest: (a, b) => b.minutes - a.minutes || byName(a, b),
+};
+
 /**
-  One path on the list: what it's for, how far through writing it is, its shape (stages and
-  chapters, or the first few lessons) and how the people on it are going.
+  One path on the list, as a card like a topic's: its picture, what's ready for learners, who's on it,
+  then Edit path, Preview and Delete.
 */
-function PathTile({ path: p, canPreview, onDelete }: { path: PathSummary; canPreview: boolean; onDelete: () => void }) {
+function PathTile({ path: p, canPreview, busy, onDelete }: { path: PathSummary; canPreview: boolean; busy: string | null; onDelete: () => void }) {
   const ready = p.lessons.filter((l) => !l.draft).length;
   const drafts = p.lessons.length - ready;
-  const isReady = new Set(p.lessons.filter((l) => !l.draft).map((l) => l.slug));
   const pct = (n: number, of: number) => `${of ? (n / of) * 100 : 0}%`;
-  // Chapters under their stage headings, in order; a stage shows once, over its first chapter.
-  const stages: { stage: string; chapters: (PathSummary["chapters"][number] & { number: number })[] }[] = [];
-  p.chapters.forEach((c, i) => {
-    const last = stages[stages.length - 1];
-    if (last && last.stage === c.stage) last.chapters.push({ ...c, number: i + 1 });
-    else stages.push({ stage: c.stage, chapters: [{ ...c, number: i + 1 }] });
-  });
-  const preview = 4;
-  const notStarted = p.assigned - p.started - p.finished;
-
   return (
-    // A container, so the chapter list inside can go to two columns only when the tile itself is wide enough.
-    <li className="@container relative flex flex-col gap-4 overflow-hidden rounded-3xl border border-line bg-surface p-5 hover:border-line-strong">
-      {p.thumbnail && <StoryVisual {...p.thumbnail} alt="" className="-mx-5 -mt-5 aspect-[16/7]" />}
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          {p.audience && <Badge tone="info">{p.audience}</Badge>}
+    <AdminCard
+      cover={p.thumbnail ? <StoryVisual {...p.thumbnail} alt="" className="aspect-[4/3]" /> : <PlainCover icon="route" />}
+      badges={
+        <>
           {!p.lessons.length && <Badge tone="warn">Planned: no topics yet</Badge>}
           {p.allowSkip && <Badge tone="warn">Testing: skipping allowed</Badge>}
           {p.quiz && <Badge tone="neutral">Upfront quiz</Badge>}
-        </div>
-        <p className="mt-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-          {p.chapters.length ? `${p.chapters.length} chapters · ` : ""}
-          {p.lessons.length} {p.lessons.length === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
-          {p.inOrder ? " · in order" : ""}
-        </p>
-        <h2 className="mt-1 font-serif text-xl font-semibold">
-          <Link href={`/admin/learning-paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
-            {p.name}
+        </>
+      }
+      meta={[
+        p.chapters.length ? `${p.chapters.length} chapters` : null,
+        `${p.lessons.length} ${p.lessons.length === 1 ? "topic" : "topics"}`,
+        formatHoursMinutes(p.minutes),
+        p.inOrder ? "in order" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+      chips={p.audience ? [p.audience] : []}
+      title={p.name}
+      href={p.lessons.length ? `/paths/${encodeURIComponent(p.id)}` : null}
+      editHref={`/admin/learning-paths/${p.id}`}
+      editLabel={p.canEdit ? "Edit path" : "Open path"}
+      secondary={
+        canPreview && p.lessons.length > 0 ? (
+          <Link href={`/paths/${encodeURIComponent(p.id)}?preview=1`} className={cardLink}>
+            <Icon name="play" className="size-4" /> Preview
           </Link>
-        </h2>
-        {p.description && <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{p.description}</p>}
-      </div>
-
+        ) : undefined
+      }
+      onDelete={p.canEdit ? onDelete : undefined}
+      deleteLabel="Delete learning path"
+      deleting={busy === p.id}
+      disabled={busy !== null}
+    >
+      {p.description && <p className="line-clamp-2 text-sm text-ink-muted">{p.description}</p>}
       {p.lessons.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <div
-            className="flex h-2 overflow-hidden rounded-full bg-muted"
-            role="img"
-            aria-label={`${ready} of ${p.lessons.length} topics ready, ${drafts} in draft`}
-          >
+        <div className="flex flex-col gap-1">
+          <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${ready} of ${p.lessons.length} topics ready, ${drafts} in draft`}>
             <div className="h-full bg-action" style={{ width: pct(ready, p.lessons.length) }} />
             <div className="h-full bg-gold/60" style={{ width: pct(drafts, p.lessons.length) }} />
           </div>
-          <p className="flex flex-wrap gap-x-3 text-xs text-ink-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-action" aria-hidden /> <strong className="text-ink">{ready}</strong> ready for learners
-            </span>
-            {drafts > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-gold/60" aria-hidden /> <strong className="text-ink">{drafts}</strong> still in draft
-              </span>
-            )}
+          <p className="text-xs text-ink-muted">
+            <strong className="text-ink">{ready}</strong> ready{drafts ? ` · ${drafts} in draft` : ""}
           </p>
         </div>
       )}
-
-      {stages.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          {stages.map((st, si) => (
-            <div key={si}>
-              {st.stage && <p className="mb-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">{st.stage}</p>}
-              <ol className="grid gap-x-4 gap-y-1 @lg:grid-cols-2">
-                {st.chapters.map((c) => {
-                  const done = c.slugs.filter((x) => isReady.has(x)).length;
-                  return (
-                    <li key={c.id} className="flex items-baseline gap-2 text-sm">
-                      <span className="font-serif font-semibold text-accent tabular-nums">{String(c.number).padStart(2, "0")}</span>
-                      <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                      <span
-                        className={cx(
-                          "shrink-0 text-xs tabular-nums",
-                          c.slugs.length && done === c.slugs.length ? "font-semibold text-success" : "text-ink-muted",
-                        )}
-                        title={`${done} of ${c.slugs.length} ready`}
-                      >
-                        {done}/{c.slugs.length}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          ))}
-        </div>
-      ) : (
-        p.lessons.length > 0 && (
-          <ol className="flex flex-col gap-1 text-sm">
-            {p.lessons.slice(0, preview).map((l, i) => (
-              <li key={l.slug} className="flex items-baseline gap-2">
-                <span className="font-serif font-semibold text-accent tabular-nums">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate">{l.title}</span>
-                {l.draft && <span className="shrink-0 text-xs text-ink-muted">Draft</span>}
-              </li>
-            ))}
-            {p.lessons.length > preview && <li className="pl-5 text-xs text-ink-muted">and {p.lessons.length - preview} more</li>}
-          </ol>
-        )
-      )}
-
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-        {p.assigned ? (
-          <div className="flex min-w-48 flex-1 flex-col gap-1">
-            <div
-              className="flex h-1.5 overflow-hidden rounded-full bg-muted"
-              role="img"
-              aria-label={`${p.finished} finished, ${p.started} in progress, ${notStarted} not started`}
-            >
-              <div className="h-full bg-success" style={{ width: pct(p.finished, p.assigned) }} />
-              <div className="h-full bg-action/50" style={{ width: pct(p.started, p.assigned) }} />
-            </div>
-            <p className="text-xs text-ink-muted">
-              <strong className="text-ink">{p.assigned}</strong> assigned · {p.started} in progress · {p.finished} finished
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-ink-muted">Not assigned to anyone yet</p>
-        )}
-        <div className="flex items-center gap-1">
-          {canPreview && p.lessons.length > 0 && (
-            <Link href={`/paths/${encodeURIComponent(p.id)}?preview=1`} className={cx(btn.quiet, "relative z-10")}>
-              <Icon name="play" className="size-4" /> Preview
-            </Link>
-          )}
-          {p.canEdit && (
-            <button
-              type="button"
-              onClick={onDelete}
-              aria-label={`Delete ${p.name}`}
-              title="Delete learning path"
-              className="relative z-10 grid size-11 place-items-center rounded-full text-ink-muted hover:bg-muted hover:text-danger"
-            >
-              <Icon name="trash" className="size-4" />
-            </button>
-          )}
-        </div>
-      </div>
-    </li>
+      <p className="text-sm text-ink-muted">
+        {p.assigned ? `${p.assigned} assigned · ${p.started} in progress · ${p.finished} finished` : "Not assigned to anyone yet"}
+      </p>
+    </AdminCard>
   );
 }
 

@@ -80,6 +80,8 @@ export const themeIds = Object.keys(THEMES) as ThemeId[];
 */
 export function cardSurface(lesson: Pick<Lesson, "theme">, card: Card): CardSurface | null {
   if (card.background) return GRADIENTS[card.background.gradient];
+  // An insight wall has its own sunlit-wall photo (see Wall in LessonPlayer), unless the card is given a colour of its own.
+  if (card.type === "wall") return null;
   const themed = THEMES[lesson.theme ?? "classic"]?.surface(card) ?? null;
   if (card.type === "listen") return themed?.text === "dark" ? themed : GRADIENTS.mist;
   return themed;

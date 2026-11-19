@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" font-family="Mulish, Segoe UI, Arial, sans-serif">
+  <rect width="1200" height="640" fill="#eef6f6"/>
+  <!-- The invoice -->
+  <g transform="translate(90 50)">
+    <rect x="8" y="10" width="560" height="540" rx="10" fill="#000" opacity="0.08"/>
+    <rect width="560" height="540" rx="10" fill="#fff" stroke="#c9d8d8"/>
+    <text x="40" y="62" font-size="30" font-weight="800" fill="#173c3c">Tidy Homes</text>
+    <text x="40" y="88" font-size="15" fill="#5c7373">Home help services (an example for this guide)</text>
+    <text x="520" y="62" font-size="26" font-weight="800" fill="#008282" text-anchor="end">INVOICE</text>
+    <text x="520" y="88" font-size="15" fill="#5c7373" text-anchor="end">No. 0417</text>
+    <line x1="40" y1="116" x2="520" y2="116" stroke="#dbe6e6"/>
+    <text x="40" y="150" font-size="14" font-weight="700" fill="#5c7373" letter-spacing="1.5">BILL FOR</text>
+    <text x="40" y="176" font-size="19" fill="#173c3c">Mr Alan Brooks</text>
+    <text x="300" y="150" font-size="14" font-weight="700" fill="#5c7373" letter-spacing="1.5">SERVICE PERIOD</text>
+    <text x="300" y="176" font-size="19" fill="#173c3c">Last week</text>
+    <rect x="40" y="214" width="480" height="40" fill="#f2f7f7"/>
+    <text x="56" y="240" font-size="14" font-weight="700" fill="#5c7373" letter-spacing="1.5">DESCRIPTION</text>
+    <text x="504" y="240" font-size="14" font-weight="700" fill="#5c7373" letter-spacing="1.5" text-anchor="end">HOURS</text>
+    <text x="56" y="296" font-size="22" fill="#173c3c">Home help</text>
+    <text x="504" y="296" font-size="22" fill="#173c3c" text-anchor="end">3</text>
+    <line x1="40" y1="322" x2="520" y2="322" stroke="#dbe6e6"/>
+    <rect x="56" y="350" width="200" height="14" rx="7" fill="#e3ecec"/>
+    <rect x="56" y="376" width="150" height="14" rx="7" fill="#e3ecec"/>
+    <rect x="56" y="460" width="120" height="14" rx="7" fill="#e3ecec"/>
+    <rect x="56" y="486" width="180" height="14" rx="7" fill="#e3ecec"/>
+    <!-- Marks -->
+    <rect x="46" y="266" width="230" height="44" rx="8" fill="none" stroke="#c7393e" stroke-width="3"/>
+    <rect x="290" y="156" width="150" height="30" rx="8" fill="none" stroke="#c7393e" stroke-width="3" stroke-dasharray="7 5"/>
+    <rect x="470" y="266" width="48" height="44" rx="8" fill="none" stroke="#c7393e" stroke-width="3"/>
+  </g>
+  <!-- Notes -->
+  <g font-size="21" fill="#173c3c">
+    <line x1="366" y1="338" x2="736" y2="150" stroke="#c7393e" stroke-width="2.5"/>
+    <circle cx="760" cy="140" r="22" fill="#c7393e"/>
+    <text x="760" y="148" fill="#fff" font-weight="800" text-anchor="middle">1</text>
+    <text x="796" y="134" font-weight="800">One line, two kinds of help</text>
+    <text x="796" y="162" fill="#3d5656">Cleaning and shopping help are joined.</text>
+
+    <line x1="530" y1="222" x2="736" y2="300" stroke="#c7393e" stroke-width="2.5"/>
+    <circle cx="760" cy="300" r="22" fill="#c7393e"/>
+    <text x="760" y="308" fill="#fff" font-weight="800" text-anchor="middle">2</text>
+    <text x="796" y="294" font-weight="800">No dates or visit times</text>
+    <text x="796" y="322" fill="#3d5656">Which visits are the hours for?</text>
+
+    <line x1="608" y1="360" x2="736" y2="460" stroke="#c7393e" stroke-width="2.5"/>
+    <circle cx="760" cy="460" r="22" fill="#c7393e"/>
+    <text x="760" y="468" fill="#fff" font-weight="800" text-anchor="middle">3</text>
+    <text x="796" y="454" font-weight="800">Which agreed service?</text>
+    <text x="796" y="482" fill="#3d5656">Nothing links the hours to the plan.</text>
+  </g>
+</svg>

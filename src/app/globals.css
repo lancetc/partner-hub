@@ -628,3 +628,63 @@ input[type="range"].brand-range::-moz-range-thumb {
   .cd-clock-sec { animation: cd-tick 1s steps(2, jump-none) infinite; }
 }
 @keyframes cd-tick { 50% { opacity: 0.55; } }
+
+/*
+  Magazine reveals. Blocks rise (or fade, slide or zoom) into place as the reader scrolls to them, and the
+  items in lists like timelines and flashcards follow one by one. Driven by the scroll itself, with no
+  script: nothing is ever hidden waiting for one, and a browser without scroll-driven animations simply
+  shows the page as it is. Off with reduced motion, and when printing.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .mag-reveal,
+    .mag-reveal-item {
+      animation: mag-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 75%;
+    }
+    .mag-reveal-item { animation-range: entry 10% entry 90%; }
+    .mag-reveal[data-reveal="fade"] { animation-name: mag-fade; }
+    .mag-reveal[data-reveal="slide"] { animation-name: mag-slide; }
+    .mag-reveal[data-reveal="zoom"] { animation-name: mag-zoom; }
+    .mag-reveal[data-reveal="none"],
+    .mag-reveal[data-reveal="none"] .mag-reveal-item { animation: none; }
+  }
+  /* The page's header, as it loads. */
+  .mag-hero-text { animation: mag-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .mag-hero-picture { animation: mag-settle 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+}
+@media print {
+  .mag-reveal,
+  .mag-reveal-item,
+  .mag-hero-text,
+  .mag-hero-picture { animation: none !important; }
+}
+@keyframes mag-rise { from { opacity: 0; transform: translateY(2.5rem); } to { opacity: 1; transform: none; } }
+@keyframes mag-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mag-slide { from { opacity: 0; transform: translateX(-3rem); } to { opacity: 1; transform: none; } }
+@keyframes mag-zoom { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes mag-settle { from { opacity: 0; transform: scale(1.06); } to { opacity: 1; transform: none; } }
+
+/* An acknowledgement ticked: the box pops, a ring pulses out, a few dots burst from it, and the thanks slides in. */
+.mag-confirmed { animation: mag-confirm-glow 0.8s ease-out; }
+.mag-confirmed input { animation: mag-confirm-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+.mag-confirmed .mag-confirm-note { animation: mag-confirm-in 0.4s ease-out 0.15s both; }
+.mag-burst { position: absolute; left: calc(0.75rem + 10px); top: calc(0.75rem + 12px); pointer-events: none; }
+.mag-burst > span {
+  position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 9999px; opacity: 0;
+  animation: mag-confirm-burst 0.75s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+.mag-burst > span:nth-child(odd) { width: 5px; height: 9px; border-radius: 2px; animation-delay: 0.04s; }
+@keyframes mag-confirm-pop { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 65% { transform: scale(0.9); } 100% { transform: scale(1); } }
+@keyframes mag-confirm-glow { 0% { box-shadow: 0 0 0 0 rgb(47 143 91 / 0.5); } 100% { box-shadow: 0 0 0 16px rgb(47 143 91 / 0); } }
+@keyframes mag-confirm-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes mag-confirm-burst {
+  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4) rotate(160deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mag-confirmed, .mag-confirmed input, .mag-confirmed .mag-confirm-note { animation: none; }
+  .mag-burst { display: none; }
+}
+@media print { .mag-burst { display: none; } }

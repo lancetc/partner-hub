@@ -5,6 +5,7 @@ import { blankLesson } from "@/content/blankLesson";
 import { createLesson, editorLesson, lessonStatus, saveDraft } from "./authoredLessons";
 import { syncPublishedLessons } from "./lessonRegistry";
 import { approvalFor, approvalQueue, decide, publishApproved, submitForReview, withdraw } from "./topicApproval";
+import { reviewIssues, reviewPrompt, skipAiReview } from "./topicAiReview";
 
 /*
   A person in the loop: topics go draft → review → (Compliance) → approved → published, and only what
@@ -30,6 +31,11 @@ function newTopic() {
   return slug;
 }
 const edit = (slug: string, summary: string, at: Date) => saveDraft(db, u("jordan"), slug, { ...editorLesson(db, slug)!.lesson, summary }, at);
+/** Jordan submits it and skips the AI pre-review, so the human review can start (step 3 has its own tests below). */
+function submitted(slug: string, input: Parameters<typeof submitForReview>[3], at: Date) {
+  submitForReview(db, u("jordan"), slug, input, at);
+  return skipAiReview(db, u("jordan"), slug, "", at);
+}
 
 describe("submitting a topic for review", () => {
   it("starts as a draft, and the author picks a reviewer other than themselves", () => {
@@ -65,7 +71,7 @@ describe("submitting a topic for review", () => {
 describe("the human review", () => {
   it("lets only the assigned reviewer decide, and asking for changes needs a note", () => {
     const slug = newTopic();
-    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    submitted(slug, { reviewer: "dana" }, t(1));
     expect(approvalFor(db, u("dana"), slug, t(2)).you.canReview).toBe(true);
     expect(approvalFor(db, u("hamish"), slug, t(2)).you.canReview).toBe(false);
     expect(() => decide(db, u("hamish"), slug, { decision: "approve" }, t(2))).toThrow(/assigned reviewer/);
@@ -82,7 +88,7 @@ describe("the human review", () => {
 
   it("publishes exactly what was approved, then goes live", () => {
     const slug = newTopic();
-    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    submitted(slug, { reviewer: "dana" }, t(1));
     const a = decide(db, u("dana"), slug, { decision: "approve", note: "Accurate." }, t(2));
     expect(a.stage).toBe("approved");
     // Dana can't publish: only the Hub owner (publisher) can.
@@ -90,12 +96,12 @@ describe("the human review", () => {
     const p = publishApproved(db, u("jordan"), slug, t(3), { notes: "First version" });
     expect(p.version).toBe("1.0");
     expect(p.approval.stage).toBe("live");
-    expect(p.approval.history.map((h) => h.action)).toEqual(["published", "approved", "submitted"]);
+    expect(p.approval.history.map((h) => h.action)).toEqual(["published", "approved", "ai_skipped", "submitted"]);
   });
 
   it("sends a draft edited after submission back to the author", () => {
     const slug = newTopic();
-    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    submitted(slug, { reviewer: "dana" }, t(1));
     decide(db, u("dana"), slug, { decision: "approve" }, t(2));
     edit(slug, "A late change nobody reviewed", t(3));
     const a = approvalFor(db, u("jordan"), slug, t(3));
@@ -105,10 +111,60 @@ describe("the human review", () => {
   });
 });
 
+describe("the AI pre-review", () => {
+  it("comes before the human review: the reviewer waits until it's done or skipped", () => {
+    const slug = newTopic();
+    const a = submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    expect(a.aiReview).toBeNull();
+    expect(a.you.canRunAiReview).toBe(true);
+    expect(approvalFor(db, u("dana"), slug, t(2)).you).toMatchObject({ canReview: false, canRunAiReview: true });
+    expect(approvalFor(db, u("hamish"), slug, t(2)).you.canRunAiReview).toBe(false);
+    expect(() => decide(db, u("dana"), slug, { decision: "approve" }, t(2))).toThrow(/AI pre-review comes first/);
+    expect(() => skipAiReview(db, u("hamish"), slug, "", t(2))).toThrow(/Only the author/);
+
+    const skipped = skipAiReview(db, u("jordan"), slug, "Claude isn’t connected here.", t(2));
+    expect(skipped.aiReview).toMatchObject({ status: "skipped", summary: "Claude isn’t connected here.", by: "Jordan Lee" });
+    expect(skipped.history[0]).toMatchObject({ action: "ai_skipped", label: "AI pre-review skipped" });
+    expect(() => skipAiReview(db, u("jordan"), slug, "", t(3))).toThrow(/already done/);
+    expect(approvalFor(db, u("dana"), slug, t(3)).you.canReview).toBe(true);
+  });
+
+  it("shows Claude's findings with the draft it checked, and starts again when the draft is resubmitted", () => {
+    const slug = newTopic();
+    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    const hash = (db.prepare("SELECT draft_hash FROM topic_approvals WHERE slug = ?").get(slug) as { draft_hash: string }).draft_hash;
+    const findings = [{ severity: "fix", card: "intro", cardLabel: "Intro", title: "Rate has no source", detail: "Use the facts library.", suggestion: "Use {{rate}}." }];
+    db.prepare("INSERT INTO topic_ai_reviews (slug, draft_hash, status, summary, findings, model, actor, at) VALUES (?, ?, 'done', 'One thing to fix.', ?, 'claude', 'jordan', ?)").run(
+      slug,
+      hash,
+      JSON.stringify(findings),
+      t(2).toISOString(),
+    );
+    expect(approvalFor(db, u("dana"), slug, t(2))).toMatchObject({ aiReview: { status: "done", summary: "One thing to fix.", findings }, you: { canReview: true } });
+    decide(db, u("dana"), slug, { decision: "changes", note: "Fix the rate." }, t(3));
+    edit(slug, "Fixed", t(4));
+    expect(submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(5)).aiReview).toBeNull();
+  });
+
+  it("asks Claude to check against the facts library and the topic's cards, and checks its reply", () => {
+    const slug = newTopic();
+    const lesson = editorLesson(db, slug)!.lesson;
+    const prompt = reviewPrompt(lesson, [{ key: "hourly-rate", label: "Hourly rate", value: "$70.00", notes: "", source_title: "Price list", check_by: null }]);
+    expect(prompt).toMatch(/\{\{hourly-rate\}\} Hourly rate: \$70\.00 \(source: Price list\)/);
+    expect(prompt).toContain(`<card id="${Object.keys(lesson.nodes)[0]}"`);
+    const ids = Object.keys(lesson.nodes);
+    expect(reviewIssues({ summary: "Fine.", findings: [{ severity: "check", card: ids[0], title: "Tone", detail: "A bit formal." }] }, ids)).toEqual([]);
+    const bad = reviewIssues({ findings: [{ severity: "maybe", card: "nope", title: "", detail: "" }] }, ids).join(" ");
+    expect(bad).toMatch(/summary/);
+    expect(bad).toMatch(/severity must be/);
+    expect(bad).toMatch(/isn’t one of the card ids/);
+  });
+});
+
 describe("compliance-sensitive topics", () => {
   it("need Compliance to approve after the reviewer", () => {
     const slug = newTopic();
-    submitForReview(db, u("jordan"), slug, { reviewer: "hamish", compliance: true }, t(1));
+    submitted(slug, { reviewer: "hamish", compliance: true }, t(1));
     expect(decide(db, u("hamish"), slug, { decision: "approve" }, t(2)).stage).toBe("compliance");
     expect(() => decide(db, u("dana"), slug, { decision: "approve" }, t(3))).toThrow(/Compliance/);
     expect(() => publishApproved(db, u("jordan"), slug, t(3))).toThrow(/hasn’t been approved/);
@@ -119,7 +175,7 @@ describe("compliance-sensitive topics", () => {
 
   it("can be flagged by the reviewer when the author didn't", () => {
     const slug = newTopic();
-    submitForReview(db, u("jordan"), slug, { reviewer: "dana" }, t(1));
+    submitted(slug, { reviewer: "dana" }, t(1));
     expect(decide(db, u("dana"), slug, { decision: "approve", compliance: true }, t(2)).stage).toBe("compliance");
   });
 });
@@ -128,7 +184,7 @@ describe("the Approvals page", () => {
   it("shows each person what's waiting on them", () => {
     const slug = newTopic();
     expect(approvalQueue(db, u("jordan"), t(1)).drafts.map((d) => d.slug)).toContain(slug);
-    submitForReview(db, u("jordan"), slug, { reviewer: "dana", compliance: true }, t(1));
+    submitted(slug, { reviewer: "dana", compliance: true }, t(1));
     expect(approvalQueue(db, u("dana"), t(1)).yours.map((x) => x.slug)).toEqual([slug]);
     expect(approvalQueue(db, u("morgan"), t(1)).yours).toEqual([]);
     decide(db, u("dana"), slug, { decision: "approve" }, t(2));

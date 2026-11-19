@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { cx, formatDate, formatDateTime } from "@/lib/format";
 import { Badge, btn, ErrorNote, Field, input } from "./ui";
+import { readEvents } from "./BuildProgress";
 import { Icon } from "../Icon";
 
 /*
@@ -35,7 +36,16 @@ export type Approval = {
     canApproveCompliance: boolean;
     canPublish: boolean;
     canWithdraw: boolean;
+    canRunAiReview: boolean;
   };
+  /** Step 3 for the submitted draft: Claude's findings, or skipped; null while it's still to do. */
+  aiReview: {
+    status: "done" | "skipped";
+    summary: string;
+    findings: { severity: "fix" | "check" | "good"; card: string; cardLabel: string; title: string; detail: string; suggestion: string }[];
+    at: string;
+    by: string;
+  } | null;
   reviewers: { id: string; name: string; role: "sme" | "compliance" | "publisher"; area: string }[];
   publishers: string[];
   history: { id: number; action: string; label: string; by: string; note: string; version: string | null; at: string }[];
@@ -43,21 +53,29 @@ export type Approval = {
 };
 type Published = { version: string; status: { state: "unpublished" | "live" | "changes"; version: string; updatedAt: string | null; publishedAt: string | null } };
 
-/** The label on the editor's header button, by stage. */
+/**
+  The label on the editor's header button, by stage. It follows the review steps even while review is
+  optional (the demo), where "Publish anyway" sits beside them.
+*/
 export function approvalButton(a: Approval | null) {
   if (!a) return "Submit for review";
-  if (!a.reviewRequired && a.stage !== "live") return "Publish";
   if (a.stage === "draft") return a.stale ? "Submit again" : "Submit for review";
   if (a.stage === "changes") return "Changes asked for";
   if (a.stage === "review") return a.you.canReview ? "Your review" : "In review";
   if (a.stage === "compliance") return a.you.canApproveCompliance ? "Your approval" : "With Compliance";
-  if (a.stage === "approved") return a.you.canPublish ? "Publish" : "Approved";
+  if (a.stage === "approved") return a.you.canPublish || !a.reviewRequired ? "Publish" : "Approved";
   return "Published";
 }
 
 const ROLE_LABEL = { sme: "Subject-matter expert", compliance: "Compliance", publisher: "Hub owner" } as const;
 
 type StepState = "done" | "current" | "next" | "skipped";
+
+const aiCounts = (f: { severity: string }[]) => {
+  const fix = f.filter((x) => x.severity === "fix").length;
+  const check = f.filter((x) => x.severity === "check").length;
+  return fix || check ? [fix && `${fix} to fix`, check && `${check} to check`].filter(Boolean).join(", ") : "Nothing to fix";
+};
 
 function steps(a: Approval) {
   const order: ApprovalStage[] = ["draft", "review", "compliance", "approved", "live"];
@@ -72,11 +90,23 @@ function steps(a: Approval) {
       who: reviewer ? `To ${reviewer.name}${reviewer.area ? `, ${reviewer.area}` : ""}` : "Author picks a subject-matter expert",
       state: (at >= 1 ? "done" : "next") as StepState,
     },
-    { title: "AI pre-review", who: "Checks against approved sources", state: "skipped" as StepState, detail: "Not set up yet. Coming later." },
+    {
+      title: "AI pre-review",
+      who: "Claude checks it against the facts library and official sources",
+      state: (a.stage === "review" && !a.aiReview ? "current" : a.aiReview?.status === "skipped" && at >= 1 ? "skipped" : at >= 1 && a.aiReview ? "done" : at > 1 ? "done" : "next") as StepState,
+      detail:
+        a.stage === "review" && !a.aiReview
+          ? "Running now, or waiting to run"
+          : a.aiReview?.status === "skipped"
+            ? "Skipped"
+            : a.aiReview
+              ? aiCounts(a.aiReview.findings)
+              : undefined,
+    },
     {
       title: "Human review",
       who: reviewer ? reviewer.name : "Subject-matter expert",
-      state: (a.stage === "changes" ? "current" : s(1)) as StepState,
+      state: (a.stage === "changes" ? "current" : a.stage === "review" && !a.aiReview ? "next" : s(1)) as StepState,
       detail: a.stage === "changes" ? "Changes asked for" : undefined,
     },
     {
@@ -110,13 +140,49 @@ export function TopicApproval({
   onComments: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  // What went wrong, and whether it was publishing (shown in the Publish now box) or a review step.
+  // What went wrong, and whether it was publishing (shown in the Skip the review box) or a review step.
   const [problem, setProblem] = useState<{ text: string; publish: boolean } | null>(null);
   const [reviewer, setReviewer] = useState<string>("");
   const [compliance, setCompliance] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [changeNote, setChangeNote] = useState("");
   const [important, setImportant] = useState(false);
+  // The AI pre-review while it runs: what Claude is doing, or why it stopped.
+  const [ai, setAi] = useState<{ running: boolean; text: string; error: string | null }>({ running: false, text: "", error: null });
+  const [skipNote, setSkipNote] = useState("");
+
+  async function runAi() {
+    setAi({ running: true, text: "Starting…", error: null });
+    try {
+      const res = await fetch(`/api/admin/lessons/${encodeURIComponent(slug)}/approval/ai`, { method: "POST" });
+      if (!res.ok || !res.headers.get("content-type")?.includes("ndjson")) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error ?? "The AI pre-review didn’t run.");
+      }
+      let failure: string | null = null;
+      await readEvents<{ type: string; phase?: string; issues?: number; error?: string; approval?: Approval }>(res, (e) => {
+        if (e.type === "phase")
+          setAi({
+            running: true,
+            error: null,
+            text:
+              e.phase === "reading"
+                ? "Reading the topic and the facts library…"
+                : e.phase === "writing"
+                  ? "Checking each card against the sources…"
+                  : e.phase === "checking"
+                    ? "Checking its findings…"
+                    : "Tidying up its findings…",
+          });
+        else if (e.type === "error") failure = e.error ?? "The AI pre-review didn’t finish.";
+        else if (e.type === "done" && e.approval) setData(e.approval);
+      });
+      if (failure) throw new Error(failure);
+      setAi({ running: false, text: "", error: null });
+    } catch (e) {
+      setAi({ running: false, text: "", error: (e as Error).message });
+    }
+  }
 
   if (error) return <ErrorNote text={error} />;
   if (!data) return <p className="text-ink-muted">Loading the approval…</p>;
@@ -137,6 +203,8 @@ export function TopicApproval({
         setImportant(false);
       } else setData(r);
       setNote("");
+      // Submitted: the AI pre-review starts straight away.
+      if (body.action === "submit" && r.stage === "review" && r.you?.canRunAiReview) void runAi();
     } catch (e) {
       setProblem({ text: (e as Error).message, publish: body.action === "publish" });
     } finally {
@@ -242,7 +310,7 @@ export function TopicApproval({
         title={dirty && !quick ? "Unsaved edits would need another review." : undefined}
         onClick={() => send({ action: "publish", notes: changeNote, kind: important ? "important" : "minor" }, { saveFirst: quick })}
       >
-        <Icon name="check" className="size-4" /> {busy ? "Publishing…" : quick ? "Publish now" : "Publish"}
+        <Icon name="check" className="size-4" /> {busy ? "Publishing…" : quick && a.stage !== "approved" ? "Publish anyway" : "Publish"}
       </button>
       <p className="text-xs text-ink-muted">Learners who already finished keep their completion. Publishing starts a new version.</p>
     </div>
@@ -275,7 +343,9 @@ export function TopicApproval({
         )}
         {!a.stale && (
           <p className="mb-3 text-ink-muted">
-            {quick ? "Send the draft to a reviewer if you’d like it checked before it goes live." : "When the draft is ready, send it to a reviewer. It can’t be published until it’s approved."}
+            {quick
+              ? "When the draft is ready, send it to a reviewer. (For this demo you can also skip the review and publish it: see below.)"
+              : "When the draft is ready, send it to a reviewer. It can’t be published until it’s approved."}
           </p>
         )}
         {submitForm}
@@ -297,6 +367,40 @@ export function TopicApproval({
         {submitForm}
       </>
     );
+  } else if (a.stage === "review" && !a.aiReview) {
+    title = "AI pre-review";
+    body = (
+      <div className="flex flex-col gap-3">
+        <p>
+          Before {a.submission?.reviewer?.name ?? "the reviewer"} reads it, Claude checks every card against the facts library and the topic’s official sources:
+          rates, dates and rules, quiz answers, safety and plain English. Its findings go to the reviewer, who decides.
+        </p>
+        {ai.running ? (
+          <p className="flex items-center gap-2 font-semibold" role="status">
+            <span className="size-4 animate-spin rounded-full border-2 border-action border-t-transparent" aria-hidden /> {ai.text}
+          </p>
+        ) : (
+          a.you.canRunAiReview && (
+            <button type="button" className={cx(btn.primary, "self-start")} onClick={() => void runAi()}>
+              <Icon name="spark" className="size-4" /> {ai.error ? "Try the AI pre-review again" : "Run the AI pre-review"}
+            </button>
+          )
+        )}
+        {ai.error && <ErrorNote text={ai.error} />}
+        {a.you.canRunAiReview && !ai.running && (
+          <details className="rounded-xl border border-line p-3 text-sm">
+            <summary className="cursor-pointer font-semibold">Skip it and go straight to the reviewer</summary>
+            <Field label="Why (optional)" hint="Kept in the topic’s history.">
+              <input className={input} value={skipNote} onChange={(e) => setSkipNote(e.target.value)} placeholder="For example: Claude isn’t connected on this server." />
+            </Field>
+            <button type="button" className={cx(btn.secondary, "mt-2")} disabled={busy} onClick={() => send({ action: "ai_skip", note: skipNote })}>
+              Skip the AI pre-review
+            </button>
+          </details>
+        )}
+        {!a.you.canRunAiReview && <p className="text-ink-muted">Waiting for the AI pre-review. The author or the Hub owner runs it.</p>}
+      </div>
+    );
   } else if (a.stage === "review") {
     title = a.you.canReview ? "Your review" : "In review";
     body = a.you.canReview ? decision("reviewer") : waiting(a.submission?.reviewer?.name ?? "the reviewer", a.submission?.at);
@@ -317,20 +421,6 @@ export function TopicApproval({
 
   return (
     <div className="flex flex-col gap-5">
-      {quick && a.you.canPublish && a.stage !== "approved" && (
-        <section className="rounded-3xl border-2 border-action bg-surface p-5">
-          <h3 className="font-serif text-xl font-semibold">Publish now</h3>
-          <p className="mb-4 mt-1 text-ink-muted">
-            Review is optional for now, so you can put this draft live straight away. To have it checked first, send it to a reviewer below instead.
-          </p>
-          {publishForm}
-          {problem?.publish && (
-            <div className="mt-3">
-              <ErrorNote text={problem.text} />
-            </div>
-          )}
-        </section>
-      )}
       <section className="rounded-3xl border border-line bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-serif text-xl font-semibold">{title}</h3>
@@ -355,8 +445,30 @@ export function TopicApproval({
         )}
       </section>
 
+      {a.aiReview && a.stage !== "live" && <AiFindings review={a.aiReview} />}
+
+      {quick && a.you.canPublish && a.stage !== "approved" && (
+        <section className="rounded-3xl border-2 border-dashed border-action bg-surface p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-serif text-xl font-semibold">Skip the review and publish</h3>
+            <Badge tone="warn">Demo</Badge>
+          </div>
+          <p className="mb-4 mt-1 text-ink-muted">
+            The review steps work as they would for real, but for this demo they don’t hold anything up: you can publish the saved draft now, at any step. With
+            review switched on, it would wait for the reviewer’s approval and the Hub owner.
+          </p>
+          {publishForm}
+          {problem?.publish && (
+            <div className="mt-3">
+              <ErrorNote text={problem.text} />
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="rounded-3xl border border-line bg-surface p-5">
         <h3 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Approval steps</h3>
+        {quick && <p className="mt-1 text-sm text-ink-muted">Shown as they run for real. In this demo you can publish at any step.</p>}
         <ol className="mt-3 flex flex-col">
           {steps(a).map((s, i, all) => (
             <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0">
@@ -453,5 +565,62 @@ function Monitor({ a }: { a: Approval }) {
       </dl>
       {m.owner && <p className="text-xs text-ink-muted">Content owner: {m.owner}</p>}
     </div>
+  );
+}
+
+const FINDING_LOOK = {
+  fix: { label: "Fix", icon: "alert", tone: "border-[#c7393e] bg-[#fdf1f0] dark:bg-[#3a1f1f]" },
+  check: { label: "Check", icon: "eye", tone: "border-[#fab53d] bg-[#fff6e4] dark:bg-[#3a2f17]" },
+  good: { label: "Good", icon: "circle-check", tone: "border-[#2f8f5b] bg-[#e9f6ef] dark:bg-[#17301f]" },
+} as const;
+
+/** Step 3's result: Claude's summary and each finding, by card, for the reviewer to weigh up. */
+function AiFindings({ review }: { review: NonNullable<Approval["aiReview"]> }) {
+  return (
+    <section className="rounded-3xl border border-line bg-surface p-5" aria-labelledby="ai-findings">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="ai-findings" className="flex items-center gap-2 font-serif text-xl font-semibold">
+          <Icon name="spark" className="size-5 text-accent" /> AI pre-review
+        </h3>
+        <Badge tone={review.status === "skipped" ? "neutral" : review.findings.some((f) => f.severity === "fix") ? "warn" : "good"}>
+          {review.status === "skipped" ? "Skipped" : aiCounts(review.findings)}
+        </Badge>
+      </div>
+      {review.status === "skipped" ? (
+        <p className="mt-2 text-sm text-ink-muted">
+          Skipped by {review.by} on {formatDateTime(review.at)}
+          {review.summary && `: ${review.summary}`}. The reviewer checks it without Claude’s findings.
+        </p>
+      ) : (
+        <>
+          <p className="mt-2">{review.summary}</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            Claude, {formatDateTime(review.at)}. Findings to weigh up, not decisions: the reviewer decides.
+          </p>
+          <ul className="mt-4 flex flex-col gap-3">
+            {review.findings.map((f, i) => {
+              const look = FINDING_LOOK[f.severity];
+              return (
+                <li key={i} className={cx("rounded-2xl border-l-4 p-4", look.tone)}>
+                  <p className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="inline-flex items-center gap-1 font-bold">
+                      <Icon name={look.icon} className="size-4" /> {look.label}
+                    </span>
+                    <span className="text-ink-muted">· {f.cardLabel || "Whole topic"}</span>
+                  </p>
+                  <p className="mt-1 font-semibold">{f.title}</p>
+                  <p className="mt-1 text-sm">{f.detail}</p>
+                  {f.suggestion && (
+                    <p className="mt-2 text-sm">
+                      <span className="font-semibold">Suggestion:</span> {f.suggestion}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

@@ -58,8 +58,8 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
 
 const cacheDir = () => path.join(process.cwd(), "data", "tts");
 
-const hashOf = (text: string) => {
-  const { voiceId, modelId } = ttsConfig();
+const hashOf = (text: string, voiceId: string) => {
+  const { modelId } = ttsConfig();
   return crypto.createHash("sha256").update(`${voiceId}|${modelId}|${text}`).digest("hex").slice(0, 32);
 };
 
@@ -70,10 +70,12 @@ const inFlight = new Map<string, Promise<{ audio: Buffer; words: WordTiming[] | 
   The narration and its word timings, from the disk cache or ElevenLabs. Both are made in one call
   so they always match. A recording cached before timings were kept is made again once.
 */
-export async function narration(text: string): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
-  const { apiKey, voiceId, modelId } = ttsConfig();
+export async function narration(text: string, voice?: string): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
+  const { apiKey, modelId } = ttsConfig();
+  // The hub's narrator unless another ElevenLabs voice is asked for (a Magazine Audio Guide may choose one).
+  const voiceId = voice ?? ttsConfig().voiceId;
   if (!apiKey) throw new HttpError(503, "ElevenLabs isn't configured. Set ELEVENLABS_API_KEY.");
-  const hash = hashOf(text);
+  const hash = hashOf(text, voiceId);
   const mp3 = path.join(cacheDir(), `${hash}.mp3`);
   const json = path.join(cacheDir(), `${hash}.json`);
   if (fs.existsSync(mp3) && fs.existsSync(json)) {
@@ -97,6 +99,16 @@ export async function narration(text: string): Promise<{ audio: Buffer; words: W
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       console.error("ElevenLabs error", res.status, detail.slice(0, 300));
+      // The reasons an author can do something about, in words.
+      if (/quota_exceeded/.test(detail))
+        throw new HttpError(
+          402,
+          "The ElevenLabs account has run out of credits for this month. Add credits or upgrade the plan at elevenlabs.io, then try again.",
+        );
+      if (res.status === 401 && /missing_permissions|text_to_speech/.test(detail))
+        throw new HttpError(502, "The ElevenLabs key doesn't have the Text to speech permission. Turn it on for the key at elevenlabs.io, then try again.");
+      if (res.status === 401)
+        throw new HttpError(502, "ElevenLabs didn't accept the API key. Check ELEVENLABS_API_KEY in .env.local, then restart the server.");
       throw new HttpError(502, `ElevenLabs couldn't generate the narration (${res.status}).`);
     }
     const body = (await res.json()) as { audio_base64: string; alignment: Alignment | null };

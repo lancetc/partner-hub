@@ -867,7 +867,9 @@ export function LessonPlayer({
               {node.type === "wall" ? node.prompt : node.heading}
             </h2>
             {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
-            {node.body && node.type !== "wall" && <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />}
+            {node.body && node.type !== "wall" && (
+              <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />
+            )}
             {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
             {node.pdf && (
               <CardDocument
@@ -918,7 +920,12 @@ export function LessonPlayer({
 
           {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
           {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}
-          <div className={cx(onColour && panelledOnColour(node.type) && !speaksFirst(node.type) && onColour.panel, speaksFirst(node.type) && "flex flex-1 flex-col")}>
+          <div
+            className={cx(
+              onColour && panelledOnColour(node.type) && !speaksFirst(node.type) && onColour.panel,
+              speaksFirst(node.type) && "flex flex-1 flex-col",
+            )}
+          >
             <CardBody
               node={node}
               attempt={attempt}
@@ -1196,7 +1203,10 @@ function CardBody({
               role="status"
               className="fx-nudge mt-1 flex gap-3 rounded-2xl border border-[#f4b8a1] bg-[#fff1eb] p-4 text-[#102a43] shadow-[0_6px_18px_rgb(179_61_23/0.14)] [text-shadow:none] dark:border-warm/40 dark:bg-warm/15 dark:text-ink"
             >
-              <span aria-hidden className="fx-tick grid size-9 shrink-0 place-items-center rounded-full bg-[#b33d17] text-white dark:bg-warm dark:text-[#102a43]">
+              <span
+                aria-hidden
+                className="fx-tick grid size-9 shrink-0 place-items-center rounded-full bg-[#b33d17] text-white dark:bg-warm dark:text-[#102a43]"
+              >
                 <Icon name="bulb" className="size-5" />
               </span>
               <div className="flex min-w-0 flex-col gap-1">
@@ -1214,7 +1224,13 @@ function CardBody({
       );
     case "response":
       return (
-        <ResponseCard node={node} slug={lessonSlug} value={(attempt.answers[node.id] as string) ?? ""} onChange={(v) => setAnswer(node.id, v)} tinted={tinted} />
+        <ResponseCard
+          node={node}
+          slug={lessonSlug}
+          value={(attempt.answers[node.id] as string) ?? ""}
+          onChange={(v) => setAnswer(node.id, v)}
+          tinted={tinted}
+        />
       );
     case "quiz":
       return (
@@ -1272,10 +1288,7 @@ function CardBody({
             </ol>
           )}
           {/* Fixed sage colours, so the action reads the same on any card and in dark mode. */}
-          <div
-            className="fx-stagger rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] [text-shadow:none]"
-            style={{ ["--i" as string]: node.points?.length ?? 0 }}
-          >
+          <div className="fx-stagger rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] [text-shadow:none]" style={{ ["--i" as string]: node.points?.length ?? 0 }}>
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#0e7c7b]">Now try this</p>
             <p className="mt-1 text-lg font-semibold leading-snug">
               <RichInline text={node.action} />
@@ -1812,23 +1825,23 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
         <p className={cx("font-mulish text-xs font-extrabold uppercase tracking-[0.12em]", onColour ? "opacity-85" : "text-ink-muted")}>{points.title}</p>
       )}
       <ul className="grid grid-cols-2 gap-2">
-          {/* One after another, like the summary card's points. */}
-          {points.items.map((p, i) => (
-            <li key={p.text} className={cx("fx-stagger flex flex-col gap-2 rounded-2xl p-3", box)} style={{ ["--i" as string]: i }}>
-              {p.icon && (
-                <span
-                  aria-hidden
-                  // Solid brand teal with a white icon, the same on any card colour and in dark mode.
-                  className="inline-flex size-8 items-center justify-center rounded-full bg-[#0e7c7b] text-white"
-                >
-                  <Icon name={p.icon} className="size-4" />
-                </span>
-              )}
-              <span className="text-[0.95rem] font-medium leading-snug">
-                <RichInline text={p.text} />
+        {/* One after another, like the summary card's points. */}
+        {points.items.map((p, i) => (
+          <li key={p.text} className={cx("fx-stagger flex flex-col gap-2 rounded-2xl p-3", box)} style={{ ["--i" as string]: i }}>
+            {p.icon && (
+              <span
+                aria-hidden
+                // Solid brand teal with a white icon, the same on any card colour and in dark mode.
+                className="inline-flex size-8 items-center justify-center rounded-full bg-[#0e7c7b] text-white"
+              >
+                <Icon name={p.icon} className="size-4" />
               </span>
-            </li>
-          ))}
+            )}
+            <span className="text-[0.95rem] font-medium leading-snug">
+              <RichInline text={p.text} />
+            </span>
+          </li>
+        ))}
       </ul>
       {points.tip && (
         <p
@@ -1866,9 +1879,7 @@ function KeyPointSteps({ points, box, onColour }: { points: NonNullable<Card["ke
               >
                 {p.icon ? <Icon name={p.icon} className="size-4" /> : i + 1}
               </span>
-              {i < points.items.length - 1 && (
-                <span aria-hidden className={cx("my-1 w-0.5 flex-1 rounded-full", onColour ? "bg-[#b9e0e0]" : "bg-line")} />
-              )}
+              {i < points.items.length - 1 && <span aria-hidden className={cx("my-1 w-0.5 flex-1 rounded-full", onColour ? "bg-[#b9e0e0]" : "bg-line")} />}
             </div>
             <div className="flex flex-col gap-0.5 pb-4 pt-1">
               {p.title && (
@@ -2295,9 +2306,21 @@ function Wall({
   const showForm = !mine || editing;
   const others = wall?.posts ?? [];
 
-  // The prompt is the card's heading, so it isn't repeated here.
+  // The prompt is the card's heading, so it isn't repeated here. On a plain card, the wall sits on a sunlit wall photo
+  // (the same as the Magazine's insight wall), softened on the left so the words read well; a card with its own background keeps it.
   return (
-    <div className="flex flex-1 flex-col gap-3">
+    <div
+      className={cx(
+        "flex flex-1 flex-col gap-3",
+        !tinted && "relative isolate overflow-hidden rounded-2xl bg-[url(/images/magazine/insight-wall.webp)] bg-cover bg-right-bottom p-4 sm:p-5",
+      )}
+    >
+      {!tinted && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#fbf7f2]/90 via-[#fbf7f2]/70 to-[#fbf7f2]/10 dark:from-[#0b1626]/90 dark:via-[#0b1626]/80 dark:to-[#0b1626]/50"
+        />
+      )}
       {showForm ? (
         <>
           {/* Speaking is the main way to share; the words then show to check and correct before posting. */}
@@ -2391,7 +2414,7 @@ function Wall({
           {!others.length && <p className={cx("text-sm", note)}>You’re the first. Come back later to see what others add.</p>}
           <ul className="flex flex-col gap-2">
             {others.map((p) => (
-              <li key={p.id} className={cx("rounded-2xl p-3 text-ink [text-shadow:none]", tinted ? "bg-surface shadow-sm" : "bg-muted")}>
+              <li key={p.id} className={cx("rounded-2xl p-3 text-ink [text-shadow:none]", tinted ? "bg-surface shadow-sm" : "bg-surface/90 shadow-sm ring-1 ring-line")}>
                 <p className="whitespace-pre-line">{p.text}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
                   {p.by && <span className="font-semibold text-ink">{p.by}</span>}

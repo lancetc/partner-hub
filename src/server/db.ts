@@ -7,6 +7,8 @@ import { demoSurveys } from "@/content/surveys";
 import { syncPublishedLessons } from "./lessonRegistry";
 import { syncStories } from "./storyRegistry";
 import { restoreDatabase } from "./snapshot";
+import { seedGuides } from "@/content/magazine";
+import { readGuideDoc, readingMinutes } from "@/lib/magazine";
 
 /*
   Local relational store for the prototype server (Node's built-in SQLite).
@@ -415,6 +417,16 @@ CREATE TABLE IF NOT EXISTS topic_approvals (
   draft_hash TEXT NOT NULL, reviewer_id TEXT NOT NULL REFERENCES users(id), compliance INTEGER NOT NULL DEFAULT 0,
   submitted_by TEXT NOT NULL REFERENCES users(id), submitted_at TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
 );
+-- Step 3, the AI pre-review (server/topicAiReview): what Claude found when it checked the submitted draft
+-- against the facts library and the topic's official sources, before the human reviewer reads it. One per
+-- submitted draft; "skipped" when the author went straight to the reviewer.
+CREATE TABLE IF NOT EXISTS topic_ai_reviews (
+  slug TEXT NOT NULL, draft_hash TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('done','skipped')),
+  summary TEXT NOT NULL DEFAULT '', findings TEXT NOT NULL DEFAULT '[]', model TEXT,
+  actor TEXT NOT NULL REFERENCES users(id), at TEXT NOT NULL,
+  PRIMARY KEY (slug, draft_hash)
+);
 -- Every step a topic took: submitted, changes asked for, approved, published, withdrawn.
 CREATE TABLE IF NOT EXISTS topic_approval_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, action TEXT NOT NULL, actor TEXT NOT NULL REFERENCES users(id),
@@ -497,6 +509,96 @@ CREATE TABLE IF NOT EXISTS scorm_runtime_data (
 CREATE TABLE IF NOT EXISTS scorm_audit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, event TEXT NOT NULL,
   course_id TEXT, version_id TEXT, attempt_id INTEGER, detail TEXT NOT NULL DEFAULT '{}'
+);
+-- Magazine (lib/magazine, server/magazine): desk-reading guides. The draft is edited in place; each publish
+-- keeps an immutable revision, and every learner record points at the revision they read.
+CREATE TABLE IF NOT EXISTS magazine_guides (
+  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, standfirst TEXT NOT NULL DEFAULT '', cover TEXT,
+  template TEXT NOT NULL DEFAULT 'blank' CHECK (template IN ('story','field','blank')),
+  -- JSON list of user audiences ('partner','coordinator','staff'); empty is everyone signed in.
+  audience TEXT NOT NULL DEFAULT '[]',
+  completion TEXT NOT NULL DEFAULT 'confirm' CHECK (completion IN ('reference','confirm','decision','assessed')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','in_review','approved','published','archived')),
+  draft TEXT NOT NULL, draft_saved_at TEXT NOT NULL,
+  revision_id TEXT,
+  owner TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS magazine_revisions (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), number INTEGER NOT NULL, parent_id TEXT,
+  title TEXT NOT NULL, standfirst TEXT NOT NULL, cover TEXT, doc TEXT NOT NULL, completion TEXT NOT NULL, minutes INTEGER NOT NULL,
+  summary TEXT NOT NULL DEFAULT '', published_by TEXT NOT NULL, published_at TEXT NOT NULL,
+  UNIQUE (guide_id, number)
+);
+-- Where a reader is: the revision they're on, the last section they reached, and their decision answers in it.
+CREATE TABLE IF NOT EXISTS magazine_progress (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
+  revision_id TEXT NOT NULL, last_section TEXT, answers TEXT NOT NULL DEFAULT '{}',
+  started_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, user_id)
+);
+-- Every completion (or acknowledgement of a reference guide), kept against the revision read.
+CREATE TABLE IF NOT EXISTS magazine_completions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
+  revision_id TEXT NOT NULL REFERENCES magazine_revisions(id), mode TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('completed','acknowledged')), at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS magazine_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL, guide_id TEXT NOT NULL, revision_id TEXT,
+  event TEXT NOT NULL, section_id TEXT, block_id TEXT, detail TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS magazine_events_guide ON magazine_events (guide_id, event);
+-- Drafting a Magazine with Claude (server/magazineDraft): the source documents an author uploaded, with what
+-- could be read from each, and the brief, time target and outline they approved. Kept with the draft so a
+-- failed or later page generation never needs the files again. Learners never see these.
+CREATE TABLE IF NOT EXISTS magazine_sources (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('pdf','text')), content TEXT NOT NULL DEFAULT '',
+  pages INTEGER, slides INTEGER, words INTEGER, bytes INTEGER NOT NULL DEFAULT 0,
+  authority TEXT NOT NULL DEFAULT 'authoritative' CHECK (authority IN ('authoritative','background')),
+  status TEXT NOT NULL CHECK (status IN ('ready','error')), error TEXT,
+  uploaded_by TEXT NOT NULL, uploaded_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS magazine_plans (
+  guide_id TEXT PRIMARY KEY REFERENCES magazine_guides(id), brief TEXT NOT NULL DEFAULT '', minutes INTEGER,
+  outline TEXT, questions TEXT NOT NULL DEFAULT '[]', updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- A learner's answer to a Reflection block, and Claude's feedback on it, for the version they read.
+-- A Magazine course's review, as for topics: who it went to, where it is, and for which exact draft.
+CREATE TABLE IF NOT EXISTS magazine_approvals (
+  guide_id TEXT PRIMARY KEY REFERENCES magazine_guides(id),
+  stage TEXT NOT NULL CHECK (stage IN ('review', 'changes', 'compliance', 'approved')),
+  draft_hash TEXT NOT NULL, reviewer_id TEXT NOT NULL REFERENCES users(id), compliance INTEGER NOT NULL DEFAULT 0,
+  submitted_by TEXT NOT NULL REFERENCES users(id), submitted_at TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS magazine_approval_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, guide_id TEXT NOT NULL REFERENCES magazine_guides(id),
+  action TEXT NOT NULL, actor TEXT NOT NULL REFERENCES users(id), note TEXT NOT NULL DEFAULT '', at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS magazine_approval_events_guide ON magazine_approval_events (guide_id, id);
+-- A reviewer's sign-off on a block flagged as needing verification: what they confirmed. It holds while
+-- the flag reads the same; change the flag and it needs signing off again.
+CREATE TABLE IF NOT EXISTS magazine_flag_signoffs (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), block_id TEXT NOT NULL, flag_note TEXT NOT NULL,
+  note TEXT NOT NULL, signed_by TEXT NOT NULL REFERENCES users(id), signed_at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, block_id)
+);
+-- Claude's pre-review of a submitted draft, or that it was skipped.
+CREATE TABLE IF NOT EXISTS magazine_ai_reviews (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), draft_hash TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('done', 'skipped')), summary TEXT NOT NULL DEFAULT '', findings TEXT NOT NULL DEFAULT '[]',
+  by_user TEXT NOT NULL REFERENCES users(id), at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, draft_hash)
+);
+CREATE TABLE IF NOT EXISTS magazine_reflections (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
+  revision_id TEXT NOT NULL, block_id TEXT NOT NULL, response TEXT NOT NULL, feedback TEXT, at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, user_id, revision_id, block_id)
+);
+-- Each page someone finished (an explicit choice), against the version they read.
+CREATE TABLE IF NOT EXISTS magazine_page_finishes (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id),
+  revision_id TEXT NOT NULL REFERENCES magazine_revisions(id), page_id TEXT NOT NULL, at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, user_id, revision_id, page_id)
 );
 `;
 
@@ -623,10 +725,14 @@ export function seedStaff(db: Db) {
     );
     // Only the first time: after that, People and permissions in admin decides (it leaves review_area set when it clears a role).
     if ("review_role" in u)
-      db.prepare("UPDATE users SET review_role = ?, review_area = ? WHERE id = ? AND review_role IS NULL AND review_area IS NULL").run(u.review_role, u.review_area, u.id);
+      db.prepare("UPDATE users SET review_role = ?, review_area = ? WHERE id = ? AND review_role IS NULL AND review_area IS NULL").run(
+        u.review_role,
+        u.review_area,
+        u.id,
+      );
   }
   // The Hub owner is the first superadmin, so someone can always manage people. Others are given it in admin.
-  if (!(db.prepare("SELECT 1 FROM users WHERE superadmin = 1").get())) db.prepare("UPDATE users SET superadmin = 1 WHERE id = ?").run("jordan");
+  if (!db.prepare("SELECT 1 FROM users WHERE superadmin = 1").get()) db.prepare("UPDATE users SET superadmin = 1 WHERE id = ?").run("jordan");
 }
 
 export function migrate(db: Db) {
@@ -655,6 +761,11 @@ export function migrate(db: Db) {
   const courseCols = (db.prepare("PRAGMA table_info(scorm_courses)").all() as { name: string }[]).map((c) => c.name);
   // The eLearning course's poster (an uploaded picture, /api/uploads/…); null shows the plain cover.
   if (!courseCols.includes("poster")) db.exec("ALTER TABLE scorm_courses ADD COLUMN poster TEXT");
+  // Magazine courses have pages: where someone is, and which page an event happened on.
+  const magProgressCols = (db.prepare("PRAGMA table_info(magazine_progress)").all() as { name: string }[]).map((c) => c.name);
+  if (!magProgressCols.includes("last_page")) db.exec("ALTER TABLE magazine_progress ADD COLUMN last_page TEXT");
+  const magEventCols = (db.prepare("PRAGMA table_info(magazine_events)").all() as { name: string }[]).map((c) => c.name);
+  if (!magEventCols.includes("page_id")) db.exec("ALTER TABLE magazine_events ADD COLUMN page_id TEXT");
   const userCols = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes("manager_id")) db.exec("ALTER TABLE users ADD COLUMN manager_id TEXT");
   // The language they read the hub in (Google Translate); null means English.
@@ -774,7 +885,29 @@ export function openDb(file: string) {
   seed(db);
   seedStaff(db);
   seedPaths(db);
+  seedMagazine(db);
   return db;
+}
+
+/** The Magazine pilot guides, published once each; a guide an author has since changed or archived is left alone. */
+export function seedMagazine(db: Db, now = new Date()) {
+  const at = now.toISOString();
+  for (const g of seedGuides) {
+    if (db.prepare("SELECT 1 FROM magazine_guides WHERE id = ? OR slug = ?").get(g.id, g.slug)) continue;
+    const clean = readGuideDoc(g.doc);
+    const doc = JSON.stringify(clean);
+    const revisionId = `${g.id}-r1`;
+    db.exec("BEGIN");
+    db.prepare(
+      `INSERT INTO magazine_guides (id, slug, title, standfirst, cover, template, audience, completion, status, draft, draft_saved_at, revision_id, owner, created_at, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'blank', ?, ?, 'published', ?, ?, ?, 'seed', ?, 'seed', ?)`,
+    ).run(g.id, g.slug, g.title, g.standfirst, g.cover, JSON.stringify(g.audience), g.completion, doc, at, revisionId, at, at);
+    db.prepare(
+      `INSERT INTO magazine_revisions (id, guide_id, number, title, standfirst, cover, doc, completion, minutes, summary, published_by, published_at)
+       VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, 'First edition', 'seed', ?)`,
+    ).run(revisionId, g.id, g.title, g.standfirst, g.cover, doc, g.completion, readingMinutes(clean), at);
+    db.exec("COMMIT");
+  }
 }
 
 const globalForDb = globalThis as unknown as { __hubDb?: Db };

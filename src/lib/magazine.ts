@@ -1,0 +1,1456 @@
+import { safeHref } from "./richText";
+import { parseVideoLink } from "./videoLinks";
+import { narrationState, pageSnapshot } from "./magazineNarration";
+
+/*
+  Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
+  Magazine shows learners as a Guide, a longer one as a Course. Each page is an article with its own
+  teaching pattern (Decide, Do, Notice, Adapt), made of sections of blocks. The whole course is a typed
+  document, stored as JSON and checked here before it is saved, published or drawn, so nothing in it is
+  ever put on the page as HTML. Text uses the Hub's rich text marks (lib/richText). The same renderer
+  draws the published pages, the author's preview and every version kept for reporting.
+
+  Schema version 2 (pages). Version 1 (one list of sections) is upgraded on reading to a one-page
+  course, so anything published on it stays readable.
+*/
+
+export const GUIDE_SCHEMA = 2;
+
+/** Who a guide is for, using the Hub's own audiences. An empty list is everyone signed in. */
+export const GUIDE_AUDIENCES = [
+  { value: "coordinator", label: "Care coordinators", phrase: "care coordinators" },
+  { value: "partner", label: "Care partners", phrase: "care partners" },
+  { value: "staff", label: "Trilogy Care staff", phrase: "Trilogy Care staff" },
+] as const;
+
+/** "care coordinators and Trilogy Care staff": who a guide is for, as it reads in a sentence. */
+export const audiencePhrase = (values: readonly string[]) =>
+  GUIDE_AUDIENCES.filter((a) => values.includes(a.value))
+    .map((a) => a.phrase)
+    .join(" and ");
+export type GuideAudience = (typeof GUIDE_AUDIENCES)[number]["value"];
+
+/**
+  What the learner should be able to do on a page. The author picks one for each page; it sets the
+  page's starting sections, not a fixed design. (Say, conversation practice, waits for the Hub's role
+  play to be embeddable; it isn't offered until it works.)
+*/
+export const PAGE_TEMPLATES = {
+  decide: {
+    label: "Decide",
+    title: "Story and decision",
+    action: "Make a judgement in a realistic situation.",
+    pattern: "Hook → person and context → choice → consequence and feedback → the principle → apply it elsewhere",
+    example: "Dot and the rose garden",
+  },
+  do: {
+    label: "Do",
+    title: "Field guide",
+    action: "Carry out a repeatable task at work.",
+    pattern: "When you'll do it → steps → worked example → common mistake → quick practice → job aid",
+    example: "Check a supplier invoice",
+  },
+  notice: {
+    label: "Notice",
+    title: "Worked example",
+    action: "Inspect something and recognise the detail that matters.",
+    pattern: "The example → guided notes → reasoning → a second one to inspect → your turn → feedback",
+    example: "Read the changes in a care plan",
+  },
+  adapt: {
+    label: "Adapt",
+    title: "Change briefing",
+    action: "Update an established way of working.",
+    pattern: "What changed and when → before and now → who it affects → a typical case → source and next step",
+    example: "A revised coordination process",
+  },
+  say: {
+    label: "Say",
+    title: "Conversation practice",
+    action: "Choose words and respond to another person.",
+    pattern: "Conversation goal → the scene → the conversation, turn by turn → coaching → phrases to take away",
+    example: "Explaining client contributions to a worried family member",
+  },
+  blank: { label: "Blank", title: "Start blank", action: "Your own structure.", pattern: "One section to start", example: "" },
+} as const;
+export type PageTemplate = keyof typeof PAGE_TEMPLATES;
+
+/** How a Magazine shows to learners: one page is a Guide; more is a Course. */
+export const formatLabel = (doc: { pages: unknown[] }) => (doc.pages.length > 1 ? "Course" : "Guide");
+
+/**
+  How a course counts as done. Opening pages, moving between them or reaching the bottom never does.
+  reference: nothing to complete; they can mark it read. confirm: they finish each required page.
+  decision: the questions on each required page answered, then the page finished. assessed: required
+  pages finished and the linked learning path's quiz passed. Optional pages never hold completion up.
+*/
+export const COMPLETION_MODES = {
+  reference: "Reference",
+  confirm: "Read and confirm",
+  decision: "Decision activity",
+  assessed: "Assessed",
+} as const;
+export type CompletionMode = keyof typeof COMPLETION_MODES;
+
+/** Where a claim came from, for authors and reviewers. Learners don't see it. */
+export type Evidence = { source: string; ref?: string; quote?: string };
+/**
+  An author's flag on a block. "verify": a claim without enough support (blocks publishing until it's
+  resolved). "illustrative": a made-up example or linking copy, marked so reviewers know.
+*/
+export type Flag = { kind: "verify" | "illustrative"; note: string };
+
+/**
+  How a block comes into view as the reader scrolls to it. Rise is the default, so it isn't stored; "none" keeps it still.
+  Readers who ask their device for less motion never see it.
+*/
+export const REVEALS = { rise: "Rise", fade: "Fade", slide: "Slide in", zoom: "Zoom", none: "None" } as const;
+export type Reveal = keyof typeof REVEALS;
+type Base = { id: string; note?: string; evidence?: Evidence[]; flag?: Flag; reveal?: Exclude<Reveal, "rise"> };
+export type Media = { src: string; alt: string; decorative?: boolean; caption?: string };
+export type Width = "column" | "wide" | "full";
+
+export type TextBlock = Base & { type: "text"; heading?: string; level?: 2 | 3; body: string };
+export type ImageBlock = Base & { type: "image"; media: Media; width: Width; enlarge?: boolean };
+/**
+  A video on YouTube, Vimeo or Loom, played in their own player. `hash`: the private part of an unlisted Vimeo
+  link. `portrait`: a YouTube Short.
+*/
+export type VideoEmbed = { provider: "youtube" | "vimeo" | "loom"; id: string; hash?: string; portrait?: boolean };
+/**
+  A video: uploaded to the Hub (`src`, with a WebVTT captions file), or on YouTube, Vimeo or Loom (`embed`,
+  whose captions live on that site: `captionsOnPlayer` is the author confirming they're there).
+  `trim`: the part that plays, in seconds (the file itself isn't cut). `recording`: made in the Magazine's
+  recording studio: how, when, how long, and the author confirming everyone and everything shown may be shared.
+*/
+export type VideoRecording = { mode: "camera" | "screen"; at: string; seconds: number; consent: boolean };
+export type VideoBlock = Base & {
+  type: "video";
+  title: string;
+  src: string;
+  embed?: VideoEmbed;
+  captionsOnPlayer?: boolean;
+  poster?: string;
+  captions?: string;
+  transcript: string;
+  caption?: string;
+  trim?: { start: number; end: number };
+  recording?: VideoRecording;
+};
+/** A video's own settings, without a block's id and type: for a video inside another block. */
+export type VideoFields = Omit<VideoBlock, keyof Base | "type">;
+/**
+  Text with a picture, or with a video (`video`, set up just like a video block). By default the media
+  sits on its side and the text flows around it and on below it, like a magazine; `wrap: false` puts them
+  side by side instead. On a phone the media always sits above the text.
+*/
+export type TextMediaBlock = Base & {
+  type: "textMedia";
+  heading?: string;
+  body: string;
+  media: Media;
+  video?: VideoFields;
+  /** Readers can open the picture full size (for detail like a document). */
+  enlarge?: boolean;
+  layout: "media-left" | "media-right";
+  wrap?: false;
+};
+/** A text-and-media block's video as a video block (same id), for the video player and its editor. */
+export const videoOf = (b: TextMediaBlock): VideoBlock | null => (b.video ? { ...b.video, id: b.id, type: "video" } : null);
+
+/**
+  Set apart: something important, an example or a tip. `confirm`: a tick box the reader ticks to confirm
+  it (an acknowledgement, say), with these words. It counts as an activity, and the tick is recorded.
+*/
+export type CalloutBlock = Base & {
+  type: "callout";
+  style: "important" | "example" | "tip";
+  label?: string;
+  body: string;
+  link?: { href: string; label: string };
+  confirm?: string;
+};
+export type Verdict = "best" | "acceptable" | "risky";
+export type Choice = { id: string; text: string; verdict: Verdict; feedback: string };
+/**
+  "What would you do?", with feedback on each answer. `media`: an optional picture, in a circle beside the
+  question (a person, say), or `mediaStyle: "wide"` across the top to set the scene.
+*/
+export type DecisionBlock = Base & {
+  type: "decision";
+  prompt: string;
+  context?: string;
+  choices: Choice[];
+  source?: { label: string; href?: string };
+  media?: Media;
+  mediaStyle?: "wide";
+};
+export type QuizBlock = Base & { type: "quiz"; pathId: string; intro?: string };
+export type ChecklistBlock = Base & { type: "checklist"; title: string; items: string[]; resource?: { href: string; label: string } };
+/** Text in folds: each item a title the reader opens to see its text. For detail some readers need and others skip. */
+/** A fold's picture sits above its text, below it, or on the right with the text flowing round it. */
+export type FoldPlacement = "above" | "below" | "right";
+export type AccordionItem = { id: string; title: string; body: string; media?: Media; placement?: FoldPlacement };
+export type AccordionBlock = Base & { type: "accordion"; heading?: string; items: AccordionItem[] };
+/** Pictures to step through one at a time, each with its description and caption. Never moves by itself. */
+export type CarouselSlide = { id: string; media: Media };
+export type CarouselBlock = Base & { type: "carousel"; slides: CarouselSlide[]; width: "column" | "wide" };
+
+/** Cards to flip: a prompt on the front (with an optional picture), the answer on the back. */
+export type FlashcardsBlock = Base & { type: "flashcards"; cards: { id: string; front: string; back: string; media?: Media }[] };
+/** Sections side by side, one shown at a time: for comparing options. */
+export type TabsBlock = Base & { type: "tabs"; tabs: { id: string; label: string; body: string }[] };
+/** Events in order, each with when it happens. */
+export type TimelineBlock = Base & { type: "timeline"; events: { id: string; when: string; title: string; body: string }[] };
+/** A workflow, one step at a time. */
+export type ProcessBlock = Base & { type: "process"; steps: { id: string; title: string; body: string }[] };
+export type BranchOutcome = "good" | "mixed" | "poor";
+/**
+  A scene of a branching scenario: what happens, then choices that lead to other scenes; or an ending
+  with how it turned out. The first scene is where it starts.
+*/
+export type BranchScene = {
+  id: string;
+  text: string;
+  choices: { id: string; text: string; next: string }[];
+  ending?: { outcome: BranchOutcome; summary: string };
+};
+export type BranchingBlock = Base & { type: "branching"; title: string; scenes: BranchScene[] };
+/**
+  A practice conversation: at each turn the other person says something, the learner picks a response,
+  and sees coaching and how the person replies. Bounded choices, not an open chat.
+*/
+export type ConversationTurn = { id: string; line: string; responses: { id: string; text: string; verdict: Verdict; feedback: string; reply: string }[] };
+export type ConversationBlock = Base & { type: "conversation"; person: string; role: string; setting: string; turns: ConversationTurn[] };
+/** A picture or document with mistakes to find, each at a point on it (x, y as percentages). */
+export type SpotBlock = Base & {
+  type: "spot";
+  prompt: string;
+  media: Media;
+  mistakes: { id: string; x: number; y: number; label: string; explanation: string }[];
+};
+/** "How confident are you…?" on a 1 to 5 scale. `compareWith`: an earlier check, to show the change. */
+export type ConfidenceBlock = Base & { type: "confidence"; statement: string; low: string; high: string; compareWith?: string };
+/** An open question the learner answers in their own words; Claude gives feedback using the author's guidance. */
+export type ReflectionBlock = Base & { type: "reflection"; prompt: string; guidance: string; minWords: number };
+/** An insight wall, as in Topics: everyone answers the same question, and the shared answers open once you've posted. */
+/** A picture with points to open: each shows a title and a note. For exploring a screen, a form or a room. */
+export type HotspotsBlock = Base & {
+  type: "hotspots";
+  prompt: string;
+  media: Media;
+  spots: { id: string; x: number; y: number; title: string; body: string }[];
+};
+/** Sort items into groups, then check: each item can say why it belongs where it does. */
+export type SortingBlock = Base & {
+  type: "sorting";
+  prompt: string;
+  groups: { id: string; label: string }[];
+  items: { id: string; text: string; group: string; feedback: string }[];
+};
+/** Put steps in order, then check. `steps` is the right order; readers get them shuffled. */
+export type SequencingBlock = Base & { type: "sequencing"; prompt: string; steps: { id: string; text: string }[]; feedback: string };
+/** Match each item on the left to one on the right, then check. */
+export type MatchingBlock = Base & { type: "matching"; prompt: string; pairs: { id: string; left: string; right: string }[]; feedback: string };
+/** Text with gaps to fill: each [[answer|another accepted answer]] is a gap. */
+export type FillBlankBlock = Base & { type: "fillblank"; prompt: string; text: string; feedback: string };
+/** A poll, as in Topics: one vote each (it can be changed), and everyone's answers shown back once you've voted. */
+export type PollBlock = Base & { type: "poll"; question: string; options: { id: string; text: string }[] };
+export type WallBlock = Base & { type: "wall"; prompt: string; placeholder?: string; anonymous?: boolean };
+/** A fictional care budget: learners change services' frequency and cost and watch the balance. */
+export type BudgetService = { id: string; name: string; unit: string; cost: number; perWeek: number; max: number };
+export type BudgetBlock = Base & { type: "budget"; title: string; budget: number; weeks: number; services: BudgetService[] };
+
+export type Block =
+  | TextBlock
+  | AccordionBlock
+  | ImageBlock
+  | CarouselBlock
+  | VideoBlock
+  | TextMediaBlock
+  | CalloutBlock
+  | DecisionBlock
+  | QuizBlock
+  | ChecklistBlock
+  | FlashcardsBlock
+  | TabsBlock
+  | TimelineBlock
+  | ProcessBlock
+  | BranchingBlock
+  | ConversationBlock
+  | SpotBlock
+  | ConfidenceBlock
+  | ReflectionBlock
+  | BudgetBlock
+  | WallBlock
+  | PollBlock
+  | HotspotsBlock
+  | SortingBlock
+  | SequencingBlock
+  | MatchingBlock
+  | FillBlankBlock;
+export type BlockType = Block["type"];
+export type Section = { id: string; title: string; blocks: Block[] };
+/**
+  A page of the course: an article with a purpose and a teaching pattern, or an assessment page that
+  holds the Hub's quiz. Required pages count towards completion; optional ones don't.
+*/
+export type Page = {
+  id: string;
+  title: string;
+  purpose: string;
+  template: PageTemplate;
+  kind: "content" | "assessment";
+  required: boolean;
+  /**
+    Readers work through every activity on the page before they can finish it or move on (on unless
+    `false`). What counts for each kind of block is in activityDone.
+  */
+  allActivities?: false;
+  hero?: Media;
+  /** The page's spoken introduction (Audio Guide). */
+  narration?: Narration;
+  sections: Section[];
+};
+/*
+  The Audio Guide (docs/magazine-audio-guide.md): a short spoken introduction to the course and to each
+  page. Kept in the document, so each edition keeps its own narration.
+*/
+export type NarrationLength = "short" | "standard" | "extended";
+/** What the page (or course) said when its script was approved: for noticing it has moved on. */
+export type NarrationSnapshot = { hash: string; key: string; sig: number[] };
+export type NarrationAudio = {
+  /** An MP3 uploaded to the hub. */
+  src: string;
+  seconds: number;
+  /** Each word's place in the script and in the recording, for following along. */
+  words: { from: number; to: number; start: number; end: number }[] | null;
+  /** The script it was recorded from, and the voice ("topic" for the Topic narrator, else an ElevenLabs voice id). */
+  scriptHash: string;
+  voice: string;
+  at: string;
+};
+export type Narration = {
+  script: string;
+  status: "draft" | "approved";
+  basis?: NarrationSnapshot;
+  audio?: NarrationAudio;
+  /** Warnings from the checks when it was written (a figure to confirm, a possible give-away). */
+  checks?: string[];
+};
+export type GuideAudio = {
+  levels: { course: boolean; pages: boolean; blocks: boolean };
+  /** The hub's Topic narrator, another ElevenLabs voice, or one of OpenAI's voices. */
+  voice: { kind: "topic" } | { kind: "custom"; voiceId: string; name: string } | { kind: "openai"; voice: string };
+  length: NarrationLength;
+  /**
+    "auto": introductions play as learners arrive, with a switch to turn them off (the default).
+    "offer-auto": the same switch, off until the learner turns it on. "press-play": no switch; Play only.
+  */
+  playback: "auto" | "offer-auto" | "press-play";
+  /** The course introduction. */
+  intro?: Narration;
+};
+export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio };
+
+/**
+  Whether the reader has worked through a block: null for blocks that are only read (text, pictures,
+  callouts, a timeline). Decisions and confidence checks count once answered, a quiz once passed, and
+  everything else once the reader has done it, recorded as `done:<block id>` among their answers.
+*/
+export function activityDone(b: Block, answers: Record<string, string>, quizzes: Record<string, { passed: boolean } | null> = {}): boolean | null {
+  switch (b.type) {
+    case "text":
+    case "image":
+      return null;
+    case "textMedia":
+      // Its video counts like a video block's: once watched, when it's uploaded to the Hub.
+      if (!b.video || b.video.embed || !b.video.src) return null;
+      break;
+    case "callout":
+      // Done once the reader ticks to confirm it, when it asks them to.
+      if (!b.confirm) return null;
+      break;
+    case "timeline":
+      return null;
+    case "decision":
+    case "confidence":
+      return Boolean(answers[b.id]);
+    case "quiz":
+      return Boolean(quizzes[b.id]?.passed);
+    case "video":
+      // A video on another site can't say it's been watched.
+      if (b.embed || !b.src) return null;
+      break;
+    case "carousel":
+      if (b.slides.filter((sl) => sl.media.src).length < 2) return null;
+      break;
+    case "accordion":
+    case "checklist":
+      if (!b.items.length) return null;
+      break;
+  }
+  return answers[`done:${b.id}`] === "1";
+}
+
+/** The activities on a page still to work through, when the page asks for all of them. */
+export function openActivities(page: Page, answers: Record<string, string>, quizzes: Record<string, { passed: boolean } | null> = {}) {
+  if (page.allActivities === false) return [];
+  return pageBlocks(page).filter((b) => activityDone(b, answers, quizzes) === false);
+}
+
+export const BLOCK_LABELS: Record<BlockType, string> = {
+  text: "Text",
+  accordion: "Accordion",
+  image: "Image",
+  carousel: "Carousel",
+  video: "Video",
+  textMedia: "Text and media",
+  callout: "Callout",
+  decision: "Decision question",
+  quiz: "Quiz",
+  checklist: "Checklist",
+  flashcards: "Flashcards",
+  tabs: "Tabs",
+  timeline: "Timeline",
+  process: "Process steps",
+  branching: "Branching scenario",
+  conversation: "Conversation simulator",
+  spot: "Spot the mistake",
+  confidence: "Confidence check",
+  reflection: "Reflection",
+  wall: "Insight wall",
+  poll: "Poll",
+  hotspots: "Hotspots",
+  sorting: "Sorting",
+  sequencing: "Sequencing",
+  matching: "Matching",
+  fillblank: "Fill in the blank",
+  budget: "Budget simulator",
+};
+export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
+
+export const VERDICTS: Record<Verdict, string> = { best: "Best choice", acceptable: "Works, with care", risky: "Not the best choice" };
+export const CALLOUTS: Record<CalloutBlock["style"], string> = { important: "Important", example: "Example", tip: "Tip" };
+
+export class GuideDocError extends Error {
+  constructor(public problems: string[]) {
+    super(problems[0] ?? "The guide isn’t valid.");
+  }
+}
+
+const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const VIMEO_ID = /^\d{6,12}$/;
+const VIMEO_HASH = /^[0-9a-f]{6,24}$/;
+const LOOM_ID = /^[0-9a-f]{32}$/;
+
+/**
+  The YouTube, Vimeo or Loom video a pasted link points to, or null. Takes the usual shapes: youtube.com/watch,
+  youtu.be, Shorts, vimeo.com/123456789 (with the private part of an unlisted link), player.vimeo.com,
+  channel or showcase links, and Loom's share and embed links (loom.com/share/…).
+*/
+export function parseEmbedLink(raw: string): VideoEmbed | null {
+  const yt = parseVideoLink(raw);
+  if (yt?.provider === "youtube") return { provider: "youtube", id: yt.id, ...(yt.orientation === "portrait" && { portrait: true }) };
+  let url: URL;
+  try {
+    const t = raw.trim();
+    url = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^www\./, "");
+  if (host === "loom.com") {
+    const [kind, id] = url.pathname.split("/").filter(Boolean);
+    return (kind === "share" || kind === "embed") && id && LOOM_ID.test(id) ? { provider: "loom", id } : null;
+  }
+  if (host !== "vimeo.com" && host !== "player.vimeo.com") return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  const at = parts.findIndex((p) => VIMEO_ID.test(p));
+  if (at < 0) return null;
+  const hash = url.searchParams.get("h") ?? (parts[at + 1] && VIMEO_HASH.test(parts[at + 1]) ? parts[at + 1] : undefined);
+  return { provider: "vimeo", id: parts[at], ...(hash && VIMEO_HASH.test(hash) && { hash }) };
+}
+
+/** The player's address: YouTube without tracking cookies, Vimeo with Do Not Track, Loom without its share buttons; captions on where the video has them. */
+export const embedSrc = (e: VideoEmbed) =>
+  e.provider === "youtube"
+    ? `https://www.youtube-nocookie.com/embed/${e.id}?rel=0&playsinline=1&modestbranding=1&cc_load_policy=1`
+    : e.provider === "loom"
+      ? `https://www.loom.com/embed/${e.id}?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true`
+      : `https://player.vimeo.com/video/${e.id}?${e.hash ? `h=${e.hash}&` : ""}dnt=1&texttrack=en`;
+
+/** The video's own page, to show the author. */
+export const embedLink = (e: VideoEmbed) =>
+  e.provider === "youtube"
+    ? e.portrait
+      ? `https://www.youtube.com/shorts/${e.id}`
+      : `https://www.youtube.com/watch?v=${e.id}`
+    : e.provider === "loom"
+      ? `https://www.loom.com/share/${e.id}`
+      : `https://vimeo.com/${e.id}${e.hash ? `/${e.hash}` : ""}`;
+
+export const EMBED_NAME = { youtube: "YouTube", vimeo: "Vimeo", loom: "Loom" } as const;
+/** Fill in the blank: the text in pieces, each [[answer|another accepted answer]] becoming a gap. */
+export function blanksOf(text: string): ({ text: string } | { answers: string[] })[] {
+  const parts: ({ text: string } | { answers: string[] })[] = [];
+  let at = 0;
+  for (const m of text.matchAll(/\[\[([^\]]*)\]\]/g)) {
+    if (m.index > at) parts.push({ text: text.slice(at, m.index) });
+    parts.push({
+      answers: m[1]
+        .split("|")
+        .map((a) => a.trim())
+        .filter(Boolean),
+    });
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at) });
+  return parts;
+}
+
+/** Whether what was typed matches an answer: case, spacing and a final full stop don't matter. */
+export const sameAnswer = (typed: string, answer: string) => {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[’']/g, "'")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[.!,;:]+$/, "");
+  return norm(typed) !== "" && norm(typed) === norm(answer);
+};
+
+/**
+  A shuffled order (indexes) that's the same every time for the same block, so the page draws the same
+  on the server and in the browser, and never the right order to start with.
+*/
+export function shuffleFor(seed: string, n: number): number[] {
+  let h = 2166136261;
+  for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+    const j = h % (i + 1);
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  if (n > 1 && order.every((v, i) => v === i)) order.push(order.shift()!);
+  return order;
+}
+
+/** Pictures and video from this site: uploads and the Hub's own images. Never another site's address. */
+export const isSiteMedia = (src: string) => /^\/(api\/uploads|images)\/[A-Za-z0-9._/-]+$/.test(src) && !src.includes("..");
+
+/**
+  Checks a guide's content against the schema and returns a clean copy (unknown fields dropped). Throws
+  GuideDocError listing what's wrong. Used for every save, AI output included, and before drawing.
+  A draft ({ draft: true }) may still have empty fields and unfinished questions while it's being
+  written; anything unsafe (another site's media, a script link, an unknown block) is refused either way.
+*/
+export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolean } = {}): GuideDoc {
+  const problems: string[] = [];
+  /** Something unfinished: refused when publishing, allowed in a draft. */
+  const unfinished = (p: string) => {
+    if (!draft) problems.push(p);
+  };
+  const seen = new Set<string>();
+  const str = (v: unknown, where: string, opts: { required?: boolean; max?: number } = {}) => {
+    if (v == null || v === "") {
+      if (opts.required) unfinished(`${where} is missing.`);
+      return undefined;
+    }
+    if (typeof v !== "string") {
+      problems.push(`${where} should be text.`);
+      return undefined;
+    }
+    const s = v.trim();
+    if (opts.max && s.length > opts.max) problems.push(`${where} is longer than ${opts.max} characters.`);
+    if (opts.required && !s) unfinished(`${where} is missing.`);
+    return s;
+  };
+  const idOf = (v: unknown, where: string) => {
+    if (typeof v !== "string" || !ID.test(v)) {
+      problems.push(`${where} needs an id of lower-case letters, numbers and hyphens.`);
+      return "x";
+    }
+    if (seen.has(v)) problems.push(`${where} repeats the id “${v}”.`);
+    seen.add(v);
+    return v;
+  };
+  const link = (v: unknown, where: string) => {
+    if (v == null) return undefined;
+    const o = v as { href?: unknown; label?: unknown };
+    const href = str(o.href, `${where} link`, { required: true });
+    const label = str(o.label, `${where} link text`, { required: true, max: 120 });
+    if (href && !safeHref(href)) problems.push(`${where} link must be a web address, an email or a page on the Hub.`);
+    return href && label ? { href, label } : undefined;
+  };
+  const media = (v: unknown, where: string): Media => {
+    const o = (v ?? {}) as Record<string, unknown>;
+    const src = str(o.src, `${where} picture`, { required: true }) ?? "";
+    if (src && !isSiteMedia(src)) problems.push(`${where} picture must be uploaded to the Hub.`);
+    return {
+      src,
+      alt: str(o.alt, `${where} description`, { max: 400 }) ?? "",
+      ...(o.decorative === true && { decorative: true }),
+      ...(str(o.caption, `${where} caption`, { max: 400 }) && { caption: str(o.caption, `${where} caption`)! }),
+    };
+  };
+  const common = (o: Record<string, unknown>, where: string) => {
+    const out: Pick<Base, "note" | "evidence" | "flag" | "reveal"> = {};
+    if (typeof o.reveal === "string" && o.reveal in REVEALS && o.reveal !== "rise") out.reveal = o.reveal as Exclude<Reveal, "rise">;
+    const note = str(o.note, `${where} note`, { max: 1000 });
+    if (note) out.note = note;
+    if (Array.isArray(o.evidence))
+      out.evidence = o.evidence.flatMap((e: Record<string, unknown>, i) => {
+        const source = str(e?.source, `${where} source ${i + 1}`, { required: true, max: 200 });
+        if (!source) return [];
+        const ref = str(e.ref, `${where} source ${i + 1} reference`, { max: 80 });
+        const quote = str(e.quote, `${where} source ${i + 1} passage`, { max: 2000 });
+        return [{ source, ...(ref && { ref }), ...(quote && { quote }) }];
+      });
+    if (o.flag != null) {
+      const f = o.flag as Record<string, unknown>;
+      if (f.kind !== "verify" && f.kind !== "illustrative") problems.push(`${where} flag should be “verify” or “illustrative”.`);
+      else out.flag = { kind: f.kind, note: str(f.note, `${where} flag note`, { max: 600 }) ?? "" };
+    }
+    return out;
+  };
+
+  /** A list of objects (cards, steps…), up to `max`. */
+  const list = (v: unknown, where: string, what: string, max: number): Record<string, unknown>[] => {
+    const raw = Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
+    if (raw.length > max) problems.push(`${where} has more than ${max} ${what}.`);
+    return raw.slice(0, max);
+  };
+
+  const block = (v: unknown, where: string): Block | null => {
+    const o = (v ?? {}) as Record<string, unknown>;
+    const id = idOf(o.id, where);
+    const base = { id, ...common(o, where) };
+    switch (o.type) {
+      case "text": {
+        const level = o.level === 3 ? 3 : 2;
+        const heading = str(o.heading, `${where} heading`, { max: 160 });
+        return { ...base, type: "text", ...(heading && { heading, level }), body: str(o.body, `${where} text`, { required: true, max: 8000 }) ?? "" };
+      }
+      case "accordion": {
+        const raw = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : [];
+        if (raw.length > 20) problems.push(`${where} has more than 20 items.`);
+        if (!raw.length) unfinished(`${where} needs at least one item.`);
+        const heading = str(o.heading, `${where} heading`, { max: 160 });
+        return {
+          ...base,
+          type: "accordion",
+          ...(heading && { heading }),
+          items: raw.map((it, i) => {
+            const at = `${where} item ${i + 1}`;
+            // A picture is optional; an empty one (still being chosen) isn't kept.
+            const m = it?.media && (it.media as { src?: unknown }).src ? media(it.media, at) : undefined;
+            const placement = it?.placement === "above" || it?.placement === "right" ? it.placement : "below";
+            return {
+              id: idOf(it?.id, at),
+              title: str(it?.title, `${at} title`, { required: true, max: 200 }) ?? "",
+              body: str(it?.body, `${at} text`, { required: true, max: 6000 }) ?? "",
+              ...(m && { media: m, placement }),
+            };
+          }),
+        };
+      }
+      case "carousel": {
+        const raw = Array.isArray(o.slides) ? (o.slides as Record<string, unknown>[]) : [];
+        if (raw.length > 20) problems.push(`${where} has more than 20 pictures.`);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 pictures.`);
+        return {
+          ...base,
+          type: "carousel",
+          slides: raw.map((sl, i) => ({ id: idOf(sl?.id, `${where} picture ${i + 1}`), media: media(sl?.media, `${where} picture ${i + 1}`) })),
+          width: o.width === "wide" ? "wide" : "column",
+        };
+      }
+      case "image": {
+        const width = o.width === "wide" || o.width === "full" ? o.width : "column";
+        return { ...base, type: "image", media: media(o.media, where), width, ...(o.enlarge === true && { enlarge: true }) };
+      }
+      case "video": {
+        // On YouTube, Vimeo or Loom: only the provider and the video's id are kept, never an address.
+        let embed: VideoEmbed | undefined;
+        if (o.embed != null) {
+          const e = o.embed as Record<string, unknown>;
+          const ok =
+            (e.provider === "youtube" && typeof e.id === "string" && YOUTUBE_ID.test(e.id)) ||
+            (e.provider === "vimeo" &&
+              typeof e.id === "string" &&
+              VIMEO_ID.test(e.id) &&
+              (e.hash == null || (typeof e.hash === "string" && VIMEO_HASH.test(e.hash)))) ||
+            (e.provider === "loom" && typeof e.id === "string" && LOOM_ID.test(e.id));
+          if (!ok) problems.push(`${where} video must be a YouTube, Vimeo or Loom video.`);
+          else
+            embed = {
+              provider: e.provider as VideoEmbed["provider"],
+              id: e.id as string,
+              ...(e.provider === "vimeo" && typeof e.hash === "string" && { hash: e.hash }),
+              ...(e.provider === "youtube" && e.portrait === true && { portrait: true }),
+            };
+        }
+        const src = embed ? "" : (str(o.src, `${where} video`, { required: true }) ?? "");
+        if (src && !isSiteMedia(src)) problems.push(`${where} video must be uploaded to the Hub, or be on YouTube, Vimeo or Loom.`);
+        const poster = str(o.poster, `${where} poster`);
+        if (poster && !isSiteMedia(poster)) problems.push(`${where} poster must be uploaded to the Hub.`);
+        const captions = str(o.captions, `${where} captions`);
+        if (captions && !isSiteMedia(captions)) problems.push(`${where} captions file must be uploaded to the Hub.`);
+        const caption = str(o.caption, `${where} caption`, { max: 400 });
+        const t = o.trim as { start?: unknown; end?: unknown } | undefined;
+        const tenth = (v: unknown) => Math.round(Math.max(0, Number(v) || 0) * 10) / 10;
+        const trim = !embed && t && typeof t === "object" && tenth(t.end) > tenth(t.start) ? { start: tenth(t.start), end: tenth(t.end) } : undefined;
+        const r = o.recording as Record<string, unknown> | undefined;
+        const recording: VideoRecording | undefined =
+          !embed && r && typeof r === "object"
+            ? {
+                mode: r.mode === "screen" ? "screen" : "camera",
+                at: typeof r.at === "string" && !Number.isNaN(Date.parse(r.at)) ? new Date(r.at).toISOString() : new Date(0).toISOString(),
+                seconds: tenth(r.seconds),
+                consent: r.consent === true,
+              }
+            : undefined;
+        return {
+          ...base,
+          type: "video",
+          title: str(o.title, `${where} title`, { required: true, max: 160 }) ?? "",
+          src,
+          ...(embed && { embed }),
+          ...(embed && o.captionsOnPlayer === true && { captionsOnPlayer: true }),
+          ...(!embed && poster && { poster }),
+          ...(!embed && captions && { captions }),
+          transcript: str(o.transcript, `${where} transcript`, { max: 20000 }) ?? "",
+          ...(caption && { caption }),
+          ...(trim && { trim }),
+          ...(recording && { recording }),
+        };
+      }
+      case "textMedia": {
+        const heading = str(o.heading, `${where} heading`, { max: 160 });
+        // A video instead of the picture: read just as a video block is, then kept without the block's own fields.
+        let video: VideoFields | undefined;
+        if (o.video && typeof o.video === "object") {
+          const v = o.video as Record<string, unknown>;
+          // Read under the block's own id, which is already checked and taken.
+          seen.delete(id);
+          const read = block({ ...v, id, type: "video", title: (typeof v.title === "string" && v.title.trim()) || heading || "Video" }, `${where} video`);
+          if (read?.type === "video") {
+            const rest: Record<string, unknown> = { ...read };
+            for (const k of ["id", "type", "note", "evidence", "flag", "reveal"]) delete rest[k];
+            video = rest as VideoFields;
+          }
+        }
+        const m = o.media as { src?: unknown } | undefined;
+        return {
+          ...base,
+          type: "textMedia",
+          ...(heading && { heading }),
+          body: str(o.body, `${where} text`, { required: true, max: 6000 }) ?? "",
+          // With a video, a picture is only kept if there is one (switching back brings it back).
+          media: video && !(typeof m?.src === "string" && m.src) ? { src: "", alt: "" } : media(o.media, where),
+          ...(video && { video }),
+          ...(!video && o.enlarge === true && { enlarge: true }),
+          layout: o.layout === "media-left" ? "media-left" : "media-right",
+          // Wrapping is the default; only turning it off is kept.
+          ...(o.wrap === false && { wrap: false as const }),
+        };
+      }
+      case "callout": {
+        const style = o.style === "important" || o.style === "example" ? o.style : "tip";
+        const label = str(o.label, `${where} label`, { max: 60 });
+        const l = link(o.link, where);
+        const confirm = str(o.confirm, `${where} confirmation`, { max: 300 });
+        return {
+          ...base,
+          type: "callout",
+          style,
+          ...(label && { label }),
+          body: str(o.body, `${where} text`, { required: true, max: 3000 }) ?? "",
+          ...(l && { link: l }),
+          ...(confirm && { confirm }),
+        };
+      }
+      case "decision": {
+        const raw = Array.isArray(o.choices) ? o.choices : [];
+        if (raw.length > 6) problems.push(`${where} has more than 6 choices.`);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 choices.`);
+        const choices = raw.map((c: Record<string, unknown>, i: number): Choice => {
+          const w = `${where} choice ${i + 1}`;
+          const verdict = c?.verdict === "best" || c?.verdict === "acceptable" ? c.verdict : "risky";
+          return {
+            id: idOf(c?.id, w),
+            text: str(c?.text, w, { required: true, max: 400 }) ?? "",
+            verdict,
+            feedback: str(c?.feedback, `${w} feedback`, { required: true, max: 2000 }) ?? "",
+          };
+        });
+        if (!choices.some((c) => c.verdict === "best")) unfinished(`${where} needs at least one best choice.`);
+        const context = str(o.context, `${where} context`, { max: 2000 });
+        const s = o.source as Record<string, unknown> | undefined;
+        const sourceLabel = s ? str(s.label, `${where} source`, { max: 160 }) : undefined;
+        const sourceHref = s?.href != null ? str(s.href, `${where} source link`) : undefined;
+        if (sourceHref && !safeHref(sourceHref)) problems.push(`${where} source link must be a web address or a page on the Hub.`);
+        return {
+          ...base,
+          type: "decision",
+          prompt: str(o.prompt, `${where} question`, { required: true, max: 400 }) ?? "",
+          // A picture is kept once one is chosen.
+          ...(o.media && (o.media as { src?: unknown }).src
+            ? { media: media(o.media, `${where} picture`), ...(o.mediaStyle === "wide" && { mediaStyle: "wide" as const }) }
+            : {}),
+          ...(context && { context }),
+          choices,
+          ...(sourceLabel && { source: { label: sourceLabel, ...(sourceHref && { href: sourceHref }) } }),
+        };
+      }
+      case "quiz": {
+        const intro = str(o.intro, `${where} intro`, { max: 600 });
+        return { ...base, type: "quiz", pathId: str(o.pathId, `${where} learning path`, { required: true, max: 80 }) ?? "", ...(intro && { intro }) };
+      }
+      case "checklist": {
+        const items = (Array.isArray(o.items) ? o.items : [])
+          .map((x, i) => str(x, `${where} item ${i + 1}`, { required: true, max: 400 }) ?? "")
+          .filter((x) => draft || x);
+        if (!items.some(Boolean)) unfinished(`${where} needs at least one item.`);
+        const l = link(o.resource, where);
+        return { ...base, type: "checklist", title: str(o.title, `${where} title`, { required: true, max: 160 }) ?? "", items, ...(l && { resource: l }) };
+      }
+      case "flashcards": {
+        const raw = list(o.cards, where, "cards", 30);
+        if (!raw.length) unfinished(`${where} needs at least one card.`);
+        return {
+          ...base,
+          type: "flashcards",
+          cards: raw.map((c, i) => {
+            const at = `${where} card ${i + 1}`;
+            const m = c?.media && (c.media as { src?: unknown }).src ? media(c.media, at) : undefined;
+            return {
+              id: idOf(c?.id, at),
+              front: str(c?.front, `${at} front`, { required: true, max: 300 }) ?? "",
+              back: str(c?.back, `${at} back`, { required: true, max: 2000 }) ?? "",
+              ...(m && { media: m }),
+            };
+          }),
+        };
+      }
+      case "tabs": {
+        const raw = list(o.tabs, where, "tabs", 8);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 tabs.`);
+        return {
+          ...base,
+          type: "tabs",
+          tabs: raw.map((t, i) => ({
+            id: idOf(t?.id, `${where} tab ${i + 1}`),
+            label: str(t?.label, `${where} tab ${i + 1} name`, { required: true, max: 60 }) ?? "",
+            body: str(t?.body, `${where} tab ${i + 1} text`, { required: true, max: 6000 }) ?? "",
+          })),
+        };
+      }
+      case "timeline": {
+        const raw = list(o.events, where, "events", 20);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 events.`);
+        return {
+          ...base,
+          type: "timeline",
+          events: raw.map((e, i) => ({
+            id: idOf(e?.id, `${where} event ${i + 1}`),
+            when: str(e?.when, `${where} event ${i + 1} when`, { required: true, max: 60 }) ?? "",
+            title: str(e?.title, `${where} event ${i + 1} title`, { required: true, max: 160 }) ?? "",
+            body: str(e?.body, `${where} event ${i + 1} text`, { max: 3000 }) ?? "",
+          })),
+        };
+      }
+      case "process": {
+        const raw = list(o.steps, where, "steps", 20);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 steps.`);
+        return {
+          ...base,
+          type: "process",
+          steps: raw.map((st, i) => ({
+            id: idOf(st?.id, `${where} step ${i + 1}`),
+            title: str(st?.title, `${where} step ${i + 1} title`, { required: true, max: 160 }) ?? "",
+            body: str(st?.body, `${where} step ${i + 1} text`, { max: 3000 }) ?? "",
+          })),
+        };
+      }
+      case "branching": {
+        const raw = list(o.scenes, where, "scenes", 30);
+        const scenes: BranchScene[] = raw.map((sc, i) => {
+          const at = `${where} scene ${i + 1}`;
+          const e = sc?.ending as Record<string, unknown> | undefined;
+          const ending = e
+            ? {
+                outcome: (e.outcome === "good" || e.outcome === "mixed" ? e.outcome : "poor") as BranchOutcome,
+                summary: str(e.summary, `${at} ending`, { required: true, max: 1500 }) ?? "",
+              }
+            : undefined;
+          return {
+            id: idOf(sc?.id, at),
+            text: str(sc?.text, `${at} text`, { required: true, max: 3000 }) ?? "",
+            // An ending has no choices.
+            choices: ending
+              ? []
+              : list(sc?.choices, at, "choices", 4).map((c, j) => ({
+                  id: idOf(c?.id, `${at} choice ${j + 1}`),
+                  text: str(c?.text, `${at} choice ${j + 1}`, { required: true, max: 300 }) ?? "",
+                  next: typeof c?.next === "string" ? c.next : "",
+                })),
+            ...(ending && { ending }),
+          };
+        });
+        const sceneIds = new Set(scenes.map((sc) => sc.id));
+        scenes.forEach((sc, i) => {
+          if (!sc.ending && !sc.choices.length) unfinished(`${where} scene ${i + 1} needs choices, or to be an ending.`);
+          sc.choices.forEach((c, j) => {
+            if (!c.next) unfinished(`${where} scene ${i + 1}, choice ${j + 1} needs to lead somewhere.`);
+            else if (!sceneIds.has(c.next)) problems.push(`${where} scene ${i + 1}, choice ${j + 1} leads to a scene that isn’t there.`);
+          });
+        });
+        if (!scenes.some((sc) => sc.ending)) unfinished(`${where} needs at least one ending.`);
+        return { ...base, type: "branching", title: str(o.title, `${where} title`, { max: 160 }) ?? "", scenes };
+      }
+      case "conversation": {
+        const raw = list(o.turns, where, "turns", 12);
+        if (!raw.length) unfinished(`${where} needs at least one turn.`);
+        return {
+          ...base,
+          type: "conversation",
+          person: str(o.person, `${where} person`, { required: true, max: 80 }) ?? "",
+          role: str(o.role, `${where} role`, { max: 120 }) ?? "",
+          setting: str(o.setting, `${where} setting`, { max: 600 }) ?? "",
+          turns: raw.map((t, i) => {
+            const at = `${where} turn ${i + 1}`;
+            const responses = list(t?.responses, at, "responses", 4).map((r, j) => ({
+              id: idOf(r?.id, `${at} response ${j + 1}`),
+              text: str(r?.text, `${at} response ${j + 1}`, { required: true, max: 400 }) ?? "",
+              verdict: (r?.verdict === "best" || r?.verdict === "acceptable" ? r.verdict : "risky") as Verdict,
+              feedback: str(r?.feedback, `${at} response ${j + 1} coaching`, { required: true, max: 1500 }) ?? "",
+              reply: str(r?.reply, `${at} response ${j + 1} reply`, { max: 600 }) ?? "",
+            }));
+            if (responses.length < 2) unfinished(`${at} needs at least 2 responses.`);
+            if (!responses.some((r) => r.verdict === "best")) unfinished(`${at} needs a best response.`);
+            return { id: idOf(t?.id, at), line: str(t?.line, `${at}: what they say`, { required: true, max: 800 }) ?? "", responses };
+          }),
+        };
+      }
+      case "spot": {
+        const raw = list(o.mistakes, where, "mistakes", 15);
+        if (!raw.length) unfinished(`${where} needs at least one mistake to find.`);
+        const pct = (v: unknown) => Math.min(100, Math.max(0, Math.round(Number(v) * 10) / 10 || 0));
+        return {
+          ...base,
+          type: "spot",
+          prompt: str(o.prompt, `${where} instructions`, { required: true, max: 400 }) ?? "",
+          media: media(o.media, where),
+          mistakes: raw.map((m, i) => ({
+            id: idOf(m?.id, `${where} mistake ${i + 1}`),
+            x: pct(m?.x),
+            y: pct(m?.y),
+            label: str(m?.label, `${where} mistake ${i + 1} name`, { required: true, max: 160 }) ?? "",
+            explanation: str(m?.explanation, `${where} mistake ${i + 1} explanation`, { required: true, max: 1000 }) ?? "",
+          })),
+        };
+      }
+      case "hotspots": {
+        const raw = list(o.spots, where, "points", 12);
+        if (!raw.length) unfinished(`${where} needs at least one point to open.`);
+        const pct = (v: unknown) => Math.min(100, Math.max(0, Math.round(Number(v) * 10) / 10 || 0));
+        return {
+          ...base,
+          type: "hotspots",
+          prompt: str(o.prompt, `${where} instructions`, { max: 400 }) ?? "",
+          media: media(o.media, where),
+          spots: raw.map((p, i) => ({
+            id: idOf(p?.id, `${where} point ${i + 1}`),
+            x: pct(p?.x),
+            y: pct(p?.y),
+            title: str(p?.title, `${where} point ${i + 1} title`, { required: true, max: 160 }) ?? "",
+            body: str(p?.body, `${where} point ${i + 1} text`, { required: true, max: 2000 }) ?? "",
+          })),
+        };
+      }
+      case "sorting": {
+        const groups = list(o.groups, where, "groups", 4).map((g, i) => ({
+          id: idOf(g?.id, `${where} group ${i + 1}`),
+          label: str(g?.label, `${where} group ${i + 1} name`, { required: true, max: 80 }) ?? "",
+        }));
+        if (groups.length < 2) unfinished(`${where} needs at least 2 groups.`);
+        const ids = new Set(groups.map((g) => g.id));
+        const items = list(o.items, where, "items", 16).map((it, i) => {
+          const group = typeof it?.group === "string" ? it.group : "";
+          if (!group) unfinished(`${where} item ${i + 1} needs a group.`);
+          else if (!ids.has(group)) problems.push(`${where} item ${i + 1} is in a group that isn’t there.`);
+          return {
+            id: idOf(it?.id, `${where} item ${i + 1}`),
+            text: str(it?.text, `${where} item ${i + 1}`, { required: true, max: 200 }) ?? "",
+            group,
+            feedback: str(it?.feedback, `${where} item ${i + 1} feedback`, { max: 600 }) ?? "",
+          };
+        });
+        if (items.length < 2) unfinished(`${where} needs at least 2 items to sort.`);
+        return { ...base, type: "sorting", prompt: str(o.prompt, `${where} instructions`, { required: true, max: 400 }) ?? "", groups, items };
+      }
+      case "sequencing": {
+        const steps = list(o.steps, where, "steps", 10).map((st, i) => ({
+          id: idOf(st?.id, `${where} step ${i + 1}`),
+          text: str(st?.text, `${where} step ${i + 1}`, { required: true, max: 300 }) ?? "",
+        }));
+        if (steps.length < 3) unfinished(`${where} needs at least 3 steps to put in order.`);
+        return {
+          ...base,
+          type: "sequencing",
+          prompt: str(o.prompt, `${where} instructions`, { required: true, max: 400 }) ?? "",
+          steps,
+          feedback: str(o.feedback, `${where} feedback`, { max: 1500 }) ?? "",
+        };
+      }
+      case "matching": {
+        const pairs = list(o.pairs, where, "pairs", 8).map((p, i) => ({
+          id: idOf(p?.id, `${where} pair ${i + 1}`),
+          left: str(p?.left, `${where} pair ${i + 1} left`, { required: true, max: 200 }) ?? "",
+          right: str(p?.right, `${where} pair ${i + 1} right`, { required: true, max: 300 }) ?? "",
+        }));
+        if (pairs.length < 2) unfinished(`${where} needs at least 2 pairs.`);
+        return {
+          ...base,
+          type: "matching",
+          prompt: str(o.prompt, `${where} instructions`, { required: true, max: 400 }) ?? "",
+          pairs,
+          feedback: str(o.feedback, `${where} feedback`, { max: 1500 }) ?? "",
+        };
+      }
+      case "fillblank": {
+        const text = str(o.text, `${where} text`, { required: true, max: 3000 }) ?? "";
+        if (text && !blanksOf(text).some((p) => "answers" in p)) unfinished(`${where} needs at least one gap: put the answer in [[double brackets]].`);
+        if (blanksOf(text).some((p) => "answers" in p && !p.answers.length)) problems.push(`${where} has an empty gap.`);
+        return {
+          ...base,
+          type: "fillblank",
+          prompt: str(o.prompt, `${where} instructions`, { max: 400 }) ?? "",
+          text,
+          feedback: str(o.feedback, `${where} feedback`, { max: 1500 }) ?? "",
+        };
+      }
+      case "confidence": {
+        const compareWith = typeof o.compareWith === "string" && ID.test(o.compareWith) ? o.compareWith : undefined;
+        return {
+          ...base,
+          type: "confidence",
+          statement: str(o.statement, `${where} question`, { required: true, max: 300 }) ?? "",
+          low: str(o.low, `${where} low label`, { max: 60 }) || "Not confident",
+          high: str(o.high, `${where} high label`, { max: 60 }) || "Very confident",
+          ...(compareWith && { compareWith }),
+        };
+      }
+      case "reflection":
+        return {
+          ...base,
+          type: "reflection",
+          prompt: str(o.prompt, `${where} question`, { required: true, max: 800 }) ?? "",
+          guidance: str(o.guidance, `${where} guidance`, { max: 3000 }) ?? "",
+          minWords: Math.min(300, Math.max(0, Math.round(Number(o.minWords) || 0))),
+        };
+      case "poll": {
+        const raw = list(o.options, where, "options", 6);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 options.`);
+        return {
+          ...base,
+          type: "poll",
+          question: str(o.question, `${where} question`, { required: true, max: 300 }) ?? "",
+          options: raw.map((op, i) => ({
+            id: idOf(op?.id, `${where} option ${i + 1}`),
+            text: str(op?.text, `${where} option ${i + 1}`, { required: true, max: 160 }) ?? "",
+          })),
+        };
+      }
+      case "wall": {
+        const placeholder = str(o.placeholder, `${where} placeholder`, { max: 200 });
+        return {
+          ...base,
+          type: "wall",
+          prompt: str(o.prompt, `${where} question`, { required: true, max: 300 }) ?? "",
+          ...(placeholder && { placeholder }),
+          ...(o.anonymous === true && { anonymous: true }),
+        };
+      }
+      case "budget": {
+        const raw = list(o.services, where, "services", 12);
+        if (!raw.length) unfinished(`${where} needs at least one service.`);
+        const money = (v: unknown, max: number) => Math.min(max, Math.max(0, Math.round(Number(v) * 100) / 100 || 0));
+        const budget = money(o.budget, 10_000_000);
+        if (!budget) unfinished(`${where} needs a budget.`);
+        return {
+          ...base,
+          type: "budget",
+          title: str(o.title, `${where} title`, { max: 160 }) ?? "",
+          budget,
+          weeks: Math.min(52, Math.max(1, Math.round(Number(o.weeks) || 13))),
+          services: raw.map((sv, i) => {
+            const max = Math.min(100, Math.max(1, Number(sv?.max) || 7));
+            return {
+              id: idOf(sv?.id, `${where} service ${i + 1}`),
+              name: str(sv?.name, `${where} service ${i + 1} name`, { required: true, max: 80 }) ?? "",
+              unit: str(sv?.unit, `${where} service ${i + 1} unit`, { max: 30 }) || "hour",
+              cost: money(sv?.cost, 10_000),
+              perWeek: Math.min(max, Math.max(0, Math.round(Number(sv?.perWeek) * 2) / 2 || 0)),
+              max,
+            };
+          }),
+        };
+      }
+      default:
+        problems.push(`${where} is an unknown kind of block.`);
+        return null;
+    }
+  };
+
+  const section = (s: Record<string, unknown>, where: string): Section => {
+    const blocks = (Array.isArray(s?.blocks) ? s.blocks : []).map((b, j) => block(b, `${where}, block ${j + 1}`)).filter((b): b is Block => b !== null);
+    return { id: idOf(s?.id, where), title: str(s?.title, `${where} title`, { required: true, max: 120 }) ?? "", blocks };
+  };
+  /** A spoken introduction: its script, whether it's approved, and its recording. Never required. */
+  const narration = (v: unknown, where: string): Narration | undefined => {
+    const o = v as Record<string, unknown> | undefined;
+    if (!o || typeof o !== "object") return undefined;
+    const script = str(o.script, `${where} narration`, { max: 1200 }) ?? "";
+    if (!script) return undefined;
+    const b = o.basis as Record<string, unknown> | undefined;
+    const basis =
+      b && typeof b.hash === "string" && typeof b.key === "string" && Array.isArray(b.sig)
+        ? { hash: b.hash.slice(0, 40), key: b.key.slice(0, 40), sig: b.sig.slice(0, 32).map((x) => Number(x) >>> 0) }
+        : undefined;
+    const a = o.audio as Record<string, unknown> | undefined;
+    let audio: NarrationAudio | undefined;
+    if (a && typeof a === "object") {
+      const src = typeof a.src === "string" ? a.src : "";
+      if (!isSiteMedia(src)) problems.push(`${where} narration must be recorded on the Hub.`);
+      else {
+        const words = Array.isArray(a.words)
+          ? (a.words as Record<string, unknown>[])
+              .slice(0, 600)
+              .map((w) => ({ from: Number(w?.from) || 0, to: Number(w?.to) || 0, start: Number(w?.start) || 0, end: Number(w?.end) || 0 }))
+          : null;
+        audio = {
+          src,
+          seconds: Math.max(0, Math.round(Number(a.seconds) * 10) / 10 || 0),
+          words,
+          scriptHash: String(a.scriptHash ?? "").slice(0, 40),
+          voice: String(a.voice ?? "topic").slice(0, 60),
+          at: typeof a.at === "string" && !Number.isNaN(Date.parse(a.at)) ? new Date(a.at).toISOString() : new Date(0).toISOString(),
+        };
+      }
+    }
+    const checks = Array.isArray(o.checks) ? o.checks.slice(0, 10).map((c) => String(c).slice(0, 300)) : [];
+    return {
+      script,
+      status: o.status === "approved" ? "approved" : "draft",
+      ...(basis && { basis }),
+      ...(audio && { audio }),
+      ...(checks.length && { checks }),
+    };
+  };
+  const audioSettings = (v: unknown): GuideAudio | undefined => {
+    const o = v as Record<string, unknown> | undefined;
+    if (!o || typeof o !== "object") return undefined;
+    const l = (o.levels ?? {}) as Record<string, unknown>;
+    const voice = o.voice as Record<string, unknown> | undefined;
+    const intro = narration(o.intro, "The course introduction");
+    return {
+      levels: { course: l.course !== false, pages: l.pages !== false, blocks: l.blocks === true },
+      voice:
+        voice?.kind === "custom" && typeof voice.voiceId === "string" && /^[A-Za-z0-9]{8,40}$/.test(voice.voiceId)
+          ? { kind: "custom", voiceId: voice.voiceId, name: String(voice.name ?? "").slice(0, 80) }
+          : voice?.kind === "openai" && typeof voice.voice === "string" && /^[a-z]{2,20}$/.test(voice.voice)
+            ? { kind: "openai", voice: voice.voice }
+            : { kind: "topic" },
+      length: o.length === "short" || o.length === "extended" ? o.length : "standard",
+      playback: o.playback === "offer-auto" || o.playback === "press-play" ? o.playback : "auto",
+      ...(intro && { intro }),
+    };
+  };
+  const page = (p: Record<string, unknown>, i: number, many: boolean): Page => {
+    const where = many ? `Page ${i + 1}` : "The page";
+    const id = idOf(p?.id, where);
+    const sections = (Array.isArray(p?.sections) ? p.sections : []).map((x: Record<string, unknown>, j: number) => section(x, `${where}, section ${j + 1}`));
+    if (!sections.length) unfinished(`${where} needs at least one section.`);
+    const hero = p?.hero ? media(p.hero, `${where} hero`) : undefined;
+    const template = typeof p?.template === "string" && p.template in PAGE_TEMPLATES ? (p.template as PageTemplate) : "blank";
+    return {
+      id,
+      title: str(p?.title, `${where} title`, { max: 120 }) ?? "",
+      purpose: str(p?.purpose, `${where} purpose`, { max: 400 }) ?? "",
+      template,
+      kind: p?.kind === "assessment" ? "assessment" : "content",
+      required: p?.required !== false,
+      ...(p?.allActivities === false && { allActivities: false as const }),
+      ...(hero?.src && { hero }),
+      ...((n) => (n ? { narration: n } : {}))(narration(p?.narration, where)),
+      sections,
+    };
+  };
+
+  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown };
+  // Schema 1: one list of sections. It becomes a one-page course.
+  if (doc.schema === 1 && Array.isArray(doc.sections))
+    doc = {
+      schema: GUIDE_SCHEMA,
+      pages: [{ id: "page-1", title: "", purpose: "", template: "blank", kind: "content", required: true, sections: doc.sections }],
+    };
+  if (doc.schema !== GUIDE_SCHEMA) problems.push(`The guide uses schema ${String(doc.schema)}; this Hub reads schemas 1 and ${GUIDE_SCHEMA}.`);
+  const raw = Array.isArray(doc.pages) ? doc.pages : [];
+  const pages = raw.map((p: Record<string, unknown>, i: number) => page(p, i, raw.length > 1));
+  if (!pages.length) unfinished("The guide needs at least one page.");
+  if (pages.length > 30) problems.push("A course can have up to 30 pages.");
+  const audio = audioSettings(doc.audio);
+  if (problems.length) throw new GuideDocError(problems);
+  return { schema: GUIDE_SCHEMA, pages, ...(audio && { audio }) };
+}
+
+export const pageBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks);
+export const allBlocks = (doc: GuideDoc) => doc.pages.flatMap(pageBlocks);
+/** The page's title as learners see it: its own, or for a one-page guide the guide's. */
+export const pageTitle = (doc: GuideDoc, page: Page, courseTitle: string) =>
+  page.title || (doc.pages.length === 1 ? courseTitle : `Page ${doc.pages.indexOf(page) + 1}`);
+
+/**
+  What stops a guide being published, and suggestions that don't. Required: everything filled in,
+  unresolved verification flags, informative pictures without a description, video without captions or
+  a transcript, a quiz without a learning path, and an assessed guide without a quiz.
+  `signedOff`: blocks whose verification flag a reviewer has signed off, which no longer hold it up.
+  `unverified`: the open verification flags among the blocking checks, by block.
+*/
+export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Set<string> = new Set()) {
+  const blocking: string[] = [];
+  const unverified: { blockId: string; check: string }[] = [];
+  const located: { blockId: string; pageId: string; check: string }[] = [];
+  try {
+    readGuideDoc(doc);
+  } catch (e) {
+    if (e instanceof GuideDocError) blocking.push(...e.problems);
+    else throw e;
+  }
+  const suggestions: string[] = [];
+  const many = doc.pages.length > 1;
+  doc.pages.forEach((p, pi) => {
+    const at = many ? `Page ${pi + 1}, ` : "";
+    if (p.kind === "assessment" && !pageBlocks(p).some((b) => b.type === "quiz")) blocking.push(`${at}the assessment page needs a quiz.`);
+    if (many && !p.title) blocking.push(`Page ${pi + 1} needs a title.`);
+    // The Audio Guide: a recording must match its script; the rest are reminders.
+    if (doc.audio && p.narration) {
+      const state = narrationState(p.narration, pageSnapshot(p), doc.audio);
+      const what = `${at || "The page’s "}narration`.replace(/^Page (\d+), narration$/, "Page $1’s narration");
+      if (state === "rerecord") blocking.push(`${what}: the script or voice has changed since it was recorded. Record it again.`);
+      if (state === "review") suggestions.push(`${what} may be out of date: the page has changed a lot since it was approved.`);
+      if (state === "draft") suggestions.push(`${what}: approve the script (learners don’t hear it until it’s approved and recorded).`);
+      if (state === "unrecorded") suggestions.push(`${what}: record the approved script.`);
+    }
+    p.sections.forEach((s) =>
+      s.blocks.forEach((b, i) => {
+        const before = blocking.length;
+        const where = `${at}“${s.title}”, ${BLOCK_LABELS[b.type].toLowerCase()} ${i + 1}`;
+        if (b.flag?.kind === "verify" && !signedOff.has(b.id)) {
+          const check = `${where}: needs verification. ${b.flag.note}`.trim();
+          blocking.push(check);
+          unverified.push({ blockId: b.id, check });
+        }
+        if ((b.type === "image" || (b.type === "textMedia" && !b.video)) && !b.media.decorative && !b.media.alt)
+          blocking.push(`${where}: describe the picture, or mark it decorative.`);
+        // A video block, or the video in a text-and-media block: the same checks.
+        const vid = b.type === "video" ? b : b.type === "textMedia" ? videoOf(b) : null;
+        if (vid?.embed && !vid.captionsOnPlayer) blocking.push(`${where}: confirm the video has captions on ${EMBED_NAME[vid.embed.provider]}.`);
+        if (vid && !vid.embed && !vid.captions) blocking.push(`${where}: add a captions file.`);
+        if (vid && !vid.transcript) blocking.push(`${where}: add a transcript.`);
+        if (vid?.recording && !vid.recording.consent) blocking.push(`${where}: confirm everyone who appears agreed, and nothing private is on screen.`);
+        if (b.type === "image" && !b.media.caption) suggestions.push(`${where}: a caption helps readers see why the picture matters.`);
+        if (b.type === "spot" && !b.media.decorative && !b.media.alt) blocking.push(`${where}: describe the picture for screen readers.`);
+        if (b.type === "hotspots" && !b.media.alt) blocking.push(`${where}: describe the picture for screen readers.`);
+        if (b.type === "sorting" && b.groups.some((g) => !b.items.some((it) => it.group === g.id)))
+          suggestions.push(`${where}: every group usually has at least one item.`);
+        if (
+          b.type === "sorting"
+            ? b.items.some((it) => !it.feedback)
+            : (b.type === "sequencing" || b.type === "matching" || b.type === "fillblank") && !b.feedback
+        )
+          suggestions.push(`${where}: add feedback that explains the right answer, not just what it is.`);
+        if (b.type === "decision" && b.media && !b.media.decorative && !b.media.alt) blocking.push(`${where}: describe the picture, or mark it decorative.`);
+        if (b.type === "flashcards")
+          b.cards.forEach((c, j) => {
+            if (c.media && !c.media.decorative && !c.media.alt) blocking.push(`${where}, card ${j + 1}: describe the picture, or mark it decorative.`);
+          });
+        if (b.type === "confidence" && b.compareWith && !allBlocks(doc).some((x) => x.id === b.compareWith && x.type === "confidence"))
+          blocking.push(`${where}: the confidence check it compares with isn’t there any more.`);
+        if (b.type === "reflection" && !b.guidance) suggestions.push(`${where}: add guidance on what a good answer covers, so Claude’s feedback is useful.`);
+        if (b.type === "budget" && !b.flag) suggestions.push(`${where}: mark the budget Illustrative, so reviewers know the figures are made up.`);
+        if (b.type === "accordion")
+          b.items.forEach((it, j) => {
+            if (it.media && !it.media.decorative && !it.media.alt) blocking.push(`${where}, item ${j + 1}: describe the picture, or mark it decorative.`);
+          });
+        if (b.type === "carousel")
+          b.slides.forEach((sl, j) => {
+            if (!sl.media.decorative && !sl.media.alt) blocking.push(`${where}, picture ${j + 1}: describe the picture, or mark it decorative.`);
+          });
+        for (const check of blocking.slice(before)) located.push({ blockId: b.id, pageId: p.id, check });
+      }),
+    );
+  });
+  if (doc.pages.length && !doc.pages.some((p) => p.required)) blocking.push("Make at least one page required.");
+  const blocks = allBlocks(doc);
+  if (mode === "assessed" && !blocks.some((b) => b.type === "quiz")) blocking.push("An assessed guide needs a quiz block.");
+  if (mode === "decision" && !blocks.some((b) => b.type === "decision")) blocking.push("A decision activity guide needs at least one decision question.");
+  if (!blocks.some((b) => b.type === "checklist" || b.type === "callout"))
+    suggestions.push("Consider ending with key points or a checklist people can use at work.");
+  if (doc.audio?.intro) {
+    const n = doc.audio.intro;
+    if (n.status === "approved" && n.audio && narrationState({ ...n, basis: undefined }, { hash: "", key: "", sig: [] }, doc.audio) === "rerecord")
+      blocking.push("The course introduction’s narration: the script or voice has changed since it was recorded. Record it again.");
+  }
+  return { blocking, suggestions, unverified, located };
+}
+
+/** The whole course: the pages' times added up. */
+export const readingMinutes = (doc: GuideDoc) => doc.pages.reduce((n, p) => n + pageMinutes(p), 0) || 1;
+
+/** About 200 words a minute, plus time to look at pictures and answer questions; at least one minute. */
+export function pageMinutes(page: Page) {
+  const words = (s?: string) => (s ? s.split(/\s+/).filter(Boolean).length : 0);
+  let n = words(page.purpose);
+  let extra = 0;
+  for (const b of pageBlocks(page)) {
+    if (b.type === "text" || b.type === "textMedia" || b.type === "callout") n += words(b.body) + words("heading" in b ? b.heading : undefined);
+    if (b.type === "image" || b.type === "textMedia") extra += 0.2;
+    if (b.type === "decision") {
+      n += words(b.prompt) + words(b.context) + b.choices.reduce((a, c) => a + words(c.text), 0);
+      extra += 0.75;
+    }
+    if (b.type === "checklist") n += b.items.reduce((a, c) => a + words(c), 0);
+    if (b.type === "accordion") {
+      n += words(b.heading) + b.items.reduce((a, it) => a + words(it.title) + words(it.body), 0);
+      extra += 0.2 * b.items.filter((it) => it.media).length;
+    }
+    if (b.type === "carousel") extra += 0.2 * b.slides.length;
+    if (b.type === "quiz") extra += 5;
+    if (b.type === "flashcards") {
+      n += b.cards.reduce((a, c) => a + words(c.front) + words(c.back), 0);
+      extra += 0.2 * b.cards.length;
+    }
+    if (b.type === "tabs") n += b.tabs.reduce((a, t) => a + words(t.body), 0);
+    if (b.type === "timeline") n += b.events.reduce((a, e) => a + words(e.title) + words(e.body), 0);
+    if (b.type === "process") n += b.steps.reduce((a, st) => a + words(st.title) + words(st.body), 0);
+    if (b.type === "branching") {
+      n += b.scenes.reduce((a, sc) => a + words(sc.text) + sc.choices.reduce((x, c) => x + words(c.text), 0), 0) / 2;
+      extra += 1.5;
+    }
+    if (b.type === "conversation") {
+      n += b.turns.reduce((a, t) => a + words(t.line) + t.responses.reduce((x, r) => x + words(r.text), 0), 0);
+      extra += 0.5 * b.turns.length;
+    }
+    if (b.type === "spot") extra += 2;
+    if (b.type === "hotspots") n += b.spots.reduce((a, p) => a + words(p.title) + words(p.body), 0);
+    if (b.type === "sorting") extra += 0.2 * b.items.length + 0.5;
+    if (b.type === "sequencing") extra += 0.2 * b.steps.length + 0.5;
+    if (b.type === "matching") extra += 0.2 * b.pairs.length + 0.5;
+    if (b.type === "fillblank") n += words(b.text);
+    if (b.type === "confidence") extra += 0.25;
+    if (b.type === "reflection") extra += 3;
+    if (b.type === "budget") extra += 3;
+    if (b.type === "wall") extra += 2;
+    if (b.type === "poll") extra += 0.5;
+  }
+  return Math.max(1, Math.round(n / 200 + extra));
+}
+
+/**
+  A new page laid out for its teaching pattern: the sections in that pattern's order, each with the
+  blocks it usually needs, ready to fill in. `id` makes ids unique within the course.
+*/
+export function templatePage(template: PageTemplate | "assessment", id: (prefix: string) => string): Page {
+  const text = (): Block => ({ id: id("text"), type: "text", body: "" });
+  const picture = (wide = false): Block => ({
+    id: id("image"),
+    type: "image",
+    media: { src: "", alt: "" },
+    width: wide ? "wide" : "column",
+    ...(wide && { enlarge: true }),
+  });
+  const decision = (): Block => ({
+    id: id("decision"),
+    type: "decision",
+    prompt: "",
+    choices: [
+      { id: id("c"), text: "", verdict: "best", feedback: "" },
+      { id: id("c"), text: "", verdict: "risky", feedback: "" },
+    ],
+  });
+  const callout = (style: CalloutBlock["style"], label?: string): Block => ({ id: id("callout"), type: "callout", style, ...(label && { label }), body: "" });
+  const sec = (title: string, ...blocks: Block[]): Section => ({ id: id("s"), title, blocks });
+  const outlines: Record<PageTemplate | "assessment", Section[]> = {
+    decide: [
+      sec("The situation", text()),
+      sec("Who’s involved", { id: id("textmedia"), type: "textMedia", body: "", media: { src: "", alt: "" }, layout: "media-right" }),
+      sec("What would you do?", decision()),
+      sec("What happened next", callout("example", "What happened")),
+      sec("The principle", callout("important", "The principle")),
+      sec("Apply it elsewhere", text()),
+    ],
+    do: [
+      sec("When you’ll do this", text()),
+      sec("Step by step", text()),
+      sec("A worked example", picture(true), text()),
+      sec("A common mistake", callout("important", "Watch for")),
+      sec("Quick practice", decision()),
+      sec("Your job aid", { id: id("checklist"), type: "checklist", title: "", items: [""] }),
+    ],
+    notice: [
+      sec("The example", picture(true)),
+      sec("What to notice", text()),
+      sec("Why it matters", text()),
+      sec("Your turn", picture(true), decision()),
+      sec("What you should have spotted", callout("tip", "What to look for")),
+    ],
+    adapt: [
+      sec("What changed, and when", callout("important", "From"), text()),
+      sec("Before and now", text()),
+      sec("Who it affects", text()),
+      sec("In a typical case", decision()),
+      sec("Source and next step", callout("tip", "Next step")),
+    ],
+    say: [
+      sec("What you’ll practise", text()),
+      sec("The scene", text()),
+      sec("The conversation", {
+        id: id("conversation"),
+        type: "conversation",
+        person: "",
+        role: "",
+        setting: "",
+        turns: [
+          {
+            id: id("turn"),
+            line: "",
+            responses: [
+              { id: id("r"), text: "", verdict: "best", feedback: "", reply: "" },
+              { id: id("r"), text: "", verdict: "risky", feedback: "", reply: "" },
+            ],
+          },
+        ],
+      }),
+      sec("What worked", callout("tip", "Coaching")),
+      sec("Phrases to take away", { id: id("checklist"), type: "checklist", title: "", items: [""] }),
+    ],
+    blank: [sec("Introduction", text())],
+    assessment: [sec("Check your judgement", { id: id("quiz"), type: "quiz", pathId: "" })],
+  };
+  return {
+    id: id("page"),
+    title: template === "assessment" ? "Check your judgement" : "",
+    purpose: "",
+    template: template === "assessment" ? "blank" : template,
+    kind: template === "assessment" ? "assessment" : "content",
+    required: true,
+    sections: outlines[template],
+  };
+}

@@ -18,9 +18,9 @@ import { Icon } from "./Icon";
 
 /*
   Background, in Profile and settings: upload a photo, pick a Pexels stock photo, or one of the brand
-  colours, or none. Picking a photo or colour previews it straight away, here and behind this page, and
-  Save keeps it (on the server, so it follows the person to other devices). An upload is saved as soon
-  as it's sent, like the profile picture.
+  colours, or none. Picking a photo or colour shows it straight away, here and behind this page, and
+  saves it (on the server, so it follows the person to other devices), with Undo to go back to the one
+  before. An upload is saved as soon as it's sent, like the profile picture.
 */
 
 type Photos = { photos: PexelsChoice[]; configured: boolean; query: string; page: number; more: boolean };
@@ -45,8 +45,13 @@ function describe(bg: Background) {
 export function BackgroundSettings() {
   const current = useApi<{ background: Background }>("/api/me/background");
   const saved = current.data?.background ?? null;
+  // The choice being saved, shown at once while the save goes through.
   const [pending, setPending] = useState<Background | null>(null);
   const shown = pending ?? saved;
+  // The background before the last change, for Undo.
+  const [before, setBefore] = useState<Background | null>(null);
+  // Only the latest of several quick picks counts.
+  const latest = useRef(0);
   const [busy, setBusy] = useState<"save" | "upload" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -55,27 +60,13 @@ export function BackgroundSettings() {
     savedRef.current = saved;
   }, [saved]);
 
-  // Leaving the page with an unsaved preview puts the saved background back.
+  // Leaving the page while a save is failing puts the saved background back.
   useEffect(
     () => () => {
       if (savedRef.current) announce(savedRef.current);
     },
     [],
   );
-
-  function preview(bg: Background) {
-    setNote(null);
-    setProblem(null);
-    const same = saved && sameBackground(bg, saved);
-    setPending(same ? null : bg);
-    announce(bg);
-  }
-
-  function cancel() {
-    setPending(null);
-    setProblem(null);
-    if (saved) announce(saved);
-  }
 
   function keep(bg: Background, message: string) {
     current.setData({ background: bg });
@@ -84,17 +75,28 @@ export function BackgroundSettings() {
     setNote(message);
   }
 
-  async function save() {
-    if (!pending) return;
-    setBusy("save");
+  /** Shows the choice at once and saves it. */
+  async function choose(bg: Background, undo = false) {
+    if (saved && sameBackground(bg, saved) && !pending) return;
+    const was = saved;
+    const mine = ++latest.current;
+    setNote(null);
     setProblem(null);
+    setPending(bg);
+    announce(bg);
+    setBusy("save");
     try {
-      const res = await api<{ background: Background }>("/api/me/background", { method: "PUT", body: pending });
-      keep(res.background, "Background saved. It shows behind the main pages on all your devices.");
+      const res = await api<{ background: Background }>("/api/me/background", { method: "PUT", body: bg });
+      if (mine !== latest.current) return;
+      keep(res.background, undo ? "Background put back." : "Background saved. It shows behind the main pages on all your devices.");
+      setBefore(undo ? null : was);
     } catch (e) {
+      if (mine !== latest.current) return;
+      setPending(null);
+      if (was) announce(was);
       setProblem((e as Error).message);
     } finally {
-      setBusy(null);
+      if (mine === latest.current) setBusy(null);
     }
   }
 
@@ -110,6 +112,7 @@ export function BackgroundSettings() {
       const res = await fetch("/api/me/background/upload", { method: "POST", body });
       const data = (await res.json().catch(() => ({}))) as { background?: Background; error?: string };
       if (!res.ok || !data.background) throw new Error(data.error ?? "Couldn’t save that photo.");
+      setBefore(saved);
       keep(data.background, "Your photo is now your background.");
     } catch (e) {
       setProblem((e as Error).message);
@@ -126,42 +129,39 @@ export function BackgroundSettings() {
         <Icon name="image" className="size-5 text-accent" /> Background
       </h2>
       <p className="mt-1 text-ink-muted">
-        Choose what shows behind the hub’s main pages: your own photo, a stock photo, or a colour. It’s saved to your account, so it follows you to other devices.
+        Choose what shows behind the hub’s main pages: your own photo, a stock photo, or a colour. It’s saved to your account, so it follows you to other
+        devices.
       </p>
 
       <Preview bg={shown} />
 
       <div className="mt-6 flex flex-col gap-6">
-        <UploadPhoto busy={busy} onUpload={upload} has={saved?.kind === "upload"} />
-        <StockPhotos is={is} onPick={preview} />
-        <Colours is={is} onPick={preview} />
+        <UploadPhoto busy={busy === "upload" ? busy : null} onUpload={upload} has={saved?.kind === "upload"} />
+        <StockPhotos is={is} onPick={(bg) => void choose(bg)} />
+        <Colours is={is} onPick={(bg) => void choose(bg)} />
       </div>
 
       <div className="sticky bottom-20 z-10 mt-6 flex flex-wrap items-center gap-3 lg:bottom-4" aria-live="polite">
-        {pending && (
-          <div className="sticky flex w-full flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-3 shadow-lg">
-            <p className="min-w-0 flex-1 text-sm">
-              <span className="font-semibold">Previewing:</span> {describe(pending)}
-            </p>
-            <button type="button" onClick={cancel} disabled={busy !== null} className="min-h-11 rounded-full px-4 font-semibold text-ink-muted hover:bg-muted hover:text-ink">
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={busy !== null}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:opacity-45"
-            >
-              {busy === "save" ? "Saving…" : "Save background"}
-            </button>
-          </div>
-        )}
+        {busy === "save" && <p className="text-sm text-ink-muted">Saving…</p>}
         {problem && (
           <p role="alert" className="w-full rounded-xl bg-orange/10 p-3 text-sm">
             {problem}
           </p>
         )}
-        {note && !pending && <p className="text-sm text-ink-muted">{note}</p>}
+        {note && !pending && (
+          <p className="flex flex-wrap items-center gap-x-3 text-sm text-ink-muted">
+            {note}
+            {before && (
+              <button
+                type="button"
+                onClick={() => void choose(before, true)}
+                className="inline-flex min-h-10 items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                <Icon name="refresh" className="size-4" /> Undo
+              </button>
+            )}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -180,7 +180,10 @@ function Preview({ bg }: { bg: Background | null }) {
         ) : (
           <div className="absolute inset-0" style={{ background: "var(--backdrop-veil)" }} />
         )}
-        <div aria-hidden className="absolute inset-x-0 top-0 flex h-8 items-center gap-2 border-b border-white/40 bg-white/60 px-3 backdrop-blur-md dark:border-white/15 dark:bg-[#16264280]">
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 flex h-8 items-center gap-2 border-b border-white/40 bg-white/60 px-3 backdrop-blur-md dark:border-white/15 dark:bg-[#16264280]"
+        >
           <span className="h-2.5 w-14 rounded-full bg-[#102a43]/70 dark:bg-white/70" />
           <span className="ml-auto h-2.5 w-8 rounded-full bg-[#102a43]/30 dark:bg-white/30" />
           <span className="h-2.5 w-8 rounded-full bg-[#102a43]/30 dark:bg-white/30" />
@@ -344,8 +347,18 @@ function StockPhotos({ is, onPick }: { is: (bg: Background) => boolean; onPick: 
                 style={{ backgroundColor: p.color ?? undefined }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- Pexels' own small size, lazy-loaded */}
-                <img src={pexelsSized(p.src, 480, 320)} alt={p.alt} loading="lazy" decoding="async" width={480} height={320} className="size-full object-cover" />
-                <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-4 text-xs text-white">{p.photographer}</span>
+                <img
+                  src={pexelsSized(p.src, 480, 320)}
+                  alt={p.alt}
+                  loading="lazy"
+                  decoding="async"
+                  width={480}
+                  height={320}
+                  className="size-full object-cover"
+                />
+                <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-4 text-xs text-white">
+                  {p.photographer}
+                </span>
                 {selected && (
                   <span className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-action text-on-action">
                     <Icon name="check" className="size-4" />
@@ -394,7 +407,10 @@ function Colours({ is, onPick }: { is: (bg: Background) => boolean; onPick: (bg:
                 type="button"
                 aria-pressed={selected}
                 onClick={() => onPick(bg)}
-                className={cx("flex w-full flex-col gap-1 rounded-xl border-2 p-1 text-left", selected ? "border-action" : "border-transparent hover:border-line-strong")}
+                className={cx(
+                  "flex w-full flex-col gap-1 rounded-xl border-2 p-1 text-left",
+                  selected ? "border-action" : "border-transparent hover:border-line-strong",
+                )}
               >
                 <span className="relative block h-14 w-full rounded-lg border border-line" style={{ background: c.css }}>
                   {selected && (
@@ -413,7 +429,10 @@ function Colours({ is, onPick }: { is: (bg: Background) => boolean; onPick: (bg:
             type="button"
             aria-pressed={is(none)}
             onClick={() => onPick(none)}
-            className={cx("flex w-full flex-col gap-1 rounded-xl border-2 p-1 text-left", is(none) ? "border-action" : "border-transparent hover:border-line-strong")}
+            className={cx(
+              "flex w-full flex-col gap-1 rounded-xl border-2 p-1 text-left",
+              is(none) ? "border-action" : "border-transparent hover:border-line-strong",
+            )}
           >
             <span className="relative grid h-14 w-full place-items-center rounded-lg border border-dashed border-line-strong text-ink-muted">
               {is(none) ? (

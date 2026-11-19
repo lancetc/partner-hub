@@ -85,11 +85,11 @@ describe("sizing photos", () => {
 });
 
 describe("where the background shows", () => {
-  it.each(["/", "/news/some-story", "/community", "/topics", "/paths", "/paths/abc", "/inbox", "/resources", "/resources/glossary", "/play", "/settings", "/webinars/3", "/challenge/2", "/topics/dementia-basics", "/topics/s/lf-recall", "/topics/follow-ups/12"])(
+  it.each(["/", "/news/some-story", "/community", "/topics", "/paths", "/paths/abc", "/magazine", "/inbox", "/resources", "/resources/glossary", "/play", "/settings", "/webinars/3", "/challenge/2", "/topics/dementia-basics", "/topics/s/lf-recall", "/topics/follow-ups/12"])(
     "shows on %s",
     (p) => expect(backdropShownOn(p)).toBe(true),
   );
-  it.each(["/topics/a/b", "/admin", "/admin/lessons", "/login", "/paths/abc/certificate", "/explorer", "/play/conversations/room/ABCD", "/open/x", "/review/x"])(
+  it.each(["/topics/a/b", "/elearning/crs-1", "/magazine/draft/mag-1", "/admin", "/admin/lessons", "/login", "/paths/abc/certificate", "/explorer", "/play/conversations/room/ABCD", "/open/x", "/review/x"])(
     "is left off %s",
     (p) => expect(backdropShownOn(p)).toBe(false),
   );

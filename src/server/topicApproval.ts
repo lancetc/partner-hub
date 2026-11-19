@@ -13,7 +13,9 @@ import { openReports } from "./contentReports";
   1. Draft: an author writes the topic in the editor.
   2. Submit for review: the author picks an internal subject-matter expert (SME) or designated reviewer,
      and says whether the topic is compliance-sensitive.
-  3. AI pre-review: not set up yet. When it is, it runs here, before the person reviews.
+  3. AI pre-review: Claude checks the submitted draft against the facts library and the topic's official
+     sources (server/topicAiReview), and its findings go to the reviewer. It runs straight after submitting;
+     the author can skip it. The reviewer's turn comes once it's done.
   4. Human review: the reviewer reads the draft, comments on its cards, then approves it or asks for changes.
   5. Approve: compliance-sensitive topics also need Compliance (or the policy owner) to approve.
   6. Publish: the Hub owner (anyone with the publisher role) makes the approved draft live.
@@ -33,7 +35,7 @@ export const reviewRequired = () => process.env.HUB_TOPIC_REVIEW === "required";
 
 export type ReviewRole = "sme" | "compliance" | "publisher";
 export type Stage = "draft" | "review" | "changes" | "compliance" | "approved" | "live";
-export type ApprovalAction = "submitted" | "changes_requested" | "approved" | "compliance_approved" | "published" | "withdrawn";
+export type ApprovalAction = "submitted" | "ai_reviewed" | "ai_skipped" | "changes_requested" | "approved" | "compliance_approved" | "published" | "withdrawn";
 
 type Row = {
   slug: string;
@@ -63,7 +65,7 @@ function savedDraft(db: Db, slug: string) {
 
 const rowOf = (db: Db, slug: string) => db.prepare("SELECT * FROM topic_approvals WHERE slug = ?").get(slug) as Row | undefined;
 
-function record(db: Db, slug: string, action: ApprovalAction, actor: User, now: Date, extra: { note?: string; version?: string } = {}) {
+export function record(db: Db, slug: string, action: ApprovalAction, actor: User, now: Date, extra: { note?: string; version?: string } = {}) {
   db.prepare("INSERT INTO topic_approval_events (slug, action, actor, note, version, at) VALUES (?, ?, ?, ?, ?, ?)").run(
     slug,
     action,
@@ -86,7 +88,7 @@ function cleanNote(note: unknown, { required }: { required: string | null }) {
   Where a topic stands. A submission whose draft has been edited since counts as a draft again
   (`stale`), unless changes were asked for, when editing is exactly what's expected.
 */
-function stageOf(db: Db, slug: string) {
+export function stageOf(db: Db, slug: string) {
   const status = lessonStatus(db, slug);
   const hash = savedDraft(db, slug);
   const r = rowOf(db, slug);
@@ -143,6 +145,7 @@ export function decide(db: Db, actor: User, slug: string, input: { decision?: un
   if (!row || (stage !== "review" && stage !== "compliance")) throw new HttpError(409, "This topic isn’t waiting for a review.");
   if (stale) throw new HttpError(409, "The topic was edited after it was submitted. Ask the author to submit it again.");
   if (stage === "review" && row.reviewer_id !== actor.id) throw new HttpError(403, "Only the assigned reviewer can approve this topic.");
+  if (stage === "review" && !aiReviewOf(db, slug, row.draft_hash)) throw new HttpError(409, "The AI pre-review comes first. Run it, or skip it, then review.");
   if (stage === "compliance" && !isCompliance(db, actor)) throw new HttpError(403, "This topic is waiting for Compliance to approve it.");
   if (row.submitted_by === actor.id) throw new HttpError(403, "Authors can’t approve their own topics.");
   const decision = input.decision === "approve" ? "approve" : input.decision === "changes" ? "changes" : null;
@@ -219,6 +222,8 @@ export function clearApproval(db: Db, slug: string) {
 
 const ACTION_LABEL: Record<ApprovalAction, string> = {
   submitted: "Submitted for review",
+  ai_reviewed: "AI pre-review done",
+  ai_skipped: "AI pre-review skipped",
   changes_requested: "Asked for changes",
   approved: "Approved",
   compliance_approved: "Approved by Compliance",
@@ -248,11 +253,24 @@ function monitor(db: Db, slug: string, now: Date) {
   };
 }
 
+export type AiFinding = { severity: "fix" | "check" | "good"; card: string; cardLabel: string; title: string; detail: string; suggestion: string };
+
+/** Step 3 for the submitted draft: Claude's findings, skipped, or still to do (null). */
+export function aiReviewOf(db: Db, slug: string, hash: string | null) {
+  if (!hash) return null;
+  const r = db.prepare("SELECT * FROM topic_ai_reviews WHERE slug = ? AND draft_hash = ?").get(slug, hash) as
+    | { status: "done" | "skipped"; summary: string; findings: string; model: string | null; actor: string; at: string }
+    | undefined;
+  return r ? { status: r.status, summary: r.summary, findings: JSON.parse(r.findings) as AiFinding[], at: r.at, by: userById(db, r.actor)?.name ?? "Someone" } : null;
+}
+
 /** Everything the editor's approval panel needs, including what the signed-in person can do now. */
 export function approvalFor(db: Db, actor: User, slug: string, now: Date) {
   requireAuthor(actor);
   requireTopic(db, slug);
   const { stage, row, stale } = stageOf(db, slug);
+  // The reviewer's turn comes after the AI pre-review (done or skipped).
+  const ai = row && !stale ? aiReviewOf(db, slug, row.draft_hash) : null;
   const name = (id: string) => userById(db, id)?.name ?? "Someone";
   const reviewer = row && (db.prepare("SELECT id, name, review_role, review_area FROM users WHERE id = ?").get(row.reviewer_id) as StaffRow | undefined);
   const publisher = canPublishTopics(db, actor);
@@ -278,11 +296,14 @@ export function approvalFor(db: Db, actor: User, slug: string, now: Date) {
     you: {
       reviewRole: roleOf(db, actor.id),
       canSubmit: stage === "draft" || stage === "changes",
-      canReview: stage === "review" && row?.reviewer_id === actor.id && row.submitted_by !== actor.id,
+      canReview: stage === "review" && Boolean(ai) && row?.reviewer_id === actor.id && row.submitted_by !== actor.id,
+      // The author who submitted it, the reviewer, or the Hub owner can run (or skip) the AI pre-review.
+      canRunAiReview: stage === "review" && !ai && Boolean(row) && (row?.submitted_by === actor.id || row?.reviewer_id === actor.id || publisher),
       canApproveCompliance: stage === "compliance" && isCompliance(db, actor) && row?.submitted_by !== actor.id,
       canPublish: required ? stage === "approved" && publisher : stage !== "live",
       canWithdraw: Boolean(row) && stage !== "live" && (row?.submitted_by === actor.id || publisher),
     },
+    aiReview: ai,
     reviewers: reviewersFor(db, actor),
     publishers: (db.prepare("SELECT name FROM users WHERE review_role = 'publisher' ORDER BY name").all() as { name: string }[]).map((u) => u.name),
     history: history(db, slug),

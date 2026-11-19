@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import type { Lesson } from "@/content/lessons";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
-import { DEFAULT_IMAGE_MODEL, HOUSE_STYLE, type ImageModel } from "@/lib/imageModels";
+import { HOUSE_STYLE, type ImageModel } from "@/lib/imageModels";
 import { Icon } from "../Icon";
 import { btn, ErrorNote, input } from "./ui";
 
 /*
-  Make a poster picture from a prompt, with the image model and settings of your choice, through
-  ElevenLabs. Finished pictures go into the image library, and "Use as poster" puts one on the lesson.
+  Make a picture from a description, with the image model and settings of your choice: OpenAI directly
+  (with the hub's OpenAI key), or the models offered through ElevenLabs. Finished pictures go into the
+  image library, and the button under each puts it where it's wanted (a topic's poster, a Magazine picture).
 */
 
 type Photo = { src: string; width: number; height: number };
@@ -20,11 +21,24 @@ type Made = { id: string; photo: Photo; prompt: string; model: string };
 const POLL_MS = 3000;
 const GIVE_UP_MS = 4 * 60_000;
 
-export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; onUse: (p: Photo, alt: string) => void; onMade: () => void }) {
-  const options = useApi<{ configured: boolean; models: ImageModel[] }>("/api/admin/image-gen").data;
+export function ImageGenerator({
+  lesson: l,
+  onUse,
+  onMade,
+  useLabel = "Use as poster",
+  defaultAspect = "16:9",
+}: {
+  lesson?: Lesson;
+  onUse: (p: Photo, alt: string) => void;
+  onMade?: () => void;
+  useLabel?: string;
+  defaultAspect?: string;
+}) {
+  const options = useApi<{ configured: boolean; models: ImageModel[]; defaultModel?: string }>("/api/admin/image-gen").data;
   const [prompt, setPrompt] = useState("");
-  const [modelId, setModelId] = useState(DEFAULT_IMAGE_MODEL);
-  const [aspect, setAspect] = useState("16:9");
+  // Empty until the author picks one: the hub's default is used (OpenAI when its key is set).
+  const [modelId, setModelId] = useState("");
+  const [aspect, setAspect] = useState(defaultAspect);
   const [resolution, setResolution] = useState("1K");
   const [quality, setQuality] = useState("medium");
   const [houseStyle, setHouseStyle] = useState(true);
@@ -45,7 +59,9 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
     return () => window.clearInterval(t);
   }, [working]);
 
-  const model = options?.models.find((m) => m.id === modelId) ?? options?.models[0];
+  // The model chosen, else the hub's default (OpenAI when its key is set), else the first on offer.
+  const model = options?.models.find((m) => m.id === modelId) ?? options?.models.find((m) => m.id === options.defaultModel) ?? options?.models[0];
+  const shape = model && !model.aspects.includes(aspect) ? (model.aspects.includes("3:2") ? "3:2" : model.aspects[0]) : aspect;
 
   function pickModel(id: string) {
     const m = options?.models.find((x) => x.id === id);
@@ -63,17 +79,24 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
     setWorking({ started: Date.now(), status: "pending" });
     setElapsed(0);
     try {
-      const { id } = await api<{ id: string }>("/api/admin/image-gen", {
+      const first = await api<Check>("/api/admin/image-gen", {
         body: {
           prompt,
           model: model.id,
-          aspect,
+          aspect: shape,
           resolution: model.resolutions ? resolution : undefined,
           quality: model.qualities ? quality : undefined,
           houseStyle,
-          lesson: l.slug,
+          lesson: l?.slug,
         },
       });
+      // OpenAI answers in one go; ElevenLabs is checked every few seconds until it's finished.
+      if (first.status === "completed" && first.photo) {
+        setMade((m) => [{ id: first.id, photo: first.photo!, prompt: first.prompt ?? prompt, model: model.label }, ...m]);
+        onMade?.();
+        return;
+      }
+      const id = first.id;
       const started = Date.now();
       // Check every few seconds until it's finished.
       while (live.current) {
@@ -82,7 +105,7 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
         const c = await api<Check>(`/api/admin/image-gen?id=${encodeURIComponent(id)}`);
         if (c.status === "completed" && c.photo) {
           setMade((m) => [{ id, photo: c.photo!, prompt: c.prompt ?? prompt, model: model.label }, ...m]);
-          onMade();
+          onMade?.();
           break;
         }
         if (c.status === "failed") throw new Error(c.error ?? "The picture couldn’t be made.");
@@ -99,7 +122,12 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
 
   if (!options) return <p className="text-sm text-ink-muted">Loading image models…</p>;
   if (!options.configured)
-    return <p className="text-sm text-ink-muted">Image generation uses ElevenLabs. Add ELEVENLABS_API_KEY to .env.local and restart the server.</p>;
+    return (
+      <p className="text-sm text-ink-muted">
+        Image generation needs an OpenAI key (OPENAI_API_KEY) or an ElevenLabs key with image access (ELEVENLABS_API_KEY). Add one to .env.local and restart the
+        server.
+      </p>
+    );
 
   const choice = "flex flex-col gap-1.5 text-sm font-semibold";
   return (
@@ -107,16 +135,18 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
       <label className={choice}>
         <span className="flex flex-wrap items-center justify-between gap-2">
           Describe the picture
-          <button
-            type="button"
-            className="text-xs font-semibold text-accent hover:underline"
-            onClick={() => {
-              const about = l.summary.trim().replace(/\.$/, "");
-              setPrompt(`A poster photo for a topic called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
-            }}
-          >
-            Start from the topic
-          </button>
+          {l && (
+            <button
+              type="button"
+              className="text-xs font-semibold text-accent hover:underline"
+              onClick={() => {
+                const about = l.summary.trim().replace(/\.$/, "");
+                setPrompt(`A poster photo for a topic called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
+              }}
+            >
+              Start from the topic
+            </button>
+          )}
         </span>
         <textarea
           rows={3}
@@ -149,7 +179,7 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
       <div className="flex flex-wrap gap-3">
         <label className={cx(choice, "min-w-28 flex-1")}>
           Shape
-          <select className={input} value={aspect} onChange={(e) => setAspect(e.target.value)}>
+          <select className={input} value={shape} onChange={(e) => setAspect(e.target.value)}>
             {model?.aspects.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -198,12 +228,14 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
         </button>
         {working && (
           <span role="status" className="text-sm text-ink-muted">
-            {working.status === "generating" ? "Drawing" : "Queued"} · {elapsed}s. Usually 10 to 60 seconds.
+            {model?.id === "openai" ? "Drawing" : working.status === "generating" ? "Drawing" : "Queued"} · {elapsed}s. Usually 10 to 60 seconds.
           </span>
         )}
       </div>
       <p className="text-xs text-ink-muted">
-        Each picture uses ElevenLabs credits; bigger sizes and higher quality cost more. Pictures that fail aren’t charged.
+        {model?.id === "openai"
+          ? "Each picture is charged to your OpenAI account; higher quality costs more. Every picture is kept in the image library."
+          : "Each picture uses ElevenLabs credits; bigger sizes and higher quality cost more. Pictures that fail aren’t charged."}
       </p>
       {error && <ErrorNote text={error} />}
 
@@ -218,7 +250,7 @@ export function ImageGenerator({ lesson: l, onUse, onMade }: { lesson: Lesson; o
                   {m.model}: {m.prompt}
                 </p>
                 <button type="button" className={cx(btn.secondary, "min-h-10")} onClick={() => onUse(m.photo, m.prompt)}>
-                  <Icon name="check" className="size-4" /> Use as poster
+                  <Icon name="check" className="size-4" /> {useLabel}
                 </button>
               </div>
             </li>

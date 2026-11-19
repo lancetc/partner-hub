@@ -154,7 +154,7 @@ export function ElearningAdmin() {
         <ul className="mt-6 grid gap-4 md:grid-cols-2">
           {data.courses.map((c) => (
             <li key={c.id} className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5">
-              {/* The poster learners see on the course's tile in eLearn. */}
+              {/* The poster learners see on the course's tile in Magazine. */}
               <ImageDropZone
                 picture={c.poster ? { src: c.poster, width: 1600, height: 1000 } : undefined}
                 label="Drag a poster here"
@@ -250,7 +250,7 @@ export function ElearningAdmin() {
   );
 }
 
-/** The course's name and description, as learners see them in eLearn. */
+/** The course's name and description, as learners see them in Magazine. */
 function CourseDetailsForm({ course, onCancel, onSaved }: { course: Course; onCancel: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description);
@@ -271,7 +271,7 @@ function CourseDetailsForm({ course, onCancel, onSaved }: { course: Course; onCa
   };
   return (
     <form onSubmit={save} className="flex flex-col gap-3 rounded-2xl bg-tealtint p-4">
-      <Field label="Course name" hint="What learners see on its tile in eLearn.">
+      <Field label="Course name" hint="What learners see on its tile in Magazine.">
         <input className={input} value={title} maxLength={160} required autoFocus onFocus={(e) => e.target.select()} onChange={(e) => setTitle(e.target.value)} />
       </Field>
       <Field label="Description" hint="Optional. A line or two on what the course covers.">

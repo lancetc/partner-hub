@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useApi } from "@/lib/api";
+import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
+import { ImageGenerator } from "./ImageGenerator";
+import { ImageCropper } from "./ImageCropper";
 import { btn, ErrorNote } from "./ui";
-import { uploadImage } from "./LessonEditor";
+import { PexelsPicker, uploadImage } from "./LessonEditor";
 
 /*
   Choosing a picture: a drop zone (drag a file in, or upload), and a large, searchable image library
@@ -155,7 +157,7 @@ export function ImageDropZone({
   addLabel,
 }: {
   picture?: Picture;
-  onChange: (p: Picture | undefined) => void;
+  onChange: (p: Picture | undefined, how?: "crop" | "pexels", alt?: string) => void;
   label?: string;
   aspect?: string;
   preview?: React.ReactNode;
@@ -163,7 +165,6 @@ export function ImageDropZone({
   addLabel?: string;
 }) {
   const [over, setOver] = useState(false);
-  const [library, setLibrary] = useState(false);
   const { busy, error, upload } = useUpload(onChange);
   return (
     <div className="flex flex-col gap-2">
@@ -204,12 +205,47 @@ export function ImageDropZone({
           </span>
         )}
       </div>
+      <PictureActions picture={picture} onChange={onChange} upload={upload} busy={busy} addLabel={addLabel} />
+      {error && <ErrorNote text={error} />}
+    </div>
+  );
+}
+
+/**
+  A picture's buttons: Crop, Replace, Image library, Generate with AI and Remove (or, with no picture yet,
+  the add button). Shared by the picture box and pictures shown elsewhere, like a decision's photo.
+*/
+export function PictureActions({
+  picture,
+  onChange,
+  upload,
+  busy,
+  addLabel,
+}: {
+  picture?: Picture;
+  /** "crop" when it is a cropped copy of the same picture; a description comes with a Pexels photo. */
+  onChange: (p: Picture | undefined, how?: "crop" | "pexels", alt?: string) => void;
+  upload: (file?: File | null) => void;
+  busy: boolean;
+  addLabel?: string;
+}) {
+  const [library, setLibrary] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [cropping, setCropping] = useState(false);
+  const [pexels, setPexels] = useState(false);
+  return (
+    <>
       <div className="flex flex-wrap gap-2">
         {!picture && addLabel && (
           <label className={cx(btn.primary, "cursor-pointer", busy && "pointer-events-none opacity-60")}>
             <Icon name="plus" className="size-4" /> {busy ? "Uploading…" : addLabel}
             <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
           </label>
+        )}
+        {picture && (
+          <button type="button" className={btn.secondary} onClick={() => setCropping(true)}>
+            <Icon name="crop" className="size-4" /> Crop
+          </button>
         )}
         {picture && (
           <label className={cx(btn.secondary, "cursor-pointer")}>
@@ -220,14 +256,126 @@ export function ImageDropZone({
         <button type="button" className={btn.secondary} onClick={() => setLibrary(true)}>
           <Icon name="image" className="size-4" /> Image library
         </button>
+        <button type="button" className={btn.secondary} onClick={() => setGenerating(true)}>
+          <Icon name="spark" className="size-4" /> Generate with AI
+        </button>
+        <button type="button" className={btn.secondary} onClick={() => setPexels(true)}>
+          <Icon name="search" className="size-4" /> Pexels
+        </button>
         {picture && (
           <button type="button" className={btn.quiet} onClick={() => onChange(undefined)}>
             Remove
           </button>
         )}
       </div>
-      {error && <ErrorNote text={error} />}
       <ImageLibraryDialog open={library} onClose={() => setLibrary(false)} onPick={onChange} current={picture?.src} />
+      {pexels && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Find a photo on Pexels"
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
+        >
+          <div className="w-full max-w-3xl rounded-3xl bg-surface p-5 shadow-2xl">
+            <PexelsPicker
+              onClose={() => setPexels(false)}
+              onPicked={(p, alt) => {
+                onChange({ src: p.src, width: p.width, height: p.height }, "pexels", alt);
+                setPexels(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {cropping && picture && (
+        <ImageCropper
+          picture={picture}
+          onClose={() => setCropping(false)}
+          onDone={(p) => {
+            onChange(p, "crop");
+            setCropping(false);
+          }}
+        />
+      )}
+      {generating && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Generate a picture"
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
+        >
+          <div className="w-full max-w-2xl rounded-3xl bg-surface p-5 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
+                <Icon name="spark" className="size-5 text-accent" /> Generate a picture
+              </h2>
+              <button type="button" className={btn.quiet} onClick={() => setGenerating(false)}>
+                Close
+              </button>
+            </div>
+            <ImageGenerator
+              useLabel="Use this picture"
+              defaultAspect="3:2"
+              onUse={(p) => {
+                onChange(p);
+                setGenerating(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The picture buttons on their own, uploading for themselves: for a picture shown somewhere else on the page. */
+export function PictureButtons({
+  picture,
+  onChange,
+}: {
+  picture?: Picture;
+  onChange: (p: Picture | undefined, how?: "crop" | "pexels", alt?: string) => void;
+}) {
+  const { busy, error, upload } = useUpload(onChange);
+  return (
+    <div className="flex flex-col gap-2">
+      <PictureActions picture={picture} onChange={onChange} upload={upload} busy={busy} />
+      {busy && <p className="text-sm text-ink-muted">Uploading…</p>}
+      {error && <ErrorNote text={error} />}
     </div>
+  );
+}
+
+/**
+  Describe with AI: asks OpenAI to suggest the picture's description (its alt text), with a line about
+  where it sits for context. The suggestion lands in the box to read and edit.
+*/
+export function DescribeButton({ src, context, onAlt, className }: { src: string; context?: string; onAlt: (alt: string) => void; className?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!src) return null;
+  return (
+    <span className={cx("inline-flex flex-col gap-1", className)}>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setProblem(null);
+          try {
+            const r = await api<{ alt: string }>("/api/admin/describe-image", { body: { src, context } });
+            onAlt(r.alt);
+          } catch (e) {
+            setProblem(e instanceof Error ? e.message : "That didn’t work.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="inline-flex items-center gap-1 self-start text-xs font-semibold text-accent hover:underline disabled:opacity-50"
+      >
+        <Icon name="spark" className="size-3.5" /> {busy ? "Describing…" : "Describe with AI"}
+      </button>
+      {problem && <span className="text-xs text-danger">{problem}</span>}
+    </span>
   );
 }

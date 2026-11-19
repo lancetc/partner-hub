@@ -36,7 +36,27 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       { href: "/admin/webinars", label: "Webinars", icon: "play", description: "Recordings, their details, and the Webinars page.", authorOnly: true },
-      { href: "/admin/elearning", label: "eLearning", icon: "layers", description: "SCORM courses from Articulate Rise and Storyline: import, preview, publish.", authorOnly: true },
+      {
+        href: "/admin/elearning",
+        label: "eLearning",
+        icon: "layers",
+        description: "SCORM courses from Articulate Rise and Storyline: import, preview, publish.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/magazine",
+        label: "Magazine",
+        icon: "magazine",
+        description: "Longer guides to read at a desk: write and edit them on the page, then publish.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/images",
+        label: "Image library",
+        icon: "image",
+        description: "Every picture authors can choose from: add, replace, crop, see where each is used, delete or restore.",
+        authorOnly: true,
+      },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
         href: "/admin/comments",

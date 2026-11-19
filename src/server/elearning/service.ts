@@ -253,7 +253,7 @@ export const MAX_COURSE_TITLE = 160;
 export const MAX_COURSE_DESCRIPTION = 1000;
 
 /**
-  Names a course and says what it's about, as learners see it in eLearn. A new import takes the title in
+  Names a course and says what it's about, as learners see it in Magazine. A new import takes the title in
   the package's manifest, which is often a working title from Articulate ("New Course Example").
 */
 export function setCourseDetails(db: Db, actor: User, courseId: string, input: { title?: unknown; description?: unknown }, now: Date) {
@@ -328,6 +328,15 @@ const attemptView = (a: AttemptRow | undefined) =>
 export function learnerCourses(db: Db, user: User) {
   const rows = db.prepare("SELECT * FROM scorm_courses WHERE status = 'published' ORDER BY title").all() as CourseRow[];
   return { courses: rows.map((c) => ({ ...courseView(db, c), attempt: attemptView(latestAttempt(db, user.id, c.id, false)) })) };
+}
+
+/** Learners (not authors previewing) active in each course in the 30 days before `now`, for "Popular with your colleagues". */
+export function coursePopularity(db: Db, now: Date) {
+  const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+  const rows = db
+    .prepare("SELECT course_id, COUNT(DISTINCT user_id) AS n FROM scorm_attempts WHERE preview = 0 AND COALESCE(last_activity_at, started_at) >= ? GROUP BY course_id")
+    .all(since) as { course_id: string; n: number }[];
+  return new Map(rows.map((r) => [r.course_id, r.n]));
 }
 
 /** A course as its player sees it. Drafts only for authors, who preview them. */

@@ -89,7 +89,7 @@ const LEGACY_TYPES: typeof CARD_TYPES = [
 ];
 const typeInfo = (t: Card["type"]) => [...CARD_TYPES, ...LEGACY_TYPES].find((c) => c.type === t) ?? { type: t, label: t, icon: "doc" as IconName, hint: "" };
 
-const LIBRARY = [
+export const LIBRARY = [
   { src: "/images/bill.webp", width: 1042, height: 521 },
   { src: "/images/paula.jpeg", width: 275, height: 183 },
   { src: "/images/mara.jpg", width: 541, height: 360 },
@@ -296,7 +296,7 @@ type PexelsPage = { configured: boolean; photos: PexelsHit[]; page: number; tota
   Search Pexels for a card photo. Picking one copies it into the image library (with the
   photographer's credit), so it behaves like any upload.
 */
-function PexelsPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) => void; onClose: () => void }) {
+export function PexelsPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) => void; onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [orientation, setOrientation] = useState<"" | "landscape" | "portrait" | "square">("");
   // Pexels' curated photos to start with; searches and "More photos" replace them.
@@ -2279,7 +2279,12 @@ function CanvasCard({
                     </span>
                     <div className="flex flex-col gap-0.5">
                       <span className="font-bold">
-                        <RichEditable inline value={k.title ?? ""} onChange={(t) => set((x) => void (x.keyPoints!.items[i].title = t || undefined))} placeholder="Step title" />
+                        <RichEditable
+                          inline
+                          value={k.title ?? ""}
+                          onChange={(t) => set((x) => void (x.keyPoints!.items[i].title = t || undefined))}
+                          placeholder="Step title"
+                        />
                       </span>
                       <RichEditable inline value={k.text} onChange={(t) => set((x) => void (x.keyPoints!.items[i].text = t))} placeholder="What happens" />
                     </div>
@@ -6371,7 +6376,10 @@ function Review({
           ))}
         </ul>
         <div className="mt-4">
-          <ClaudeButton>Ask Claude to check accuracy against the sources</ClaudeButton>
+          <p className="flex items-start gap-2 text-sm text-ink-muted">
+            <Icon name="spark" className="mt-0.5 size-4 shrink-0 text-accent" />
+            Claude checks accuracy against the facts library and the official sources in step 3, the AI pre-review, straight after you submit the topic.
+          </p>
         </div>
       </Panel>
       <div className="flex flex-col gap-5">

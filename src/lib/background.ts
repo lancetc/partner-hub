@@ -179,10 +179,11 @@ export function sameBackground(a: Background, b: Background) {
 }
 
 /*
-  Where the background shows: the main pages. Not inside a topic (the lesson player has its own full
+  Where the background shows: the main pages (Magazine too, but not an eLearning course's player or a
+  guide being read, where the text needs a plain page). Not inside a topic (the lesson player has its own full
   screen design), on admin screens, certificates, the games' own screens, sign-in or public links.
 */
-const SHOWN = [/^\/$/, /^\/news(\/|$)/, /^\/community$/, /^\/topics$/, /^\/topics\/follow-ups\//, /^\/paths$/, /^\/paths\/[^/]+$/, /^\/inbox$/];
+const SHOWN = [/^\/$/, /^\/news(\/|$)/, /^\/community$/, /^\/topics$/, /^\/topics\/follow-ups\//, /^\/paths$/, /^\/paths\/[^/]+$/, /^\/magazine$/, /^\/inbox$/];
 const SHOWN_UNDER = ["/resources", "/webinars", "/journey", "/challenges", "/challenge/", "/saved", "/settings"];
 
 /** The topic player: a topic, a topic in a sequence, or a follow up. Its card deck sits on the background too. */

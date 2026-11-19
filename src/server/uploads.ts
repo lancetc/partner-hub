@@ -29,8 +29,12 @@ const TYPES: Record<string, { ext: string; magic: (b: Buffer) => boolean }> = {
   "video/quicktime": { ext: "mov", magic: (b) => b.subarray(4, 8).toString("latin1") === "ftyp" && b.subarray(8, 12).toString("latin1") === "qt  " },
   "video/mp4": { ext: "mp4", magic: (b) => b.subarray(4, 8).toString("latin1") === "ftyp" },
   "application/pdf": { ext: "pdf", magic: (b) => b.subarray(0, 5).toString("latin1") === "%PDF-" },
+  // Captions for a video (WebVTT), which may start with a byte order mark.
+  // Audio Guide narration recorded by ElevenLabs: an ID3 tag, or straight into an MPEG audio frame.
+  "audio/mpeg": { ext: "mp3", magic: (b) => b.subarray(0, 3).toString("latin1") === "ID3" || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) },
+  "text/vtt": { ext: "vtt", magic: (b) => b.toString("utf8", 0, 12).replace(/^﻿/, "").startsWith("WEBVTT") },
 };
-const NAME = /^[0-9a-f-]{36}\.(jpg|png|webp|gif|webm|mp4|mov|pdf)$/;
+const NAME = /^[0-9a-f-]{36}\.(jpg|png|webp|gif|webm|mp4|mov|pdf|vtt|mp3)$/;
 
 type UploadRow = {
   filename: string;
@@ -83,10 +87,11 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
   let buf = Buffer.from(await file.arrayBuffer());
   // Trust the file's bytes, not its name or the browser's label.
   const detected = buf.length >= 12 ? Object.entries(TYPES).find(([, t]) => t.magic(buf)) : undefined;
-  if (!detected) throw new HttpError(415, "Upload a JPEG, PNG, WebP or GIF image, a WebM, MP4 or MOV video, or a PDF.");
+  if (!detected) throw new HttpError(415, "Upload a JPEG, PNG, WebP or GIF image, a WebM, MP4 or MOV video, a PDF, or WebVTT captions.");
   let [mime, { ext }] = detected;
   if (mime.startsWith("image/") && buf.length > MAX_BYTES) throw new HttpError(413, "That image is over 25 MB. Try a smaller copy.");
-  const pdf = mime === "application/pdf";
+  // PDFs and captions have no picture size.
+  const pdf = mime === "application/pdf" || mime === "text/vtt" || mime === "audio/mpeg";
   if (pdf && buf.length > MAX_PDF_BYTES) throw new HttpError(413, "That PDF is over 20 MB. Try a smaller copy.");
   // PDFs have no picture size.
   let width = pdf ? 0 : Math.round(Number(size.width));
@@ -165,7 +170,18 @@ function uploadRow(db: Db, filename: string) {
 export function uploadUsage(db: Db, actor: User, filename: string) {
   requireAuthor(actor);
   uploadRow(db, filename);
-  return { lessons: lessonsUsing(db, publicUrl(filename)) };
+  return { lessons: lessonsUsing(db, publicUrl(filename)), magazines: magazinesUsing(db, publicUrl(filename)) };
+}
+
+/** Magazine courses whose draft, cover or live edition uses a picture (archived ones aside). */
+function magazinesUsing(db: Db, src: string) {
+  const like = `%${src}%`;
+  return db
+    .prepare(
+      `SELECT g.id, g.title FROM magazine_guides g LEFT JOIN magazine_revisions r ON r.id = g.revision_id
+       WHERE g.status != 'archived' AND (g.draft LIKE ? OR g.cover LIKE ? OR r.doc LIKE ? OR r.cover LIKE ?) ORDER BY g.title`,
+    )
+    .all(like, like, like, like) as { id: string; title: string }[];
 }
 
 /** Lessons whose saved draft or live version mentions an image address: edited lessons, and lessons from the content files nobody has edited. */
@@ -231,7 +247,7 @@ function checkBuiltIn(src: string) {
 export function builtInUsage(db: Db, actor: User, src: string) {
   requireAuthor(actor);
   checkBuiltIn(src);
-  return { lessons: lessonsUsing(db, src) };
+  return { lessons: lessonsUsing(db, src), magazines: magazinesUsing(db, src) };
 }
 
 export function hideBuiltIn(db: Db, actor: User, src: string, hidden: boolean, now: Date) {

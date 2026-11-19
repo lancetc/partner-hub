@@ -47,7 +47,7 @@ export async function readSource(file: File): Promise<Source> {
 }
 
 /** Finds one file inside a zip (a .docx is a zip) using the central directory. */
-function unzipEntry(zip: Buffer, wanted: string): string | null {
+export function unzipEntry(zip: Buffer, wanted: string): string | null {
   // End of central directory record: the last 22+ bytes, signature 0x06054b50.
   let eocd = -1;
   for (let i = zip.length - 22; i >= Math.max(0, zip.length - 65_557); i--) {

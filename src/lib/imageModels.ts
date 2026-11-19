@@ -75,4 +75,18 @@ export const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image";
 export const HOUSE_STYLE =
   "Warm, natural documentary-style photograph in an Australian home or community setting. Soft daylight, real-looking older people and care workers, respectful and dignified, genuine expressions. No text, words, logos or watermarks.";
 
-export const imageModel = (id: string) => IMAGE_MODELS.find((m) => m.id === id);
+/**
+  OpenAI's image model called directly, with the hub's own OpenAI key (OPENAI_API_KEY), not through
+  ElevenLabs. Offered first, and chosen by default, when that key is set.
+*/
+export const OPENAI_DIRECT: ImageModel = {
+  id: "openai",
+  label: "GPT Image (your OpenAI key)",
+  maker: "OpenAI",
+  note: "Straight to OpenAI with your own key. Good at realistic people and clean compositions.",
+  aspects: ["3:2", "1:1", "2:3"],
+  qualities: ["low", "medium", "high"],
+  defaultQuality: "medium",
+};
+
+export const imageModel = (id: string) => (id === OPENAI_DIRECT.id ? OPENAI_DIRECT : IMAGE_MODELS.find((m) => m.id === id));

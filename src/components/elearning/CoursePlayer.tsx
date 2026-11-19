@@ -166,7 +166,7 @@ export function CoursePlayer({ id }: { id: string }) {
       for (let i = 0; i < 20 && (pending.current || sending.current); i++) await sleep(200);
     }
     if (ownWindow) window.close();
-    router.push("/elearning");
+    router.push("/magazine?kind=elearning");
   };
 
   if (error) return <Message title="Course not found" text={error} />;
@@ -179,8 +179,8 @@ export function CoursePlayer({ id }: { id: string }) {
     <div className={cx("mx-auto flex max-w-[1400px] flex-col px-3 pb-4 pt-3 sm:px-5", launch && "min-h-[calc(100dvh-5rem)]")}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface/90 px-4 py-2.5 ring-1 ring-line">
         <nav aria-label="Breadcrumb" className="min-w-0 flex-1 text-sm">
-          <Link href="/elearning" className="font-semibold text-accent hover:underline">
-            eLearn
+          <Link href="/magazine?kind=elearning" className="font-semibold text-accent hover:underline">
+            Magazine
           </Link>{" "}
           <span className="text-ink-muted">›</span> <span className="font-semibold">{info.course.title}</span>
           {info.preview && <span className="ml-2 rounded-full bg-gold/25 px-2 py-0.5 text-xs font-bold">Preview: draft, not counted</span>}
@@ -234,7 +234,7 @@ export function CoursePlayer({ id }: { id: string }) {
         />
       ) : (
         <section className="mx-auto mt-8 w-full max-w-2xl overflow-hidden rounded-3xl bg-surface p-6 ring-1 ring-line">
-          {/* The course's poster across the top of the card, as on its tile in eLearn. */}
+          {/* The course's poster across the top of the card, as on its tile in Magazine. */}
           {info.course.poster && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={info.course.poster} alt="" className="-mx-6 -mt-6 mb-5 aspect-[16/7] w-[calc(100%+3rem)] max-w-none bg-muted object-cover" />
@@ -281,8 +281,8 @@ function Message({ title, text }: { title: string; text: string }) {
     <div className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="font-serif text-3xl font-semibold">{title}</h1>
       <p className="mt-2 text-ink-muted">{text}</p>
-      <Link href="/elearning" className="mt-4 inline-block font-semibold text-accent hover:underline">
-        Back to eLearn
+      <Link href="/magazine?kind=elearning" className="mt-4 inline-block font-semibold text-accent hover:underline">
+        Back to Magazine
       </Link>
     </div>
   );
