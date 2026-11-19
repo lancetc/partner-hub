@@ -22,6 +22,9 @@ import {
 import { RichText } from "../RichText";
 import { InteractiveBlock, type InteractiveContext } from "./InteractiveBlocks";
 import { Icon, type IconName } from "../Icon";
+import { Burst } from "../player/Burst";
+// The same press, pop, glow and shake as answers in Topics.
+import "../player/fx.css";
 
 /*
   The Magazine blocks as readers see them, drawn from the checked guide document (lib/magazine): never
@@ -523,8 +526,10 @@ function Decision({ block: b, ctx }: { block: DecisionBlock; ctx: BlockContext }
             <label
               key={c.id}
               className={cx(
-                "flex cursor-pointer items-start gap-3 rounded-2xl border p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
+                "fx-press relative flex cursor-pointer items-start gap-3 rounded-2xl border p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
                 picked === c.id ? "border-action bg-tealtint" : "border-line bg-surface hover:border-action",
+                // Picked: a springy pop. Checked: a glow and burst for the best answer, a small shake otherwise (as in Topics).
+                picked === c.id && (checked === c.id ? (c.verdict === "best" ? "fx-correct" : "fx-shake") : "fx-pop"),
               )}
             >
               <input
@@ -539,6 +544,7 @@ function Decision({ block: b, ctx }: { block: DecisionBlock; ctx: BlockContext }
                 className="mt-1 size-5 shrink-0 accent-[var(--color-action)]"
               />
               <span>{c.text}</span>
+              {checked === c.id && c.verdict === "best" && <Burst />}
             </label>
           ))}
         </div>

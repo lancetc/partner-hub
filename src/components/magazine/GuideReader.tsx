@@ -9,7 +9,7 @@ import type { ReaderGuide } from "@/server/magazine";
 import { Icon } from "../Icon";
 import { GuideBlock, column, type BlockContext } from "./GuideBlocks";
 import type { ReflectionSaved } from "./InteractiveBlocks";
-import { AudioGuideCard, AudioGuideSwitch } from "./AudioGuide";
+import { AudioGuideCard } from "./AudioGuide";
 import { playable } from "@/lib/magazineNarration";
 
 /*
@@ -163,14 +163,25 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
           </p>
           <h1 className="mt-2 font-serif text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">{guide.title}</h1>
           {guide.standfirst && <p className="mt-4 text-xl leading-relaxed text-ink-muted">{guide.standfirst}</p>}
-          <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
               <Icon name="clock" className="size-4" /> About {guide.minutes} min in all
             </span>
+            {pages.length > 1 && audioGuide.audio?.intro && (
+              <AudioGuideCard
+                variant="inline"
+                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
+                narration={audioGuide.audio.intro}
+                audio={audioGuide.audio}
+                level="course"
+                autoplay={audioGuide.on && !doneHere}
+                onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
+              />
+            )}
             <span>
               {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
             </span>
-          </p>
+          </div>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link
               href={`${base}/${next.id}`}
@@ -191,22 +202,6 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
         )}
       </header>
       <Notices guide={guide} preview={preview} stale={stale} />
-      {pages.length > 1 && audioGuide.audio?.intro && (
-        <div className="mt-8 flex flex-col gap-3">
-          {audioGuide.offered && (
-            <div className="mx-auto flex w-full max-w-[42rem] justify-end">
-              <AudioGuideSwitch on={audioGuide.on} onChange={audioGuide.change} />
-            </div>
-          )}
-          <AudioGuideCard
-            narration={audioGuide.audio.intro}
-            audio={audioGuide.audio}
-            level="course"
-            autoplay={audioGuide.on && !doneHere}
-            onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
-          />
-        </div>
-      )}
 
       <section aria-labelledby="pages-h" className="mt-12">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -390,7 +385,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       </nav>
 
       <header className="mt-4 grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10">
-        <div className={cx("mag-hero-text", !hero?.src && "lg:col-span-2 lg:max-w-3xl")}>
+        <div className={cx("mag-hero-text relative z-30", !hero?.src && "lg:col-span-2 lg:max-w-3xl")}>
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
             {course ? (
               <>
@@ -405,10 +400,22 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           {(course ? page.purpose : guide.standfirst) && (
             <p className="mt-4 text-xl leading-relaxed text-ink-muted">{course ? page.purpose : guide.standfirst}</p>
           )}
-          <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
               <Icon name="clock" className="size-4" /> {guide.pageMinutes[page.id]} min read
             </span>
+            {page.kind === "content" && audioGuide.audio && (audioGuide.offered || playable(page.narration, audioGuide.audio)) && (
+              <AudioGuideCard
+                key={page.id}
+                variant="inline"
+                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
+                narration={page.narration}
+                audio={audioGuide.audio}
+                level={course ? "page" : "course"}
+                autoplay={audioGuide.on && !finished.includes(page.id)}
+                onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
+              />
+            )}
             {!course && (
               <span>
                 {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
@@ -424,7 +431,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 <Icon name="circle-check" className="size-4" /> Read
               </span>
             )}
-          </p>
+          </div>
           {resume && (
             <a
               href={`#section-${resume.id}`}
@@ -443,23 +450,6 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
         )}
       </header>
       <Notices guide={guide} preview={preview} stale={stale} />
-      {page.kind === "content" && audioGuide.audio && (audioGuide.offered || playable(page.narration, audioGuide.audio)) && (
-        <div className="mt-8 flex flex-col gap-3">
-          {audioGuide.offered && (
-            <div className="mx-auto flex w-full max-w-[42rem] justify-end">
-              <AudioGuideSwitch on={audioGuide.on} onChange={audioGuide.change} />
-            </div>
-          )}
-          <AudioGuideCard
-            key={page.id}
-            narration={page.narration}
-            audio={audioGuide.audio}
-            level={course ? "page" : "course"}
-            autoplay={audioGuide.on && !finished.includes(page.id)}
-            onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
-          />
-        </div>
-      )}
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
         <Rail guide={guide} page={page} base={base} active={active} finished={finished} />

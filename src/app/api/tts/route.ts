@@ -10,8 +10,8 @@ export async function GET(req: Request) {
   return handle(async ({ db, user }) => {
     const url = new URL(req.url);
     if (url.searchParams.has("status")) {
-      const { apiKey, voiceId, modelId } = ttsConfig();
-      return { configured: Boolean(apiKey), voiceId, modelId };
+      const { configured, voiceId, modelId } = ttsConfig();
+      return { configured, voiceId, modelId: voiceId.startsWith("openai:") ? "openai-tts" : modelId };
     }
     const key = url.searchParams.get("key");
     if (!key) throw new HttpError(400, "Missing card key.");

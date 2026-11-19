@@ -2,9 +2,20 @@
 
 import { useState } from "react";
 import { cx } from "@/lib/format";
-import { OUTCOMES, VERDICTS, allBlocks, blanksOf, type Block, type BranchOutcome, type GuideDoc, type Verdict } from "@/lib/magazine";
+import {
+  OUTCOMES,
+  VERDICTS,
+  allBlocks,
+  blanksOf,
+  type Block,
+  type BranchOutcome,
+  type GuideDoc,
+  type Verdict,
+  CONFIDENCE_FACES,
+  type Media,
+} from "@/lib/magazine";
 import { btn, Field, input } from "./ui";
-import { ImageDropZone } from "./ImagePicker";
+import { DescribeButton, ImageDropZone, PictureButtons } from "./ImagePicker";
 import { RichEditable } from "./RichEditable";
 import { InlineText, MediaSlot, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { column } from "../magazine/GuideBlocks";
@@ -26,6 +37,83 @@ const OUTCOME_TONE: Record<BranchOutcome, string> = {
   mixed: "border-[#fab53d] bg-[#fff6e4] dark:bg-[#3a2f17]",
   poor: "border-[#c7393e] bg-[#fdf1f0] dark:bg-[#3a1f1f]",
 };
+
+type Photographed = Of<"sequencing"> | Of<"poll"> | Of<"wall"> | Of<"reflection"> | Of<"conversation">;
+
+/**
+  The optional photo in a circle beside the question: a link to add one, then the picture's controls
+  (replace, crop, the library, AI, Pexels, remove) and its description. `context` helps AI describe it.
+*/
+function PhotoField({ block: b, update, context }: { block: Photographed; update: Update; context: string }) {
+  const set = (fn: (x: Photographed) => void, key?: string) => update<Photographed>(b.id, fn, key);
+  if (!b.media)
+    return (
+      <button
+        type="button"
+        className="mb-3 inline-flex items-center gap-1.5 self-start text-sm font-semibold text-accent hover:underline"
+        onClick={() => set((x) => void (x.media = { src: "", alt: "" }))}
+      >
+        <Icon name="image" className="size-4" /> Add a photo (a circle beside the question)
+      </button>
+    );
+  return (
+    <div className="mb-5 flex flex-col gap-2 rounded-2xl bg-muted/50 p-3">
+      {!b.media.src ? (
+        <>
+          <MediaSlot media={b.media} aspect="aspect-square max-w-48" onPick={(src) => set((x) => void (x.media = src ? { src, alt: "" } : undefined))} />
+          <button type="button" className="self-start text-xs font-semibold text-accent hover:underline" onClick={() => set((x) => void delete x.media)}>
+            Remove picture
+          </button>
+        </>
+      ) : (
+        <>
+          <PictureButtons
+            picture={{ src: b.media.src, width: 0, height: 0 }}
+            onChange={(p, how, alt) =>
+              set((x) => {
+                if (!p) return void delete x.media;
+                // A cropped copy keeps its description; a different picture needs a new one.
+                const cropped = how === "crop";
+                x.media = { src: p.src, alt: cropped ? (x.media?.alt ?? "") : (alt ?? ""), ...(x.media?.decorative && { decorative: true }) };
+              })
+            }
+          />
+          <DescribeButton src={b.media.src} context={context} onAlt={(alt) => set((x) => void (x.media!.alt = alt))} />
+          <input
+            className={cx(input, "min-h-10 text-sm", !b.media.alt && !b.media.decorative && "border-danger")}
+            placeholder="Describe the picture"
+            aria-label="Picture description"
+            value={b.media.alt}
+            disabled={b.media.decorative}
+            onChange={(e) => set((x) => void (x.media!.alt = e.target.value), `${b.id}:alt`)}
+          />
+          <label className="flex items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-action)]"
+              checked={Boolean(b.media.decorative)}
+              onChange={(e) => set((x) => void (x.media!.decorative = e.target.checked || undefined))}
+            />
+            Decorative: it adds nothing the question doesn’t say
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The photo where readers see it: in a circle, floated beside the question (inside a flow-root box). */
+function CircleShown({ media }: { media?: Media }) {
+  if (!media?.src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={media.src}
+      alt={media.alt}
+      className="float-right -mt-8 mb-2 ml-4 size-24 rounded-full bg-muted object-cover shadow-md ring-4 ring-surface sm:size-32"
+    />
+  );
+}
 
 function Kicker({ icon, children }: { icon: IconName; children: React.ReactNode }) {
   return (
@@ -568,28 +656,32 @@ function BranchingEdit({ block: b, update }: { block: Of<"branching">; update: U
 function ConversationEdit({ block: b, update }: { block: Of<"conversation">; update: Update }) {
   return (
     <div className={cx(column, card, "flex flex-col")}>
+      <PhotoField block={b} update={update} context={[b.person, b.role, b.setting].filter(Boolean).join(", ")} />
       <Kicker icon="chat">Conversation practice</Kicker>
-      <div className="flex flex-wrap items-baseline gap-x-2">
+      <div className="flow-root">
+        <CircleShown media={b.media} />
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <InlineText
+            value={b.person}
+            onChange={(v) => update<typeof b>(b.id, (x) => void (x.person = v), `${b.id}:person`)}
+            placeholder="Their name"
+            className="font-serif text-2xl font-semibold"
+          />
+          <InlineText
+            value={b.role}
+            onChange={(v) => update<typeof b>(b.id, (x) => void (x.role = v), `${b.id}:role`)}
+            placeholder="Who they are (a client’s daughter…)"
+            className="text-ink-muted"
+          />
+        </div>
         <InlineText
-          value={b.person}
-          onChange={(v) => update<typeof b>(b.id, (x) => void (x.person = v), `${b.id}:person`)}
-          placeholder="Their name"
-          className="font-serif text-2xl font-semibold"
-        />
-        <InlineText
-          value={b.role}
-          onChange={(v) => update<typeof b>(b.id, (x) => void (x.role = v), `${b.id}:role`)}
-          placeholder="Who they are (a client’s daughter…)"
-          className="text-ink-muted"
+          value={b.setting}
+          onChange={(v) => update<typeof b>(b.id, (x) => void (x.setting = v), `${b.id}:setting`)}
+          placeholder="The situation, in a sentence or two"
+          multiline
+          className="mt-1 text-ink-muted"
         />
       </div>
-      <InlineText
-        value={b.setting}
-        onChange={(v) => update<typeof b>(b.id, (x) => void (x.setting = v), `${b.id}:setting`)}
-        placeholder="The situation, in a sentence or two"
-        multiline
-        className="mt-1 text-ink-muted"
-      />
       <ol className="mt-5 flex flex-col gap-5">
         {b.turns.map((t, i) => (
           <li key={t.id} className="flex flex-col gap-3 rounded-2xl border border-line p-4">
@@ -818,18 +910,23 @@ function ConfidenceEdit({ block: b, update }: { block: Of<"confidence">; update:
         className="font-serif text-xl font-semibold"
       />
       <div className="mt-4 grid grid-cols-5 gap-2" aria-hidden>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <span key={n} className="flex min-h-14 items-center justify-center rounded-2xl border-2 border-line-strong font-mulish text-lg font-extrabold">
-            {n}
+        {CONFIDENCE_FACES.map((face) => (
+          <span
+            key={face}
+            className="flex min-h-16 items-center justify-center rounded-2xl border-2 border-line-strong bg-surface text-3xl leading-none sm:text-4xl"
+          >
+            {face}
           </span>
         ))}
       </div>
       <div className="mt-2 flex justify-between gap-4 text-sm text-ink-muted">
         <span className="flex gap-1">
-          1 · <InlineText value={b.low} onChange={(v) => update<typeof b>(b.id, (x) => void (x.low = v), `${b.id}:low`)} placeholder="Not confident" />
+          {CONFIDENCE_FACES[0]}{" "}
+          <InlineText value={b.low} onChange={(v) => update<typeof b>(b.id, (x) => void (x.low = v), `${b.id}:low`)} placeholder="Not confident" />
         </span>
         <span className="flex gap-1">
-          5 · <InlineText value={b.high} onChange={(v) => update<typeof b>(b.id, (x) => void (x.high = v), `${b.id}:high`)} placeholder="Very confident" />
+          {CONFIDENCE_FACES[4]}{" "}
+          <InlineText value={b.high} onChange={(v) => update<typeof b>(b.id, (x) => void (x.high = v), `${b.id}:high`)} placeholder="Very confident" />
         </span>
       </div>
       <p className="mt-3 text-sm text-ink-muted">
@@ -844,14 +941,18 @@ function ConfidenceEdit({ block: b, update }: { block: Of<"confidence">; update:
 function ReflectionEdit({ block: b, update }: { block: Of<"reflection">; update: Update }) {
   return (
     <div className={cx(column, card)}>
+      <PhotoField block={b} update={update} context={b.prompt} />
       <Kicker icon="pen">Reflection</Kicker>
-      <InlineText
-        value={b.prompt}
-        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
-        placeholder="The question (How would you handle…?)"
-        multiline
-        className="font-serif text-xl font-semibold"
-      />
+      <div className="flow-root">
+        <CircleShown media={b.media} />
+        <InlineText
+          value={b.prompt}
+          onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+          placeholder="The question (How would you handle…?)"
+          multiline
+          className="font-serif text-xl font-semibold"
+        />
+      </div>
       <div className="mt-3 min-h-24 rounded-2xl border border-dashed border-line-strong p-3 text-ink-muted" aria-hidden>
         The reader writes their answer here, then asks Claude for feedback.
       </div>
@@ -875,13 +976,17 @@ function ReflectionEdit({ block: b, update }: { block: Of<"reflection">; update:
 function PollEdit({ block: b, update }: { block: Of<"poll">; update: Update }) {
   return (
     <div className={cx(column, card, "flex flex-col")}>
+      <PhotoField block={b} update={update} context={b.question} />
       <Kicker icon="sliders">Poll</Kicker>
-      <InlineText
-        value={b.question}
-        onChange={(v) => update<typeof b>(b.id, (x) => void (x.question = v), `${b.id}:question`)}
-        placeholder="The question (How often do you review a client’s budget?)"
-        className="font-serif text-xl font-semibold"
-      />
+      <div className="flow-root">
+        <CircleShown media={b.media} />
+        <InlineText
+          value={b.question}
+          onChange={(v) => update<typeof b>(b.id, (x) => void (x.question = v), `${b.id}:question`)}
+          placeholder="The question (How often do you review a client’s budget?)"
+          className="font-serif text-xl font-semibold"
+        />
+      </div>
       <ul className="mt-4 flex flex-col gap-2">
         {b.options.map((op, i) => (
           <li key={op.id} className="flex items-center gap-2 rounded-2xl border border-line-strong p-3">
@@ -913,14 +1018,18 @@ function PollEdit({ block: b, update }: { block: Of<"poll">; update: Update }) {
 function WallEdit({ block: b, update }: { block: Of<"wall">; update: Update }) {
   return (
     <div className={cx(column, card)}>
+      <PhotoField block={b} update={update} context={b.prompt} />
       <Kicker icon="people">Insight wall</Kicker>
-      <InlineText
-        value={b.prompt}
-        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
-        placeholder="The question everyone answers (What’s one thing that helps a worried family member feel heard?)"
-        multiline
-        className="font-serif text-xl font-semibold"
-      />
+      <div className="flow-root">
+        <CircleShown media={b.media} />
+        <InlineText
+          value={b.prompt}
+          onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+          placeholder="The question everyone answers (What’s one thing that helps a worried family member feel heard?)"
+          multiline
+          className="font-serif text-xl font-semibold"
+        />
+      </div>
       <div className="mt-3 rounded-2xl border border-dashed border-line-strong p-3">
         <InlineText
           value={b.placeholder ?? ""}
@@ -1477,14 +1586,18 @@ function FeedbackField({ value, onChange }: { value: string; onChange: (v: strin
 function SequencingEdit({ block: b, update }: { block: Of<"sequencing">; update: Update }) {
   return (
     <div className={cx(column, card, "flex flex-col")}>
+      <PhotoField block={b} update={update} context={b.prompt} />
       <Kicker icon="sequencing">Sequencing</Kicker>
-      <InlineText
-        value={b.prompt}
-        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
-        placeholder="What to put in order (Put the incident report steps in order)"
-        className="font-serif text-xl font-semibold"
-      />
-      <p className="mt-1 text-sm text-ink-muted">Write the steps in the right order. Readers get them shuffled.</p>
+      <div className="flow-root">
+        <CircleShown media={b.media} />
+        <InlineText
+          value={b.prompt}
+          onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+          placeholder="What to put in order (Put the incident report steps in order)"
+          className="font-serif text-xl font-semibold"
+        />
+        <p className="mt-1 text-sm text-ink-muted">Write the steps in the right order. Readers get them shuffled.</p>
+      </div>
       <ol className="mt-4 flex flex-col gap-2">
         {b.steps.map((st, i) => (
           <li key={st.id} className="flex items-center gap-2 rounded-2xl border border-line-strong p-3">

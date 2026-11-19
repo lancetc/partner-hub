@@ -640,6 +640,11 @@ export type GuideInput = {
   /** The first page's teaching pattern for a new course, or "assessment". */
   template?: unknown;
   doc?: unknown;
+  /**
+    The draft's saved time when this editor last had it. A save from an editor that's behind (another tab,
+    or someone else, saved since) is refused, so it can't quietly undo the newer changes.
+  */
+  basedOn?: unknown;
 };
 
 const slugify = (s: string) =>
@@ -704,6 +709,8 @@ export function saveGuideDraft(db: Db, actor: User, id: string, input: GuideInpu
   requireAuthor(actor);
   const g = guideById(db, id);
   if (!g || g.status === "archived") throw new HttpError(404, "Guide not found.");
+  if (typeof input.basedOn === "string" && input.basedOn !== g.draft_saved_at)
+    throw new HttpError(409, "This course was changed in another tab or by someone else after this editor opened it.");
   const meta = cleanMeta(input, g, { draft: true });
   const doc = input.doc === undefined ? readGuideDoc(JSON.parse(g.draft), { draft: true }) : cleanDoc(input.doc, true);
   // The status doesn't change: a published course stays published (learners keep reading its version), and

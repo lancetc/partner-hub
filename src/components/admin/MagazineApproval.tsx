@@ -131,6 +131,8 @@ export function MagazineApproval({
 }) {
   const url = `/api/admin/magazine/${guideId}/approval`;
   const { data, error, setData } = useApi<CourseApproval>(url);
+  // The whole panel starts folded to its title and where the course is; open it to act.
+  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [reviewer, setReviewer] = useState("");
@@ -465,7 +467,18 @@ export function MagazineApproval({
   return (
     <section aria-label="Review and publish" className="mt-4 rounded-3xl border-2 border-action bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-serif text-2xl font-semibold">Review and publish</h2>
+        <h2 className="min-w-0 flex-1">
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((x) => !x)}
+            className="group flex w-full min-w-0 items-center gap-3 rounded-xl text-left"
+          >
+            <span className="font-serif text-2xl font-semibold">Review and publish</span>
+            {!expanded && <span className="truncate text-base font-semibold text-ink-muted">· {title}</span>}
+            <Icon name="chevron-down" className={cx("size-5 shrink-0 text-ink-muted transition-transform group-hover:text-ink", expanded && "rotate-180")} />
+          </button>
+        </h2>
         <div className="flex items-center gap-2">
           {a.you.reviewRole && <Badge tone="info">You: {ROLE_LABEL[a.you.reviewRole]}</Badge>}
           <button type="button" className={btn.quiet} onClick={onClose}>
@@ -474,222 +487,224 @@ export function MagazineApproval({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-5">
-          {quick && a.you.canPublish && a.stage !== "approved" && (
-            <section className="rounded-3xl border-2 border-dashed border-action bg-surface p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-serif text-xl font-semibold">Skip the review and publish</h3>
-                <Badge tone="warn">Demo</Badge>
-              </div>
-              <p className="mb-4 mt-1 text-ink-muted">
-                The review steps work as they would for real, but for this demo they don’t hold anything up: you can publish the saved draft now, at any step.
-                With review switched on, it would wait for the reviewer’s sign-off and the Hub owner.
-              </p>
-              {publishForm(true)}
-            </section>
-          )}
-          {/* The review step, folded under its title until it's wanted (open when something went wrong). */}
-          <details open={Boolean(problem)} className="group rounded-3xl border border-line bg-surface p-5">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-              <h3 className="font-serif text-xl font-semibold">{title}</h3>
-              <Icon name="chevron-down" className="size-5 shrink-0 transition-transform group-open:rotate-180" />
-            </summary>
-            {a.submission && a.stage !== "draft" && (
-              <p className="mt-1 text-sm text-ink-muted">
-                Submitted by {a.submission.byYou ? "you" : a.submission.by} on {formatDate(a.submission.at)}
-                {a.submission.compliance && " · compliance-sensitive"}
-              </p>
+      {expanded && (
+        <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-5">
+            {quick && a.you.canPublish && a.stage !== "approved" && (
+              <section className="rounded-3xl border-2 border-dashed border-action bg-surface p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-serif text-xl font-semibold">Skip the review and publish</h3>
+                  <Badge tone="warn">Demo</Badge>
+                </div>
+                <p className="mb-4 mt-1 text-ink-muted">
+                  The review steps work as they would for real, but for this demo they don’t hold anything up: you can publish the saved draft now, at any step.
+                  With review switched on, it would wait for the reviewer’s sign-off and the Hub owner.
+                </p>
+                {publishForm(true)}
+              </section>
             )}
-            {a.submission?.note && (a.stage === "review" || a.stage === "compliance") && (
-              <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm">
-                <span className="font-semibold">Note from {a.submission.by}:</span> {a.submission.note}
-              </p>
-            )}
-            <div className="mt-4">{body}</div>
-            {problem && (
-              <div className="mt-3">
-                <ErrorNote text={problem} />
-              </div>
-            )}
-          </details>
-
-          {a.flags.length > 0 && (
-            // Folded away until it's wanted: open for a reviewer, who signs each one off.
-            <details open={a.you.canSignOff} className="group rounded-3xl border border-line bg-surface p-5" aria-labelledby="verify-heading">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-                <h3 id="verify-heading" className="font-serif text-xl font-semibold">
-                  Needs verification
-                </h3>
-                <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-ink-muted">
-                  {a.flags.length - open.length} of {a.flags.length} signed off
-                  <Icon name="chevron-down" className="size-5 transition-transform group-open:rotate-180" />
-                </span>
+            {/* The review step, folded under its title until it's wanted (open when something went wrong). */}
+            <details open={Boolean(problem)} className="group rounded-3xl border border-line bg-surface p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                <h3 className="font-serif text-xl font-semibold">{title}</h3>
+                <Icon name="chevron-down" className="size-5 shrink-0 transition-transform group-open:rotate-180" />
               </summary>
-              <p className="mt-1 text-sm text-ink-muted">
-                {a.you.canSignOff
-                  ? "Check each one against policy or with the owner, then sign it off with what you confirmed. If the course needs to say something different, ask for changes."
-                  : quick
-                    ? "The reviewer signs off each one, saying what they confirmed. While review is optional they don’t stop you publishing: Publish anyway records which weren’t verified."
-                    : "The reviewer signs off each one, saying what they confirmed. A signed-off item no longer holds up publishing."}
-              </p>
-              <ol className="mt-3 flex flex-col gap-2">
-                {a.flags.map((f) => (
-                  <li
-                    key={f.blockId}
-                    className={cx("rounded-2xl border-l-4 p-3", f.signoff ? "border-[#2f8f5b] bg-[#e9f6ef] dark:bg-[#17301f]" : "border-gold bg-gold/10")}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p className="min-w-0 flex-1 text-sm">
-                        <span className="font-semibold">{f.where}</span>
-                        <span className="block">{f.note}</span>
-                      </p>
-                      <button type="button" className={cx(btn.quiet, "min-h-8 px-2 text-xs")} onClick={() => onShowBlock(f.pageId, f.blockId)}>
-                        Show it
-                      </button>
-                    </div>
-                    {f.signoff ? (
-                      <div className="mt-2 flex flex-wrap items-start justify-between gap-2 text-sm">
-                        <p className="min-w-0 flex-1">
-                          <Icon name="circle-check" className="mr-1 inline size-4 text-[#2f8f5b]" />
-                          <strong>Signed off</strong> by {f.signoff.by}, {formatDateTime(f.signoff.at)}: {f.signoff.note}
+              {a.submission && a.stage !== "draft" && (
+                <p className="mt-1 text-sm text-ink-muted">
+                  Submitted by {a.submission.byYou ? "you" : a.submission.by} on {formatDate(a.submission.at)}
+                  {a.submission.compliance && " · compliance-sensitive"}
+                </p>
+              )}
+              {a.submission?.note && (a.stage === "review" || a.stage === "compliance") && (
+                <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm">
+                  <span className="font-semibold">Note from {a.submission.by}:</span> {a.submission.note}
+                </p>
+              )}
+              <div className="mt-4">{body}</div>
+              {problem && (
+                <div className="mt-3">
+                  <ErrorNote text={problem} />
+                </div>
+              )}
+            </details>
+
+            {a.flags.length > 0 && (
+              // Folded away until it's wanted: open for a reviewer, who signs each one off.
+              <details open={a.you.canSignOff} className="group rounded-3xl border border-line bg-surface p-5" aria-labelledby="verify-heading">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                  <h3 id="verify-heading" className="font-serif text-xl font-semibold">
+                    Needs verification
+                  </h3>
+                  <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-ink-muted">
+                    {a.flags.length - open.length} of {a.flags.length} signed off
+                    <Icon name="chevron-down" className="size-5 transition-transform group-open:rotate-180" />
+                  </span>
+                </summary>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {a.you.canSignOff
+                    ? "Check each one against policy or with the owner, then sign it off with what you confirmed. If the course needs to say something different, ask for changes."
+                    : quick
+                      ? "The reviewer signs off each one, saying what they confirmed. While review is optional they don’t stop you publishing: Publish anyway records which weren’t verified."
+                      : "The reviewer signs off each one, saying what they confirmed. A signed-off item no longer holds up publishing."}
+                </p>
+                <ol className="mt-3 flex flex-col gap-2">
+                  {a.flags.map((f) => (
+                    <li
+                      key={f.blockId}
+                      className={cx("rounded-2xl border-l-4 p-3", f.signoff ? "border-[#2f8f5b] bg-[#e9f6ef] dark:bg-[#17301f]" : "border-gold bg-gold/10")}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 text-sm">
+                          <span className="font-semibold">{f.where}</span>
+                          <span className="block">{f.note}</span>
                         </p>
-                        {a.you.canSignOff && (
-                          <button
-                            type="button"
-                            className={cx(btn.quiet, "min-h-8 px-2 text-xs")}
-                            disabled={busy}
-                            onClick={() => send({ action: "signoff", blockId: f.blockId, remove: true })}
-                          >
-                            Undo
-                          </button>
-                        )}
-                      </div>
-                    ) : a.you.canSignOff ? (
-                      <div className="mt-2 flex flex-wrap items-end gap-2">
-                        <label className="min-w-0 flex-1 text-sm">
-                          <span className="sr-only">What you confirmed for {f.where}</span>
-                          <input
-                            className={cx(input, "min-h-10")}
-                            placeholder="What you confirmed, and how (Confirmed with Operations: …)"
-                            value={signNotes[f.blockId] ?? ""}
-                            onChange={(e) => setSignNotes((n) => ({ ...n, [f.blockId]: e.target.value }))}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className={btn.secondary}
-                          disabled={busy || (signNotes[f.blockId] ?? "").trim().length < 2}
-                          onClick={() => send({ action: "signoff", blockId: f.blockId, note: signNotes[f.blockId] })}
-                        >
-                          <Icon name="check" className="size-4" /> Sign off
+                        <button type="button" className={cx(btn.quiet, "min-h-8 px-2 text-xs")} onClick={() => onShowBlock(f.pageId, f.blockId)}>
+                          Show it
                         </button>
                       </div>
-                    ) : null}
+                      {f.signoff ? (
+                        <div className="mt-2 flex flex-wrap items-start justify-between gap-2 text-sm">
+                          <p className="min-w-0 flex-1">
+                            <Icon name="circle-check" className="mr-1 inline size-4 text-[#2f8f5b]" />
+                            <strong>Signed off</strong> by {f.signoff.by}, {formatDateTime(f.signoff.at)}: {f.signoff.note}
+                          </p>
+                          {a.you.canSignOff && (
+                            <button
+                              type="button"
+                              className={cx(btn.quiet, "min-h-8 px-2 text-xs")}
+                              disabled={busy}
+                              onClick={() => send({ action: "signoff", blockId: f.blockId, remove: true })}
+                            >
+                              Undo
+                            </button>
+                          )}
+                        </div>
+                      ) : a.you.canSignOff ? (
+                        <div className="mt-2 flex flex-wrap items-end gap-2">
+                          <label className="min-w-0 flex-1 text-sm">
+                            <span className="sr-only">What you confirmed for {f.where}</span>
+                            <input
+                              className={cx(input, "min-h-10")}
+                              placeholder="What you confirmed, and how (Confirmed with Operations: …)"
+                              value={signNotes[f.blockId] ?? ""}
+                              onChange={(e) => setSignNotes((n) => ({ ...n, [f.blockId]: e.target.value }))}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className={btn.secondary}
+                            disabled={busy || (signNotes[f.blockId] ?? "").trim().length < 2}
+                            onClick={() => send({ action: "signoff", blockId: f.blockId, note: signNotes[f.blockId] })}
+                          >
+                            <Icon name="check" className="size-4" /> Sign off
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+
+            {a.aiReview?.status === "done" && (
+              <section className="rounded-3xl border border-line bg-surface p-5">
+                <h3 className="font-serif text-xl font-semibold">AI pre-review</h3>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {a.aiReview.by}, {formatDateTime(a.aiReview.at)}
+                </p>
+                <p className="mt-2">{a.aiReview.summary}</p>
+                <ul className="mt-3 flex flex-col gap-2">
+                  {a.aiReview.findings.map((f, i) => (
+                    <li key={i} className="rounded-2xl border border-line p-3 text-sm">
+                      <p className="flex flex-wrap items-center gap-2">
+                        <Badge tone={f.severity === "fix" ? "bad" : f.severity === "check" ? "warn" : "good"}>
+                          {f.severity === "fix" ? "Fix" : f.severity === "check" ? "Check" : "Good"}
+                        </Badge>
+                        <span className="font-semibold">{f.title}</span>
+                        <span className="text-ink-muted">· {f.blockLabel}</span>
+                      </p>
+                      {f.detail && <p className="mt-1">{f.detail}</p>}
+                      {f.suggestion && <p className="mt-1 text-ink-muted">Suggestion: {f.suggestion}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-5">
+            {/* Folded to the step it's at; open it to see them all. */}
+            <details className="group rounded-3xl border border-line bg-surface p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <h3 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Approval steps</h3>
+                  {(() => {
+                    const all = steps(a);
+                    const i = all.findIndex((s) => s.state === "current");
+                    return i >= 0 ? (
+                      <span className="mt-1 block text-sm font-semibold">
+                        Step {i + 1} of {all.length}: {all[i].title}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+                <Icon name="chevron-down" className="size-5 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              {quick && <p className="mt-2 text-sm text-ink-muted">Shown as they run for real. In this demo you can publish at any step.</p>}
+              <ol className="mt-3 flex flex-col">
+                {steps(a).map((s, i, all) => (
+                  <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0">
+                    {i < all.length - 1 && <span aria-hidden className="absolute left-[0.6875rem] top-6 h-[calc(100%-1rem)] w-0.5 bg-line" />}
+                    <span
+                      aria-hidden
+                      className={cx(
+                        "relative mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border-2",
+                        s.state === "done" && "border-action bg-action text-on-action",
+                        s.state === "current" && "border-action bg-tealtint",
+                        s.state === "next" && "border-line-strong bg-surface",
+                        s.state === "skipped" && "border-dashed border-line-strong bg-muted",
+                      )}
+                    >
+                      {s.state === "done" && <Icon name="check" className="size-3.5" />}
+                      {s.state === "current" && <span className="size-2 rounded-full bg-action" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={cx("block font-semibold", s.state === "skipped" && "text-ink-muted")}>
+                        {i + 1}. {s.title}
+                        <span className="sr-only">
+                          {" "}
+                          ({s.state === "done" ? "done" : s.state === "current" ? "current step" : s.state === "skipped" ? "skipped" : "to come"})
+                        </span>
+                      </span>
+                      <span className="block text-sm text-ink-muted">{s.who}</span>
+                      {"detail" in s && s.detail && <span className="mt-0.5 block text-xs font-semibold text-warm">{s.detail}</span>}
+                    </span>
                   </li>
                 ))}
               </ol>
             </details>
-          )}
 
-          {a.aiReview?.status === "done" && (
-            <section className="rounded-3xl border border-line bg-surface p-5">
-              <h3 className="font-serif text-xl font-semibold">AI pre-review</h3>
-              <p className="mt-1 text-sm text-ink-muted">
-                {a.aiReview.by}, {formatDateTime(a.aiReview.at)}
-              </p>
-              <p className="mt-2">{a.aiReview.summary}</p>
-              <ul className="mt-3 flex flex-col gap-2">
-                {a.aiReview.findings.map((f, i) => (
-                  <li key={i} className="rounded-2xl border border-line p-3 text-sm">
-                    <p className="flex flex-wrap items-center gap-2">
-                      <Badge tone={f.severity === "fix" ? "bad" : f.severity === "check" ? "warn" : "good"}>
-                        {f.severity === "fix" ? "Fix" : f.severity === "check" ? "Check" : "Good"}
-                      </Badge>
-                      <span className="font-semibold">{f.title}</span>
-                      <span className="text-ink-muted">· {f.blockLabel}</span>
-                    </p>
-                    {f.detail && <p className="mt-1">{f.detail}</p>}
-                    {f.suggestion && <p className="mt-1 text-ink-muted">Suggestion: {f.suggestion}</p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+            {a.history.length > 0 && (
+              <section className="rounded-3xl border border-line bg-surface p-5">
+                <h3 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">History</h3>
+                <ul className="mt-3 flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
+                  {a.history.map((h) => (
+                    <li key={h.id} className="text-sm">
+                      <p>
+                        <span className="font-semibold">{h.label}</span>{" "}
+                        <span className="text-ink-muted">
+                          · {h.by}, {formatDateTime(h.at)}
+                        </span>
+                      </p>
+                      {h.note && <p className="mt-0.5 whitespace-pre-line text-ink-muted">{h.note}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         </div>
-
-        <div className="flex flex-col gap-5">
-          {/* Folded to the step it's at; open it to see them all. */}
-          <details className="group rounded-3xl border border-line bg-surface p-5">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-              <div className="min-w-0">
-                <h3 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Approval steps</h3>
-                {(() => {
-                  const all = steps(a);
-                  const i = all.findIndex((s) => s.state === "current");
-                  return i >= 0 ? (
-                    <span className="mt-1 block text-sm font-semibold">
-                      Step {i + 1} of {all.length}: {all[i].title}
-                    </span>
-                  ) : null;
-                })()}
-              </div>
-              <Icon name="chevron-down" className="size-5 shrink-0 transition-transform group-open:rotate-180" />
-            </summary>
-            {quick && <p className="mt-2 text-sm text-ink-muted">Shown as they run for real. In this demo you can publish at any step.</p>}
-            <ol className="mt-3 flex flex-col">
-              {steps(a).map((s, i, all) => (
-                <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0">
-                  {i < all.length - 1 && <span aria-hidden className="absolute left-[0.6875rem] top-6 h-[calc(100%-1rem)] w-0.5 bg-line" />}
-                  <span
-                    aria-hidden
-                    className={cx(
-                      "relative mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border-2",
-                      s.state === "done" && "border-action bg-action text-on-action",
-                      s.state === "current" && "border-action bg-tealtint",
-                      s.state === "next" && "border-line-strong bg-surface",
-                      s.state === "skipped" && "border-dashed border-line-strong bg-muted",
-                    )}
-                  >
-                    {s.state === "done" && <Icon name="check" className="size-3.5" />}
-                    {s.state === "current" && <span className="size-2 rounded-full bg-action" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className={cx("block font-semibold", s.state === "skipped" && "text-ink-muted")}>
-                      {i + 1}. {s.title}
-                      <span className="sr-only">
-                        {" "}
-                        ({s.state === "done" ? "done" : s.state === "current" ? "current step" : s.state === "skipped" ? "skipped" : "to come"})
-                      </span>
-                    </span>
-                    <span className="block text-sm text-ink-muted">{s.who}</span>
-                    {"detail" in s && s.detail && <span className="mt-0.5 block text-xs font-semibold text-warm">{s.detail}</span>}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </details>
-
-          {a.history.length > 0 && (
-            <section className="rounded-3xl border border-line bg-surface p-5">
-              <h3 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">History</h3>
-              <ul className="mt-3 flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
-                {a.history.map((h) => (
-                  <li key={h.id} className="text-sm">
-                    <p>
-                      <span className="font-semibold">{h.label}</span>{" "}
-                      <span className="text-ink-muted">
-                        · {h.by}, {formatDateTime(h.at)}
-                      </span>
-                    </p>
-                    {h.note && <p className="mt-0.5 whitespace-pre-line text-ink-muted">{h.note}</p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      </div>
+      )}
     </section>
   );
 }

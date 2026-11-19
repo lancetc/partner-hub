@@ -5,7 +5,7 @@ import { HttpError, requireAuthor, type User } from "./auth";
 import { askForJson, keyCounts } from "./claudeJson";
 import { GENERATION_MODEL } from "./generate";
 import { audienceText, requireGuide, sourceDocuments, type DraftProgress } from "./magazineDraft";
-import { narration as speakWithTimings, ttsConfig } from "./tts";
+import { narration as speakWithTimings, narratorName, ttsConfig } from "./tts";
 import { saveUpload } from "./uploads";
 import { claudeConfigured, mp3Seconds, OPENAI_VOICES, openaiJson, openaiReady, openaiSpeech, openaiTextModel } from "./openaiText";
 import { GuideDocError, PAGE_TEMPLATES, readGuideDoc, type GuideDoc, type NarrationAudio, type NarrationLength } from "@/lib/magazine";
@@ -225,6 +225,7 @@ export async function recordNarration(
   const { audio, words } = voice.startsWith("openai:")
     ? { audio: await openaiSpeech(script, voice.slice("openai:".length)), words: null }
     : await speakWithTimings(script, voice === "topic" ? undefined : voice);
+  const spokenBy = voice === "topic" ? ttsConfig().voiceId : voice;
   const label = script
     .replace(/[^\w .,-]/g, "")
     .slice(0, 50)
@@ -244,7 +245,7 @@ export async function recordNarration(
     next: {
       target: String(input.target ?? "").slice(0, 60),
       voice,
-      model: voice.startsWith("openai:") ? "openai-tts" : ttsConfig().modelId,
+      model: spokenBy.startsWith("openai:") ? "openai-tts" : ttsConfig().modelId,
       characters: script.length,
       seconds,
     },
@@ -262,7 +263,7 @@ export async function narrationVoices(
   now = Date.now(),
 ): Promise<{ topic: { name: string }; voices: Voice[]; openai: { id: string; label: string }[]; note: string | null }> {
   requireAuthor(actor);
-  const topic = { name: "Claire, Calm & Friendly (the Topic narrator)" };
+  const topic = { name: `${narratorName()} (the Topic narrator)` };
   // OpenAI's voices, with the hub's OpenAI key: an alternative when ElevenLabs is out of credit.
   const openai = openaiReady() ? OPENAI_VOICES : [];
   const { apiKey } = ttsConfig();

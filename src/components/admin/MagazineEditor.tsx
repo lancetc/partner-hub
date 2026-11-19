@@ -81,7 +81,7 @@ type AuthorGuide = Draft & {
 };
 type PathOption = { id: string; name: string };
 type Selection = { kind: "guide" } | { kind: "section"; id: string } | { kind: "block"; id: string };
-type Save = { state: "saved" | "waiting" | "saving" | "error"; error?: string; problems?: string[] };
+type Save = { state: "saved" | "waiting" | "saving" | "error" | "conflict"; error?: string; problems?: string[] };
 
 const draftOf = (g: Draft): Draft => ({ title: g.title, standfirst: g.standfirst, cover: g.cover, audience: g.audience, completion: g.completion, doc: g.doc });
 const storeKey = (id: string) => `hub-magazine-draft:${id}`;
@@ -626,33 +626,41 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
 
   // Save a moment after the last change. Kept in this browser too until the server has it.
   const dirty = JSON.stringify(draft) !== lastSaved;
-  const flush = useCallback(async () => {
-    const body = JSON.stringify(draft);
-    if (body === lastSaved) return true;
-    setSave({ state: "saving" });
-    try {
-      const out = await api<{ guide: AuthorGuide }>(`/api/admin/magazine/${id}`, { method: "PUT", body: draft });
-      setLastSaved(body);
-      setServer(out.guide);
-      setSave({ state: "saved" });
+  // `force`: save this editor's version even though the course changed elsewhere (the author chose to).
+  const flush = useCallback(
+    async (force = false) => {
+      const body = JSON.stringify(draft);
+      if (body === lastSaved) return true;
+      setSave({ state: "saving" });
       try {
-        localStorage.removeItem(storeKey(id));
-      } catch {}
-      return true;
-    } catch (e) {
-      const err = e as Error & { problems?: string[] };
-      setSave({ state: "error", error: err.message });
-      return false;
-    }
-  }, [draft, id, lastSaved]);
+        const out = await api<{ guide: AuthorGuide }>(`/api/admin/magazine/${id}`, {
+          method: "PUT",
+          // Saying which version this editor started from, so it can't save over newer changes from another tab.
+          body: force ? draft : { ...draft, basedOn: server.savedAt },
+        });
+        setLastSaved(body);
+        setServer(out.guide);
+        setSave({ state: "saved" });
+        try {
+          localStorage.removeItem(storeKey(id));
+        } catch {}
+        return true;
+      } catch (e) {
+        const err = e as Error & { problems?: string[]; status?: number };
+        setSave({ state: err.status === 409 ? "conflict" : "error", error: err.message });
+        return false;
+      }
+    },
+    [draft, id, lastSaved, server.savedAt],
+  );
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || save.state === "conflict") return;
     try {
       localStorage.setItem(storeKey(id), JSON.stringify({ draft, savedAt: new Date().toISOString() }));
     } catch {}
     const t = setTimeout(() => void flush(), 1200);
     return () => clearTimeout(t);
-  }, [draft, dirty, flush, id]);
+  }, [draft, dirty, flush, id, save.state]);
   // Leaving with changes the server hasn't got: the browser asks first.
   useEffect(() => {
     if (!dirty) return;
@@ -972,6 +980,47 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
           </button>
         )}
       </p>
+      {save.state === "conflict" && (
+        // Another tab (or person) saved since this editor opened the course: nothing is saved over it without asking.
+        <div
+          role="alert"
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-danger bg-[#fdf1f0] px-4 py-3 text-sm dark:bg-[#3a1f1f]"
+        >
+          <Icon name="alert" className="size-5 shrink-0 text-danger" />
+          <p className="min-w-0 flex-1">
+            <strong>Not saved: this course was changed in another tab or by someone else.</strong> Load the latest to carry on from it (your unsaved changes
+            here are dropped), or keep yours to replace it.
+          </p>
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={() => {
+              try {
+                localStorage.removeItem(storeKey(id));
+              } catch {}
+              window.location.reload();
+            }}
+          >
+            Load the latest
+          </button>
+          <button
+            type="button"
+            className={btn.quiet}
+            onClick={async () => {
+              if (
+                await confirmAction("The other changes are replaced by what’s in this tab. Undo here won’t bring them back.", {
+                  title: "Keep this tab’s version?",
+                  confirmLabel: "Keep mine",
+                  danger: true,
+                })
+              )
+                void flush(true);
+            }}
+          >
+            Keep mine
+          </button>
+        </div>
+      )}
       {recovered && (
         <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-gold bg-gold/15 px-4 py-3 text-sm">
           <Icon name="alert" className="size-5 shrink-0" />
@@ -1008,7 +1057,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
         <MagazineApproval
           guideId={id}
           dirty={dirty}
-          save={flush}
+          save={() => flush()}
           onPublished={(g) => setServer(g as AuthorGuide)}
           onClose={() => setPublishing(false)}
           onShowBlock={(pageId, blockId) => {

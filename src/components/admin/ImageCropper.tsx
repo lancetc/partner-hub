@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { btn, ErrorNote } from "./ui";
 import { uploadImage } from "./LessonEditor";
@@ -135,7 +136,8 @@ export function ImageCropper({ picture, onDone, onClose }: { picture: Picture; o
   };
 
   const corner = "absolute size-5 rounded-full border-2 border-white bg-action shadow touch-none";
-  return (
+  // Drawn at the top of the page, so a picture in a scrolling sidebar or a block can't trap it under the page.
+  return createPortal(
     <div role="dialog" aria-modal="true" aria-labelledby="crop-h" className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-[#0b1626]/80 p-4">
       <div className="flex w-full max-w-4xl flex-col gap-4 rounded-3xl bg-surface p-5 shadow-2xl">
         <div className="flex items-center justify-between gap-2">
@@ -223,6 +225,7 @@ export function ImageCropper({ picture, onDone, onClose }: { picture: Picture; o
         </div>
         {problem && <ErrorNote text={problem} />}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
@@ -270,22 +271,24 @@ export function PictureActions({
       </div>
       <ImageLibraryDialog open={library} onClose={() => setLibrary(false)} onPick={onChange} current={picture?.src} />
       {pexels && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Find a photo on Pexels"
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
-        >
-          <div className="w-full max-w-3xl rounded-3xl bg-surface p-5 shadow-2xl">
-            <PexelsPicker
-              onClose={() => setPexels(false)}
-              onPicked={(p, alt) => {
-                onChange({ src: p.src, width: p.width, height: p.height }, "pexels", alt);
-                setPexels(false);
-              }}
-            />
+        <Overlay>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Find a photo on Pexels"
+            className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
+          >
+            <div className="w-full max-w-3xl rounded-3xl bg-surface p-5 shadow-2xl">
+              <PexelsPicker
+                onClose={() => setPexels(false)}
+                onPicked={(p, alt) => {
+                  onChange({ src: p.src, width: p.width, height: p.height }, "pexels", alt);
+                  setPexels(false);
+                }}
+              />
+            </div>
           </div>
-        </div>
+        </Overlay>
       )}
       {cropping && picture && (
         <ImageCropper
@@ -298,34 +301,44 @@ export function PictureActions({
         />
       )}
       {generating && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Generate a picture"
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
-        >
-          <div className="w-full max-w-2xl rounded-3xl bg-surface p-5 shadow-2xl">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
-                <Icon name="spark" className="size-5 text-accent" /> Generate a picture
-              </h2>
-              <button type="button" className={btn.quiet} onClick={() => setGenerating(false)}>
-                Close
-              </button>
+        <Overlay>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Generate a picture"
+            className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#0b1626]/70 p-4"
+          >
+            <div className="w-full max-w-2xl rounded-3xl bg-surface p-5 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
+                  <Icon name="spark" className="size-5 text-accent" /> Generate a picture
+                </h2>
+                <button type="button" className={btn.quiet} onClick={() => setGenerating(false)}>
+                  Close
+                </button>
+              </div>
+              <ImageGenerator
+                useLabel="Use this picture"
+                defaultAspect="3:2"
+                onUse={(p) => {
+                  onChange(p);
+                  setGenerating(false);
+                }}
+              />
             </div>
-            <ImageGenerator
-              useLabel="Use this picture"
-              defaultAspect="3:2"
-              onUse={(p) => {
-                onChange(p);
-                setGenerating(false);
-              }}
-            />
           </div>
-        </div>
+        </Overlay>
       )}
     </>
   );
+}
+
+/**
+  A pop-up window drawn at the top of the page, not inside whatever opened it: a picture box in the
+  editor's scrolling sidebar would otherwise trap it in its own layer, under the page.
+*/
+export function Overlay({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body);
 }
 
 /** The picture buttons on their own, uploading for themselves: for a picture shown somewhere else on the page. */

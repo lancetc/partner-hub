@@ -171,6 +171,10 @@ export type CalloutBlock = Base & {
   confirm?: string;
 };
 export type Verdict = "best" | "acceptable" | "risky";
+/** An optional photo in a circle beside the question (a person, say), as on a decision question. */
+export type WithPhoto = { media?: Media };
+/** The blocks that can have that photo (the decision question can also have it wide across the top). */
+export const PHOTO_BLOCKS = ["decision", "sequencing", "poll", "wall", "reflection", "conversation"] as const;
 export type Choice = { id: string; text: string; verdict: Verdict; feedback: string };
 /**
   "What would you do?", with feedback on each answer. `media`: an optional picture, in a circle beside the
@@ -221,7 +225,7 @@ export type BranchingBlock = Base & { type: "branching"; title: string; scenes: 
   and sees coaching and how the person replies. Bounded choices, not an open chat.
 */
 export type ConversationTurn = { id: string; line: string; responses: { id: string; text: string; verdict: Verdict; feedback: string; reply: string }[] };
-export type ConversationBlock = Base & { type: "conversation"; person: string; role: string; setting: string; turns: ConversationTurn[] };
+export type ConversationBlock = Base & { type: "conversation"; person: string; role: string; setting: string; turns: ConversationTurn[] } & WithPhoto;
 /** A picture or document with mistakes to find, each at a point on it (x, y as percentages). */
 export type SpotBlock = Base & {
   type: "spot";
@@ -232,7 +236,7 @@ export type SpotBlock = Base & {
 /** "How confident are you…?" on a 1 to 5 scale. `compareWith`: an earlier check, to show the change. */
 export type ConfidenceBlock = Base & { type: "confidence"; statement: string; low: string; high: string; compareWith?: string };
 /** An open question the learner answers in their own words; Claude gives feedback using the author's guidance. */
-export type ReflectionBlock = Base & { type: "reflection"; prompt: string; guidance: string; minWords: number };
+export type ReflectionBlock = Base & { type: "reflection"; prompt: string; guidance: string; minWords: number } & WithPhoto;
 /** An insight wall, as in Topics: everyone answers the same question, and the shared answers open once you've posted. */
 /** A picture with points to open: each shows a title and a note. For exploring a screen, a form or a room. */
 export type HotspotsBlock = Base & {
@@ -249,14 +253,14 @@ export type SortingBlock = Base & {
   items: { id: string; text: string; group: string; feedback: string }[];
 };
 /** Put steps in order, then check. `steps` is the right order; readers get them shuffled. */
-export type SequencingBlock = Base & { type: "sequencing"; prompt: string; steps: { id: string; text: string }[]; feedback: string };
+export type SequencingBlock = Base & { type: "sequencing"; prompt: string; steps: { id: string; text: string }[]; feedback: string } & WithPhoto;
 /** Match each item on the left to one on the right, then check. */
 export type MatchingBlock = Base & { type: "matching"; prompt: string; pairs: { id: string; left: string; right: string }[]; feedback: string };
 /** Text with gaps to fill: each [[answer|another accepted answer]] is a gap. */
 export type FillBlankBlock = Base & { type: "fillblank"; prompt: string; text: string; feedback: string };
 /** A poll, as in Topics: one vote each (it can be changed), and everyone's answers shown back once you've voted. */
-export type PollBlock = Base & { type: "poll"; question: string; options: { id: string; text: string }[] };
-export type WallBlock = Base & { type: "wall"; prompt: string; placeholder?: string; anonymous?: boolean };
+export type PollBlock = Base & { type: "poll"; question: string; options: { id: string; text: string }[] } & WithPhoto;
+export type WallBlock = Base & { type: "wall"; prompt: string; placeholder?: string; anonymous?: boolean } & WithPhoto;
 /** A fictional care budget: learners change services' frequency and cost and watch the balance. */
 export type BudgetService = { id: string; name: string; unit: string; cost: number; perWeek: number; max: number };
 export type BudgetBlock = Base & { type: "budget"; title: string; budget: number; weeks: number; services: BudgetService[] };
@@ -398,6 +402,10 @@ export function openActivities(page: Page, answers: Record<string, string>, quiz
   if (page.allActivities === false) return [];
   return pageBlocks(page).filter((b) => activityDone(b, answers, quizzes) === false);
 }
+
+/** The confidence scale's faces, from 1 (worried) to 5 (beaming). Ratings are still saved as 1 to 5. */
+export const CONFIDENCE_FACES = ["😟", "🙁", "😐", "🙂", "😄"] as const;
+export const confidenceFace = (n: number) => CONFIDENCE_FACES[Math.min(5, Math.max(1, Math.round(n))) - 1];
 
 export const BLOCK_LABELS: Record<BlockType, string> = {
   text: "Text",
@@ -597,6 +605,9 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       ...(str(o.caption, `${where} caption`, { max: 400 }) && { caption: str(o.caption, `${where} caption`)! }),
     };
   };
+  // The optional photo in a circle beside the question: kept once one is chosen.
+  const photo = (o: Record<string, unknown>, where: string): WithPhoto =>
+    o.media && (o.media as { src?: unknown }).src ? { media: media(o.media, `${where} picture`) } : {};
   const common = (o: Record<string, unknown>, where: string) => {
     const out: Pick<Base, "note" | "evidence" | "flag" | "reveal"> = {};
     if (typeof o.reveal === "string" && o.reveal in REVEALS && o.reveal !== "rise") out.reveal = o.reveal as Exclude<Reveal, "rise">;
@@ -919,6 +930,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return {
           ...base,
           type: "conversation",
+          ...photo(o, where),
           person: str(o.person, `${where} person`, { required: true, max: 80 }) ?? "",
           role: str(o.role, `${where} role`, { max: 120 }) ?? "",
           setting: str(o.setting, `${where} setting`, { max: 600 }) ?? "",
@@ -1003,6 +1015,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return {
           ...base,
           type: "sequencing",
+          ...photo(o, where),
           prompt: str(o.prompt, `${where} instructions`, { required: true, max: 400 }) ?? "",
           steps,
           feedback: str(o.feedback, `${where} feedback`, { max: 1500 }) ?? "",
@@ -1050,6 +1063,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return {
           ...base,
           type: "reflection",
+          ...photo(o, where),
           prompt: str(o.prompt, `${where} question`, { required: true, max: 800 }) ?? "",
           guidance: str(o.guidance, `${where} guidance`, { max: 3000 }) ?? "",
           minWords: Math.min(300, Math.max(0, Math.round(Number(o.minWords) || 0))),
@@ -1060,6 +1074,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return {
           ...base,
           type: "poll",
+          ...photo(o, where),
           question: str(o.question, `${where} question`, { required: true, max: 300 }) ?? "",
           options: raw.map((op, i) => ({
             id: idOf(op?.id, `${where} option ${i + 1}`),
@@ -1072,6 +1087,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return {
           ...base,
           type: "wall",
+          ...photo(o, where),
           prompt: str(o.prompt, `${where} question`, { required: true, max: 300 }) ?? "",
           ...(placeholder && { placeholder }),
           ...(o.anonymous === true && { anonymous: true }),
@@ -1276,7 +1292,10 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
             : (b.type === "sequencing" || b.type === "matching" || b.type === "fillblank") && !b.feedback
         )
           suggestions.push(`${where}: add feedback that explains the right answer, not just what it is.`);
-        if (b.type === "decision" && b.media && !b.media.decorative && !b.media.alt) blocking.push(`${where}: describe the picture, or mark it decorative.`);
+        if ((PHOTO_BLOCKS as readonly string[]).includes(b.type)) {
+          const m = (b as WithPhoto).media;
+          if (m && !m.decorative && !m.alt) blocking.push(`${where}: describe the picture, or mark it decorative.`);
+        }
         if (b.type === "flashcards")
           b.cards.forEach((c, j) => {
             if (c.media && !c.media.decorative && !c.media.alt) blocking.push(`${where}, card ${j + 1}: describe the picture, or mark it decorative.`);

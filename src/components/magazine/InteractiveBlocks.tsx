@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm";
 import { cx, formatMoney } from "@/lib/format";
 import {
+  CONFIDENCE_FACES,
+  confidenceFace,
   OUTCOMES,
   VERDICTS,
   type Block,
@@ -22,6 +24,7 @@ import {
   type WallBlock,
   type PollBlock,
   type HotspotsBlock,
+  type Media,
   type SortingBlock,
   type SequencingBlock,
   type MatchingBlock,
@@ -31,6 +34,7 @@ import {
   shuffleFor,
 } from "@/lib/magazine";
 import { RichText } from "../RichText";
+import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -39,6 +43,20 @@ import { Icon, type IconName } from "../Icon";
   Claude's feedback, and a budget simulator. Each works by keyboard and screen reader, never moves by
   itself, and is practice: none of them is a test.
 */
+
+/** A person in the scene, in a circle beside the question (as on a decision question). Sits in a flow-root box. */
+function CirclePhoto({ media }: { media?: Media }) {
+  if (!media?.src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={media.src}
+      alt={media.decorative ? "" : media.alt}
+      loading="lazy"
+      className="float-right -mt-8 mb-2 ml-4 size-24 rounded-full bg-muted object-cover shadow-md ring-4 ring-surface sm:size-32"
+    />
+  );
+}
 
 export type ReflectionSaved = { response: string; feedback: { summary: string; strengths: string[]; consider: string[] } | null; at?: string };
 
@@ -517,11 +535,14 @@ function Conversation({ block: b, ctx }: { block: ConversationBlock; ctx: Intera
       <p className={kicker}>
         <Icon name="chat" className="size-5" /> Conversation practice
       </p>
-      <p className="font-serif text-2xl font-semibold">
-        {b.person}
-        {b.role && <span className="font-sans text-base font-normal text-ink-muted"> · {b.role}</span>}
-      </p>
-      {b.setting && <p className="mt-1 text-ink-muted">{b.setting}</p>}
+      <div className="flow-root">
+        <CirclePhoto media={b.media} />
+        <p className="font-serif text-2xl font-semibold">
+          {b.person}
+          {b.role && <span className="font-sans text-base font-normal text-ink-muted"> · {b.role}</span>}
+        </p>
+        {b.setting && <p className="mt-1 text-ink-muted">{b.setting}</p>}
+      </div>
       <div className="mt-5 flex flex-col gap-3">
         {b.turns.slice(0, turn).map((tt, i) => {
           const r = tt.responses.find((x) => x.id === said[i]);
@@ -755,29 +776,43 @@ function Confidence({ block: b, ctx }: { block: ConfidenceBlock; ctx: Interactiv
       <p className="font-serif text-xl font-semibold" aria-hidden>
         {b.statement}
       </p>
+      {/* Five faces, worried to beaming; each is "n out of 5" to a screen reader. */}
       <div className="mt-4 grid grid-cols-5 gap-2">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <label
-            key={n}
-            className={cx(
-              "flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 font-mulish text-lg font-extrabold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
-              rating === n ? "border-action bg-action text-on-action" : "border-line-strong bg-surface hover:border-action",
-            )}
-          >
-            <input type="radio" name={name} value={n} checked={rating === n} onChange={() => void choose(n)} className="sr-only" />
-            {n}
-          </label>
-        ))}
+        {CONFIDENCE_FACES.map((face, i) => {
+          const n = i + 1;
+          return (
+            <label
+              key={n}
+              className={cx(
+                "fx-press flex min-h-16 cursor-pointer items-center justify-center rounded-2xl border-2 bg-surface text-3xl leading-none transition-[filter,opacity] has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus sm:text-4xl",
+                rating === n ? "fx-pop border-action ring-4 ring-action/25" : "border-line-strong hover:border-action",
+                // Once one is chosen, the others step back a little.
+                rating !== null && rating !== n && "opacity-60 grayscale-[40%] hover:opacity-100 hover:grayscale-0",
+              )}
+            >
+              <input type="radio" name={name} value={n} checked={rating === n} onChange={() => void choose(n)} className="sr-only" />
+              <span aria-hidden>{face}</span>
+              <span className="sr-only">
+                {n} out of 5{n === 1 ? `, ${b.low}` : n === 5 ? `, ${b.high}` : ""}
+              </span>
+            </label>
+          );
+        })}
       </div>
-      <div className="mt-2 flex justify-between text-sm text-ink-muted">
-        <span>1 · {b.low}</span>
-        <span>5 · {b.high}</span>
+      <div className="mt-2 flex justify-between text-sm text-ink-muted" aria-hidden>
+        <span>
+          {CONFIDENCE_FACES[0]} {b.low}
+        </span>
+        <span>
+          {b.high} {CONFIDENCE_FACES[4]}
+        </span>
       </div>
       {rating && (
         <p className="mt-4 rounded-2xl bg-surface p-3 text-sm" role="status">
           {earlier ? (
             <>
-              Earlier you rated <strong>{earlier}</strong>; now <strong>{rating}</strong>.{" "}
+              Earlier you chose <span aria-label={`${earlier} out of 5`}>{confidenceFace(earlier)}</span>; now{" "}
+              <span aria-label={`${rating} out of 5`}>{confidenceFace(rating)}</span>.{" "}
               {change! > 0
                 ? `That’s up ${change}: nice work.`
                 : change === 0
@@ -786,7 +821,8 @@ function Confidence({ block: b, ctx }: { block: ConfidenceBlock; ctx: Interactiv
             </>
           ) : (
             <>
-              Thanks: you rated {rating}. {b.compareWith ? "" : "You can see how it changes later on."}
+              Thanks: you chose <span aria-label={`${rating} out of 5`}>{confidenceFace(rating)}</span>.{" "}
+              {b.compareWith ? "" : "You can see how it changes later on."}
             </>
           )}
         </p>
@@ -827,9 +863,12 @@ function Reflection({ block: b, ctx }: { block: ReflectionBlock; ctx: Interactiv
       <p className={kicker}>
         <Icon name="pen" className="size-5" /> Reflection
       </p>
-      <label htmlFor={id} className="font-serif text-xl font-semibold">
-        {b.prompt}
-      </label>
+      <div className="flow-root">
+        <CirclePhoto media={b.media} />
+        <label htmlFor={id} className="font-serif text-xl font-semibold">
+          {b.prompt}
+        </label>
+      </div>
       <textarea
         id={id}
         className="mt-3 min-h-40 w-full rounded-2xl border border-line-strong bg-surface p-3 text-[1.02rem] leading-relaxed"
@@ -1079,9 +1118,12 @@ function Wall({ block: b, ctx }: { block: WallBlock; ctx: InteractiveContext }) 
         <p className={kicker}>
           <Icon name="people" className="size-5" /> Insight wall
         </p>
-        <p className="font-serif text-xl font-semibold" id={`${id}-q`}>
-          {b.prompt}
-        </p>
+        <div className="flow-root">
+          <CirclePhoto media={b.media} />
+          <p className="font-serif text-xl font-semibold" id={`${id}-q`}>
+            {b.prompt}
+          </p>
+        </div>
         {showForm ? (
           <div className="mt-3 flex flex-col gap-2">
             <textarea
@@ -1257,9 +1299,12 @@ function Poll({ block: b, ctx }: { block: PollBlock; ctx: InteractiveContext }) 
       <p className={kicker}>
         <Icon name="sliders" className="size-5" /> Poll
       </p>
-      <p className="font-serif text-xl font-semibold" aria-hidden>
-        {b.question}
-      </p>
+      <div className="flow-root">
+        <CirclePhoto media={b.media} />
+        <p className="font-serif text-xl font-semibold" aria-hidden>
+          {b.question}
+        </p>
+      </div>
       <div className="mt-4 flex flex-col gap-2">
         {b.options.map((op) => {
           const chosen = mine === op.id;
@@ -1571,22 +1616,80 @@ function Sequencing({ block: b, ctx }: { block: SequencingBlock; ctx: Interactiv
     });
     setSaid(`“${text(order[i])}” moved to position ${j + 1}.`);
   };
+
+  // Dragging a step: with a mouse anywhere on it, on a touch screen by its grip (so the page still scrolls).
+  // It moves into the slot under the pointer as it goes; the arrows do the same from the keyboard.
+  const [dragging, setDragging] = useState<string | null>(null);
+  // The step being dragged and the order so far, kept outside render so quick moves are never missed.
+  const drag = useRef<{ id: string; order: string[] } | null>(null);
+  const rows = useRef(new Map<string, HTMLLIElement>());
+  const startDrag = (e: React.PointerEvent, id: string) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    if (e.pointerType !== "mouse" && !(e.target as HTMLElement).closest("[data-grip]")) return;
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+    drag.current = { id, order };
+    setDragging(id);
+    setChecked(false);
+  };
+  const dragTo = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    // The slot: how many of the other steps sit above the pointer.
+    const others = d.order.filter((x) => x !== d.id);
+    const slot = others.filter((x) => {
+      const r = rows.current.get(x)?.getBoundingClientRect();
+      return r ? r.top + r.height / 2 < e.clientY : false;
+    }).length;
+    if (d.order.indexOf(d.id) === slot) return;
+    d.order = [...others.slice(0, slot), d.id, ...others.slice(slot)];
+    setOrder(d.order);
+  };
+  const endDrag = () => {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    setSaid(`“${text(d.id)}” is now step ${d.order.indexOf(d.id) + 1}.`);
+    setDragging(null);
+  };
+
   return (
     <div className={cx(column, "rounded-3xl border border-line-strong bg-surface p-5 sm:p-7")}>
       <p className={kicker}>
         <Icon name="sequencing" className="size-5" /> Sequencing
       </p>
-      <p className="font-serif text-xl font-semibold">{b.prompt}</p>
-      <p className="mt-1 text-sm text-ink-muted">Use the arrows to move each step into place.</p>
+      <div className="flow-root">
+        <CirclePhoto media={b.media} />
+        <p className="font-serif text-xl font-semibold">{b.prompt}</p>
+        <p className="mt-1 text-sm text-ink-muted">Drag the steps into order, or use the arrows.</p>
+      </div>
       <ol className="mt-4 flex flex-col gap-2">
         {order.map((id, i) => (
           <li
             key={id}
+            ref={(el) => {
+              if (el) rows.current.set(id, el);
+              else rows.current.delete(id);
+            }}
+            onPointerDown={(e) => startDrag(e, id)}
+            onPointerMove={dragTo}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
             className={cx(
-              "flex items-center gap-3 rounded-2xl border-2 p-3",
-              checked ? (ok(id, i) ? "border-[#2f8f5b]" : "border-[#c7393e]") : "border-line-strong",
+              "flex select-none items-center gap-3 rounded-2xl border-2 bg-surface p-3 transition-shadow",
+              dragging
+                ? dragging === id
+                  ? "relative z-10 cursor-grabbing border-action shadow-xl ring-4 ring-action/20"
+                  : "border-line-strong"
+                : "cursor-grab",
+              !dragging && (checked ? (ok(id, i) ? "border-[#2f8f5b]" : "border-[#c7393e]") : "border-line-strong hover:border-action"),
             )}
           >
+            <span data-grip aria-hidden className="-ml-1 grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center text-ink-muted">
+              <Icon name="grip" className="size-4" />
+            </span>
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted font-mulish text-sm font-extrabold">{i + 1}</span>
             <span className="min-w-0 flex-1">{text(id)}</span>
             {checked && rightMark(ok(id, i))}

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db";
 import { userById, type User } from "./auth";
 import { activityDone, readGuideDoc } from "@/lib/magazine";
-import { createGuide, finishPage, publishGuide, readGuide, recordGuideEvent } from "./magazine";
+import { createGuide, finishPage, publishGuide, readGuide, recordGuideEvent, saveGuideDraft } from "./magazine";
 
 /* An acknowledgement: a callout readers tick to confirm. The page waits for the tick, and the tick is recorded. */
 
@@ -48,5 +48,20 @@ describe("an acknowledgement to tick", () => {
     const events = db.prepare("SELECT event, page_id, block_id, detail FROM magazine_events WHERE guide_id = ? AND event = 'callout.confirmed'").all(g.id);
     expect(events).toEqual([{ event: "callout.confirmed", page_id: "p1", block_id: "ack", detail: JSON.stringify({ confirmed: "I understand and agree" }) }]);
     expect(finishPage(db, partner, c.slug, g.revisionId, "p1", now).completed).toMatchObject({ kind: "completed" });
+  });
+});
+
+describe("two editors on one course", () => {
+  it("refuses a save from an editor that's behind, unless it keeps its own version on purpose", () => {
+    const c = createGuide(db, author, { title: "Two tabs", completion: "confirm", doc: doc([ACK]) }, now);
+    const opened = c.savedAt;
+    // One tab saves...
+    const later = new Date("2026-11-19T00:05:00Z");
+    const first = saveGuideDraft(db, author, c.id, { doc: doc([{ ...ACK, body: "Newer words." }]), basedOn: opened }, later);
+    // ...then a tab still holding the older version tries to save.
+    expect(() => saveGuideDraft(db, author, c.id, { doc: doc([ACK]), basedOn: opened }, new Date("2026-11-19T00:06:00Z"))).toThrow(/changed in another tab/);
+    // The newer save carries on from where it got to, and a deliberate "keep mine" (no basedOn) still saves.
+    expect(saveGuideDraft(db, author, c.id, { doc: doc([ACK]), basedOn: first.savedAt }, new Date("2026-11-19T00:07:00Z")).savedAt).toBe("2026-11-19T00:07:00.000Z");
+    expect(saveGuideDraft(db, author, c.id, { doc: doc([ACK]) }, new Date("2026-11-19T00:08:00Z")).savedAt).toBe("2026-11-19T00:08:00.000Z");
   });
 });
