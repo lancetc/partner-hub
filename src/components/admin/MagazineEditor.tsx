@@ -7,6 +7,7 @@ import { api, useApi } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm";
 import { cx, formatDate, formatDateTime } from "@/lib/format";
 import {
+  PULSE_DEFAULTS,
   BLOCK_LABELS,
   videoOf,
   type TextMediaBlock,
@@ -116,6 +117,10 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   sequencing: "sequencing",
   matching: "matching",
   fillblank: "blank",
+  journal: "pen",
+  perspectives: "people",
+  pulse: "gauge",
+  action: "target",
 };
 const BLOCK_HINTS: Record<BlockType, string> = {
   text: "Paragraphs, lists and links, with an optional heading.",
@@ -145,6 +150,10 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   sequencing: "Put steps in order, then check.",
   matching: "Match each item to its pair, then check.",
   fillblank: "Type the missing words, then check.",
+  journal: "A private note on a prompt, kept in My Notes. Can revisit an earlier one.",
+  perspectives: "Two or three curated viewpoints to compare, with what the guidance says.",
+  pulse: "One tap: confidence or a view, never scored. Pair two to show the change.",
+  action: "One concrete thing to try at work, and later whether they did.",
 };
 
 /**
@@ -168,6 +177,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "process", "hotspots"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "budget"] },
+  { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "confidence"] },
 ];
 
@@ -303,6 +313,30 @@ function newBlock(item: PaletteItem): Block {
       return { id, type, prompt: "", media: { src: "", alt: "" }, mistakes: [] };
     case "confidence":
       return { id, type, statement: "", low: "Not confident", high: "Very confident" };
+    case "journal":
+      return { id, type, prompt: "" };
+    case "perspectives":
+      return {
+        id,
+        type,
+        prompt: "",
+        views: [
+          { id: rid("view"), title: "", reasoning: "", misses: "" },
+          { id: rid("view"), title: "", reasoning: "", misses: "" },
+        ],
+      };
+    case "pulse":
+      return { id, type, kind: "confidence", question: "", options: PULSE_DEFAULTS.confidence.map((label, i) => ({ id: `o${i + 1}`, label })) };
+    case "action":
+      return {
+        id,
+        type,
+        prompt: "",
+        suggestions: [
+          { id: rid("act"), text: "" },
+          { id: rid("act"), text: "" },
+        ],
+      };
     case "reflection":
       return { id, type, prompt: "", guidance: "", minWords: 30 };
     case "wall":
@@ -393,6 +427,8 @@ function copyBlock(b: Block): Block {
   }
   // A copied confidence check doesn't compare with anything until the author says so.
   if (c.type === "confidence") delete c.compareWith;
+  // Nor does a copied pulse check; a copied revisit still looks back at the same earlier block.
+  if (c.type === "pulse") delete c.compareWith;
   return c;
 }
 
@@ -457,6 +493,14 @@ function isBlank(b: Block): boolean {
       return !b.prompt && !b.media.src && !b.mistakes.length;
     case "confidence":
       return !b.statement;
+    case "journal":
+      return !b.prompt;
+    case "perspectives":
+      return !b.prompt && b.views.every((v) => !v.title && !v.reasoning && !v.misses) && !b.guidance;
+    case "pulse":
+      return !b.question;
+    case "action":
+      return !b.prompt && b.suggestions.every((sg) => !sg.text);
     case "reflection":
       return !b.prompt && !b.guidance;
     case "wall":

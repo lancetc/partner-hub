@@ -410,6 +410,12 @@ export const BLOCK_SHAPES = `Blocks you may use (JSON shapes):
 - {"type":"reflection","prompt":"An open question","guidance":"What a good answer covers, for the AI feedback; learners don't see it","minWords":30}
 - {"type":"confidence","statement":"How confident are you…?","low":"Not confident","high":"Very confident"}  (one near the start and one at the end of a course; the later one may add "compareWith":"the earlier one's id" only if you gave it an "id")
 - {"type":"budget","title":"Whose budget","budget":6000,"weeks":13,"services":[{"name":"Personal care","unit":"hour","cost":75,"perWeek":3,"max":10}]}  (a made-up quarterly budget to plan services against; always flag it illustrative)
+Reflect and apply blocks (unscored and private to the learner; for courses about judgement, conversations or changing practice, not for a plain procedure). Use at most one or two of these on a page, only where they serve the page's purpose, and give each a "note" saying why it belongs here:
+- {"type":"journal","prompt":"A short, specific prompt about the case just read","scaffold":"optional: a way in, like 'What would you ask first?'"}  (a private note; never ask for a real client's name or details; a later page may add "revisits":"the earlier journal's id" to look back at it, only if you gave that journal an "id")
+- {"type":"perspectives","prompt":"What's being compared","views":[{"title":"A viewpoint in plain words","reasoning":"Why someone would see it this way","misses":"What it might miss"}],"guidance":{"body":"What the approved source says","source":{"label":"exact document name and section"}}}  (2 or 3 defensible viewpoints, none of them 'the answer'; include "guidance" only when the documents state a rule or safety step, and then flag the block "verify"; may add "after":"the id of the journal or decision just before it")
+- {"type":"pulse","kind":"confidence","question":"How confident are you that you could…?","options":[{"label":"Not confident"},{"label":"Unsure"},{"label":"Somewhat confident"},{"label":"Confident"}]}  (one tap, never a test; a matched pair uses the very same question and labels, the later one adding "compareWith":"the earlier one's id")
+- {"type":"action","prompt":"Choose one thing to try…","timing":"optional: when it's worth trying","suggestions":[{"text":"On my next…, I will…"}]}  (2 to 4 concrete actions drawn from the documents; near the end of a course)
+Never write a learner's private response, a made-up first-person client account presented as real, or a policy the documents don't state.
 
 On every block you may add:
 - "evidence": [{"source":"exact document name","ref":"page, slide or section","quote":"the short passage it relies on"}]  — required on any block that states a fact, rule or process from the documents
@@ -596,6 +602,14 @@ export function pageIssues(value: unknown): string[] {
           issues.push(`${at} needs its question and at least 2 options.`);
         if (b.type === "wall" && !b.prompt) issues.push(`${at} needs its question.`);
         if (b.type === "confidence" && !b.statement) issues.push(`${at} needs its statement.`);
+        if (b.type === "journal" && !b.prompt) issues.push(`${at} needs its prompt.`);
+        if (b.type === "pulse" && (!b.question || b.options.length < 2 || b.options.some((op) => !op.label)))
+          issues.push(`${at} needs its question and at least 2 labelled responses.`);
+        if (b.type === "action" && (!b.prompt || (!b.revisits && b.suggestions.length < 2)))
+          issues.push(`${at} needs its prompt and 2 to 4 suggested actions.`);
+        if (b.type === "perspectives" && (b.views.length < 2 || b.views.some((v) => !v.title || !v.reasoning || !v.misses)))
+          issues.push(`${at} needs 2 or 3 perspectives, each with its reasoning and what it might miss.`);
+        if (b.type === "perspectives" && b.guidance && !b.flag) issues.push(`${at}: flag it "verify" so the guidance is checked by its policy owner.`);
         if (b.type === "budget" && (!b.services.length || b.services.some((sv) => !sv.name || !sv.cost)))
           issues.push(`${at}: every service needs a name and a cost.`);
       });

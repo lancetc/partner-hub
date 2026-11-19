@@ -5,12 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import { BLOCK_LABELS, openActivities, pageBlocks, pageTitle, type Page } from "@/lib/magazine";
-import type { ReaderGuide } from "@/server/magazine";
+import type { ReaderGuide, ReaderNote } from "@/server/magazine";
 import { Icon } from "../Icon";
 import { GuideBlock, column, type BlockContext } from "./GuideBlocks";
 import type { ReflectionSaved } from "./InteractiveBlocks";
 import { AudioGuideCard } from "./AudioGuide";
 import { useSelfReview } from "./SelfReview";
+import { useMyNotes } from "./ReflectBlocks";
 import { playable } from "@/lib/magazineNarration";
 
 /*
@@ -280,6 +281,9 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
   const [answers, setAnswers] = useState(guide.progress.answers);
   const [finished, setFinished] = useState<string[]>(guide.progress.finished);
   const [reflections, setReflections] = useState<Record<string, ReflectionSaved>>(guide.progress.reflections ?? {});
+  // Reflect and apply: the learner's own journal entries, action notes and pulse answers.
+  const [notes, setNotes] = useState<Record<string, ReaderNote>>(guide.progress.notes ?? {});
+  const perspectivesSent = useRef(new Set<string>());
   const [completed, setCompleted] = useState<Done>(guide.completed);
   const [active, setActive] = useState<string>(page.sections[0]?.id ?? "");
   const [stale, setStale] = useState(false);
@@ -359,7 +363,54 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       setReflections((r) => ({ ...r, [blockId]: saved }));
       return saved;
     },
+    notes,
+    find: (blockId) => pages.flatMap(pageBlocks).find((x) => x.id === blockId),
+    saveNote: async (blockId, patch) => {
+      let note: ReaderNote;
+      if (preview) {
+        // An author's preview: kept on the page only, so the blocks can be tried. Nothing is saved.
+        const b = pages.flatMap(pageBlocks).find((x) => x.id === blockId);
+        const at = new Date().toISOString();
+        const label =
+          b?.type === "pulse"
+            ? b.options.find((o) => o.id === patch.choice)?.label
+            : b?.type === "action"
+              ? b.suggestions.find((sg) => sg.id === patch.choice)?.text
+              : undefined;
+        note = {
+          blockId,
+          kind: b?.type === "pulse" ? "pulse" : b?.type === "action" ? "action" : "journal",
+          body: patch.state === "skipped" ? "" : (patch.body ?? ""),
+          choice: label ? (patch.choice ?? null) : null,
+          choiceLabel: label ?? null,
+          status: patch.status ?? null,
+          state: patch.state ?? "saved",
+          createdAt: notes[blockId]?.createdAt ?? at,
+          updatedAt: at,
+        };
+      } else note = (await api<{ note: ReaderNote }>(`/api/magazine/${guide.id}/notes`, { body: { revisionId: guide.revisionId, blockId, ...patch } })).note;
+      setNotes((n) => ({ ...n, [blockId]: note }));
+      return note;
+    },
+    opened: (blockId) => {
+      if (preview || perspectivesSent.current.has(blockId)) return;
+      perspectivesSent.current.add(blockId);
+      void api(`/api/magazine/${guide.id}/notes`, { body: { action: "perspectives", revisionId: guide.revisionId, blockId } }).catch(() => {});
+    },
   };
+  // My Notes: their own entries in this course.
+  const myNotes = useMyNotes({
+    guide,
+    preview,
+    notes,
+    onChanged: (blockId, note) =>
+      setNotes((n) => {
+        const next = { ...n };
+        if (note) next[blockId] = note;
+        else delete next[blockId];
+        return next;
+      }),
+  });
 
   const resume =
     !course && guide.progress.lastSection && guide.progress.lastSection !== page.sections[0]?.id
@@ -407,6 +458,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             <span className="inline-flex items-center gap-1.5">
               <Icon name="clock" className="size-4" /> {guide.pageMinutes[page.id]} min read
             </span>
+            {/* On a phone the reading rail is a menu, so My notes sits here. */}
+            {myNotes.button && <span className="lg:hidden">{myNotes.button}</span>}
             {page.kind === "content" && audioGuide.audio && (audioGuide.offered || playable(page.narration, audioGuide.audio)) && (
               <AudioGuideCard
                 key={page.id}
@@ -455,7 +508,21 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       <Notices guide={guide} preview={preview} stale={stale} />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
-        <Rail guide={guide} page={page} base={base} active={active} finished={finished} extra={selfReview.button("rail")} />
+        <Rail
+          guide={guide}
+          page={page}
+          base={base}
+          active={active}
+          finished={finished}
+          extra={
+            (selfReview.available || myNotes.available) && (
+              <div className="flex flex-col gap-2">
+                {selfReview.button("rail")}
+                {myNotes.button}
+              </div>
+            )
+          }
+        />
         <div className="flex min-w-0 flex-col gap-16">
           {page.sections.map((s, i) => (
             <section key={s.id} id={`section-${s.id}`} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8">
@@ -490,6 +557,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       </div>
       {selfReview.button("float")}
       {selfReview.dialog}
+      {myNotes.dialog}
     </article>
   );
 }

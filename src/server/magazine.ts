@@ -24,7 +24,7 @@ import {
   type Page,
   type PageTemplate,
 } from "@/lib/magazine";
-import { audit, tx, type Db } from "./db";
+import { audit, ensureNotes, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 import { quizOffer } from "./pathQuiz";
 import { liveItems } from "@/lib/magazineReview";
@@ -122,6 +122,42 @@ const finishedPages = (db: Db, guideId: string, userId: string, revisionId: stri
       page_id: string;
     }[]
   ).map((r) => r.page_id);
+
+/**
+  The learner's own reflect-and-apply entries in this course (journal, action notes, pulse answers), by block:
+  sent with their copy of the course so the blocks show what they saved. Only ever their own.
+*/
+function notesOf(db: Db, guideId: string, userId: string) {
+  ensureNotes(db);
+  const rows = db.prepare("SELECT * FROM magazine_notes WHERE guide_id = ? AND user_id = ?").all(guideId, userId) as {
+    block_id: string;
+    kind: "journal" | "action" | "pulse";
+    body: string;
+    choice: string | null;
+    choice_label: string | null;
+    status: string | null;
+    state: "draft" | "saved" | "skipped";
+    created_at: string;
+    updated_at: string;
+  }[];
+  return Object.fromEntries(
+    rows.map((r) => [
+      r.block_id,
+      {
+        blockId: r.block_id,
+        kind: r.kind,
+        body: r.body,
+        choice: r.choice,
+        choiceLabel: r.choice_label,
+        status: r.status,
+        state: r.state,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      },
+    ]),
+  );
+}
+export type ReaderNote = ReturnType<typeof notesOf>[string];
 
 export type ReflectionFeedback = { summary: string; strengths: string[]; consider: string[] };
 
@@ -309,6 +345,7 @@ export function readGuide(db: Db, user: User, slug: string) {
       finished: finishedPages(db, g.id, user.id, r.id),
       started: Boolean(p),
       reflections: reflectionsOf(db, g.id, user.id, r.id),
+      notes: notesOf(db, g.id, user.id),
     },
     completed: done ? { kind: done.kind, at: done.at, thisRevision: done.revision_id === r.id } : null,
     quizzes: quizStates(db, user, doc),
@@ -1015,7 +1052,7 @@ export function previewGuide(db: Db, actor: User, id: string): ReaderGuide {
     // An author's preview keeps the questions: it runs reviews in the browser, recording nothing.
     doc: a.doc,
     practice: practiceSummary(a.doc),
-    progress: { lastPage: null, lastSection: null, answers: {}, finished: [], started: false, reflections: {} },
+    progress: { lastPage: null, lastSection: null, answers: {}, finished: [], started: false, reflections: {}, notes: {} },
     completed: null,
     quizzes: quizStates(db, actor, a.doc),
   };

@@ -34,6 +34,8 @@ import {
   shuffleFor,
 } from "@/lib/magazine";
 import { RichText } from "../RichText";
+import type { ReaderNote } from "@/server/magazine";
+import { ReflectBlock } from "./ReflectBlocks";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
 
@@ -71,6 +73,13 @@ export type InteractiveContext = {
   engaged: (blockId: string) => void;
   reflections: Record<string, ReflectionSaved>;
   reflect: (blockId: string, response: string) => Promise<ReflectionSaved>;
+  /** Reflect and apply: the learner's own entries by block, and saving one (a draft, a note, a pulse answer). */
+  notes: Record<string, ReaderNote>;
+  saveNote: (blockId: string, patch: { body?: string; choice?: string; status?: string; state?: "draft" | "saved" | "skipped" }) => Promise<ReaderNote>;
+  /** Another block in the course, for a block that looks back at one. */
+  find: (blockId: string) => Block | undefined;
+  /** The learner opened a perspectives panel. */
+  opened: (blockId: string) => void;
 };
 
 const column = "mx-auto w-full max-w-[42rem]";
@@ -117,6 +126,11 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <Matching block={b} ctx={ctx} />;
     case "fillblank":
       return <FillBlank block={b} ctx={ctx} />;
+    case "journal":
+    case "perspectives":
+    case "pulse":
+    case "action":
+      return <ReflectBlock block={b} ctx={ctx} />;
     default:
       return null;
   }

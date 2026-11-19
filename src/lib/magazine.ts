@@ -295,6 +295,72 @@ export type WallBlock = Base & { type: "wall"; prompt: string; placeholder?: str
 export type BudgetService = { id: string; name: string; unit: string; cost: number; perWeek: number; max: number };
 export type BudgetBlock = Base & { type: "budget"; title: string; budget: number; weeks: number; services: BudgetService[] };
 
+/*
+  Reflect and apply (docs/magazine-reflect-apply.md): four unscored blocks. A learner's entries are private
+  to them (server/magazineNotes), are never graded, and never complete a page unless the author asks for a
+  response, in which case writing or "prefer not to write" both count.
+*/
+/**
+  A private note on a prompt. With `revisits` it's a later look at an earlier journal: the learner sees what
+  they wrote then and adds a dated follow-up, without changing the original.
+*/
+export type JournalBlock = Base & {
+  type: "journal";
+  prompt: string;
+  /** A way in, shown under the prompt ("What would you ask first?"). */
+  scaffold?: string;
+  /** About how long it takes, in minutes. */
+  minutes?: number;
+  required?: boolean;
+  revisits?: string;
+};
+/** A defensible way of seeing a case: its reasoning, and what it might miss. Never ranked, never "the answer". */
+export type PerspectiveView = { id: string; title: string; reasoning: string; misses: string };
+/**
+  Two or three curated viewpoints, opened by the learner (after their own response when `after` names a
+  journal, decision, pulse or action block). What the approved guidance says is shown apart from the opinions.
+*/
+export type PerspectivesBlock = Base & {
+  type: "perspectives";
+  prompt: string;
+  after?: string;
+  views: PerspectiveView[];
+  guidance?: { body: string; source?: { label: string; href?: string }; reviewedBy?: string; reviewedOn?: string };
+};
+/**
+  One tap: confidence or a viewpoint, never a scored answer. `compareWith` pairs it with an earlier pulse
+  that asks the same thing with the same labels, to show the learner how their own view changed.
+*/
+export type PulseBlock = Base & {
+  type: "pulse";
+  question: string;
+  kind: "confidence" | "view";
+  options: { id: string; label: string }[];
+  compareWith?: string;
+};
+/**
+  One concrete action to try at work: a suggestion or their own. With `revisits` it asks later whether they
+  tried the earlier one (tried it, not yet, adjusted my plan) with an optional private reflection.
+*/
+export type ActionBlock = Base & {
+  type: "action";
+  prompt: string;
+  suggestions: { id: string; text: string }[];
+  /** Learners can write their own action (on unless set to false). */
+  allowOwn?: false;
+  /** When it's worth trying ("On your next invoice review"). */
+  timing?: string;
+  required?: boolean;
+  revisits?: string;
+};
+export const PULSE_DEFAULTS = {
+  confidence: ["Not confident", "Unsure", "Somewhat confident", "Confident"],
+  view: ["", "", ""],
+} as const;
+export const ACTION_STATUSES = { tried: "Tried it", not_yet: "Not yet", adjusted: "Adjusted my plan" } as const;
+export type ActionStatus = keyof typeof ACTION_STATUSES;
+export const REFLECT_TYPES = ["journal", "perspectives", "pulse", "action"] as const;
+
 export type Block =
   | TextBlock
   | AccordionBlock
@@ -322,7 +388,11 @@ export type Block =
   | SortingBlock
   | SequencingBlock
   | MatchingBlock
-  | FillBlankBlock;
+  | FillBlankBlock
+  | JournalBlock
+  | PerspectivesBlock
+  | PulseBlock
+  | ActionBlock;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -455,6 +525,15 @@ export function activityDone(b: Block, answers: Record<string, string>, quizzes:
     case "checklist":
       if (!b.items.length) return null;
       break;
+    // Reflect and apply: never an activity to finish, unless the author asks for a response (writing, or
+    // choosing not to, both count).
+    case "perspectives":
+    case "pulse":
+      return null;
+    case "journal":
+    case "action":
+      if (!b.required) return null;
+      break;
   }
   return answers[`done:${b.id}`] === "1";
 }
@@ -497,6 +576,10 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   matching: "Matching",
   fillblank: "Fill in the blank",
   budget: "Budget simulator",
+  journal: "Private journal",
+  perspectives: "Compare perspectives",
+  pulse: "Pulse check",
+  action: "Action note",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1148,6 +1231,88 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           })),
         };
       }
+      case "journal": {
+        const scaffold = str(o.scaffold, `${where} scaffold`, { max: 300 });
+        const minutes = Math.round(Number(o.minutes));
+        const revisits = typeof o.revisits === "string" && ID.test(o.revisits) ? o.revisits : undefined;
+        return {
+          ...base,
+          type: "journal",
+          prompt: str(o.prompt, `${where} prompt`, { required: true, max: 500 }) ?? "",
+          ...(scaffold && { scaffold }),
+          ...(minutes >= 1 && minutes <= 30 && { minutes }),
+          ...(o.required === true && { required: true }),
+          ...(revisits && { revisits }),
+        };
+      }
+      case "perspectives": {
+        const raw = list(o.views, where, "perspectives", 4);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 perspectives.`);
+        const g = o.guidance as Record<string, unknown> | undefined;
+        const body = g ? str(g.body, `${where} guidance`, { max: 2000 }) : undefined;
+        const src = g?.source as Record<string, unknown> | undefined;
+        const label = src ? str(src.label, `${where} guidance source`, { max: 200 }) : undefined;
+        const href = src?.href != null && src.href !== "" ? str(src.href, `${where} guidance link`) : undefined;
+        if (href && !safeHref(href)) problems.push(`${where} guidance link must be a web address or a page on the Hub.`);
+        const reviewedBy = g ? str(g.reviewedBy, `${where} guidance reviewer`, { max: 120 }) : undefined;
+        const reviewedOn = typeof g?.reviewedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(g.reviewedOn) ? g.reviewedOn : undefined;
+        const after = typeof o.after === "string" && ID.test(o.after) ? o.after : undefined;
+        return {
+          ...base,
+          type: "perspectives",
+          prompt: str(o.prompt, `${where} prompt`, { max: 400 }) ?? "",
+          ...(after && { after }),
+          views: raw.map((v, i) => ({
+            id: typeof v?.id === "string" && ID.test(v.id) ? v.id : `v${i + 1}`,
+            title: str(v?.title, `${where} perspective ${i + 1}`, { required: true, max: 200 }) ?? "",
+            reasoning: str(v?.reasoning, `${where} perspective ${i + 1} reasoning`, { required: true, max: 1200 }) ?? "",
+            misses: str(v?.misses, `${where} perspective ${i + 1}: what it might miss`, { max: 800 }) ?? "",
+          })),
+          ...(body && {
+            guidance: {
+              body,
+              ...(label && { source: { label, ...(href && { href }) } }),
+              ...(reviewedBy && { reviewedBy }),
+              ...(reviewedOn && { reviewedOn }),
+            },
+          }),
+        };
+      }
+      case "pulse": {
+        const raw = list(o.options, where, "response labels", 5);
+        if (raw.length < 2) unfinished(`${where} needs at least 2 response labels.`);
+        const compareWith = typeof o.compareWith === "string" && ID.test(o.compareWith) ? o.compareWith : undefined;
+        return {
+          ...base,
+          type: "pulse",
+          question: str(o.question, `${where} question`, { required: true, max: 300 }) ?? "",
+          kind: o.kind === "view" ? "view" : "confidence",
+          options: raw.map((op, i) => ({
+            id: typeof op?.id === "string" && ID.test(op.id) ? op.id : `o${i + 1}`,
+            label: str(op?.label, `${where} label ${i + 1}`, { required: true, max: 80 }) ?? "",
+          })),
+          ...(compareWith && { compareWith }),
+        };
+      }
+      case "action": {
+        const raw = list(o.suggestions, where, "suggested actions", 4);
+        const timing = str(o.timing, `${where} timing`, { max: 160 });
+        const revisits = typeof o.revisits === "string" && ID.test(o.revisits) ? o.revisits : undefined;
+        if (!revisits && raw.length < 2 && o.allowOwn === false) unfinished(`${where} needs at least 2 suggested actions, or let learners write their own.`);
+        return {
+          ...base,
+          type: "action",
+          prompt: str(o.prompt, `${where} prompt`, { required: true, max: 400 }) ?? "",
+          suggestions: raw.map((sg, i) => ({
+            id: typeof sg?.id === "string" && ID.test(sg.id) ? sg.id : `a${i + 1}`,
+            text: str(sg?.text, `${where} action ${i + 1}`, { required: true, max: 300 }) ?? "",
+          })),
+          ...(o.allowOwn === false && { allowOwn: false as const }),
+          ...(timing && { timing }),
+          ...(o.required === true && { required: true }),
+          ...(revisits && { revisits }),
+        };
+      }
       case "wall": {
         const placeholder = str(o.placeholder, `${where} placeholder`, { max: 200 });
         return {
@@ -1351,6 +1516,68 @@ export const allBlocks = (doc: GuideDoc) => doc.pages.flatMap(pageBlocks);
 export const pageTitle = (doc: GuideDoc, page: Page, courseTitle: string) =>
   page.title || (doc.pages.length === 1 ? courseTitle : `Page ${doc.pages.indexOf(page) + 1}`);
 
+/** The order of every block in the course, to check a paired block comes after the one it looks back at. */
+const blockOrder = (doc: GuideDoc) => new Map(allBlocks(doc).map((b, i) => [b.id, i]));
+
+/**
+  Reflect and apply blocks' own checks. `blocks`: it stops publishing (a pair that's gone, or comes later);
+  otherwise it's a suggestion (vague or uneven labels, a pair worded differently, a prompt that invites real
+  client details).
+*/
+export function reflectChecks(b: Block, doc: GuideDoc): { text: string; blocks: boolean }[] {
+  const out: { text: string; blocks: boolean }[] = [];
+  const order = blockOrder(doc);
+  const earlier = (id: string | undefined, type: Block["type"], what: string) => {
+    if (!id) return undefined;
+    const other = allBlocks(doc).find((x) => x.id === id);
+    if (!other || other.type !== type)
+      out.push({ text: `the ${what} it looks back at isn’t there any more. Choose another, or remove the link.`, blocks: true });
+    else if ((order.get(other.id) ?? 0) >= (order.get(b.id) ?? 0))
+      out.push({ text: `the ${what} it looks back at comes after it. Move this block later in the course.`, blocks: true });
+    else return other;
+    return undefined;
+  };
+  const personal = (text: string) =>
+    /\b(a|your|one of your) (real |actual )?clients?('s)? (name|address|details)|name (the|a|your) client\b/i.test(text)
+      ? out.push({ text: "the prompt seems to ask for a real client’s details. Ask for a fictional or de-identified example.", blocks: false })
+      : 0;
+  if (b.type === "journal") {
+    earlier(b.revisits, "journal", "journal");
+    personal(b.prompt);
+  }
+  if (b.type === "action") {
+    earlier(b.revisits, "action", "action note");
+    if (!b.revisits && b.suggestions.length === 1) out.push({ text: "offer 2 to 4 suggested actions, so there’s a real choice.", blocks: false });
+    personal(b.prompt);
+  }
+  if (b.type === "perspectives") {
+    if (b.after && !allBlocks(doc).some((x) => x.id === b.after))
+      out.push({ text: "the response it follows isn’t there any more. Choose another, or show it on its own.", blocks: true });
+    if (b.views.some((v) => !v.misses)) out.push({ text: "say what each perspective might miss, so none reads as the answer.", blocks: false });
+    if (b.guidance && !b.guidance.source) out.push({ text: "link “What the guidance says” to its approved source.", blocks: false });
+    if (b.guidance && !b.flag) out.push({ text: "flag the guidance to be verified by its policy owner before publishing.", blocks: false });
+  }
+  if (b.type === "pulse") {
+    const labels = b.options.map((o) => o.label.trim().toLowerCase());
+    if (new Set(labels).size !== labels.length) out.push({ text: "two response labels are the same.", blocks: false });
+    if (b.options.some((o) => o.label.trim().length < 2 || /^(ok|fine|maybe|other|n\/a)$/i.test(o.label.trim())))
+      out.push({ text: "a response label is vague. Say what choosing it means.", blocks: false });
+    if (b.kind === "confidence" && b.options.length < 3)
+      out.push({ text: "a confidence scale reads better with 3 to 5 labels, evenly spaced from low to high.", blocks: false });
+    const pair = earlier(b.compareWith, "pulse", "pulse check");
+    if (pair && pair.type === "pulse") {
+      if (pair.options.map((o) => o.label).join("|") !== b.options.map((o) => o.label).join("|"))
+        out.push({
+          text: "its response labels differ from the pulse check it’s paired with, so the change can’t be compared. Use the same labels.",
+          blocks: true,
+        });
+      else if (pair.question.trim() !== b.question.trim())
+        out.push({ text: "it’s worded differently from the pulse check it’s paired with. Check both ask about the same thing.", blocks: false });
+    }
+  }
+  return out;
+}
+
 /**
   What stops a guide being published, and suggestions that don't. Required: everything filled in,
   unresolved verification flags, informative pictures without a description, video without captions or
@@ -1422,6 +1649,8 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
         if (b.type === "confidence" && b.compareWith && !allBlocks(doc).some((x) => x.id === b.compareWith && x.type === "confidence"))
           blocking.push(`${where}: the confidence check it compares with isn’t there any more.`);
         if (b.type === "reflection" && !b.guidance) suggestions.push(`${where}: add guidance on what a good answer covers, so Claude’s feedback is useful.`);
+        // Reflect and apply: a pair must still be there, earlier in the course, and ask the same thing.
+        for (const p of reflectChecks(b, doc)) (p.blocks ? blocking : suggestions).push(`${where}: ${p.text}`);
         if (b.type === "budget" && !b.flag) suggestions.push(`${where}: mark the budget Illustrative, so reviewers know the figures are made up.`);
         if (b.type === "accordion")
           b.items.forEach((it, j) => {
@@ -1497,6 +1726,11 @@ export function pageMinutes(page: Page) {
     if (b.type === "matching") extra += 0.2 * b.pairs.length + 0.5;
     if (b.type === "fillblank") n += words(b.text);
     if (b.type === "confidence") extra += 0.25;
+    if (b.type === "journal") extra += b.minutes ?? 2;
+    if (b.type === "perspectives")
+      n += words(b.prompt) + b.views.reduce((a, v) => a + words(v.title) + words(v.reasoning) + words(v.misses), 0) + words(b.guidance?.body);
+    if (b.type === "pulse") extra += 0.25;
+    if (b.type === "action") extra += 1;
     if (b.type === "reflection") extra += 3;
     if (b.type === "budget") extra += 3;
     if (b.type === "wall") extra += 2;

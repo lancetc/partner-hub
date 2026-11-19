@@ -13,6 +13,10 @@ import {
   type Verdict,
   CONFIDENCE_FACES,
   type Media,
+  ACTION_STATUSES,
+  PULSE_DEFAULTS,
+  reflectChecks,
+  BLOCK_LABELS,
 } from "@/lib/magazine";
 import { btn, Field, input } from "./ui";
 import { DescribeButton, ImageDropZone, PictureButtons } from "./ImagePicker";
@@ -213,6 +217,14 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <MatchingEdit block={b} update={update} />;
     case "fillblank":
       return <FillBlankEdit block={b} update={update} />;
+    case "journal":
+      return <JournalEdit block={b} update={update} />;
+    case "perspectives":
+      return <PerspectivesEdit block={b} update={update} />;
+    case "pulse":
+      return <PulseEdit block={b} update={update} />;
+    case "action":
+      return <ActionEdit block={b} update={update} />;
     default:
       return null;
   }
@@ -1373,6 +1385,11 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
       );
     case "budget":
       return <p className="text-sm text-ink-muted">The figures are for practice. Flag the block Illustrative below so reviewers know they’re made up.</p>;
+    case "journal":
+    case "perspectives":
+    case "pulse":
+    case "action":
+      return <ReflectSettings block={b} update={update} doc={doc} />;
     default:
       return null;
   }
@@ -1696,5 +1713,485 @@ function FillBlankEdit({ block: b, update }: { block: Of<"fillblank">; update: U
       </p>
       <FeedbackField value={b.feedback} onChange={(v) => update<typeof b>(b.id, (x) => void (x.feedback = v), `${b.id}:feedback`)} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reflect and apply: a private journal, curated perspectives, a pulse check and an action note
+// ---------------------------------------------------------------------------------------------
+
+/** What learners are told about privacy, shown in the editor so authors see it too. */
+function PrivacyPreview({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-3 flex items-start gap-2 text-sm text-ink-muted">
+      <Icon name="lock" className="mt-0.5 size-4 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function JournalEdit({ block: b, update }: { block: Of<"journal">; update: Update }) {
+  return (
+    <div className={cx(column, card)}>
+      <Kicker icon="pen">{b.revisits ? "Revisit your note" : "Private journal"}</Kicker>
+      <InlineText
+        value={b.prompt}
+        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+        placeholder={b.revisits ? "The question now (What would you now ask Dot?)" : "A short, specific prompt, close to the case it’s about"}
+        multiline
+        className="font-serif text-xl font-semibold"
+      />
+      <InlineText
+        value={b.scaffold ?? ""}
+        onChange={(v) => update<typeof b>(b.id, (x) => void (x.scaffold = v || undefined), `${b.id}:scaffold`)}
+        placeholder="A way in (optional): What would you ask first?"
+        className="mt-1 text-ink-muted"
+      />
+      <div className="mt-3 min-h-24 rounded-2xl border border-dashed border-line-strong p-3 text-ink-muted" aria-hidden>
+        {b.revisits
+          ? "The learner sees what they wrote earlier beside this, and adds a dated follow-up. Both are kept."
+          : "The learner writes a few sentences here. It autosaves as they type."}
+      </div>
+      <PrivacyPreview>
+        <strong className="text-ink">Private note.</strong> Only the learner sees it, in My Notes. It isn’t graded, shown to you or managers, posted, or sent to
+        AI. {b.required ? "A response is asked for: writing, or “Prefer not to write”, both count." : "Optional: it never holds up finishing the page."}
+      </PrivacyPreview>
+    </div>
+  );
+}
+
+function PerspectivesEdit({ block: b, update }: { block: Of<"perspectives">; update: Update }) {
+  const g = b.guidance;
+  return (
+    <div className={cx("mx-auto w-full max-w-5xl", card)}>
+      <Kicker icon="people">Compare perspectives</Kicker>
+      <InlineText
+        value={b.prompt}
+        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+        placeholder="What’s being compared (Two ways to respond to the complaint)"
+        className="font-serif text-xl font-semibold"
+      />
+      <p className="mt-1 text-sm text-ink-muted">
+        Two or three defensible viewpoints, each with what it might miss. Learners open them themselves; none is ranked or “the answer”.
+      </p>
+      <ol className={cx("mt-4 grid gap-4", b.views.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2")}>
+        {b.views.map((v, i) => (
+          <li key={v.id} className="flex flex-col gap-2 rounded-2xl border border-line p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">Perspective {i + 1}</span>
+              <RowTools
+                what="perspective"
+                index={i}
+                count={b.views.length}
+                min={2}
+                onMove={(d) => update<typeof b>(b.id, (x) => move(x.views, i, d))}
+                onRemove={() => update<typeof b>(b.id, (x) => void x.views.splice(i, 1))}
+              />
+            </div>
+            <InlineText
+              value={v.title}
+              onChange={(t) => update<typeof b>(b.id, (x) => void (x.views[i].title = t), `${b.id}:${v.id}:title`)}
+              placeholder="The viewpoint, in their words (I want to reassure the client straight away)"
+              multiline
+              className="font-serif text-lg font-semibold"
+            />
+            <p className="text-sm font-bold">The reasoning</p>
+            <InlineText
+              value={v.reasoning}
+              onChange={(t) => update<typeof b>(b.id, (x) => void (x.views[i].reasoning = t), `${b.id}:${v.id}:reasoning`)}
+              placeholder="Why someone would see it this way"
+              multiline
+            />
+            <p className="text-sm font-bold">What it might miss</p>
+            <InlineText
+              value={v.misses}
+              onChange={(t) => update<typeof b>(b.id, (x) => void (x.views[i].misses = t), `${b.id}:${v.id}:misses`)}
+              placeholder="The risk or gap in it"
+              multiline
+            />
+          </li>
+        ))}
+      </ol>
+      <AddButton
+        disabled={b.views.length >= 3}
+        onClick={() => update<typeof b>(b.id, (x) => void x.views.push({ id: rid("view"), title: "", reasoning: "", misses: "" }))}
+      >
+        Add a perspective
+      </AddButton>
+      {g ? (
+        <div className="mt-4 rounded-2xl border-l-4 border-action bg-tealtint p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-wide">
+              <Icon name="doc" className="size-4" /> What the guidance says
+            </p>
+            <button
+              type="button"
+              className="text-xs font-semibold text-accent hover:underline"
+              onClick={() => update<typeof b>(b.id, (x) => void delete x.guidance)}
+            >
+              Remove
+            </button>
+          </div>
+          <InlineText
+            value={g.body}
+            onChange={(t) => update<typeof b>(b.id, (x) => void (x.guidance!.body = t), `${b.id}:guidance`)}
+            placeholder="The policy or safety step that applies, from its approved source. Shown apart from the viewpoints."
+            multiline
+            className="mt-1"
+          />
+          <p className="mt-2 text-xs text-ink-muted">
+            Add its source and who reviewed it in the panel. Flag the block “Needs verification” so its policy owner checks it.
+          </p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
+          onClick={() => update<typeof b>(b.id, (x) => void (x.guidance = { body: "" }))}
+        >
+          <Icon name="doc" className="size-4" /> Add “What the guidance says” (when a policy or safety step applies)
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PulseEdit({ block: b, update }: { block: Of<"pulse">; update: Update }) {
+  return (
+    <div className={cx(column, card, "flex flex-col")}>
+      <Kicker icon="gauge">Pulse check</Kicker>
+      <InlineText
+        value={b.question}
+        onChange={(v) => update<typeof b>(b.id, (x) => void (x.question = v), `${b.id}:question`)}
+        placeholder={b.kind === "view" ? "A viewpoint to choose (Which part would you check first?)" : "How confident are you that you could…?"}
+        className="font-serif text-xl font-semibold"
+      />
+      <ul className="mt-4 flex flex-col gap-2">
+        {b.options.map((o, i) => (
+          <li key={o.id} className="flex items-center gap-2 rounded-2xl border-2 border-line-strong px-3 py-2">
+            <InlineText
+              value={o.label}
+              onChange={(v) => update<typeof b>(b.id, (x) => void (x.options[i].label = v), `${b.id}:${o.id}`)}
+              placeholder={`Response ${i + 1}`}
+              className="min-w-0 flex-1 font-semibold"
+            />
+            <RowTools
+              what="response"
+              index={i}
+              count={b.options.length}
+              min={2}
+              onMove={(d) => update<typeof b>(b.id, (x) => move(x.options, i, d))}
+              onRemove={() => update<typeof b>(b.id, (x) => void x.options.splice(i, 1))}
+            />
+          </li>
+        ))}
+      </ul>
+      <AddButton disabled={b.options.length >= 5} onClick={() => update<typeof b>(b.id, (x) => void x.options.push({ id: rid("opt"), label: "" }))}>
+        Add a response
+      </AddButton>
+      <PrivacyPreview>One tap, no right answer and no score. Only the learner sees their response; no group results are shown.</PrivacyPreview>
+    </div>
+  );
+}
+
+function ActionEdit({ block: b, update }: { block: Of<"action">; update: Update }) {
+  return (
+    <div className={cx(column, card, "flex flex-col")}>
+      <Kicker icon="target">{b.revisits ? "Back to your action" : "Action note"}</Kicker>
+      <InlineText
+        value={b.prompt}
+        onChange={(v) => update<typeof b>(b.id, (x) => void (x.prompt = v), `${b.id}:prompt`)}
+        placeholder={b.revisits ? "Did you try it? What happened?" : "Ask for one concrete action (Choose one thing to try on your next invoice review)"}
+        multiline
+        className="font-serif text-xl font-semibold"
+      />
+      {b.revisits ? (
+        <>
+          <div className="mt-3 flex flex-wrap gap-2" aria-hidden>
+            {Object.values(ACTION_STATUSES).map((l) => (
+              <span key={l} className="rounded-full border-2 border-line-strong px-4 py-2 font-semibold">
+                {l}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-ink-muted">The learner sees the action they chose earlier, picks how it went, and can add a private reflection.</p>
+        </>
+      ) : (
+        <>
+          <InlineText
+            value={b.timing ?? ""}
+            onChange={(v) => update<typeof b>(b.id, (x) => void (x.timing = v || undefined), `${b.id}:timing`)}
+            placeholder="When it’s worth trying (optional): On your next invoice review"
+            className="mt-1 text-ink-muted"
+          />
+          <ul className="mt-4 flex flex-col gap-2">
+            {b.suggestions.map((sg, i) => (
+              <li key={sg.id} className="flex items-center gap-2 rounded-2xl border-2 border-line-strong p-3">
+                <span className="size-5 shrink-0 rounded-full border-2 border-line-strong" aria-hidden />
+                <InlineText
+                  value={sg.text}
+                  onChange={(v) => update<typeof b>(b.id, (x) => void (x.suggestions[i].text = v), `${b.id}:${sg.id}`)}
+                  placeholder="A specific action (On my next invoice review, I will…)"
+                  multiline
+                  className="min-w-0 flex-1"
+                />
+                <RowTools
+                  what="action"
+                  index={i}
+                  count={b.suggestions.length}
+                  min={b.allowOwn === false ? 2 : 0}
+                  onMove={(d) => update<typeof b>(b.id, (x) => move(x.suggestions, i, d))}
+                  onRemove={() => update<typeof b>(b.id, (x) => void x.suggestions.splice(i, 1))}
+                />
+              </li>
+            ))}
+            {b.allowOwn !== false && (
+              <li className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-line-strong p-3 text-ink-muted" aria-hidden>
+                <span className="size-5 shrink-0 rounded-full border-2 border-line-strong" /> Write my own
+              </li>
+            )}
+          </ul>
+          <AddButton disabled={b.suggestions.length >= 4} onClick={() => update<typeof b>(b.id, (x) => void x.suggestions.push({ id: rid("act"), text: "" }))}>
+            Add a suggested action
+          </AddButton>
+        </>
+      )}
+      <PrivacyPreview>
+        <strong className="text-ink">Private note.</strong> Saved to the learner’s My Notes, where they can say later whether they tried it. No reminder is
+        sent, and nothing follows if they don’t.
+      </PrivacyPreview>
+    </div>
+  );
+}
+
+/** The panel's settings for the reflect-and-apply blocks: pairing, whether a response is asked for, and what this block's own checks say. */
+function ReflectSettings({ block: b, update, doc }: { block: Of<"journal"> | Of<"perspectives"> | Of<"pulse"> | Of<"action">; update: Update; doc: GuideDoc }) {
+  const blocks = allBlocks(doc);
+  const at = blocks.findIndex((x) => x.id === b.id);
+  const before = blocks.slice(0, at);
+  const label = (x: Block) =>
+    (x.type === "journal" || x.type === "action" || x.type === "decision" ? x.prompt : x.type === "pulse" ? x.question : "").slice(0, 70) ||
+    `An untitled ${x.type}`;
+  const checks = reflectChecks(b, doc);
+  const notes = checks.length > 0 && (
+    <ul className="flex list-disc flex-col gap-1 rounded-2xl bg-muted px-7 py-2 text-sm">
+      {checks.map((c) => (
+        <li key={c.text} className={cx(c.blocks && "font-semibold text-danger")}>
+          {c.text.charAt(0).toUpperCase() + c.text.slice(1)}
+        </li>
+      ))}
+    </ul>
+  );
+  const required = (b.type === "journal" || b.type === "action") && (
+    <label className="flex items-start gap-2 text-sm">
+      <input
+        type="checkbox"
+        className="mt-0.5 size-4 accent-[var(--color-action)]"
+        checked={Boolean(b.required)}
+        onChange={(e) => update<typeof b>(b.id, (x) => void (x.required = e.target.checked || undefined))}
+      />
+      <span>
+        <span className="font-semibold">Ask for a response before finishing the page</span>
+        <span className="block text-ink-muted">
+          Off by default. When on, saving a note counts, and so does “Prefer not to write: mark as reviewed”: no one has to disclose something personal. Length
+          and content are never checked.
+        </span>
+      </span>
+    </label>
+  );
+  if (b.type === "journal") {
+    const earlier = before.filter((x): x is Of<"journal"> => x.type === "journal" && !x.revisits);
+    return (
+      <>
+        <Field
+          label="Revisit an earlier journal"
+          hint="Learners see what they wrote then beside this prompt, and add a follow-up. Put this block later in the course."
+        >
+          <select className={input} value={b.revisits ?? ""} onChange={(e) => update<typeof b>(b.id, (x) => void (x.revisits = e.target.value || undefined))}>
+            <option value="">None: this is a first note</option>
+            {b.revisits && !earlier.some((x) => x.id === b.revisits) && <option value={b.revisits}>(The linked journal isn’t available)</option>}
+            {earlier.map((x) => (
+              <option key={x.id} value={x.id}>
+                {label(x)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="About how long it takes (minutes)" hint="Shown beside the heading, and counted in the page’s reading time.">
+          <input
+            type="number"
+            min={1}
+            max={30}
+            className={input}
+            value={b.minutes ?? ""}
+            onChange={(e) => update<typeof b>(b.id, (x) => void (x.minutes = Number(e.target.value) || undefined), `${b.id}:minutes`)}
+          />
+        </Field>
+        {required}
+        {notes}
+      </>
+    );
+  }
+  if (b.type === "action") {
+    const earlier = before.filter((x): x is Of<"action"> => x.type === "action" && !x.revisits);
+    return (
+      <>
+        <Field
+          label="Come back to an earlier action"
+          hint="Asks whether they tried it: Tried it, Not yet or Adjusted my plan, with an optional private reflection."
+        >
+          <select className={input} value={b.revisits ?? ""} onChange={(e) => update<typeof b>(b.id, (x) => void (x.revisits = e.target.value || undefined))}>
+            <option value="">None: this asks for a new action</option>
+            {b.revisits && !earlier.some((x) => x.id === b.revisits) && <option value={b.revisits}>(The linked action isn’t available)</option>}
+            {earlier.map((x) => (
+              <option key={x.id} value={x.id}>
+                {label(x)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {!b.revisits && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-[var(--color-action)]"
+              checked={b.allowOwn !== false}
+              onChange={(e) => update<typeof b>(b.id, (x) => void (e.target.checked ? delete x.allowOwn : (x.allowOwn = false)))}
+            />
+            <span className="font-semibold">Learners can write their own action</span>
+          </label>
+        )}
+        {required}
+        {notes}
+      </>
+    );
+  }
+  if (b.type === "pulse") {
+    const earlier = before.filter((x): x is Of<"pulse"> => x.type === "pulse");
+    const pair = earlier.find((x) => x.id === b.compareWith);
+    return (
+      <>
+        <Field label="What it asks for" hint="Either way it isn’t scored, and there’s no right answer.">
+          <select
+            className={input}
+            value={b.kind}
+            onChange={(e) =>
+              update<typeof b>(b.id, (x) => {
+                x.kind = e.target.value === "view" ? "view" : "confidence";
+                // A fresh confidence scale gets labels to start from.
+                if (x.kind === "confidence" && x.options.every((o) => !o.label))
+                  x.options = PULSE_DEFAULTS.confidence.map((l, i) => ({ id: `o${i + 1}`, label: l }));
+              })
+            }
+          >
+            <option value="confidence">Confidence (a labelled scale)</option>
+            <option value="view">A viewpoint (a clearly worded choice)</option>
+          </select>
+        </Field>
+        <Field label="Pair with an earlier pulse check" hint="Learners see how their own view changed. Both must ask the same thing, with the same labels.">
+          <select
+            className={input}
+            value={b.compareWith ?? ""}
+            onChange={(e) => update<typeof b>(b.id, (x) => void (x.compareWith = e.target.value || undefined))}
+          >
+            <option value="">None: this is the first</option>
+            {b.compareWith && !pair && <option value={b.compareWith}>(The linked pulse check isn’t available)</option>}
+            {earlier.map((x) => (
+              <option key={x.id} value={x.id}>
+                {label(x)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {pair && (pair.question !== b.question || pair.options.map((o) => o.label).join("|") !== b.options.map((o) => o.label).join("|")) && (
+          <button
+            type="button"
+            className={btn.secondary}
+            onClick={() =>
+              update<typeof b>(b.id, (x) => {
+                x.question = pair.question;
+                x.kind = pair.kind;
+                x.options = pair.options.map((o) => ({ ...o }));
+              })
+            }
+          >
+            Use the same question and labels as its pair
+          </button>
+        )}
+        {notes}
+      </>
+    );
+  }
+  const g = b.guidance;
+  const responses = before.filter((x) => x.type === "journal" || x.type === "decision" || x.type === "pulse" || x.type === "action");
+  return (
+    <>
+      <Field
+        label="Show after the learner’s own response"
+        hint="They’re invited to answer that first. They can still compare without answering: it’s never forced."
+      >
+        <select className={input} value={b.after ?? ""} onChange={(e) => update<typeof b>(b.id, (x) => void (x.after = e.target.value || undefined))}>
+          <option value="">On its own</option>
+          {b.after && !responses.some((x) => x.id === b.after) && <option value={b.after}>(The linked block isn’t available)</option>}
+          {responses.map((x) => (
+            <option key={x.id} value={x.id}>
+              {BLOCK_LABELS[x.type]}: {label(x)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {g && (
+        <>
+          <Field label="Guidance: its approved source">
+            <input
+              className={input}
+              placeholder="Complaints policy, section 3"
+              value={g.source?.label ?? ""}
+              onChange={(e) =>
+                update<typeof b>(
+                  b.id,
+                  (x) => void (x.guidance!.source = e.target.value ? { ...x.guidance!.source, label: e.target.value } : undefined),
+                  `${b.id}:gsrc`,
+                )
+              }
+            />
+          </Field>
+          {g.source && (
+            <Field label="Link to the source (optional)">
+              <input
+                className={input}
+                placeholder="https://… or a page on the Hub"
+                value={g.source.href ?? ""}
+                onChange={(e) =>
+                  update<typeof b>(
+                    b.id,
+                    (x) => void (x.guidance!.source = { label: x.guidance!.source!.label, ...(e.target.value && { href: e.target.value }) }),
+                    `${b.id}:ghref`,
+                  )
+                }
+              />
+            </Field>
+          )}
+          <Field label="Reviewed by">
+            <input
+              className={input}
+              placeholder="Name or role of the policy owner"
+              value={g.reviewedBy ?? ""}
+              onChange={(e) => update<typeof b>(b.id, (x) => void (x.guidance!.reviewedBy = e.target.value || undefined), `${b.id}:gby`)}
+            />
+          </Field>
+          <Field label="Reviewed on">
+            <input
+              type="date"
+              className={input}
+              value={g.reviewedOn ?? ""}
+              onChange={(e) => update<typeof b>(b.id, (x) => void (x.guidance!.reviewedOn = e.target.value || undefined))}
+            />
+          </Field>
+        </>
+      )}
+      <p className="text-sm text-ink-muted">Curated viewpoints only for now: learners don’t post here. Moderated peer sharing comes with the later pilot.</p>
+      {notes}
+    </>
   );
 }

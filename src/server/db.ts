@@ -83,6 +83,31 @@ CREATE TABLE IF NOT EXISTS pool_views (id INTEGER PRIMARY KEY AUTOINCREMENT, use
 CREATE TABLE IF NOT EXISTS pool_reconciliations (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, by_user TEXT, report TEXT NOT NULL);
 `;
 
+/*
+  Reflect and apply (lib/magazine, server/magazineNotes): a learner's private journal entries, action notes
+  and pulse answers in a Magazine course. One row per learner per block, kept across editions (the prompt as
+  it read is kept with it). Only the learner reads their own; authors see counts, never the words.
+*/
+export const NOTES_SCHEMA = `
+CREATE TABLE IF NOT EXISTS magazine_notes (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), user_id TEXT NOT NULL REFERENCES users(id), block_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('journal', 'action', 'pulse')),
+  body TEXT NOT NULL DEFAULT '', choice TEXT, choice_label TEXT, status TEXT,
+  -- draft: autosaved while writing. saved: the learner saved it. skipped: they chose not to write.
+  state TEXT NOT NULL DEFAULT 'saved' CHECK (state IN ('draft', 'saved', 'skipped')),
+  page_id TEXT, prompt TEXT NOT NULL DEFAULT '', revisit_of TEXT, revision_id TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (guide_id, user_id, block_id)
+);
+`;
+const notesReady = new WeakSet<object>();
+/** Makes sure the notes table is there, for a server that was already running when it was added. */
+export function ensureNotes(db: { exec: (sql: string) => void }) {
+  if (notesReady.has(db)) return;
+  db.exec(NOTES_SCHEMA);
+  notesReady.add(db);
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS orgs (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, timezone TEXT NOT NULL
@@ -820,6 +845,7 @@ export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
   db.exec(POOL_SCHEMA);
+  db.exec(NOTES_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
