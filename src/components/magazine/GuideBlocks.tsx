@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import {
   CALLOUTS,
@@ -292,11 +292,28 @@ function Picture({ media, enlarge, className }: { media: Media; enlarge?: boolea
   );
 }
 
+/**
+  Stops a video when its page is hidden. Moving to another page hides this one rather than removing it (Next keeps
+  it for coming back), and a hidden video would carry on playing.
+*/
+const pauseWhenHidden = (el: HTMLMediaElement | null) => (el ? () => el.pause() : undefined);
+
 /** A YouTube, Vimeo or Loom player: the video's own page in a frame, loaded when it scrolls near. */
 export function EmbedPlayer({ embed, title }: { embed: VideoEmbed; title: string }) {
+  const src = embedSrc(embed);
+  // Another site's player can't be paused from here, so a hidden page's frame is emptied, and loaded again on return.
+  const frame = useCallback(
+    (el: HTMLIFrameElement | null) => {
+      if (!el) return;
+      if (el.getAttribute("src") !== src) el.setAttribute("src", src);
+      return () => el.setAttribute("src", "about:blank");
+    },
+    [src],
+  );
   return (
     <iframe
-      src={embedSrc(embed)}
+      ref={frame}
+      src={src}
       title={`${title || "Video"} (${EMBED_NAME[embed.provider]})`}
       loading="lazy"
       allow="encrypted-media; fullscreen; picture-in-picture"
@@ -325,6 +342,7 @@ function Video({ block: b, ctx, className = column }: { block: Extract<Block, { 
         <EmbedPlayer embed={b.embed} title={b.title} />
       ) : (
         <video
+          ref={pauseWhenHidden}
           controls
           preload="metadata"
           poster={b.poster}

@@ -7,7 +7,7 @@ import { GENERATION_MODEL } from "./generate";
 import { audienceText, requireGuide, sourceDocuments, type DraftProgress } from "./magazineDraft";
 import { narration as speakWithTimings, narratorName, ttsConfig } from "./tts";
 import { saveUpload } from "./uploads";
-import { claudeConfigured, mp3Seconds, OPENAI_VOICES, openaiJson, openaiReady, openaiSpeech, openaiTextModel } from "./openaiText";
+import { claudeConfigured, mp3Seconds, OPENAI_VOICES, openaiJson, openaiReady, openaiTextModel } from "./openaiText";
 import { GuideDocError, PAGE_TEMPLATES, readGuideDoc, type GuideDoc, type NarrationAudio, type NarrationLength } from "@/lib/magazine";
 import { answersOn, audioOf, NARRATION_LENGTHS, scriptWarnings, secondsFor, spoilerIn, textHash, wordCount } from "@/lib/magazineNarration";
 
@@ -221,10 +221,9 @@ export async function recordNarration(
     n: number;
   };
   if (recent.n >= PER_HOUR) throw new HttpError(429, "That’s a lot of recordings in an hour. Take a short break, then try again.");
-  // OpenAI's voices read it as a plain MP3 (no word timings); the hub's narrator and ElevenLabs voices come with timings.
-  const { audio, words } = voice.startsWith("openai:")
-    ? { audio: await openaiSpeech(script, voice.slice("openai:".length)), words: null }
-    : await speakWithTimings(script, voice === "topic" ? undefined : voice);
+  // With word timings: ElevenLabs reports them; for OpenAI's voices they're estimated from the recording's length.
+  if (voice.startsWith("openai:") && !OPENAI_VOICES.some((v) => `openai:${v.id}` === voice)) throw new HttpError(400, "Choose one of OpenAI’s voices.");
+  const { audio, words } = await speakWithTimings(script, voice === "topic" ? undefined : voice);
   const spokenBy = voice === "topic" ? ttsConfig().voiceId : voice;
   const label = script
     .replace(/[^\w .,-]/g, "")

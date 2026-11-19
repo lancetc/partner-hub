@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cx } from "@/lib/format";
 import { STOP_AUDIO, useFollowWords } from "@/lib/audioPrefs";
 import { formatSeconds, playable } from "@/lib/magazineNarration";
@@ -94,6 +94,13 @@ export function AudioGuideCard({
     if (!el || !src || !autoplay || readMuted()) return;
     el.play().catch(() => {});
   }, [src, autoplay]);
+
+  // Moving to another page hides this one rather than removing it (Next keeps it for coming back), and a
+  // hidden player would carry on talking: it stops as the page is hidden.
+  useLayoutEffect(() => {
+    const el = player.current;
+    return () => el?.pause();
+  }, [src]);
 
   // A video starting, or the player's own stop, pauses the guide.
   useEffect(() => {
