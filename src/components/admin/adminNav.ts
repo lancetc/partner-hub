@@ -36,6 +36,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/problems",
+        label: "Problem desk",
+        icon: "target",
+        description: "From a signal to a reasoned response: themes, diagnosis, what’s been tried, the learning plan and whether work changed.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/challenges",
         label: "Challenges",
         icon: "flag",

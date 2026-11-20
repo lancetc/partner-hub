@@ -49,6 +49,10 @@
   --line: rgb(16 42 67 / 0.14);
   --line-strong: rgb(16 42 67 / 0.28);
   --focus: #0e7c7b;
+  /* Chart series, in fixed order (blue, orange, aqua). Checked for colour-blind separation in both themes. */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
   --overlay: rgb(10 26 46 / 0.55);
   --hero: #2d4875;
   --on-hero: #ffffff;
@@ -80,6 +84,9 @@
   --line: rgb(255 255 255 / 0.16);
   --line-strong: rgb(255 255 255 / 0.32);
   --focus: #62d2d7;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
   --overlay: rgb(16 42 67 / 0.7);
   /* A deeper shade of the official blue, so navy blocks (like Policy updates) stand out from the page. */
   --hero: #203759;

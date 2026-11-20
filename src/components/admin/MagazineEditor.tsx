@@ -52,6 +52,7 @@ import { SelfReviewManager, SelfReviewPanel } from "./MagazineSelfReview";
 import { GuideEdit, LearningGuideSettings } from "./MagazineGuideEdit";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
 import { Icon, type IconName } from "../Icon";
+import { contractFor, EVIDENCE, searchBlocks } from "@/lib/blockRegistry";
 import { freshSignal } from "@/lib/signal";
 import { freshMission } from "@/lib/mission";
 import { MISSION_CASES } from "@/content/missionCases";
@@ -2003,10 +2004,23 @@ function BlockPalette({ onAdd, onDragStart, onDragEnd }: { onAdd: (t: PaletteIte
   const [category, setCategory] = useState(BLOCK_CATEGORIES[0].title);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  // A search looks through every category.
+  // A search looks through every category, by name and by what the learner does (lib/blockRegistry): "spot a
+  // wrong rate" finds the blocks for noticing, best match first.
+  const everything = BLOCK_CATEGORIES.flatMap((c) => c.types);
+  const byPurpose: PaletteItem[] = q ? searchBlocks(query, BLOCK_LABELS).map((b) => b.type) : [];
   const shown = q
-    ? BLOCK_CATEGORIES.flatMap((c) => c.types).filter((t) => `${ITEM_LABELS[t]} ${ITEM_HINTS[t]}`.toLowerCase().includes(q))
+    ? [
+        ...new Set([
+          ...everything.filter((t) => ITEM_LABELS[t].toLowerCase().includes(q)),
+          ...byPurpose,
+          ...everything.filter((t) => ITEM_HINTS[t].toLowerCase().includes(q)),
+        ]),
+      ].slice(0, 12)
     : (BLOCK_CATEGORIES.find((c) => c.title === category)?.types ?? []);
+  const purpose = (t: PaletteItem) => {
+    const c = t === "webcam" || t === "ack" ? undefined : contractFor(t);
+    return c ? `The learner ${c.purpose.charAt(0).toLowerCase()}${c.purpose.slice(1)}. ${EVIDENCE[c.evidence]} · about ${c.minutes} min.` : "";
+  };
   return (
     <aside aria-label="Add a block">
       <div className="flex flex-col gap-3 rounded-3xl bg-gold p-3 text-[#102a43] shadow-sm ring-1 ring-[#e0a12e] dark:ring-[#e0a12e]">
@@ -2018,7 +2032,7 @@ function BlockPalette({ onAdd, onDragStart, onDragEnd }: { onAdd: (t: PaletteIte
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search blocks…"
+            placeholder="Name, or what the learner does…"
             className="min-h-10 w-full rounded-full border border-line-strong bg-surface pl-9 pr-3 text-sm"
           />
         </label>
@@ -2055,11 +2069,14 @@ function BlockPalette({ onAdd, onDragStart, onDragEnd }: { onAdd: (t: PaletteIte
                   }}
                   onDragEnd={onDragEnd}
                   onClick={() => onAdd(t)}
-                  title={`${ITEM_HINTS[t]} Click to add it after the selected block, or drag it into place.`}
+                  title={`${ITEM_HINTS[t]} ${purpose(t)} Click to add it after the selected block, or drag it into place.`}
                   className="flex min-h-12 w-full cursor-grab items-center gap-2.5 rounded-2xl border border-line-strong bg-surface px-3 py-2 text-left text-sm font-semibold hover:border-action hover:bg-tealtint active:cursor-grabbing"
                 >
                   <Icon name={ITEM_ICONS[t]} className="size-4 shrink-0 text-accent" />
-                  <span className="min-w-0 leading-snug">{ITEM_LABELS[t]}</span>
+                  <span className="min-w-0 leading-snug">
+                    {ITEM_LABELS[t]}
+                    {q && purpose(t) && <span className="mt-0.5 block text-xs font-normal text-ink-muted">{purpose(t)}</span>}
+                  </span>
                 </button>
               </li>
             ))}

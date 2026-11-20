@@ -1225,6 +1225,71 @@ export function ensureSandbox(db: { exec: (sql: string) => void }) {
 }
 
 /*
+  The Problem desk (lib/problemDesk, server/problemDesk): themes of related signals, the cases behind them and
+  each dated contact about a case, the diagnosis, the check of existing content, the response decision, every
+  action tried (before and after), the learning plan with its rationale, dated measure snapshots and review
+  decisions. De-identified summaries and links only: the source system keeps the real record.
+*/
+export const PROBLEM_SCHEMA = `
+CREATE TABLE IF NOT EXISTS pd_themes (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'investigate',
+  risk TEXT NOT NULL DEFAULT 'routine', roles TEXT NOT NULL DEFAULT '', segment TEXT NOT NULL DEFAULT '',
+  denominator INTEGER, denominator_note TEXT NOT NULL DEFAULT '', verified_by TEXT, verified_at TEXT, owner TEXT NOT NULL DEFAULT '',
+  priority_note TEXT NOT NULL DEFAULT '', status_note TEXT NOT NULL DEFAULT '', diagnosis TEXT NOT NULL DEFAULT '{}',
+  sample INTEGER NOT NULL DEFAULT 0, merged_into TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pd_cases (
+  id TEXT PRIMARY KEY, theme_id TEXT REFERENCES pd_themes(id), source TEXT NOT NULL, source_ref TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
+  link TEXT NOT NULL DEFAULT '', false_match INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, UNIQUE (source, source_ref)
+);
+CREATE TABLE IF NOT EXISTS pd_case_events (
+  id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES pd_cases(id), kind TEXT NOT NULL, on_date TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+  recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pd_case_events_case ON pd_case_events (case_id, on_date);
+CREATE TABLE IF NOT EXISTS pd_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, theme_id TEXT NOT NULL, at TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS pd_content_checks (
+  id TEXT PRIMARY KEY, theme_id TEXT NOT NULL REFERENCES pd_themes(id), kind TEXT NOT NULL, ref TEXT NOT NULL, title TEXT NOT NULL,
+  shared TEXT NOT NULL DEFAULT '', missing TEXT NOT NULL DEFAULT '', decision TEXT NOT NULL DEFAULT '', by_user TEXT NOT NULL, at TEXT NOT NULL,
+  UNIQUE (theme_id, kind, ref)
+);
+CREATE TABLE IF NOT EXISTS pd_responses (
+  theme_id TEXT PRIMARY KEY REFERENCES pd_themes(id), data TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft',
+  approved_by TEXT, approved_at TEXT, guide_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pd_actions (
+  id TEXT PRIMARY KEY, theme_id TEXT NOT NULL REFERENCES pd_themes(id), prior INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL, title TEXT NOT NULL,
+  owner TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '', asset_kind TEXT NOT NULL DEFAULT '', asset_ref TEXT NOT NULL DEFAULT '',
+  asset_version TEXT NOT NULL DEFAULT '', intended TEXT NOT NULL DEFAULT '', on_date TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'planned', result TEXT NOT NULL DEFAULT '', interpretation TEXT NOT NULL DEFAULT '', snapshot TEXT NOT NULL DEFAULT '',
+  snapshot_at TEXT NOT NULL DEFAULT '', work_link TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pd_plan_steps (
+  id TEXT PRIMARY KEY, theme_id TEXT NOT NULL REFERENCES pd_themes(id), position INTEGER NOT NULL, step TEXT NOT NULL, block_type TEXT NOT NULL,
+  rationale TEXT NOT NULL DEFAULT '{}', alternatives TEXT NOT NULL DEFAULT '[]', needs TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'proposed',
+  override_reason TEXT NOT NULL DEFAULT '', by_user TEXT NOT NULL, at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pd_metric_points (
+  id TEXT PRIMARY KEY, theme_id TEXT NOT NULL REFERENCES pd_themes(id), metric TEXT NOT NULL, bucket TEXT NOT NULL, numerator REAL NOT NULL,
+  denominator REAL, note TEXT NOT NULL DEFAULT '', as_at TEXT NOT NULL, link TEXT NOT NULL DEFAULT '', by_user TEXT NOT NULL,
+  UNIQUE (theme_id, metric, bucket)
+);
+CREATE TABLE IF NOT EXISTS pd_reviews (
+  id TEXT PRIMARY KEY, theme_id TEXT NOT NULL REFERENCES pd_themes(id), decided_on TEXT NOT NULL, decision TEXT NOT NULL, evidence TEXT NOT NULL,
+  uncertainties TEXT NOT NULL DEFAULT '', by_user TEXT NOT NULL, at TEXT NOT NULL
+);
+`;
+const problemReady = new WeakSet<object>();
+/** Makes sure the Problem desk tables are there, for a server already running when they were added. */
+export function ensureProblemTables(db: { exec: (sql: string) => void }) {
+  if (problemReady.has(db)) return;
+  db.exec(PROBLEM_SCHEMA);
+  problemReady.add(db);
+}
+
+/*
   Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
   (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
 */
@@ -1515,6 +1580,7 @@ export function migrate(db: Db) {
   db.exec(AUDITOR_SCHEMA);
   db.exec(CHARACTERS_SCHEMA);
   db.exec(SANDBOX_SCHEMA);
+  db.exec(PROBLEM_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
