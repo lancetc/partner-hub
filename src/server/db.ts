@@ -1122,6 +1122,27 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  Invoice X-Ray (lib/xray, server/xray): a learner's attempt at a case: each line's outcome, reason and
+  evidence, the split, and their script. Theirs alone; authors see totals. Each attempt keeps the edition and a
+  hash of the case and its answer key.
+*/
+export const XRAY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS xray_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), key_hash TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS xray_attempts_user ON xray_attempts (user_id, guide_id, block_id);
+`;
+const xrayReady = new WeakSet<object>();
+/** Makes sure the Invoice X-Ray table is there, for a server that was already running when it was added. */
+export function ensureXRay(db: { exec: (sql: string) => void }) {
+  if (xrayReady.has(db)) return;
+  db.exec(XRAY_SCHEMA);
+  xrayReady.add(db);
+}
+
+/*
   Dignity of Risk Balance Scale (lib/balance, server/balance): a learner's attempt at a case, with every plan
   revision. Theirs alone; authors see totals. Each attempt keeps the edition and a hash of the case and its rubric.
 */
@@ -1165,6 +1186,7 @@ export function migrate(db: Db) {
   db.exec(SIGNAL_SCHEMA);
   db.exec(MISSION_SCHEMA);
   db.exec(BALANCE_SCHEMA);
+  db.exec(XRAY_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

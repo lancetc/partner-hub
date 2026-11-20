@@ -27,6 +27,7 @@ import { RoleplaySettings } from "./MagazineRoleplayEdit";
 import { SignalEdit } from "./MagazineSignalEdit";
 import { MissionEdit } from "./MagazineMissionEdit";
 import { BalanceEdit } from "./MagazineBalanceEdit";
+import { XRayEdit } from "./MagazineXRayEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -213,6 +214,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <MissionEdit block={b} update={update} />;
     case "balance":
       return <BalanceEdit block={b} update={update} />;
+    case "xray":
+      return <XRayEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1409,6 +1412,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A training case: nothing a learner does in it changes a real care plan or record. It can’t be published until Clinical, Quality and Care Operations
           sign-off (and WHS, where workers are at risk) and the source version are recorded in the block. Use Preview to work it through.
+        </p>
+      );
+    case "xray":
+      return (
+        <p className="text-sm text-ink-muted">
+          A training case: nothing a learner does in it creates a claim, payment or message. It can’t be published until Finance, Care Operations and Quality
+          sign-off and the ruleset version are recorded in the block. Use Preview to work it through.
         </p>
       );
     case "budget":

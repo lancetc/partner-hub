@@ -35,6 +35,7 @@ import { reviewRequired } from "./topicApproval";
 import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
 import { balanceApproved, balanceForReaders } from "@/lib/balance";
+import { xrayApproved, xrayForReaders } from "@/lib/xray";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -265,7 +266,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
               : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
                 b.type === "balance"
                 ? balanceForReaders(b)
-                : b,
+                : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
+                  b.type === "xray"
+                  ? xrayForReaders(b)
+                  : b,
       ),
     })),
   })),
@@ -650,6 +654,7 @@ export function recordGuideEvent(
           "signal",
           "mission",
           "balance",
+          "xray",
           "process",
           "flashcards",
           "video",
@@ -1035,6 +1040,21 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unsigned = draftBlocks.filter((b) => b.type === "mission" && !missionApproved(b));
   // And a Balance Scale: its rules about choice, falls, worker safety and funded workers are clinical and policy judgements.
   const unbalanced = draftBlocks.filter((b) => b.type === "balance" && !balanceApproved(b));
+  // And an Invoice X-Ray: its eligibility answers, arithmetic and scripts are Finance, Care Operations and Quality judgements.
+  const unchecked = draftBlocks.filter((b) => b.type === "xray" && !xrayApproved(b));
+  if (unchecked.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "An Invoice X-Ray case needs its sign-off and ruleset version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unchecked.map(
+          (b) =>
+            `“${b.type === "xray" ? b.title : ""}”: record the content owner, the Finance, Care Operations and Quality reviewers, the date, and the ruleset and its version.`,
+        ),
+      },
+    );
   if (unbalanced.length)
     throw Object.assign(
       new HttpError(
