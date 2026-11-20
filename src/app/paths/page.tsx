@@ -65,6 +65,9 @@ function MyDiscoveryPanel() {
         <Link href="/discovery" className="inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 font-semibold hover:bg-muted">
           Open My Discovery
         </Link>
+        <Link href="/capabilities" className="inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 font-semibold hover:bg-muted">
+          My Capabilities
+        </Link>
       </div>
     </section>
   );

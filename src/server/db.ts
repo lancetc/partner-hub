@@ -891,12 +891,103 @@ export function ensureDiscovery(db: { exec: (sql: string) => void }) {
   discoveryReady.add(db);
 }
 
+/*
+  Capability Intelligence (lib/capability, server/capability): a versioned framework of competencies for a
+  role, the approved learning and assessment that count as evidence, and the records only this feature
+  holds: observations, corrections and items recorded by hand. Everything else a profile shows is read
+  from the Hub's own completion and assessment records, never copied into a second grade book.
+*/
+export const CAPABILITY_SCHEMA = `
+-- Who may do what. A superadmin grants these; no one holds them by default.
+CREATE TABLE IF NOT EXISTS cap_access (
+  user_id TEXT NOT NULL REFERENCES users(id), role TEXT NOT NULL CHECK (role IN ('pc', 'partner_ops', 'quality', 'insights')),
+  granted_by TEXT NOT NULL, granted_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, role)
+);
+CREATE TABLE IF NOT EXISTS cap_competencies (
+  id TEXT PRIMARY KEY, group_name TEXT NOT NULL DEFAULT '', retired INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL
+);
+-- Every wording of a competency. Only an approved version can be used by a role; earlier ones are kept.
+CREATE TABLE IF NOT EXISTS cap_competency_versions (
+  competency_id TEXT NOT NULL REFERENCES cap_competencies(id), version INTEGER NOT NULL,
+  name TEXT NOT NULL, definition TEXT NOT NULL DEFAULT '', behaviours TEXT NOT NULL DEFAULT '[]',
+  owner TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', review_date TEXT, high_risk INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved')),
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT,
+  PRIMARY KEY (competency_id, version)
+);
+CREATE TABLE IF NOT EXISTS cap_roles (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, job_family TEXT NOT NULL DEFAULT '',
+  domain TEXT NOT NULL CHECK (domain IN ('internal', 'partner')),
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL
+);
+-- What a role asks for, version by version. One draft at a time; making it active retires the one before.
+CREATE TABLE IF NOT EXISTS cap_role_versions (
+  id TEXT PRIMARY KEY, role_id TEXT NOT NULL REFERENCES cap_roles(id), version INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft', 'active', 'retired')), requirements TEXT NOT NULL DEFAULT '[]',
+  note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  quality_by TEXT, quality_at TEXT, approved_by TEXT, approved_at TEXT, retired_at TEXT,
+  UNIQUE (role_id, version)
+);
+-- A person's role, team and start date for capability purposes. Set by hand or by a handoff from HR or onboarding.
+CREATE TABLE IF NOT EXISTS cap_people (
+  user_id TEXT PRIMARY KEY REFERENCES users(id), role_id TEXT REFERENCES cap_roles(id), team TEXT NOT NULL DEFAULT '',
+  start_date TEXT, set_by TEXT NOT NULL, set_at TEXT NOT NULL
+);
+-- Which learning counts for a competency, and how. Suggested until a named person approves it.
+CREATE TABLE IF NOT EXISTS cap_mappings (
+  id TEXT PRIMARY KEY, competency_id TEXT NOT NULL REFERENCES cap_competencies(id),
+  asset_kind TEXT NOT NULL CHECK (asset_kind IN ('topic', 'course', 'page', 'quiz')), asset_ref TEXT NOT NULL, asset_label TEXT NOT NULL,
+  relation TEXT NOT NULL CHECK (relation IN ('introduces', 'practises', 'assesses')), rationale TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'suggested' CHECK (status IN ('suggested', 'approved', 'rejected')),
+  source TEXT NOT NULL DEFAULT 'author', asset_version TEXT,
+  proposed_by TEXT NOT NULL, proposed_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, decision_note TEXT NOT NULL DEFAULT '',
+  UNIQUE (competency_id, asset_kind, asset_ref, relation)
+);
+-- A named person's observation of someone doing the thing at work. Never changed: a later one supersedes it.
+CREATE TABLE IF NOT EXISTS cap_observations (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), competency_id TEXT NOT NULL REFERENCES cap_competencies(id),
+  competency_version INTEGER NOT NULL, role_version_id TEXT, behaviours TEXT NOT NULL DEFAULT '[]',
+  decision TEXT NOT NULL CHECK (decision IN ('verified', 'more_practice')), rationale TEXT NOT NULL,
+  assessor_id TEXT NOT NULL REFERENCES users(id), observed_on TEXT NOT NULL, at TEXT NOT NULL,
+  superseded_by TEXT, withdrawn_at TEXT, withdrawn_by TEXT, withdrawn_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS cap_observations_user ON cap_observations (user_id, competency_id);
+-- A learner asking to be observed.
+CREATE TABLE IF NOT EXISTS cap_asks (
+  user_id TEXT NOT NULL REFERENCES users(id), competency_id TEXT NOT NULL, asked_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, competency_id)
+);
+-- Evidence recorded by hand: an approved item from a handoff, or the outcome of a correction. Voided, never deleted.
+CREATE TABLE IF NOT EXISTS cap_records (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), competency_id TEXT NOT NULL REFERENCES cap_competencies(id),
+  stage TEXT NOT NULL CHECK (stage IN ('introduced', 'practised', 'demonstrated', 'verified')),
+  description TEXT NOT NULL, evidence_on TEXT NOT NULL, correction_id TEXT,
+  added_by TEXT NOT NULL, added_at TEXT NOT NULL, voided_by TEXT, voided_at TEXT, voided_reason TEXT
+);
+-- A person saying their record is wrong or missing something. A named reviewer answers; history isn't rewritten.
+CREATE TABLE IF NOT EXISTS cap_corrections (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), competency_id TEXT NOT NULL, message TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'resolved', 'declined')),
+  resolution TEXT NOT NULL DEFAULT '', resolved_by TEXT, resolved_at TEXT, created_at TEXT NOT NULL
+);
+`;
+const capabilityReady = new WeakSet<object>();
+/** Makes sure the capability tables are there, for a server that was already running when they were added. */
+export function ensureCapability(db: { exec: (sql: string) => void }) {
+  if (capabilityReady.has(db)) return;
+  db.exec(CAPABILITY_SCHEMA);
+  capabilityReady.add(db);
+}
+
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
   db.exec(POOL_SCHEMA);
   db.exec(NOTES_SCHEMA);
   db.exec(DISCOVERY_SCHEMA);
+  db.exec(CAPABILITY_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

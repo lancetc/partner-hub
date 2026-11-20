@@ -85,6 +85,12 @@ export function AccountMenu() {
               <Icon name="bookmark" /> Saved items {savedCount > 0 && <span className="ml-auto text-sm text-ink-muted">{savedCount}</span>}
             </Link>
           )}
+          <Link href="/discovery" className={item} onClick={() => setOpen(false)}>
+            <Icon name="route" /> My Discovery
+          </Link>
+          <Link href="/capabilities" className={item} onClick={() => setOpen(false)}>
+            <Icon name="layers" /> My Capabilities
+          </Link>
           <Link href="/onboarding" className={item} onClick={() => setOpen(false)}>
             <Icon name="list" /> My onboarding
           </Link>

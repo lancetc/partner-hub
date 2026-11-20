@@ -345,6 +345,33 @@ export function discoveryCourses(db: Db, user: User) {
   return { courses, restricted: rows.filter((g) => !canRead(user, g)).map((g) => g.id) };
 }
 
+/**
+  For Capability Intelligence (server/capability.ts): every published course with its reading pages, so
+  learning can be mapped to a competency. No one's progress; just what's published and its current version.
+*/
+export function capabilityCourses(db: Db) {
+  const rows = db.prepare("SELECT * FROM magazine_guides WHERE status = 'published' AND revision_id IS NOT NULL").all() as GuideRow[];
+  return rows.map((g) => {
+    const r = revisionById(db, g.revision_id!)!;
+    const doc = readGuideDoc(JSON.parse(r.doc), { draft: true });
+    return {
+      id: g.id,
+      slug: g.slug,
+      title: r.title,
+      edition: r.number,
+      audience: audienceOf(g),
+      pages: doc.pages
+        .filter((p) => p.kind === "content")
+        .map((p, i) => ({
+          id: p.id,
+          title: p.title || `Page ${i + 1}`,
+          version: createHash("sha1").update(JSON.stringify(p)).digest("hex").slice(0, 12),
+          decisions: pageBlocks(p).some((b) => b.type === "decision"),
+        })),
+    };
+  });
+}
+
 export type QuizState = { pathId: string; pathName: string; passed: boolean; available: boolean; passMark: number | null };
 
 /** The linked learning path quiz for each quiz block (null when the path has gone), from the Hub's quiz engine. */

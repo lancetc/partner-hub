@@ -101,6 +101,12 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/completions", label: "Completions", icon: "circle-check", description: "Who has finished each topic and path, by topic or by person." },
       {
+        href: "/admin/capabilities",
+        label: "Capability Insights",
+        icon: "layers",
+        description: "What each role needs people to be able to do, the evidence for it, and where it's missing.",
+      },
+      {
         href: "/admin/compliance",
         label: "Compliance register",
         icon: "shield",
