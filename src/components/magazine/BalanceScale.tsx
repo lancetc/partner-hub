@@ -31,6 +31,7 @@ import {
 } from "@/lib/balance";
 import type { balanceState } from "@/server/balance";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -304,11 +305,13 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 function Situation({ block: b }: { block: BalanceBlock }) {
   return (
     <article aria-label="The situation" className={cx(box, "mt-4")}>
-      <h4 className="font-serif text-lg font-semibold">
-        {b.person.name}
-        {b.person.age ? `, ${b.person.age}` : ""}
-      </h4>
-      {b.person.about && <p className="mt-1">{b.person.about}</p>}
+      <CharacterRow names={[b.person.name]}>
+        <h4 className="font-serif text-lg font-semibold">
+          {b.person.name}
+          {b.person.age ? `, ${b.person.age}` : ""}
+        </h4>
+        {b.person.about && <p className="mt-1">{b.person.about}</p>}
+      </CharacterRow>
       <blockquote className="mt-3 border-l-4 border-accent pl-4 font-serif text-lg italic">“{b.quote}”</blockquote>
       <p className="mt-3">{b.situation}</p>
       <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">

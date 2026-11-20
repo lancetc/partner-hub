@@ -33,6 +33,7 @@ import {
 } from "@/lib/xray";
 import type { xrayState } from "@/server/xray";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -250,10 +251,12 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 function Context({ block: b }: { block: XRayBlock }) {
   return (
     <article aria-label="What you’re checking against" className={cx(box, "mt-4")}>
-      <h4 className="font-semibold">
-        {b.participant.name}
-        {b.participant.about ? `: ${b.participant.about}` : ""}
-      </h4>
+      <CharacterRow names={[b.participant.name]} size="sm">
+        <h4 className="font-semibold">
+          {b.participant.name}
+          {b.participant.about ? `: ${b.participant.about}` : ""}
+        </h4>
+      </CharacterRow>
       <ul className="mt-2 list-disc pl-6 text-sm">
         {b.facts.map((f) => (
           <li key={f}>{f}</li>

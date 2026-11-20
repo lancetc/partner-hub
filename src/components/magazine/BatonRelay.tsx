@@ -34,6 +34,7 @@ import {
 } from "@/lib/baton";
 import type { batonState } from "@/server/baton";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -185,8 +186,10 @@ export function BatonRelay({ block: b, ctx }: { block: BatonBlock; ctx: Interact
       )}
       {v.stale && <p className={cx(warn, "mt-3")}>This relay is past its review date and is being reviewed. Treat its guidance as possibly out of date.</p>}
       <div className={cx(box, "mt-3")}>
-        <p className="font-semibold">{b.person.name}</p>
-        <p className="text-sm">{b.person.about}</p>
+        <CharacterRow names={[b.person.name]} size="sm">
+          <p className="font-semibold">{b.person.name}</p>
+          <p className="text-sm">{b.person.about}</p>
+        </CharacterRow>
       </div>
 
       <Rail b={b} v={v} />

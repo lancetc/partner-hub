@@ -38,6 +38,7 @@ import { BatonEdit } from "./MagazineBatonEdit";
 import { RedPenEdit } from "./MagazineRedPenEdit";
 import { NotesDeckEdit } from "./MagazineNotesEdit";
 import { PlaybookEdit } from "./MagazinePlaybookEdit";
+import { AuditorEdit } from "./MagazineAuditorEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -246,6 +247,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <NotesDeckEdit block={b} update={update} />;
     case "playbook":
       return <PlaybookEdit block={b} update={update} />;
+    case "auditor":
+      return <AuditorEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1485,6 +1488,14 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           The procedure lives in the playbook library (Admin, then Playbooks). This block always shows its current approved release, so editing it there
           updates every page it’s on. The course can’t be published until the snippet has an approved release.
+        </p>
+      );
+    case "auditor":
+      return (
+        <p className="text-sm text-ink-muted">
+          A practice case: nothing a learner decides in it approves a supplier or pays an invoice. It can’t be published until Supply Chain or Compliance
+          (vetting) or Finance (invoices), Care Operations and Quality sign-off and the ruleset version are recorded, every rule is within its review date, and
+          nothing looks like a real identifier. Use Preview to test every marker and decision.
         </p>
       );
     case "mentor":

@@ -27,6 +27,7 @@ import {
 import { aud, CATEGORIES, RULESET, SERVICES, showDate, WEEKDAYS, type ServiceId } from "@/lib/sahRules";
 import type { bridgeState, liveStatus } from "@/server/bridge";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -548,22 +549,24 @@ export function BridgePractice({ block: b, ctx }: { block: BridgeBlock; ctx: Int
       <p className="mt-2 rounded-2xl bg-muted px-4 py-2 text-sm font-semibold">{PRACTICE_NOTICE}</p>
       {b.intro && <p className="mt-3 text-lg">{b.intro}</p>}
       <article aria-label="The call" className={cx(box, "mt-4")}>
-        <p>
-          <span className="font-semibold">{b.person.name}. </span>
-          {b.person.about}
-        </p>
-        <p className="mt-2">
-          <span className="font-semibold">
-            {b.caller.name}
-            {b.caller.relation ? ` (${b.caller.relation})` : ""} asks:{" "}
-          </span>
-          “{b.ask}”
-        </p>
-        <p className="mt-2 text-sm">
-          {b.caller.authorised
-            ? `${b.person.name} has agreed ${b.caller.name} can discuss his arrangements.`
-            : `${b.caller.name} isn’t verified as someone ${b.person.name} has authorised: keep it general.`}
-        </p>
+        <CharacterRow names={[b.person.name, b.caller.name]} size="sm">
+          <p>
+            <span className="font-semibold">{b.person.name}. </span>
+            {b.person.about}
+          </p>
+          <p className="mt-2">
+            <span className="font-semibold">
+              {b.caller.name}
+              {b.caller.relation ? ` (${b.caller.relation})` : ""} asks:{" "}
+            </span>
+            “{b.ask}”
+          </p>
+          <p className="mt-2 text-sm">
+            {b.caller.authorised
+              ? `${b.person.name} has agreed ${b.caller.name} can discuss his arrangements.`
+              : `${b.caller.name} isn’t verified as someone ${b.person.name} has authorised: keep it general.`}
+          </p>
+        </CharacterRow>
       </article>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">

@@ -44,6 +44,8 @@ import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/be
 import { unpublishableTiles } from "./myths";
 import { deckProblems } from "./notes";
 import { playbookBlockProblems } from "./playbooks";
+import { charactersAfterPublish } from "./characters";
+import { auditorForReaders, auditorHardProblems } from "@/lib/auditor";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 
@@ -297,7 +299,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                             : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
                               b.type === "redpen"
                               ? redPenForReaders(b)
-                              : b,
+                              : // Document Auditor: the documents, records and rules, without the answer key.
+                                b.type === "auditor"
+                                ? auditorForReaders(b)
+                                : b,
       ),
     })),
   })),
@@ -692,6 +697,7 @@ export function recordGuideEvent(
           "baton",
           "redpen",
           "mentor",
+          "auditor",
           "process",
           "flashcards",
           "video",
@@ -1132,6 +1138,16 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
         ),
       },
     );
+  // And a Document Auditor: its answer key is Compliance, Finance, Care Operations and Quality judgement, its rules must be in date, and its documents must be fictional.
+  const unaudited = draftBlocks.flatMap((b) => (b.type === "auditor" ? auditorHardProblems(b, now.toISOString().slice(0, 10)) : []));
+  if (unaudited.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A Document Auditor case needs its sign-off, in-date rules and fictional details before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      { problems: unaudited },
+    );
   // And a Live SOP playbook: the snippet must have an approved release that isn't withdrawn.
   const unreleased = draftBlocks.flatMap((b) => (b.type === "playbook" ? playbookBlockProblems(db, b.snippetId, now) : []));
   if (unreleased.length)
@@ -1325,6 +1341,8 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     });
   });
   afterPublish(db, actor, now);
+  // Anyone its scenarios name without a portrait gets one queued, in the background (docs/character-photos.md).
+  charactersAfterPublish(db, actor, doc, now);
   return authorGuide(db, actor, id);
 }
 

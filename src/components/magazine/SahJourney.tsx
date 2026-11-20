@@ -24,6 +24,7 @@ import {
 } from "@/lib/journey";
 import type { journeyState } from "@/server/journey";
 import { Icon } from "../Icon";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -217,9 +218,12 @@ export function SahJourney({ block: b, ctx }: { block: JourneyBlock; ctx: Intera
         <summary className="cursor-pointer font-semibold">Who’s in this journey</summary>
         <ul className="mt-2 flex flex-col gap-2">
           {PERSONA_IDS.map((p) => (
-            <li key={p}>
-              <strong>{b.personas[p].name}</strong> {roleOf(b, p) && <span className="text-ink-muted">({roleOf(b, p)})</span>}
-              {b.personas[p].about && <span>: {b.personas[p].about}</span>}
+            <li key={p} className="flex items-start gap-2">
+              <CharacterPortrait name={b.personas[p].name} size="sm" />
+              <span>
+                <strong>{b.personas[p].name}</strong> {roleOf(b, p) && <span className="text-ink-muted">({roleOf(b, p)})</span>}
+                {b.personas[p].about && <span>: {b.personas[p].about}</span>}
+              </span>
             </li>
           ))}
         </ul>

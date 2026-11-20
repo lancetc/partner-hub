@@ -40,6 +40,7 @@ import {
 } from "@/lib/mission";
 import type { missionState } from "@/server/mission";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -368,10 +369,12 @@ function Overview({ block: b, day }: { block: MissionBlock; day: number }) {
   return (
     <div className="mt-4 grid gap-3 lg:grid-cols-3">
       <article className={box} aria-label="The participant">
-        <h4 className="font-serif text-lg font-semibold">
-          {b.participant.name}
-          {b.participant.age ? `, ${b.participant.age}` : ""}
-        </h4>
+        <CharacterRow names={[b.participant.name]} size="sm">
+          <h4 className="font-serif text-lg font-semibold">
+            {b.participant.name}
+            {b.participant.age ? `, ${b.participant.age}` : ""}
+          </h4>
+        </CharacterRow>
         {b.participant.about && <p className="mt-1">{b.participant.about}</p>}
         {b.participant.consent && (
           <p className="mt-2 text-sm">

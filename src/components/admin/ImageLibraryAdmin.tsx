@@ -144,6 +144,9 @@ export function ImageLibraryAdmin() {
           <button type="button" className={btn.secondary} onClick={() => setAdding("pexels")}>
             <Icon name="search" className="size-4" /> Pexels
           </button>
+          <Link href="/admin/images/characters" className={btn.secondary}>
+            <Icon name="people" className="size-4" /> Character photos
+          </Link>
           <button type="button" className={btn.quiet} onClick={() => void merge()} disabled={busy}>
             <Icon name="copy" className="size-4" /> Tidy duplicates
           </button>

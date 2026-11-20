@@ -1147,12 +1147,53 @@ CREATE TABLE IF NOT EXISTS playbook_gap_replies (
   label TEXT NOT NULL CHECK (label IN ('peer', 'lead', 'policy')), body TEXT NOT NULL, release_number INTEGER NOT NULL, at TEXT NOT NULL
 );
 `;
+/*
+  Document Auditor (lib/auditor, server/auditor): a learner's attempt at a case: their marks, comparisons, decision,
+  rationale and next action, and the result. Theirs alone; authors see totals. Each attempt keeps the edition and a
+  hash of the case and its answer key, and is settled once submitted.
+*/
+export const AUDITOR_SCHEMA = `
+CREATE TABLE IF NOT EXISTS auditor_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), key_hash TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS auditor_attempts_user ON auditor_attempts (user_id, guide_id, block_id);
+`;
+const auditorReady = new WeakSet<object>();
+/** Makes sure the Document Auditor table is there, for a server already running when it was added. */
+export function ensureAuditor(db: { exec: (sql: string) => void }) {
+  if (auditorReady.has(db)) return;
+  db.exec(AUDITOR_SCHEMA);
+  auditorReady.add(db);
+}
+
 const playbookReady = new WeakSet<object>();
 /** Makes sure the playbook tables are there, for a server already running when they were added. */
 export function ensurePlaybooks(db: { exec: (sql: string) => void }) {
   if (playbookReady.has(db)) return;
   db.exec(PLAYBOOK_SCHEMA);
   playbookReady.add(db);
+}
+
+/*
+  The character photo library (lib/characters, server/characters): the recurring fictional people in training
+  scenarios, each with one portrait from the image library. Scenarios find portraits by name when they are read.
+*/
+export const CHARACTERS_SCHEMA = `
+CREATE TABLE IF NOT EXISTS characters (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, aliases TEXT NOT NULL DEFAULT '[]', role TEXT NOT NULL DEFAULT 'participant',
+  look TEXT NOT NULL DEFAULT '', portrait TEXT NOT NULL DEFAULT '', alt TEXT NOT NULL DEFAULT '', hidden INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'none', error TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL DEFAULT 'author',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+`;
+const charactersReady = new WeakSet<object>();
+/** Makes sure the character table is there, for a server already running when it was added. */
+export function ensureCharacterTable(db: { exec: (sql: string) => void }) {
+  if (charactersReady.has(db)) return;
+  db.exec(CHARACTERS_SCHEMA);
+  charactersReady.add(db);
 }
 
 /*
@@ -1443,6 +1484,8 @@ export function migrate(db: Db) {
   db.exec(REDPEN_SCHEMA);
   db.exec(MENTOR_SCHEMA);
   db.exec(PLAYBOOK_SCHEMA);
+  db.exec(AUDITOR_SCHEMA);
+  db.exec(CHARACTERS_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

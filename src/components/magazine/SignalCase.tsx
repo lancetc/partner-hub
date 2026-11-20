@@ -34,6 +34,7 @@ import {
 } from "@/lib/signal";
 import type { SignalDebrief, signalState } from "@/server/signal";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -182,10 +183,12 @@ export function SignalCase({ block: b, ctx }: { block: SignalBlock; ctx: Interac
   const stage = state.stage;
   return (
     <Shell title={b.title}>
-      <p className="text-ink-muted">
-        {b.client}
-        {b.role ? ` · ${b.role}` : ""}
-      </p>
+      <CharacterRow names={[b.client]} size="sm">
+        <p className="text-ink-muted">
+          {b.client}
+          {b.role ? ` · ${b.role}` : ""}
+        </p>
+      </CharacterRow>
       <p className="mt-2 rounded-2xl bg-muted px-4 py-2 text-sm font-semibold">{SIGNAL_NOTICE}</p>
       <div ref={top} tabIndex={-1} className="mt-4 outline-none">
         <p className="text-sm font-semibold text-ink-muted" aria-live="polite">

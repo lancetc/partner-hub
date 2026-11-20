@@ -59,6 +59,8 @@ import { freshBalance } from "@/lib/balance";
 import { BALANCE_CASES } from "@/content/balanceCases";
 import { freshXRay } from "@/lib/xray";
 import { XRAY_CASES } from "@/content/xrayCases";
+import { AUDIT_CASES } from "@/content/auditCases";
+import { freshAuditor } from "@/lib/auditor";
 import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
 import { freshLine } from "@/lib/line";
@@ -147,6 +149,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   redpen: "pen",
   mentor: "mail",
   playbook: "clipboard",
+  auditor: "shield",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -194,6 +197,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   baton: "A role-handoff relay: pass the right facts to the right person, name an owner, confirm receipt, escalate what’s urgent.",
   redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
   playbook: "A procedure from the playbook library, always showing its current approved release, with Ask a Lead.",
+  auditor: "A fictional contractor pack or invoice to inspect and mark, then Approve, Query or Reject current submission.",
   mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
@@ -229,7 +233,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
-  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "baton", "budget"] },
+  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "mentor", "confidence"] },
 ];
@@ -462,6 +466,9 @@ function newBlock(item: PaletteItem): Block {
     case "playbook":
       // Points at the incident first-steps playbook; it shows once its release is approved in the library.
       return { id, type, snippetId: "sirs-first-steps" };
+    case "auditor":
+      // Starts from the first starter case, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshAuditor(AUDIT_CASES[0].data) };
     case "mentor":
       // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
       return { id, type, title: "Notes to a younger me", intro: "", topics: ["boundaries", "calls"], audiences: [], selection: "hybrid", noteIds: [], count: 3, deal: true, contribute: false, mode: "read", reflection: "Which part would you keep, in your own words?" };
@@ -507,6 +514,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "mission") Object.assign(c, freshMission(c));
   if (c.type === "balance") Object.assign(c, freshBalance(c));
   if (c.type === "xray") Object.assign(c, freshXRay(c));
+  if (c.type === "auditor") Object.assign(c, freshAuditor(c));
   if (c.type === "reset") Object.assign(c, freshReset(c));
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
@@ -658,6 +666,8 @@ function isBlank(b: Block): boolean {
       return !b.noteIds.length && !b.topics.length;
     case "playbook":
       return !b.snippetId;
+    case "auditor":
+      return !b.approval.owner && !b.approval.operations;
   }
 }
 

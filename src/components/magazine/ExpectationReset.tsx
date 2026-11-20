@@ -27,6 +27,7 @@ import {
 import { members, posts } from "@/content/community";
 import type { resetState } from "@/server/reset";
 import { Icon } from "../Icon";
+import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -173,19 +174,21 @@ export function ExpectationReset({ block: b, ctx }: { block: ResetBlock; ctx: In
         </label>
       )}
       <article aria-label={`About ${b.person.name}`} className={cx(box, "mt-4")}>
-        <p>
-          <span className="font-semibold">{b.person.name}. </span>
-          {b.person.about}
-        </p>
-        {b.family.name && (
-          <p className="mt-1 text-sm">
-            <span className="font-semibold">
-              {b.family.name}
-              {b.family.relation ? ` (${b.family.relation})` : ""}:{" "}
-            </span>
-            {b.consent}
+        <CharacterRow names={[b.person.name, b.family.name]} size="sm">
+          <p>
+            <span className="font-semibold">{b.person.name}. </span>
+            {b.person.about}
           </p>
-        )}
+          {b.family.name && (
+            <p className="mt-1 text-sm">
+              <span className="font-semibold">
+                {b.family.name}
+                {b.family.relation ? ` (${b.family.relation})` : ""}:{" "}
+              </span>
+              {b.consent}
+            </p>
+          )}
+        </CharacterRow>
       </article>
 
       <div className={cx("mt-4 grid gap-4", open && !open.modal && "lg:grid-cols-[minmax(0,1fr)_26rem]")}>

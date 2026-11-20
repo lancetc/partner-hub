@@ -18,6 +18,7 @@ import { parseBaton, type BatonBlockData } from "./baton";
 import { parseRedPen, type RedPenBlockData } from "./redpen";
 import { parseNotesDeck, type NotesDeckData } from "./notes";
 import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
+import { parseAuditor, type AuditorBlockData } from "./auditor";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -479,7 +480,8 @@ export type Block =
   | BatonBlock
   | RedPenBlock
   | NotesDeckBlock
-  | PlaybookBlock;
+  | PlaybookBlock
+  | AuditorBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -508,6 +510,8 @@ export type RedPenBlock = Base & { type: "redpen" } & RedPenBlockData;
 export type NotesDeckBlock = Base & { type: "mentor" } & NotesDeckData;
 /** Live SOP-to-Playbook (lib/playbook): a procedure resolved from the playbook library to its current approved release. */
 export type PlaybookBlock = Base & { type: "playbook" } & PlaybookBlockData;
+/** Document Auditor (lib/auditor): a fictional contractor pack or invoice, inspected and marked, then Approve, Query or Reject current submission. */
+export type AuditorBlock = Base & { type: "auditor" } & AuditorBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -720,6 +724,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   redpen: "Red Pen critique",
   mentor: "Notes to a Younger Me deck",
   playbook: "Live SOP playbook",
+  auditor: "Document Auditor",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1623,6 +1628,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "mentor", ...parseNotesDeck(o, where, { str, unfinished }) };
       case "playbook":
         return { ...base, type: "playbook", ...parsePlaybookBlock(o, where, { unfinished }) };
+      case "auditor":
+        return { ...base, type: "auditor", ...parseAuditor(o, where, { str, idOf, list, unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -2050,6 +2057,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "redpen") extra += 8;
     if (b.type === "mentor") extra += b.count;
     if (b.type === "playbook") extra += 1;
+    if (b.type === "auditor") extra += 10;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

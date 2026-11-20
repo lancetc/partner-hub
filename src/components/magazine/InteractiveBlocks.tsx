@@ -52,9 +52,11 @@ import { BatonRelay } from "./BatonRelay";
 import { RedPen } from "./RedPen";
 import { NotesDeck } from "./NotesDeck";
 import { PlaybookBlockView } from "./PlaybookBlock";
+import { DocumentAuditor } from "./DocumentAuditor";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 
 /*
   The Magazine's interactive blocks as readers use them: flashcards, tabs, a timeline, process steps, a
@@ -160,6 +162,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <NotesDeck block={b} ctx={ctx} />;
     case "playbook":
       return <PlaybookBlockView block={b} ctx={ctx} />;
+    case "auditor":
+      return <DocumentAuditor block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":
@@ -601,6 +605,7 @@ function Conversation({ block: b, ctx }: { block: ConversationBlock; ctx: Intera
       </p>
       <div className="flow-root">
         <CirclePhoto media={b.media} />
+        {!b.media?.src && <CharacterPortrait name={b.person} size="lg" className="float-right mb-2 ml-4" />}
         <p className="font-serif text-2xl font-semibold">
           {b.person}
           {b.role && <span className="font-sans text-base font-normal text-ink-muted"> · {b.role}</span>}

@@ -22,6 +22,7 @@ import {
 } from "@/lib/roleplay";
 import type { roleplayState, testTurn } from "@/server/roleplay";
 import { Icon } from "../Icon";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -441,7 +442,10 @@ function Shell({ person, children }: { person: string; children: React.ReactNode
       <p className="mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
         <Icon name="mic" className="size-5" /> Conversation practice · fictional AI character
       </p>
-      <h3 className="font-serif text-2xl font-semibold">{person}</h3>
+      <div className="flex items-center gap-3">
+        <CharacterPortrait name={person} />
+        <h3 className="font-serif text-2xl font-semibold">{person}</h3>
+      </div>
       <div className="mt-2">{children}</div>
     </section>
   );
