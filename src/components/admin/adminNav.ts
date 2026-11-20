@@ -80,6 +80,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
+        href: "/admin/myths",
+        label: "Myth vs Reality",
+        icon: "flashcards",
+        description: "The client-question tile library: drafts, sign-off, versions, and flags from learners.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/comments",
         label: "Comments",
         icon: "chat",

@@ -33,6 +33,7 @@ import { LineEdit } from "./MagazineLineEdit";
 import { BridgeEdit } from "./MagazineBridgeEdit";
 import { JourneyEdit } from "./MagazineJourneyEdit";
 import { BenchmarkEdit } from "./MagazineBenchmarkEdit";
+import { MythEdit } from "./MagazineMythEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -231,6 +232,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <JourneyEdit block={b} update={update} />;
     case "benchmark":
       return <BenchmarkEdit block={b} update={update} />;
+    case "myths":
+      return <MythEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1463,6 +1466,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A fictional journey: story times are never wait estimates. The course can’t be published until Care Operations, Clinical, Quality, Privacy and
           Communications sign-off is recorded in the block.
+        </p>
+      );
+    case "myths":
+      return (
+        <p className="text-sm text-ink-muted">
+          Tiles come from the library (Admin, then Myth vs Reality). The course can’t be published until every tile here has an approved version that isn’t
+          under review.
         </p>
       );
     case "benchmark":

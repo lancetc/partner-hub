@@ -47,6 +47,7 @@ import { LineDrawer } from "./LineDrawer";
 import { BridgePractice } from "./WhileYouWait";
 import { SahJourney } from "./SahJourney";
 import { PeerPoll } from "./PeerPoll";
+import { MythTilesBlock } from "./MythTilesBlock";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -145,6 +146,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <SahJourney block={b} ctx={ctx} />;
     case "benchmark":
       return <PeerPoll block={b} ctx={ctx} />;
+    case "myths":
+      return <MythTilesBlock block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

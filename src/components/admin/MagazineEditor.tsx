@@ -68,6 +68,7 @@ import { freshJourney } from "@/lib/journey";
 import { JOURNEY_CASES } from "@/content/journeyCases";
 import { freshBenchmark } from "@/lib/benchmark";
 import { BENCHMARK_CASES } from "@/content/benchmarkCases";
+import { SEED_TILES } from "@/content/mythTiles";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -137,6 +138,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   bridge: "money",
   journey: "timeline",
   benchmark: "people",
+  myths: "flashcards",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -180,6 +182,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   bridge: "While someone waits for funding: compare CHSP, a private quote and the funded picture, then write the family a summary.",
   journey: "A Support at Home journey from four points of view, with decision points where a change affects each person differently.",
   benchmark: "Lock in a decision on a fictional case, then see how peers chose (privacy-safe) beside the reviewed perspective.",
+  myths: "Client questions from the tile library: a 30-second answer, the exception, the source, and an approved reply to copy.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -212,7 +215,7 @@ const openStudioFor = new Set<string>();
 /** The palette's categories, so the longer list stays easy to scan. Each block is in one. */
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
-  { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots"] },
+  { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
@@ -444,6 +447,9 @@ function newBlock(item: PaletteItem): Block {
     case "benchmark":
       // Starts from the missed check-in case, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshBenchmark(BENCHMARK_CASES[0].data) };
+    case "myths":
+      // Points at the seed tiles in the library; they show to learners only once each is approved there.
+      return { id, type, title: "Myth vs Reality", intro: "", tileIds: SEED_TILES.map((t) => t.id), mode: "learning", practice: true, showCopy: true, toOpen: 3 };
     case "budget":
       return {
         id,
@@ -616,6 +622,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.clinical;
     case "benchmark":
       return !b.approval.owner && !b.approval.clinical;
+    case "myths":
+      return !b.tileIds.length;
   }
 }
 

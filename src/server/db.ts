@@ -1122,6 +1122,34 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  Myth vs Reality (lib/myths, server/myths): the canonical tile library, every version kept; what learners did
+  with a tile (opened, opened the source, practised, copied: never "sent"); and their flags.
+*/
+export const MYTHS_SCHEMA = `
+CREATE TABLE IF NOT EXISTS myth_tiles (
+  id TEXT NOT NULL, version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('draft', 'approved', 'retired')), paused INTEGER NOT NULL DEFAULT 0,
+  data TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT,
+  PRIMARY KEY (id, version)
+);
+CREATE TABLE IF NOT EXISTS myth_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), tile_id TEXT NOT NULL, version INTEGER NOT NULL,
+  event TEXT NOT NULL, guide_id TEXT
+);
+CREATE TABLE IF NOT EXISTS myth_flags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), tile_id TEXT NOT NULL, version INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('useful', 'outdated')), note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
+  resolved_by TEXT, resolved_at TEXT, resolution TEXT
+);
+`;
+const mythsReady = new WeakSet<object>();
+/** Makes sure the Myth vs Reality tables are there, for a server already running when they were added. */
+export function ensureMyths(db: { exec: (sql: string) => void }) {
+  if (mythsReady.has(db)) return;
+  db.exec(MYTHS_SCHEMA);
+  mythsReady.add(db);
+}
+
+/*
   Peer benchmark poll (lib/benchmark, server/benchmark): one locked decision per person per case version, with
   their verified role and cohort at the time. Confidence, reason and reflection are private to them.
 */
@@ -1304,6 +1332,7 @@ export function migrate(db: Db) {
   db.exec(BRIDGE_SCHEMA);
   db.exec(JOURNEY_SCHEMA);
   db.exec(BENCHMARK_SCHEMA);
+  db.exec(MYTHS_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
