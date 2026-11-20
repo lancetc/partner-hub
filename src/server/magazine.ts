@@ -33,6 +33,7 @@ import { afterPublish, publishGate } from "./questionPool";
 import { guideForReaders, guideIdentity } from "./learningGuide";
 import { reviewRequired } from "./topicApproval";
 import { signalApproved, signalForReaders } from "@/lib/signal";
+import { missionApproved, missionForReaders } from "@/lib/mission";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -257,7 +258,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
           : // Spot the Signal: the case, without what marks an answer right.
             b.type === "signal"
             ? signalForReaders(b)
-            : b,
+            : // The Mission Board: the case and board, without what marks a choice right.
+              b.type === "mission"
+              ? missionForReaders(b)
+              : b,
       ),
     })),
   })),
@@ -640,6 +644,7 @@ export function recordGuideEvent(
           "spot",
           "budget",
           "signal",
+          "mission",
           "process",
           "flashcards",
           "video",
@@ -1019,7 +1024,23 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     });
   // One thing "Publish anyway" can't waive: a Spot the Signal case teaches a regulatory judgement, so it never
   // reaches learners without its Clinical and Quality approval and source version on record.
-  const unapproved = allBlocks(readGuideDoc(a.doc, { draft: true })).filter((b) => b.type === "signal" && !signalApproved(b));
+  const draftBlocks = allBlocks(readGuideDoc(a.doc, { draft: true }));
+  const unapproved = draftBlocks.filter((b) => b.type === "signal" && !signalApproved(b));
+  // The same for a Mission Board: its dates, screening routes and statement rules are policy, signed off by the teams that own them.
+  const unsigned = draftBlocks.filter((b) => b.type === "mission" && !missionApproved(b));
+  if (unsigned.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A First 30 Days Mission Board needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unsigned.map(
+          (b) =>
+            `“${b.type === "mission" ? b.title : ""}”: record the Care Operations owner, the Supplier Compliance, Finance and Quality reviewers, the approval date, and the policy source and version.`,
+        ),
+      },
+    );
   if (unapproved.length)
     throw Object.assign(
       new HttpError(

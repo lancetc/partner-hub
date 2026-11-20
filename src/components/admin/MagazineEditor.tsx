@@ -53,6 +53,8 @@ import { GuideEdit, LearningGuideSettings } from "./MagazineGuideEdit";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
 import { Icon, type IconName } from "../Icon";
 import { freshSignal } from "@/lib/signal";
+import { freshMission } from "@/lib/mission";
+import { MISSION_CASES } from "@/content/missionCases";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -114,6 +116,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   reflection: "pen",
   budget: "money",
   signal: "eye",
+  mission: "calendar",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -149,6 +152,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   reflection: "An open question, with feedback from Claude.",
   budget: "A made-up budget to plan services against.",
   signal: "Three updates about one client: spot the pattern, act first, then a provisional SIRS assessment.",
+  mission: "A participant’s first 30 days as a task board with dated events: sequence the work, keep them told, recover when a promise slips.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -183,7 +187,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "process", "hotspots"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "checklist", "quiz"] },
-  { title: "Simulate", types: ["branching", "conversation", "signal", "budget"] },
+  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "confidence"] },
 ];
@@ -389,6 +393,9 @@ function newBlock(item: PaletteItem): Block {
     case "signal":
       // Starts from the first starter case. It's a draft: it can't be published until its approvals are recorded.
       return { id, type, ...freshSignal(SIGNAL_CASES[0].data) };
+    case "mission":
+      // Starts from the first starter case, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshMission(MISSION_CASES[0].data) };
     case "budget":
       return {
         id,
@@ -419,6 +426,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "spot") c.mistakes = c.mistakes.map((x) => ({ ...x, id: rid("mistake") }));
   if (c.type === "budget") c.services = c.services.map((x) => ({ ...x, id: rid("svc") }));
   if (c.type === "signal") Object.assign(c, freshSignal(c));
+  if (c.type === "mission") Object.assign(c, freshMission(c));
   if (c.type === "poll") c.options = c.options.map((x) => ({ ...x, id: rid("opt") }));
   if (c.type === "hotspots") c.spots = c.spots.map((x) => ({ ...x, id: rid("spot") }));
   if (c.type === "sequencing") c.steps = c.steps.map((x) => ({ ...x, id: rid("step") }));
@@ -538,6 +546,8 @@ function isBlank(b: Block): boolean {
     case "signal":
       // It starts as a whole case; an approval is the sign someone has made it theirs.
       return !b.approval.owner && !b.approval.clinical;
+    case "mission":
+      return !b.approval.owner && !b.approval.compliance;
   }
 }
 

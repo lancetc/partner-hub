@@ -25,6 +25,7 @@ import { InlineText, MediaSlot, rid, VERDICT_TONE, type Update } from "./Magazin
 import { column } from "../magazine/GuideBlocks";
 import { RoleplaySettings } from "./MagazineRoleplayEdit";
 import { SignalEdit } from "./MagazineSignalEdit";
+import { MissionEdit } from "./MagazineMissionEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -207,6 +208,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <BudgetEdit block={b} update={update} />;
     case "signal":
       return <SignalEdit block={b} update={update} />;
+    case "mission":
+      return <MissionEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1389,6 +1392,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A training case: nothing a learner does in it contacts anyone. Its answers are a regulatory judgement, so it can’t be published until Clinical and
           Quality approval and the source version are recorded in the block. Use Preview to work it through as a learner.
+        </p>
+      );
+    case "mission":
+      return (
+        <p className="text-sm text-ink-muted">
+          A training case: nothing a learner does in it rosters, starts care, issues a statement or contacts anyone. It can’t be published until Care
+          Operations, Supplier Compliance, Finance and Quality sign-off and the source version are recorded in the block. Use Preview to work it through.
         </p>
       );
     case "budget":
