@@ -28,6 +28,8 @@ import { AdminShell, Badge, btn, ErrorNote, Field, input } from "../ui";
 import { Icon } from "../../Icon";
 import { area, box, Section } from "../problems/problemUi";
 import { useStoryAct } from "./StoryLibraryAdmin";
+import type { ContinuityProposal, PlanProposal } from "@/lib/storyAssist";
+import { ContinuityPanel, PlanProposalPanel, ProposalError, ProposeButton, useProposal } from "./StoryProposals";
 
 /*
   A Story Plan (docs/story-plans.md): who this is happening to, what they're trying to do, which decision the
@@ -35,7 +37,8 @@ import { useStoryAct } from "./StoryLibraryAdmin";
   cards or pages, and it's never a gate: write by hand, use a short example, or go without a story.
 
   Suggestions here come from rules over approved profiles, episodes and the block registry, each with its reasons.
-  Nothing is accepted for the author, and a missing fact stays "Needs author or source".
+  Nothing is accepted for the author, and a missing fact stays "Needs author or source". A model can also propose a
+  plan or take a second look at continuity (./StoryProposals): the same applies to what it writes.
 */
 
 const FIELDS: [keyof PlanData & string, string, string][] = [
@@ -87,6 +90,10 @@ function Editor({
   const [x, setX] = useState<PlanData>(d.data);
   const [answer, setAnswer] = useState<Record<string, string>>({});
   const [fresh, setFresh] = useState<{ beatId: string; kind: MomentKind; speakerId: string } | null>(null);
+  // AI proposals (step 6): drafted from what's on screen now, saved or not, and taken a piece at a time.
+  const planAi = useProposal<PlanProposal>();
+  const secondLook = useProposal<ContinuityProposal>();
+  const names = new Map(d.cast.map((c) => [c.id, c.name]));
   const dirty = JSON.stringify([title, x]) !== JSON.stringify([d.title, d.data]);
   const save = (data: PlanData = x) => act({ action: "save-plan", id: d.id, title, data });
   const beat = (i: number, patch: Partial<Beat>) => setX({ ...x, beats: x.beats.map((b, n) => (n === i ? { ...b, ...patch } : b)) });
@@ -168,6 +175,40 @@ function Editor({
 
       {story && (
         <>
+          <Section
+            title="Proposals"
+            hint="A model can draft from your purpose and the approved story. It proposes; you decide. It can’t approve a character’s story, publish anything or set a rule, and a fact it can’t point to is taken out."
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <ProposeButton busy={planAi.busy} disabled={secondLook.busy} onClick={() => void planAi.ask({ kind: "plan", id: d.id, title, data: x })}>
+                Propose a plan from the purpose
+              </ProposeButton>
+              <ProposeButton
+                busy={secondLook.busy}
+                disabled={planAi.busy}
+                onClick={() => void secondLook.ask({ kind: "continuity", id: d.id, title, data: x })}
+              >
+                A second look at continuity
+              </ProposeButton>
+              <span className="text-sm text-ink-muted">Uses the learning purpose and approved profiles only. Takes a few seconds.</span>
+            </div>
+            {(planAi.error || secondLook.error) && (
+              <div className="mt-3">
+                <ProposalError text={planAi.error ?? secondLook.error ?? ""} />
+              </div>
+            )}
+            {planAi.proposal && (
+              <div className="mt-3">
+                <PlanProposalPanel p={planAi.proposal} x={x} setX={setX} names={names} onClose={planAi.clear} />
+              </div>
+            )}
+            {secondLook.proposal && (
+              <div className="mt-3">
+                <ContinuityPanel p={secondLook.proposal} beats={x.beats} onClose={secondLook.clear} />
+              </div>
+            )}
+          </Section>
+
           <Section title="The plan" hint="Rough notes are fine. Anything you don’t know yet stays empty: needs author or source.">
             <div className={cx(box, "grid gap-3 sm:grid-cols-2")}>
               {FIELDS.map(([k, label, hint]) => (

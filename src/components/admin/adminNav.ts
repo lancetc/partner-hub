@@ -86,6 +86,14 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/relay",
+        label: "Ava Relay",
+        icon: "chat",
+        description:
+          "Ava’s text relay on Magazine story pages: who used it, what the course’s own activities show, the work measure it answers to, and the Hub’s switch.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/images",
         label: "Image library",
         icon: "image",

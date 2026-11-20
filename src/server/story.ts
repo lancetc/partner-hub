@@ -323,6 +323,22 @@ function castOf(db: Db): CastMember[] {
 }
 
 /**
+  For AI proposals (server/storyAssist): everyone with a story profile, their approved profile version, and every
+  episode. The caller keeps to what is approved; nothing here is a draft passed off as canon.
+*/
+export function assistCanon(db: Db, actor: User, now = new Date()) {
+  requireAuthor(actor);
+  ensureStory(db, now);
+  const revisions = new Map(
+    (db.prepare("SELECT character_id, revision FROM character_profiles").all() as { character_id: string; revision: number }[]).map((r) => [
+      r.character_id,
+      r.revision,
+    ]),
+  );
+  return { cast: castOf(db), revisions, episodes: allEpisodes(db) };
+}
+
+/**
   Who may change shared canon. Where the steward is a named person in the Hub, it's them or a superadmin; where it's
   a team ("Partner Enablement"), any learning author, as for the rest of publishing.
 */
@@ -1181,7 +1197,13 @@ export function storyFor(db: Db, user: User, input: { topic?: unknown; guide?: u
   where the moment they came from sits. Later ones are counted, and only listed when asked for. Anything outside
   the learner's access is left out entirely: no title, no summary, no count.
 */
-export function characterHistory(db: Db, user: User, characterId: unknown, input: { placement?: unknown; later?: unknown }, now = new Date()) {
+export function characterHistory(
+  db: Db,
+  user: User,
+  characterId: unknown,
+  input: { placement?: unknown; episode?: unknown; later?: unknown },
+  now = new Date(),
+) {
   ensureStory(db, now);
   const c = charRow(db, characterId);
   if (!c || !mayMeet(db, user, c.id)) throw new HttpError(404, "That character isn’t here.");
@@ -1194,7 +1216,8 @@ export function characterHistory(db: Db, user: User, characterId: unknown, input
   const placement = idOf(input.placement)
     ? (db.prepare("SELECT * FROM story_placements WHERE id = ?").get(idOf(input.placement)) as PlacementRow | undefined)
     : undefined;
-  const context = placement ? episodes.get(momentRow(db, placement.moment_id)?.episode_id ?? "") : undefined;
+  // Where the learner is in the story: the moment they came from, or (from Ava Relay) the episode their page sits at.
+  const context = placement ? episodes.get(momentRow(db, placement.moment_id)?.episode_id ?? "") : episodes.get(idOf(input.episode));
   const items: HistoryItem[] = [];
   for (const a of db.prepare("SELECT * FROM story_appearances WHERE character_id = ? AND status = 'active'").all(c.id) as AppearanceRow[]) {
     const e = episodes.get(a.episode_id);
@@ -1238,6 +1261,142 @@ export function characterHistory(db: Db, user: User, characterId: unknown, input
   };
 }
 export type CharacterHistory = ReturnType<typeof characterHistory>;
+
+/**
+  What the story report (server/storyReport) is built on: who has a story, every moment and where it's placed, every
+  appearance and whether its link still opens, and every plan with what the rules say about it. No learner data.
+*/
+export function reportBasis(db: Db, actor: User, now = new Date()) {
+  requireAuthor(actor);
+  ensureStory(db, now);
+  const cast = castOf(db);
+  const episodes = allEpisodes(db);
+  const momentRows = db.prepare("SELECT * FROM story_moments ORDER BY created_at").all() as MomentRow[];
+  const moments = momentRows.map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    title: momentData(m).title || MOMENT_KINDS[m.kind],
+    status: m.status,
+    revision: m.revision,
+    speakerId: m.speaker_id,
+    featuredId: m.featured_id,
+    episodeId: m.episode_id,
+    planId: m.plan_id,
+  }));
+  const placements = (db.prepare("SELECT * FROM story_placements WHERE status = 'active' ORDER BY placed_at").all() as PlacementRow[]).map((pl) => {
+    const m = momentRows.find((x) => x.id === pl.moment_id);
+    return {
+      id: pl.id,
+      momentId: pl.moment_id,
+      revision: pl.revision,
+      kind: pl.kind,
+      ref: pl.ref,
+      place: pl.place,
+      behind: Boolean(m && pl.revision < m.revision),
+      ...placeLabel(db, pl),
+    };
+  });
+  const appearances = (db.prepare("SELECT * FROM story_appearances WHERE status = 'active'").all() as AppearanceRow[]).map((ap) => {
+    const label = appearanceLabel(db, ap);
+    // A link learners can't follow: the Topic has gone, or the course isn't published.
+    const g = ap.kind === "course" || ap.kind === "page" ? guideRow(db, ap.ref) : undefined;
+    const open = ap.kind === "other" ? true : ap.kind === "topic" ? Boolean(lessonBySlug(ap.ref)) : Boolean(g && g.status === "published" && g.revision_id);
+    return { id: ap.id, characterId: ap.character_id, episodeId: ap.episode_id, format: FORMATS[ap.kind], label: label.label, open };
+  });
+  const forRules = moments
+    .filter((m) => m.status !== "retired")
+    .map((m) => ({ id: m.id, kind: m.kind, status: m.status, title: m.title, speakerId: m.speakerId, planId: m.planId }));
+  const plans = (db.prepare("SELECT * FROM story_plans ORDER BY created_at").all() as PlanRow[]).map((row) => {
+    const data = { ...emptyPlan(), ...cleanPlan(JSON.parse(row.data)) };
+    const fits = suggestCharacters(
+      { behaviour: `${data.purpose} ${data.decision}`, situation: data.perspective, tension: data.tension, audience: data.audience },
+      cast,
+    ).fits;
+    const guide = row.ref_kind === "course" && row.ref ? guideRow(db, row.ref) : undefined;
+    return {
+      id: row.id,
+      title: row.title,
+      sample: Boolean(row.sample),
+      themeId: row.theme_id,
+      guide: guide ? { id: guide.id, title: guide.title, published: guide.status === "published" } : null,
+      mode: data.mode,
+      anchorId: data.anchorId,
+      /** The character the rules rank first for this brief, when one connects at all. */
+      topFit: fits[0] && fits[0].score > 0 ? fits[0].id : "",
+      openWarnings: continuityCheck(data, cast, episodes, forRules).filter((w) => !data.resolved[w.id]).length,
+      /** The plan promises a decision, and nothing at its choice beat lets the learner practise one. */
+      choiceUnpractised:
+        data.mode === "story" &&
+        data.beats.some((x) => x.kind === "choice" && (x.text || x.action)) &&
+        !data.beats.some((x) => x.kind === "choice" && x.evidence !== "explanation"),
+    };
+  });
+  return {
+    characters: cast.map((c) => ({ id: c.id, name: c.name, approved: c.approved })),
+    episodes: episodes.map((e) => ({ id: e.id, title: e.title, whenLabel: e.whenLabel, seq: e.seq, status: e.status })),
+    moments,
+    placements,
+    appearances,
+    plans,
+  };
+}
+
+/**
+  Approved canon for Ava Relay (server/relay): Ava herself, and the people an author chose for a page, each at the
+  approved profile version chosen (or the current one if that has gone). Episodes come only up to where the page
+  sits in the story; with no episode chosen, none are given. A person outside the learner's audience is left out.
+*/
+export function relayCanon(db: Db, user: User, input: { picks: { id: string; revision: number }[]; episode: string }, now = new Date()) {
+  ensureStory(db, now);
+  const approved = allEpisodes(db).filter((e) => e.status === "approved");
+  const at = approved.find((e) => e.id === input.episode) ?? null;
+  const person = (id: string, revision: number) => {
+    const c = charRow(db, id);
+    const row = c && profileRow(db, c.id);
+    if (!c || !row || !row.revision || !mayMeet(db, user, c.id)) return null;
+    const number = revision > 0 && revision <= row.revision ? revision : row.revision;
+    const profile = approvedProfile(db, c.id, number) ?? approvedProfile(db, c.id, row.revision);
+    if (!profile) return null;
+    return { id: c.id, name: c.name, portrait: c.hidden ? "" : (c.portrait ?? ""), revision: number, current: row.revision, profile };
+  };
+  const ava = person("ava", 0);
+  const people = input.picks
+    .filter((p) => p.id !== "ava")
+    .flatMap((p) => {
+      const found = person(p.id, p.revision);
+      if (!found) return [];
+      const episodes = at ? approved.filter((e) => e.seq <= at.seq && e.people.some((x) => x.characterId === found.id)) : [];
+      return [{ ...found, episodes: episodes.map((e) => ({ id: e.id, title: e.title, whenLabel: e.whenLabel, summary: e.summary, changes: e.changes })) }];
+    });
+  return {
+    ava,
+    people,
+    episode: at ? { id: at.id, title: at.title, whenLabel: at.whenLabel, seq: at.seq } : null,
+    /** How many approved episodes sit later in the story than this page: held back, and only ever counted. */
+    later: at ? approved.filter((e) => e.seq > at.seq).length : 0,
+  };
+}
+export type RelayCanon = ReturnType<typeof relayCanon>;
+
+/** For the Magazine editor's Ava Relay settings: the approved people and episodes an author can choose from. */
+export function relayChoices(db: Db, actor: User, now = new Date()) {
+  requireAuthor(actor);
+  ensureStory(db, now);
+  const people = (
+    db.prepare("SELECT character_id, revision FROM character_profiles WHERE revision > 0").all() as { character_id: string; revision: number }[]
+  ).flatMap((r) => {
+    const c = charRow(db, r.character_id);
+    const profile = c && approvedProfile(db, c.id, r.revision);
+    return c && profile ? [{ id: c.id, name: c.name, revision: r.revision, role: profile.narrativeRole, facts: profile.facts.map((f) => f.text) }] : [];
+  });
+  return {
+    ava: people.find((x) => x.id === "ava") ?? null,
+    people: people.filter((x) => x.id !== "ava"),
+    episodes: allEpisodes(db)
+      .filter((e) => e.status === "approved")
+      .map((e) => ({ id: e.id, title: e.title, whenLabel: e.whenLabel, seq: e.seq, people: e.people.map((x) => x.characterId) })),
+  };
+}
 
 /** One engagement event. Sending it again with the same key records nothing new. */
 export function recordStoryEvent(db: Db, user: User, input: Record<string, unknown>, now: Date) {

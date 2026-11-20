@@ -163,12 +163,18 @@ export function savedItems(db: Db, user: User, ids: string[]): SearchResult[] {
 
 export type RelatedDoc = { id: string; title: string; href: string; meta: string; text: string };
 
-export function related(db: Db, user: User, question: string, opts: { exclude?: string; limit?: number; chars?: number } = {}): RelatedDoc[] {
+export function related(
+  db: Db,
+  user: User,
+  question: string,
+  /** only: the kinds of content to look in, by id prefix ("lesson", "resource", "webinar"…). */
+  opts: { exclude?: string; limit?: number; chars?: number; only?: string[] } = {},
+): RelatedDoc[] {
   const words = keywords(question).slice(0, 12);
   if (!words.length) return [];
   const scored: { doc: Doc; score: number }[] = [];
   for (const doc of documents(db, user)) {
-    if (doc.id === opts.exclude) continue;
+    if (doc.id === opts.exclude || (opts.only && !opts.only.some((k) => doc.id.startsWith(`${k}:`)))) continue;
     const head = doc.head.toLowerCase();
     const rest = `${doc.summary} ${doc.body}`.toLowerCase();
     let score = 0;
@@ -190,3 +196,6 @@ export function related(db: Db, user: User, question: string, opts: { exclude?: 
         .slice(0, opts.chars ?? 3000),
     }));
 }
+
+/** Every piece of Hub content this person can open, by id: to check a source cited earlier is still theirs to see. */
+export const openableIds = (db: Db, user: User) => new Set(documents(db, user).map((d) => d.id));

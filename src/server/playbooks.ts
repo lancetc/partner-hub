@@ -249,6 +249,45 @@ export function playbookList(db: Db, user: User, now: Date) {
   };
 }
 
+/**
+  For Ava Relay's Work guidance (server/relay): the playbooks this reader may see whose approved release is in
+  effect today. A withdrawn one, one past review that has fallen back, or one not yet effective is left out, so it
+  can't be cited. Each comes with the exact release it would be cited at.
+*/
+export function playbooksForRelay(db: Db, user: User, now: Date) {
+  ensurePlaybooks(db, now);
+  const day = today(now);
+  return (db.prepare("SELECT * FROM playbook_snippets ORDER BY id").all() as SnippetRow[]).flatMap((row) => {
+    const sn = cleanSnippet(JSON.parse(row.data));
+    if (!sn.audiences.includes(user.audience as PbAudience)) return [];
+    const current = approved(db, row.id);
+    const ready = readiness(sn, Boolean(row.withdrawn), current, day);
+    if (!current || ready === "fallback" || (current.data.effectiveOn && current.data.effectiveOn > day)) return [];
+    return [
+      {
+        id: row.id,
+        title: sn.title,
+        purpose: sn.purpose,
+        tag: sn.tag,
+        ownerTeam: sn.ownerTeam,
+        number: current.number,
+        effectiveOn: current.data.effectiveOn,
+        reviewBy: current.data.reviewBy,
+        reviewDue: ready === "review_due",
+        steps: current.data.steps.map((st) => ({ id: st.id, text: st.text, why: st.why })),
+      },
+    ];
+  });
+}
+
+/** The directory's routes for this reader's role, where one has been entered: for a route answer in Ava Relay. */
+export function contactRoutes(db: Db, user: User, now: Date) {
+  ensurePlaybooks(db, now);
+  return contacts(db)
+    .map((c) => ({ label: c.label, route: c.routes[user.audience as PbAudience] ?? "" }))
+    .filter((c) => c.route);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Ask a Lead / Flag a policy gap
 // ---------------------------------------------------------------------------------------------

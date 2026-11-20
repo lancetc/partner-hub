@@ -1350,6 +1350,42 @@ export function ensureStoryTables(db: { exec: (sql: string) => void }) {
 }
 
 /*
+  Ava Relay (lib/relay, server/relay): a learner's conversation with Ava beside a Magazine course. One session per
+  learner, course and published version; each turn keeps the page it was asked on, whether activities there had
+  been attempted (never the answers), and where an answer came from. Words are kept only until the session expires.
+  Events carry no words at all: they are what reporting reads.
+*/
+export const RELAY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS relay_sessions (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '', guide_id TEXT NOT NULL, revision_id TEXT NOT NULL,
+  mode TEXT NOT NULL DEFAULT 'story', last_page TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS relay_sessions_user ON relay_sessions (user_id, guide_id, revision_id, status);
+CREATE TABLE IF NOT EXISTS relay_turns (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES relay_sessions(id) ON DELETE CASCADE, n INTEGER NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('learner','ava')), mode TEXT NOT NULL, page_id TEXT NOT NULL, beat TEXT NOT NULL DEFAULT '',
+  attempts TEXT NOT NULL DEFAULT '{}', text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'done', kind TEXT NOT NULL DEFAULT '',
+  provider TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', provenance TEXT NOT NULL DEFAULT '{}', idem TEXT, at TEXT NOT NULL,
+  UNIQUE (session_id, n)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_turns_idem ON relay_turns (session_id, idem) WHERE idem IS NOT NULL;
+CREATE TABLE IF NOT EXISTS relay_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL DEFAULT '',
+  guide_id TEXT NOT NULL, revision_id TEXT NOT NULL, page_id TEXT NOT NULL DEFAULT '', beat TEXT NOT NULL DEFAULT '', mode TEXT NOT NULL DEFAULT '',
+  event TEXT NOT NULL, outcome TEXT NOT NULL DEFAULT '', idem TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS relay_events_guide ON relay_events (guide_id, revision_id, event);
+`;
+const relayReady = new WeakSet<object>();
+/** Makes sure the relay tables are there, for a server already running when they were added. */
+export function ensureRelayTables(db: { exec: (sql: string) => void }) {
+  if (relayReady.has(db)) return;
+  db.exec(RELAY_SCHEMA);
+  relayReady.add(db);
+}
+
+/*
   Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
   (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
 */
@@ -1642,6 +1678,7 @@ export function migrate(db: Db) {
   db.exec(SANDBOX_SCHEMA);
   db.exec(PROBLEM_SCHEMA);
   db.exec(STORY_SCHEMA);
+  db.exec(RELAY_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

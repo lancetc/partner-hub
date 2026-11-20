@@ -18,6 +18,7 @@ import { parseBaton, type BatonBlockData } from "./baton";
 import { parseRedPen, type RedPenBlockData } from "./redpen";
 import { parseNotesDeck, type NotesDeckData } from "./notes";
 import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
+import { cleanRelayCourse, cleanRelayPage, relayChecks, type RelayCourse, type RelayPage } from "./relayConfig";
 import { parseAuditor, type AuditorBlockData } from "./auditor";
 import { parsePhoneCase, type PhoneCallData } from "./phonecall";
 import { parseSandbox, type SandboxBlockData } from "./sandbox";
@@ -546,6 +547,8 @@ export type Page = {
   hero?: Media;
   /** The page's spoken introduction (Audio Guide). */
   narration?: Narration;
+  /** Ava Relay on this page (lib/relayConfig): why she's here, what she may talk about and what she holds back. */
+  relay?: RelayPage;
   sections: Section[];
 };
 /*
@@ -619,7 +622,7 @@ export type PracticeItem = {
   source?: string;
 };
 export type SelfReview = { enabled: boolean; items: PracticeItem[] };
-export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio; review?: SelfReview };
+export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio; review?: SelfReview; relay?: RelayCourse };
 
 /**
   Whether the reader has worked through a block: null for blocks that are only read (text, pictures,
@@ -1771,6 +1774,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       ...(p?.standalone === true && p?.kind !== "assessment" && { standalone: true as const }),
       ...(hero?.src && { hero }),
       ...((n) => (n ? { narration: n } : {}))(narration(p?.narration, where)),
+      ...((r) => (r ? { relay: r } : {}))(cleanRelayPage(p?.relay)),
       sections,
     };
   };
@@ -1827,7 +1831,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     return { enabled: o.enabled === true, items };
   };
 
-  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown; review?: unknown };
+  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown; review?: unknown; relay?: unknown };
   // Schema 1: one list of sections. It becomes a one-page course.
   if (doc.schema === 1 && Array.isArray(doc.sections))
     doc = {
@@ -1841,8 +1845,15 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
   if (pages.length > 30) problems.push("A course can have up to 30 pages.");
   const audio = audioSettings(doc.audio);
   const review = selfReview(doc.review);
+  const relay = cleanRelayCourse(doc.relay);
   if (problems.length) throw new GuideDocError(problems);
-  return { schema: GUIDE_SCHEMA, pages, ...(audio && { audio }), ...(review && (review.enabled || review.items.length) && { review }) };
+  return {
+    schema: GUIDE_SCHEMA,
+    pages,
+    ...(audio && { audio }),
+    ...(review && (review.enabled || review.items.length) && { review }),
+    ...(relay && { relay }),
+  };
 }
 
 export const pageBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks);
@@ -2011,6 +2022,10 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
   const practice = reviewChecks(doc);
   blocking.push(...practice.blocking);
   suggestions.push(...practice.suggestions);
+  // Ava Relay: a page she's on needs its reason and its test answers reviewed.
+  const relay = relayChecks(doc.relay, doc.pages);
+  blocking.push(...relay.blocking);
+  suggestions.push(...relay.suggestions);
   if (doc.audio?.intro) {
     const n = doc.audio.intro;
     if (n.status === "approved" && n.audio && narrationState({ ...n, basis: undefined }, { hash: "", key: "", sig: [] }, doc.audio) === "rerecord")

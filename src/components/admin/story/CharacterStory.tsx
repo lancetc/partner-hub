@@ -24,6 +24,8 @@ import { AdminShell, Badge, btn, ErrorNote, Field, input } from "../ui";
 import { Icon } from "../../Icon";
 import { area, box, dateText, Section } from "../problems/problemUi";
 import { canonBadge, useStoryAct, type StoryAct } from "./StoryLibraryAdmin";
+import type { EpisodeProposal } from "@/lib/storyAssist";
+import { EpisodeProposalPanel, ProposalError, ProposeButton, useProposal } from "./StoryProposals";
 
 /*
   One character's shared story (docs/story-plans.md): the profile and its approved facts, the episodes they're in,
@@ -394,6 +396,10 @@ const blankEpisode = (characterId: string) => ({
 function TimelineTab({ d, act, busy }: Props) {
   const [form, setForm] = useState<ReturnType<typeof blankEpisode> | null>(null);
   const cast = (id: string) => form?.people.find((p) => p.characterId === id);
+  // An AI draft of what happens next (step 6): it fills the form below, and is saved as a draft like any other.
+  const ai = useProposal<EpisodeProposal>();
+  const [wish, setWish] = useState("");
+  const names = new Map(d.cast.map((c) => [c.id, c.name]));
   return (
     <>
       <Section
@@ -466,6 +472,49 @@ function TimelineTab({ d, act, busy }: Props) {
           ))}
           {!d.episodes.length && <li className={cx(box, "text-ink-muted")}>No episodes yet.</li>}
         </ol>
+        <div className={cx(box, "mt-3 flex flex-col gap-3")}>
+          <p className="text-sm">
+            <span className="font-semibold">What might happen next?</span> A model can draft the next episode from {d.name}’s approved story. It can’t approve
+            it: a draft becomes shared history only when a steward approves it.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="What it should be about (optional)" className="min-w-64 flex-1">
+              <input
+                className={input}
+                value={wish}
+                maxLength={400}
+                onChange={(e) => setWish(e.target.value)}
+                placeholder="Something small that follows from the last episode"
+              />
+            </Field>
+            <ProposeButton busy={ai.busy} disabled={!d.approved} onClick={() => void ai.ask({ kind: "episode", characterId: d.id, note: wish })}>
+              Draft a next episode
+            </ProposeButton>
+          </div>
+          {!d.approved && <p className="text-sm text-ink-muted">Approve {d.name}’s profile first: an episode builds on approved canon.</p>}
+          {ai.error && <ProposalError text={ai.error} />}
+          {ai.proposal && (
+            <EpisodeProposalPanel
+              p={ai.proposal}
+              names={names}
+              onClose={ai.clear}
+              onUse={() => {
+                const p = ai.proposal!;
+                setForm({
+                  episodeId: "",
+                  title: p.title,
+                  whenLabel: p.whenLabel,
+                  seq: String(p.seq),
+                  summary: p.summary,
+                  changes: p.changes,
+                  source: p.source,
+                  people: p.people,
+                });
+                ai.clear();
+              }}
+            />
+          )}
+        </div>
       </Section>
       {form && (
         <Section title={form.episodeId ? "Edit the episode" : "Propose an episode"}>

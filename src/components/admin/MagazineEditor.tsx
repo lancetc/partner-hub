@@ -49,6 +49,7 @@ import { canConvert, convertBlock, convertLoses, CONVERTIBLE, type ConvertibleTy
 import { DEFAULT_AUDIO } from "@/lib/magazineNarration";
 import { MagazineRevise, type RevisionChange } from "./MagazineRevise";
 import { SelfReviewManager, SelfReviewPanel } from "./MagazineSelfReview";
+import { RelayManager, RelayPanel } from "./MagazineRelay";
 import { GuideEdit, LearningGuideSettings } from "./MagazineGuideEdit";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
 import { Icon, type IconName } from "../Icon";
@@ -818,6 +819,8 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
   const [selected, setSelected] = useState<Selection>({ kind: "guide" });
   const [save, setSave] = useState<Save>({ state: "saved" });
   const [previewing, setPreviewing] = useState(false);
+  // Ava Relay's settings for the page being edited (docs/ava-relay.md).
+  const [relaying, setRelaying] = useState(false);
   const [practicing, setPracticing] = useState(false);
   const [narrating, setNarrating] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -1359,6 +1362,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
             <GuideSettings guide={server} draft={draft} change={change} onAct={act} />
             <AudioGuidePanel draft={draft} change={change} onOpenReview={() => setNarrating(true)} />
             <SelfReviewPanel draft={draft} change={change} onOpen={() => setPracticing(true)} />
+            <RelayPanel draft={draft} change={change} page={page} onOpen={() => setRelaying(true)} />
           </div>
         )}
         {!page ? (
@@ -1560,6 +1564,9 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
             });
           }}
         />
+      )}
+      {relaying && page && (
+        <RelayManager guideId={id} draft={draft} change={change} pageId={page.id} flush={() => flush()} onClose={() => setRelaying(false)} />
       )}
       {previewing && (
         <PreviewDialog id={id} pageId={page && pages.length > 1 ? page.id : undefined} savedAt={server.savedAt} onClose={() => setPreviewing(false)} />

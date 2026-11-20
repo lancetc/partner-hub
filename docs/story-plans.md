@@ -1,6 +1,6 @@
 # Story Plans, recurring characters and voiced check-ins
 
-Built from the PRD *Story Plans, recurring characters and voiced check-ins* (20 November 2026). This note records how the first build works, the decisions made, and what's left. It covers the PRD's build steps 1 to 5. Step 6 (AI suggestions and reporting) is not built.
+Built from the PRD *Story Plans, recurring characters and voiced check-ins* (20 November 2026). This note records how the first build works, the decisions made, and what's left. It covers all six of the PRD's build steps. Steps 1 to 5 came first; step 6 (AI proposals and the story report) was added on 21 November 2026 and is described under "AI proposals" and "The story report" below.
 
 In Administration: **Content → Characters and stories** (`/admin/characters`). Learning authors only.
 
@@ -122,6 +122,46 @@ Only an approved moment can be placed, and only somewhere that exists. In a Topi
 
 When a moment gets a new approved version, each placement shows **Update to version n**. Until an author presses it, that page keeps the words and the recording it had.
 
+### AI proposals
+
+A model may draft. It never decides. There are four proposals, each asked for with a button and each shown beside what the author already has:
+
+| Proposal | Where | What it gives |
+|---|---|---|
+| **A plan from the purpose** | A Story Plan | Who it happens to (only from the characters the rules already connect to the behaviour, or "new", or none), the plan's fields, and three to nine beats, each with its blocks and a "why here". |
+| **A second look at continuity** | A Story Plan | Up to eight concerns the rules can miss: a contradiction, something unsupported, an order problem, a changed relationship, the wrong audience, an unanswered beat, repetition, or a learner's branch written as shared story. |
+| **A next episode** | A character's Story timeline | A title, summary, in-story time, what changes and who is in it, with each person's "never" line shown beside it. |
+| **A script** | A story moment | The five transmission beats, or a check-in's update and two to four questions, or a return moment's words. |
+
+What holds it in:
+
+- **It only sees approved canon.** The author's own plan, and approved profiles, facts and episodes for people the plan's audience may meet. No draft profile, no draft episode, no Problem desk case, no source document. A script is given the story only up to the episode its moment sits at.
+- **What comes back is read against the Hub's lists** (`lib/storyAssist`). A character with no approved profile, a block the Hub doesn't have, a fact id that isn't real, or a continuing character the rules don't offer is taken out, and the author is told what was taken out.
+- **Every proposal shows what it leaned on**: each approved fact, whose it is, and at which profile version. A proposal that cites nothing says so.
+- **Work guidance is flagged.** A beat or a line that states a rule is marked as needing an approved source. Fiction is never the source.
+- **A consequence always belongs to the learner's own attempt**, whatever the model says.
+- **A script may not recite a character's history word for word.** Ten words in a row from an approved fact and the draft is refused: a returning character's past is referred to in a phrase.
+- **Nothing is saved by asking.** The author takes a field, a beat or a line at a time. A script lands in the moment's draft and still has to be approved; the approved version learners get, and any recording, don't change. An episode goes into the ordinary form and is saved as a draft, which becomes shared history only when a steward approves it.
+- Claude when it's connected, otherwise the Hub's OpenAI connection. Forty proposals an hour per author. The audit record says a proposal was asked for and about what, never what it said.
+
+**Checked live** on the sample plan, Ava's opening and Dot's timeline, through the OpenAI connection, with nothing saved. What that showed:
+
+- The model named an episode as the continuing character. It was taken out and said so, and the screen now shows no proposal for that choice instead of "no continuing character".
+- It left citation ids such as `[dot:roses]` inside script lines. Those are now lifted out of every proposed text and counted as citations.
+- It twice left out the wording for the Begin button, which failed the whole draft. That wording is now optional.
+- It adds small inferences of its own ("the relay van", hands that "slow her down a bit"). The checks can't see those. The author and the steward still have to read every proposal as a draft.
+
+## The story report
+
+**Characters and stories → Story report.** One date range, and three kinds of figure kept in their own sections:
+
+- **Reach and engagement**, by character, by approved episode, and by moment at each approved version (so a revised script can be compared with the one before it). Learners reached are people who were shown a moment, started a transmission or opened a check-in. Also check-ins opened, questions chosen, history opened, links followed, audio played, transmissions started, played to the end and skipped.
+- **Learning evidence**: the decisions on the Magazine pages those moments sit on, as the course scored them: learners who answered, their first answer, and who tried again. Every learner, whether or not they opened a check-in. Moments placed in Topics are counted and pointed to Completions.
+- **Work results**: each plan that began on the Problem desk, with that theme's own measure, owner, lag and review date.
+- **Things to look at**: story links learners can't open, moments placed somewhere that has gone, placements still showing an earlier version, plans with unanswered continuity warnings and a course under way, plans that promise a decision and give no practice at it, characters the rules keep suggesting and authors rarely choose, and check-ins most people open and then choose nothing. For revising a sequence or retiring a check-in; not a score.
+
+A figure resting on fewer than ten learners is marked "few". Counts of people only: no answer a learner gave and nothing they typed. On this machine the report was seen with its empty state only (no moment is placed); its figures are covered by tests.
+
 ## Events
 
 Kept in their own table, apart from attempts and completions: `story_check_in_opened`, `story_question_selected`, `story_audio_play_started`, `story_history_opened`, `story_appearance_link_followed`, `story_moment_shown`, `ava_transmission_started`, `ava_transmission_ended`, `ava_transmission_skipped`, `ava_poster_shown`.
@@ -151,6 +191,10 @@ Nothing is placed in any real Topic or course. Ava's three moments have recordin
 | Pilot content | `src/content/storyPilot.ts` |
 | Learner components | `src/components/story/StoryMoments.tsx` |
 | Admin screens | `src/components/admin/story/`, `src/app/admin/characters/` |
+| AI proposals: what a reply may contain | `src/lib/storyAssist.ts` |
+| AI proposals: what a model is shown | `src/server/storyAssist.ts` |
+| Proposal review screens | `src/components/admin/story/StoryProposals.tsx` |
+| The story report | `src/server/storyReport.ts`, `src/components/admin/story/StoryReportView.tsx` |
 | API | `src/app/api/admin/story/route.ts`, `src/app/api/story/route.ts` |
 | Hook-ups | `GuideReader.tsx` (Magazine), `LessonPlayer.tsx` (Topic) |
 
@@ -184,8 +228,11 @@ No second content, assessment or complaint system: courses, Topics, uploads, the
 
 ## Not built yet
 
-- **AI assistance** (step 6): drafting a plan, a beat, an episode or a script, and model-based continuity checks. Everything here is rules.
-- **Reporting** (step 6): reach and engagement by character beside the learning evidence and the work measure. Events are recorded; no report reads them yet.
+- **Proposals inside the Topic and Magazine editors.** They are in the Story Plan, moment and character screens. The editors' own assistant doesn't know about Story Plans.
+- **A proposal for a whole new character profile.** An author still writes a new person by hand.
+- **Changes within a field.** A proposal is taken or left a field, a beat or a line at a time; there is no word-by-word diff.
+- **Topic evidence in the report.** Learning evidence is the Magazine's decisions. A Topic's answers stay in Completions.
+- **A way for a learner to say a check-in was confusing.** The report infers it from check-ins opened with no question chosen.
 - **Ava's video.** No transmission video exists. The player, the editor and the checks are ready for an approved clip, still and captions.
 - **Building a Topic from a plan.** The Topic outline is shown to write from; only a Magazine draft can be started from it.
 - **The Story Plan step inside the Topic and Magazine editors.** Plans are reached from Characters and stories and from the Problem desk.

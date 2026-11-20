@@ -734,3 +734,82 @@ input[type="range"].brand-range::-moz-range-thumb {
   .mag-burst { display: none; }
 }
 @media print { .mag-burst { display: none; } }
+
+/*
+  Ava Relay (components/relay/AvaRelay): a terminal-style dial bar and modal, dark teal in both themes. The bar's
+  sweep runs while it dials, and each part of the modal gets one short, dim pulse as it resolves. With reduced
+  motion there is neither, and the modal opens complete. The scanline texture never moves.
+*/
+.relay {
+  --relay-bg: #04110f;
+  --relay-panel: #071c1a;
+  --relay-raised: #0c2a27;
+  --relay-line: #1c6f68;
+  --relay-glow: #4cc3c9;
+  --relay-ink: #e2f7f4;
+  --relay-dim: #93c2bb;
+  color: var(--relay-ink);
+  background: var(--relay-bg);
+}
+.relay-mono { font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: 0.08em; }
+.relay-bar {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--relay-line);
+  box-shadow: 0 0 0 1px rgb(76 195 201 / 0.12), 0 0 18px -6px rgb(76 195 201 / 0.55), inset 0 0 22px -14px rgb(76 195 201 / 0.6);
+}
+.relay-bar:hover { border-color: var(--relay-glow); }
+.relay-bar:focus-visible { outline: 3px solid var(--relay-glow); outline-offset: 3px; }
+@keyframes relay-sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(520%); }
+}
+.relay-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 22%;
+  background: linear-gradient(90deg, transparent, rgb(76 195 201 / 0.28), transparent);
+  animation: relay-sweep 600ms linear infinite;
+  pointer-events: none;
+}
+.relay-dialog {
+  margin: 0 0 0 auto;
+  width: min(30rem, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--relay-line);
+  background: var(--relay-bg);
+  color: var(--relay-ink);
+  box-shadow: -18px 0 60px -30px rgb(76 195 201 / 0.5);
+  overflow: hidden;
+}
+.relay-dialog::backdrop { background: rgb(2 10 9 / 0.62); }
+.relay-scan {
+  background-image: repeating-linear-gradient(0deg, rgb(76 195 201 / 0.045) 0 1px, transparent 1px 4px);
+}
+@keyframes relay-part-in {
+  0% { opacity: 0; }
+  45% { opacity: 0.55; }
+  70% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+.relay-part[data-shown="false"] { visibility: hidden; }
+.relay-part[data-shown="true"][data-pulse="true"] { animation: relay-part-in 320ms ease-out both; }
+.relay-dialog :focus-visible { outline: 2px solid var(--relay-glow); outline-offset: 2px; }
+/* On a wide screen only the conversation scrolls. On a phone, who Ava is and what she's looking at scroll with it, and the tabs stay put. */
+.relay-middle { display: contents; }
+@media (max-width: 640px) {
+  .relay-dialog { width: 100vw; border-left: 0; }
+  .relay-middle { position: relative; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-y: auto; }
+  .relay-middle > .relay-log { flex: none; overflow: visible; }
+  .relay-middle > .relay-tabs { position: sticky; top: 0; z-index: 1; padding-bottom: 0.5rem; background: var(--relay-bg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .relay-sweep { display: none; }
+  .relay-part[data-shown="true"][data-pulse="true"] { animation: none; }
+}
+.relay-dialog * { scrollbar-width: thin; scrollbar-color: var(--relay-line) transparent; }
+

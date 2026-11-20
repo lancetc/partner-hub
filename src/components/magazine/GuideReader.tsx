@@ -15,6 +15,8 @@ import { useMyNotes } from "./ReflectBlocks";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { playable } from "@/lib/magazineNarration";
 import { StoryAt, useStory } from "../story/StoryMoments";
+import { AvaRelay } from "../relay/AvaRelay";
+import { relayOn } from "@/lib/relayConfig";
 
 /*
   Reading a Magazine. A one-page Guide opens straight on its article; a Course opens on an overview
@@ -544,6 +546,17 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           }
         />
         <div className="flex min-w-0 flex-col gap-16">
+          {/* Ava Relay (docs/ava-relay.md): one dial bar, after the page's introduction and before its first block. Part of the page, not of its content. */}
+          {relayOn(guide.doc.relay, page) && (
+            <AvaRelay
+              key={page.id}
+              className={column}
+              slug={guide.slug}
+              revisionId={guide.revisionId}
+              pageId={page.id}
+              preview={preview ? { guideId: guide.id, answers } : undefined}
+            />
+          )}
           <StoryAt moments={story} place={`page:${page.id}`} className={column} onBegin={beginAt(`section-${page.sections[0]?.id}`)} />
           {page.sections.map((s, i) => (
             <section key={s.id} id={`section-${s.id}`} tabIndex={-1} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8 outline-none">

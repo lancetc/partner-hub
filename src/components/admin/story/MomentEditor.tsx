@@ -13,6 +13,8 @@ import { Icon } from "../../Icon";
 import { CheckIn, ReturnMoment, Transmission } from "../../story/StoryMoments";
 import { area, box, dateText, Section } from "../problems/problemUi";
 import { useStoryAct } from "./StoryLibraryAdmin";
+import type { ScriptProposal } from "@/lib/storyAssist";
+import { ProposalError, ProposeButton, ScriptProposalPanel, useProposal } from "./StoryProposals";
 
 /*
   One story moment (docs/story-plans.md): the script, why it belongs where it does, its approval, its voice and
@@ -96,6 +98,8 @@ function Editor({
   const [picking, setPicking] = useState<"poster" | "endFrame" | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
+  // An AI draft of the script (step 6), from the saved moment and the approved story up to it.
+  const ai = useProposal<ScriptProposal>();
   const [place, setPlace] = useState({ kind: "guide" as "topic" | "guide", ref: "", place: "", position: "before" });
   const places = useApi<Places>("/api/admin/story?view=places").data;
   const dirty = JSON.stringify([x, featuredId, episodeId]) !== JSON.stringify([d.draft, d.featuredId, d.episodeId]);
@@ -228,6 +232,25 @@ function Editor({
           title="What they say"
           hint={`${script.length} of 1,200 characters. Every word is shown to the learner as text, whether or not it’s also spoken.`}
         >
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <ProposeButton busy={ai.busy} onClick={() => void ai.ask({ kind: "script", id: d.id })}>
+              Draft the script with AI
+            </ProposeButton>
+            <span className="text-sm text-ink-muted">
+              From the saved purpose and the approved story up to this moment{dirty ? ". Save first to include your latest changes" : ""}. You decide what to
+              keep.
+            </span>
+          </div>
+          {ai.error && (
+            <div className="mb-3">
+              <ProposalError text={ai.error} />
+            </div>
+          )}
+          {ai.proposal && (
+            <div className="mb-3">
+              <ScriptProposalPanel p={ai.proposal} x={x} setX={setX} onClose={ai.clear} />
+            </div>
+          )}
           <div className={cx(box, "grid gap-3")}>
             {opening ? (
               (Object.keys(BEAT_PROMPTS) as (keyof TransmissionBeats)[]).map((k) => (

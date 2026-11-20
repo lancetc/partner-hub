@@ -31,6 +31,7 @@ import { liveItems } from "@/lib/magazineReview";
 import { questionsInGuide } from "@/lib/questionPool";
 import { afterPublish, publishGate } from "./questionPool";
 import { guideForReaders, guideIdentity } from "./learningGuide";
+import { relayForReaders } from "@/lib/relayConfig";
 import { reviewRequired } from "./topicApproval";
 import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
@@ -256,7 +257,12 @@ export function practiceSummary(doc: GuideDoc) {
   return { pages };
 }
 /** The document without its self-review questions, for a reader. */
-const withoutPractice = (doc: GuideDoc): GuideDoc => ({ schema: doc.schema, pages: doc.pages, ...(doc.audio && { audio: doc.audio }) });
+const withoutPractice = (doc: GuideDoc): GuideDoc => ({
+  schema: doc.schema,
+  pages: doc.pages,
+  ...(doc.audio && { audio: doc.audio }),
+  ...(doc.relay && { relay: doc.relay }),
+});
 
 /**
   A conversation practice's scene, for a reader: what they're told going in, without the character's
@@ -494,7 +500,7 @@ export function readGuide(db: Db, user: User, slug: string) {
     publishedAt: r.published_at,
     completion: r.completion,
     // Guide recordings only when they're cleared to play (and not withdrawn); never the self-review answers.
-    doc: withoutScenes(withoutPractice(guideForReaders(db, doc))),
+    doc: relayForReaders(withoutScenes(withoutPractice(guideForReaders(db, doc)))),
     /** The Hub's AI Learning Guide: its name, introduction and portrait. */
     guide: guideIdentity(db),
     /** Self-review: on, and how many questions each page has (null when it's off). */
@@ -510,6 +516,39 @@ export function readGuide(db: Db, user: User, slug: string) {
     },
     completed: done ? { kind: done.kind, at: done.at, thisRevision: done.revision_id === r.id } : null,
     quizzes: quizStates(db, user, doc),
+  };
+}
+
+/**
+  For Ava Relay (server/relay): the edition this person is reading, in full, with their answers on it. Read again
+  for every message, so a course that's been archived or closed to their audience stops answering at once.
+*/
+export function relayEdition(db: Db, user: User, slugOrId: string) {
+  const { guide: g, revision: r } = publishedFor(db, user, slugOrId);
+  const p = progressOf(db, g.id, user.id);
+  return {
+    id: g.id,
+    slug: g.slug,
+    title: r.title,
+    revisionId: r.id,
+    revision: r.number,
+    doc: readGuideDoc(JSON.parse(r.doc), { draft: true }),
+    answers: p?.revision_id === r.id ? (JSON.parse(p.answers) as Record<string, string>) : {},
+  };
+}
+/** The saved draft, for an author trying the relay before publishing. Nothing a preview does is kept. */
+export function relayDraftEdition(db: Db, actor: User, id: string) {
+  requireAuthor(actor);
+  const g = guideById(db, id);
+  if (!g || g.status === "archived") throw new HttpError(404, "Guide not found.");
+  return {
+    id: g.id,
+    slug: g.slug,
+    title: g.title,
+    revisionId: "draft",
+    revision: 0,
+    doc: readGuideDoc(JSON.parse(g.draft), { draft: true }),
+    answers: {} as Record<string, string>,
   };
 }
 

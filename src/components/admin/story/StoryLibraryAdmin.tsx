@@ -88,6 +88,9 @@ export function StoryLibraryAdmin() {
         <Link href="/admin/images/characters" className={btn.secondary}>
           <Icon name="image" className="size-4" /> Character photos
         </Link>
+        <Link href="/admin/characters/report" className={btn.secondary}>
+          <Icon name="gauge" className="size-4" /> Story report
+        </Link>
       </div>
       {error && (
         <div className="mt-3">
