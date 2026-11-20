@@ -43,6 +43,7 @@ import { journeyApproved, journeyForReaders } from "@/lib/journey";
 import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 import { unpublishableTiles } from "./myths";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
+import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -291,7 +292,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                           : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
                             b.type === "baton"
                             ? batonForReaders(b)
-                            : b,
+                            : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
+                              b.type === "redpen"
+                              ? redPenForReaders(b)
+                              : b,
       ),
     })),
   })),
@@ -684,6 +688,7 @@ export function recordGuideEvent(
           "benchmark",
           "myths",
           "baton",
+          "redpen",
           "process",
           "flashcards",
           "video",
@@ -1080,11 +1085,43 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   // And The SaH Journey: its pathway, fall branch, government claims and family access need their reviewers.
   const unjourneyed = draftBlocks.filter((b) => b.type === "journey" && !journeyApproved(b));
   // And a peer benchmark poll: its reviewed next step, escalation facts and disclosure threshold need their reviewers, and a current review date.
+  // And Red Pen: its rubric, example rewrites and escalation language need Clinical, Quality and Privacy.
+  // Nor does it cover text that looks like a real identifier: these cases must be synthetic.
+  const identified = draftBlocks.flatMap((b) =>
+    b.type === "redpen" && redPenIdentifiers(b).length ? [`“${b.title}” looks like it contains ${redPenIdentifiers(b).join(" and ")}.`] : [],
+  );
+  if (identified.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A Red Pen case looks like it contains a real identifier. Use fictional, de-identified details only. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: identified,
+      },
+    );
+  const unpenned = draftBlocks.filter((b) => b.type === "redpen" && (!redPenApproved(b) || redPenStale(b, now.toISOString().slice(0, 10))));
+  if (unpenned.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A Red Pen critique needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unpenned.map(
+          (b) =>
+            `“${b.type === "redpen" ? b.title : ""}”: record the content owner, the Clinical, Quality and Privacy reviewers, the date, the policy IDs, and a review date that hasn’t passed.`,
+        ),
+      },
+    );
   // And Pass the Baton: its roles, escalation language, budget assumptions and privacy rules need their reviewers.
   const unrelayed = draftBlocks.filter((b) => b.type === "baton" && (!batonApproved(b) || batonStale(b, now.toISOString().slice(0, 10))));
   if (unrelayed.length)
     throw Object.assign(
-      new HttpError(400, "A Pass the Baton relay needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this."),
+      new HttpError(
+        400,
+        "A Pass the Baton relay needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
       {
         problems: unrelayed.map(
           (b) =>
@@ -1096,13 +1133,19 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const untiled = draftBlocks.flatMap((b) => (b.type === "myths" ? unpublishableTiles(db, b.tileIds, now) : []));
   if (untiled.length)
     throw Object.assign(
-      new HttpError(400, "Myth vs Reality tiles need an approved version, not under review, before the course can be published. “Publish anyway” doesn’t cover this."),
+      new HttpError(
+        400,
+        "Myth vs Reality tiles need an approved version, not under review, before the course can be published. “Publish anyway” doesn’t cover this.",
+      ),
       { problems: untiled },
     );
   const unpolled = draftBlocks.filter((b) => b.type === "benchmark" && (!benchmarkApproved(b) || benchmarkStale(b, now.toISOString().slice(0, 10))));
   if (unpolled.length)
     throw Object.assign(
-      new HttpError(400, "A peer benchmark poll needs its sign-off, policy version and a current review date before it can be published. “Publish anyway” doesn’t cover this."),
+      new HttpError(
+        400,
+        "A peer benchmark poll needs its sign-off, policy version and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
       {
         problems: unpolled.map(
           (b) =>

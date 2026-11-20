@@ -514,6 +514,61 @@ export const posts: Post[] = [
       { id: "mci4", authorId: "jess", hoursAgo: 24 * 3, body: "I'd probably just leave it until the next monthly call.", likes: 1 },
     ],
   },
+  // Canonical threads for the Red Pen cases (docs/red-pen.md). Fictional cases only; learners' attempts are never posted here.
+  {
+    id: "case-dot-buttons",
+    space: "coordinators",
+    authorId: "maya",
+    hoursAgo: 24 * 5,
+    title: "Red Pen case: Dot’s dressing goal (fictional)",
+    body: "A training case, not a real client. How would you word Dot’s goal about doing her own buttons? Talk about the wording and reasoning from the fictional brief only.\n\nModerator note: please don’t describe real clients or paste real care plans here.",
+    likes: 9,
+    comments: [
+      {
+        id: "rpd1",
+        authorId: "leanne",
+        hoursAgo: 24 * 4,
+        body: "I keep the arthritis in. Taking out a label isn't the same as taking out a fact that matters for how we support her.",
+        likes: 14,
+      },
+    ],
+  },
+  {
+    id: "case-shower-after-lunch",
+    space: "coordinators",
+    authorId: "maya",
+    hoursAgo: 24 * 5,
+    title: "Red Pen case: Mrs Nguyen’s shower (fictional)",
+    body: "A training case, not a real client. “Refused hygiene care” or her own words? Share how you'd write the note, from the fictional brief only.\n\nModerator note: please don’t describe real clients or paste real notes here.",
+    likes: 11,
+    comments: [
+      {
+        id: "rpn1",
+        authorId: "grace",
+        hoursAgo: 24 * 4,
+        body: "If I meant to call the RN but haven't yet, the note says 'to contact', never 'notified'.",
+        likes: 19,
+      },
+    ],
+  },
+  {
+    id: "case-floor-hip",
+    space: "coordinators",
+    authorId: "maya",
+    hoursAgo: 24 * 5,
+    title: "Red Pen case: Mr Okafor on the floor (fictional)",
+    body: "A training case, not a real client. What goes in the note, and what has to happen before you even finish writing it? From the fictional brief only.\n\nModerator note: please don’t describe real clients here.",
+    likes: 8,
+    comments: [
+      {
+        id: "rpo1",
+        authorId: "tom",
+        hoursAgo: 24 * 4,
+        body: "Escalate first, write second. The note records the contacts once they've actually happened.",
+        likes: 16,
+      },
+    ],
+  },
 ];
 
 export type CommunityEvent = {

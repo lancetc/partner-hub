@@ -49,6 +49,7 @@ import { SahJourney } from "./SahJourney";
 import { PeerPoll } from "./PeerPoll";
 import { MythTilesBlock } from "./MythTilesBlock";
 import { BatonRelay } from "./BatonRelay";
+import { RedPen } from "./RedPen";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -151,6 +152,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <MythTilesBlock block={b} ctx={ctx} />;
     case "baton":
       return <BatonRelay block={b} ctx={ctx} />;
+    case "redpen":
+      return <RedPen block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

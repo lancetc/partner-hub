@@ -71,6 +71,8 @@ import { BENCHMARK_CASES } from "@/content/benchmarkCases";
 import { SEED_TILES } from "@/content/mythTiles";
 import { freshBaton } from "@/lib/baton";
 import { BATON_CASES } from "@/content/batonCases";
+import { freshRedPen } from "@/lib/redpen";
+import { REDPEN_CASES } from "@/content/redpenCases";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -142,6 +144,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   benchmark: "people",
   myths: "flashcards",
   baton: "route",
+  redpen: "pen",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -187,6 +190,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   benchmark: "Lock in a decision on a fictional case, then see how peers chose (privacy-safe) beside the reviewed perspective.",
   myths: "Client questions from the tile library: a 30-second answer, the exception, the source, and an approved reply to copy.",
   baton: "A role-handoff relay: pass the right facts to the right person, name an owner, confirm receipt, escalate what’s urgent.",
+  redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -220,7 +224,7 @@ const openStudioFor = new Set<string>();
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
-  { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "checklist", "quiz"] },
+  { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "baton", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "confidence"] },
@@ -451,6 +455,9 @@ function newBlock(item: PaletteItem): Block {
     case "benchmark":
       // Starts from the missed check-in case, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshBenchmark(BENCHMARK_CASES[0].data) };
+    case "redpen":
+      // Starts from Dot's care plan goal, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshRedPen(REDPEN_CASES[0].data) };
     case "baton":
       // Starts from Mr Nguyen's relay, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshBaton(BATON_CASES[0].data) };
@@ -494,6 +501,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
   if (c.type === "baton") Object.assign(c, freshBaton(c));
+  if (c.type === "redpen") Object.assign(c, freshRedPen(c));
   if (c.type === "benchmark") Object.assign(c, freshBenchmark(c));
   if (c.type === "poll") c.options = c.options.map((x) => ({ ...x, id: rid("opt") }));
   if (c.type === "hotspots") c.spots = c.spots.map((x) => ({ ...x, id: rid("spot") }));
@@ -633,6 +641,8 @@ function isBlank(b: Block): boolean {
     case "myths":
       return !b.tileIds.length;
     case "baton":
+      return !b.approval.owner && !b.approval.clinical;
+    case "redpen":
       return !b.approval.owner && !b.approval.clinical;
   }
 }

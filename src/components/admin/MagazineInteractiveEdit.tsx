@@ -35,6 +35,7 @@ import { JourneyEdit } from "./MagazineJourneyEdit";
 import { BenchmarkEdit } from "./MagazineBenchmarkEdit";
 import { MythEdit } from "./MagazineMythEdit";
 import { BatonEdit } from "./MagazineBatonEdit";
+import { RedPenEdit } from "./MagazineRedPenEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -237,6 +238,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <MythEdit block={b} update={update} />;
     case "baton":
       return <BatonEdit block={b} update={update} />;
+    case "redpen":
+      return <RedPenEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1469,6 +1472,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A fictional journey: story times are never wait estimates. The course can’t be published until Care Operations, Clinical, Quality, Privacy and
           Communications sign-off is recorded in the block.
+        </p>
+      );
+    case "redpen":
+      return (
+        <p className="text-sm text-ink-muted">
+          A synthetic case: never paste a real care plan or note. The course can’t be published until Clinical, Quality and Privacy sign-off is recorded in
+          the block.
         </p>
       );
     case "baton":

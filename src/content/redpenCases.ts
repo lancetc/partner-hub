@@ -1,0 +1,433 @@
+import type { RedPenBlockData } from "@/lib/redpen";
+
+/*
+  The starter cases for Red Pen (docs/red-pen.md), drafted from the PRD. All names, situations and records are
+  fictional. None has sign-off: the rubric, wording and escalation language need Clinical, Quality and Privacy
+  review, and the policy excerpts are placeholders for the approved Trilogy Care documentation policy.
+
+  - Dot (care plan goal): labels and an unagreed intervention to remove, and a documented diagnosis to keep.
+  - Mrs Nguyen (progress note): an RN notification that never happened, and her actual words to restore.
+  - Mr Okafor (progress note): a fall the note plays down, and an escalation the note can't replace.
+*/
+
+const NO_SIGN_OFF = { owner: "", clinical: "", quality: "", privacy: "", approvedOn: "" };
+const REVIEWER = "Senior Clinical Lead (example)";
+const STANDARDS = "Strengthened Aged Care Quality Standards: Outcome 3.1 (assessment and planning), Outcome 2.7 (information management)";
+
+const dot: RedPenBlockData = {
+  title: "Red Pen: Dot’s dressing goal",
+  intro: "Mark what’s wrong with this care plan goal, say why, and rewrite it from what the case tells you. No more, no less.",
+  mode: "plan",
+  role: "You’re Dot’s Care Partner, reviewing a draft goal before it goes into her care plan.",
+  brief: "Dot lives at home and gets help with personal care. A draft goal about her mornings has been written for her care plan.",
+  facts: [
+    { id: "rp-d-f1", text: "Dot says, “I want to do my own buttons even if it takes a while.”" },
+    { id: "rp-d-f2", text: "She wants help only with the buttons she can’t manage." },
+    { id: "rp-d-f3", text: "Her Care Partner has agreed to discuss a practical dressing routine with her." },
+    { id: "rp-d-f4", text: "Her GP letter documents osteoarthritis in both hands." },
+  ],
+  unknowns: ["No assessment says a worker must dress her.", "No fixed time limit has been agreed.", "No date for the next review is given in this brief."],
+  policyExcerpt:
+    "(Placeholder for the approved care planning policy.) A care plan records the person’s goals in their own words, the supports agreed with them, relevant risks, and when the plan will be reviewed.",
+  document: [
+    {
+      id: "rp-d-s1",
+      text: "Dot has osteoarthritis in both hands.",
+      expect: "retain",
+      reasons: [],
+      dim: "fidelity",
+      feedback: "It’s documented in her GP letter and relevant to dressing support. Accurate clinical detail stays.",
+      suggestion: "",
+    },
+    {
+      id: "rp-d-s2",
+      text: "Dot is non-compliant with morning dressing and takes too long.",
+      expect: "issue",
+      reasons: ["judgement", "goal"],
+      dim: "voice",
+      feedback: "“Non-compliant” labels Dot instead of describing her preference, and “takes too long” makes the service’s timetable her goal.",
+      suggestion: "Dot says doing up her own buttons helps her feel independent.",
+    },
+    {
+      id: "rp-d-s3",
+      text: "Staff will dress her promptly every day to prevent delays.",
+      expect: "issue",
+      reasons: ["inference", "goal", "action"],
+      dim: "fidelity",
+      feedback: "Nobody has agreed this, and no assessment says a worker must dress her. It replaces her choice with an unagreed intervention.",
+      suggestion:
+        "Goal: Dot continues to dress herself where she wishes to. Agreed support to confirm with Dot: allow time for buttons and offer help with any she asks for.",
+    },
+  ],
+  checks: [
+    {
+      id: "rp-d-c1",
+      kind: "avoid",
+      phrases: ["non-compliant", "noncompliant", "non compliant"],
+      dim: "voice",
+      severity: "revision",
+      feedback: "“Non-compliant” is a label, not her preference.",
+    },
+    {
+      id: "rp-d-c2",
+      kind: "avoid",
+      phrases: ["takes too long", "too slow", "prevent delays"],
+      dim: "voice",
+      severity: "revision",
+      feedback: "The service’s timetable isn’t Dot’s goal.",
+    },
+    {
+      id: "rp-d-c3",
+      kind: "avoid",
+      phrases: ["staff will dress her", "will dress her", "dress her promptly"],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "That’s an intervention nobody has agreed or assessed. Writing it into the plan invents agreement.",
+    },
+    {
+      id: "rp-d-c4",
+      kind: "avoid",
+      phrases: ["dot agreed", "she agreed", "dot has agreed", "she has agreed"],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "The brief doesn’t say Dot has agreed a routine: the discussion is still to happen.",
+    },
+    {
+      id: "rp-d-c5",
+      kind: "include",
+      phrases: ["own buttons", "herself", "independen"],
+      dim: "voice",
+      severity: "revision",
+      feedback: "Keep Dot’s goal in her terms: doing her own buttons.",
+    },
+    {
+      id: "rp-d-c6",
+      kind: "include",
+      phrases: ["osteoarthritis", "arthritis"],
+      dim: "fidelity",
+      severity: "revision",
+      feedback: "The documented osteoarthritis is relevant. Don’t remove it.",
+    },
+    {
+      id: "rp-d-c7",
+      kind: "include",
+      phrases: ["review"],
+      dim: "purpose",
+      severity: "revision",
+      feedback: "A care plan goal needs a point when it’s reviewed.",
+    },
+  ],
+  escalation: null,
+  reviewed: {
+    text: "Dot has osteoarthritis in both hands (GP letter). Dot says doing up her own buttons helps her feel independent. Goal: Dot continues to dress herself where she wishes to. Agreed support to confirm with Dot: allow time for buttons and offer help with any she asks for, in line with her assessed support needs. Record her preference in the care plan and review the approach with her at the next scheduled care plan review.",
+    reviewer: "",
+    reviewerRole: REVIEWER,
+    reviewedOn: "",
+    endorsed: false,
+    notes: [
+      {
+        quote: "osteoarthritis in both hands",
+        note: "Kept: it’s documented, and it’s relevant to dressing. Removing labels isn’t the same as removing clinical facts.",
+      },
+      { quote: "Agreed support to confirm with Dot", note: "The routine hasn’t been discussed yet, so the plan says it’s to be confirmed, not agreed." },
+      { quote: "next scheduled care plan review", note: "No review date was supplied, so the rewrite doesn’t invent one." },
+    ],
+    alternatives: ["Dot would like to keep doing her own buttons. Offer help only with the ones she asks for, and allow her time."],
+  },
+  maxRevisions: 2,
+  communityPostId: "case-dot-buttons",
+  policyIds: [],
+  standards: STANDARDS,
+  reviewDue: "",
+  approval: NO_SIGN_OFF,
+};
+
+const nguyen: RedPenBlockData = {
+  title: "Red Pen: Mrs Nguyen’s shower",
+  intro: "Mark what’s wrong with this progress note, say why, and rewrite it from what actually happened.",
+  mode: "note",
+  role: "You’re the support worker who visited Mrs Nguyen this morning.",
+  brief:
+    "You visited Mrs Nguyen this morning. A colleague drafted the progress note for your visit. Document the interaction and what follow-up needs confirming.",
+  facts: [
+    { id: "rp-n-f1", text: "At 10:15 am you offered Mrs Nguyen a shower." },
+    { id: "rp-n-f2", text: "She said, “Not now; I’d prefer to wash after lunch.”" },
+    { id: "rp-n-f3", text: "She didn’t have a shower during this visit." },
+    { id: "rp-n-f4", text: "You didn’t contact an RN." },
+    { id: "rp-n-f5", text: "No assessment of cognition, mood or illness was done." },
+  ],
+  unknowns: ["How she’d like the wash rescheduled.", "Who will follow it up."],
+  policyExcerpt:
+    "(Placeholder for the approved documentation policy.) Notes record what was said, seen and done, with times; say what’s still to happen, and never record an action as done before it is.",
+  document: [
+    {
+      id: "rp-n-s1",
+      text: "Mrs Nguyen was confused and aggressive,",
+      expect: "issue",
+      reasons: ["inference", "judgement"],
+      dim: "fidelity",
+      feedback: "Nothing observed or assessed supports “confused” or “aggressive”. Write what happened instead.",
+      suggestion: "",
+    },
+    {
+      id: "rp-n-s2",
+      text: "refused hygiene care.",
+      expect: "issue",
+      reasons: ["judgement", "goal"],
+      dim: "voice",
+      feedback: "“Refused” loses what she actually said: she’d prefer to wash after lunch.",
+      suggestion: "Offered Mrs Nguyen a shower. She said, “Not now; I’d prefer to wash after lunch.” No shower was provided during this visit.",
+    },
+    {
+      id: "rp-n-s3",
+      text: "RN notified.",
+      expect: "issue",
+      reasons: ["action"],
+      dim: "fidelity",
+      feedback: "No RN was contacted. Recording an action that didn’t happen is a critical gap.",
+      suggestion: "",
+    },
+    {
+      id: "rp-n-s4",
+      text: "Otherwise fine.",
+      expect: "issue",
+      reasons: ["vague"],
+      dim: "specificity",
+      feedback: "“Otherwise fine” doesn’t tell a colleague anything they can use.",
+      suggestion: "Follow-up: confirm with Mrs Nguyen and the appropriate team member how she’d like the wash rescheduled, and record it once done.",
+    },
+  ],
+  checks: [
+    {
+      id: "rp-n-c1",
+      kind: "avoid",
+      phrases: ["confused", "aggressive", "agitated", "combative"],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "Nothing in the case supports a clinical description like this. It’s an inference, recorded as fact.",
+    },
+    {
+      id: "rp-n-c2",
+      kind: "avoid",
+      phrases: [
+        "rn notified",
+        "notified the rn",
+        "notified rn",
+        "rn was notified",
+        "rn informed",
+        "informed the rn",
+        "contacted the rn",
+        "rn contacted",
+        "rn aware",
+      ],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "No RN was contacted. An intended contact isn’t a completed one.",
+    },
+    { id: "rp-n-c3", kind: "avoid", phrases: ["refused"], dim: "voice", severity: "revision", feedback: "Record what she said rather than “refused”." },
+    {
+      id: "rp-n-c4",
+      kind: "avoid",
+      phrases: ["otherwise fine", "all good", "no issues"],
+      dim: "specificity",
+      severity: "revision",
+      feedback: "A vague all-clear isn’t useful to the next person.",
+    },
+    {
+      id: "rp-n-c5",
+      kind: "include",
+      phrases: ["after lunch"],
+      dim: "voice",
+      severity: "revision",
+      feedback: "Keep her preference, in her words: after lunch.",
+    },
+    { id: "rp-n-c6", kind: "include", phrases: ["10:15", "10.15"], dim: "specificity", severity: "revision", feedback: "The time was given: include it." },
+    {
+      id: "rp-n-c7",
+      kind: "include",
+      phrases: ["follow-up", "follow up", "confirm"],
+      dim: "specificity",
+      severity: "revision",
+      feedback: "Say what follow-up needs confirming.",
+    },
+  ],
+  escalation: null,
+  reviewed: {
+    text: "10:15 am: Offered Mrs Nguyen a shower. She said, “Not now; I’d prefer to wash after lunch.” No shower was provided during this visit. Follow-up: confirm with Mrs Nguyen and the appropriate team member how she would like the wash rescheduled, and record any communication once completed.",
+    reviewer: "",
+    reviewerRole: REVIEWER,
+    reviewedOn: "",
+    endorsed: false,
+    notes: [
+      {
+        quote: "She said, “Not now; I’d prefer to wash after lunch.”",
+        note: "Her words replace “refused”: it’s a preference about timing, not a refusal of care.",
+      },
+      { quote: "No shower was provided during this visit.", note: "States plainly what didn’t happen." },
+      { quote: "Follow-up: confirm", note: "Says what still needs doing, without claiming anyone has been told." },
+    ],
+    alternatives: [
+      "10:15 am: Mrs Nguyen chose to wash after lunch instead of now (“Not now; I’d prefer to wash after lunch”). No shower this visit. To confirm: how she’d like the wash rescheduled, and who arranges it.",
+    ],
+  },
+  maxRevisions: 2,
+  communityPostId: "case-shower-after-lunch",
+  policyIds: [],
+  standards: STANDARDS,
+  reviewDue: "",
+  approval: NO_SIGN_OFF,
+};
+
+const okafor: RedPenBlockData = {
+  title: "Red Pen: Mr Okafor on the floor",
+  intro: "Mark what’s wrong with this progress note and rewrite it. This one also needs a decision that a note can’t make.",
+  mode: "note",
+  role: "You’re the support worker on the 2 pm visit.",
+  brief: "At your 2 pm visit you found Mr Okafor on the floor. A note has been started. Document what happened, and decide what you do now.",
+  facts: [
+    { id: "rp-o-f1", text: "At 2:00 pm you found Mr Okafor sitting on the floor next to his bed." },
+    { id: "rp-o-f2", text: "He said, “I slipped getting up and I can’t stand; my left hip really hurts.”" },
+    { id: "rp-o-f3", text: "He wasn’t sure how long he’d been there." },
+    { id: "rp-o-f4", text: "You stayed with him and made him comfortable without moving him." },
+    { id: "rp-o-f5", text: "No one has been contacted yet." },
+  ],
+  unknowns: ["When he fell.", "Whether he’s injured."],
+  policyExcerpt:
+    "(Placeholder for the approved incident and escalation procedure.) A fall where the person can’t get up or reports new pain is escalated straight away through the urgent escalation procedure. Document what was found, said and done, and each contact once it’s made.",
+  document: [
+    {
+      id: "rp-o-s1",
+      text: "2pm: Mr Okafor had a minor fall.",
+      expect: "issue",
+      reasons: ["inference"],
+      dim: "fidelity",
+      feedback: "“Minor” is a judgement nobody has made: he can’t stand and his hip hurts.",
+      suggestion: "2:00 pm: Found Mr Okafor sitting on the floor next to his bed.",
+    },
+    {
+      id: "rp-o-s2",
+      text: "He is fine but a bit sore.",
+      expect: "issue",
+      reasons: ["inference", "vague"],
+      dim: "fidelity",
+      feedback: "He said he can’t stand and his left hip really hurts. “Fine but a bit sore” plays that down.",
+      suggestion: "He said, “I slipped getting up and I can’t stand; my left hip really hurts.”",
+    },
+    {
+      id: "rp-o-s3",
+      text: "Helped him back into bed.",
+      expect: "issue",
+      reasons: ["action"],
+      dim: "fidelity",
+      feedback: "You didn’t move him. Recording an action that didn’t happen is a critical gap.",
+      suggestion: "Stayed with him and made him comfortable without moving him.",
+    },
+    {
+      id: "rp-o-s4",
+      text: "Will mention it at the next team meeting.",
+      expect: "issue",
+      reasons: ["risk"],
+      dim: "escalation",
+      feedback: "A team meeting isn’t the route for someone who can’t stand after a fall.",
+      suggestion: "Escalating now through the urgent escalation procedure; each contact to be recorded once made.",
+    },
+  ],
+  checks: [
+    { id: "rp-o-c1", kind: "avoid", phrases: ["minor fall", "minor"], dim: "fidelity", severity: "revision", feedback: "Nobody has judged it minor." },
+    {
+      id: "rp-o-c2",
+      kind: "avoid",
+      phrases: ["helped him back", "back into bed", "helped him up", "got him up", "assisted him up", "back to bed"],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "He wasn’t moved. Don’t record an action that didn’t happen.",
+    },
+    {
+      id: "rp-o-c3",
+      kind: "avoid",
+      phrases: ["he is fine", "he's fine", "he was fine", "a bit sore"],
+      dim: "fidelity",
+      severity: "critical",
+      feedback: "That contradicts what he said: he can’t stand and his hip really hurts.",
+    },
+    {
+      id: "rp-o-c4",
+      kind: "avoid",
+      phrases: ["team meeting"],
+      dim: "escalation",
+      severity: "critical",
+      feedback: "This needs escalating now, not at a meeting.",
+    },
+    {
+      id: "rp-o-c5",
+      kind: "include",
+      phrases: ["can't stand", "cannot stand", "unable to stand", "can’t stand"],
+      dim: "fidelity",
+      severity: "revision",
+      feedback: "Keep that he can’t stand: it’s safety-relevant.",
+    },
+    { id: "rp-o-c6", kind: "include", phrases: ["hip"], dim: "fidelity", severity: "revision", feedback: "Keep his reported hip pain." },
+    {
+      id: "rp-o-c7",
+      kind: "include",
+      phrases: ["2:00", "2pm", "2 pm", "14:00", "2.00"],
+      dim: "specificity",
+      severity: "revision",
+      feedback: "The time was given: include it.",
+    },
+  ],
+  escalation: {
+    question: "Mr Okafor can’t stand after a fall and reports hip pain. Apart from the note, what do you do now?",
+    options: [
+      {
+        id: "rp-o-e1",
+        text: "Follow the approved urgent escalation procedure now (including calling emergency services if it directs), stay with him, and record each contact once it’s made",
+        verdict: "good",
+        feedback: "The concern goes straight through the urgent route; the note records it once it’s done.",
+      },
+      {
+        id: "rp-o-e2",
+        text: "Finish the note and raise it at the next team meeting",
+        verdict: "critical",
+        feedback: "Writing it down isn’t escalating it. This can’t wait for a meeting.",
+      },
+      {
+        id: "rp-o-e3",
+        text: "Help him up so he’s comfortable, then report it",
+        verdict: "critical",
+        feedback: "Moving someone who can’t stand after a fall isn’t your call to make, and reporting comes first.",
+      },
+      { id: "rp-o-e4", text: "Text his Care Partner and wait for a reply", verdict: "critical", feedback: "A text and a wait isn’t the urgent route." },
+    ],
+  },
+  reviewed: {
+    text: "2:00 pm: Found Mr Okafor sitting on the floor next to his bed. He said, “I slipped getting up and I can’t stand; my left hip really hurts.” He wasn’t sure how long he’d been there. Stayed with him and made him comfortable without moving him. Escalating now through the urgent escalation procedure; record who was contacted, how and when, once each contact is made.",
+    reviewer: "",
+    reviewerRole: REVIEWER,
+    reviewedOn: "",
+    endorsed: false,
+    notes: [
+      { quote: "I can’t stand; my left hip really hurts", note: "His words are the safety-relevant facts: they stay, word for word." },
+      { quote: "without moving him", note: "Records what was actually done, and that he wasn’t moved." },
+      { quote: "record who was contacted, how and when, once each contact is made", note: "The note doesn’t claim a contact that hasn’t happened yet." },
+    ],
+    alternatives: [],
+  },
+  maxRevisions: 2,
+  communityPostId: "case-floor-hip",
+  policyIds: [],
+  standards: STANDARDS,
+  reviewDue: "",
+  approval: NO_SIGN_OFF,
+};
+
+export const REDPEN_CASES: { id: string; name: string; teaches: string; data: RedPenBlockData }[] = [
+  {
+    id: "dot",
+    name: "Dot’s dressing goal (care plan)",
+    teaches: "Her goal in her words; no labels or unagreed interventions; keep the documented diagnosis.",
+    data: dot,
+  },
+  { id: "nguyen", name: "Mrs Nguyen’s shower (progress note)", teaches: "Her words, not “refused”; never record an action that didn’t happen.", data: nguyen },
+  { id: "okafor", name: "Mr Okafor on the floor (progress note)", teaches: "Don’t play down a fall; a note can’t replace an urgent escalation.", data: okafor },
+];
