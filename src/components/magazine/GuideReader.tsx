@@ -727,7 +727,8 @@ function Finish({
   const quizPassed = pageBlocks(page).some((b) => b.type === "quiz" && guide.quizzes[b.id]?.passed);
   // Every activity on the page, unless its author turned that off (a reference course is only read).
   const todo = reference ? [] : openActivities(page, answers, guide.quizzes);
-  const todoNames = [...new Set(todo.map((b) => BLOCK_LABELS[b.type].toLowerCase()))].join(", ");
+  // In a sentence, block names drop their capitals, but not an acronym's ("The SaH Journey" reads "the SaH journey").
+  const todoNames = [...new Set(todo.map((b) => BLOCK_LABELS[b.type].replace(/\b[A-Z][a-z’']*\b/g, (w) => w.toLowerCase())))].join(", ");
   const blocked = open > 0 || (page.kind === "assessment" && !quizPassed) || todo.length > 0;
 
   const run = async (path: "finish" | "complete") => {

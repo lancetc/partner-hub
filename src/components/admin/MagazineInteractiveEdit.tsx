@@ -31,6 +31,7 @@ import { XRayEdit } from "./MagazineXRayEdit";
 import { ResetEdit } from "./MagazineResetEdit";
 import { LineEdit } from "./MagazineLineEdit";
 import { BridgeEdit } from "./MagazineBridgeEdit";
+import { JourneyEdit } from "./MagazineJourneyEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -225,6 +226,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <LineEdit block={b} update={update} />;
     case "bridge":
       return <BridgeEdit block={b} update={update} />;
+    case "journey":
+      return <JourneyEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1450,6 +1453,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           Practice mode: every number is fictional and labelled so. The course can’t be published until Operations, Finance, Quality, Privacy and Communications
           sign-off is recorded in the block. Staff use the live-call version at /tools/while-you-wait once it’s released.
+        </p>
+      );
+    case "journey":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional journey: story times are never wait estimates. The course can’t be published until Care Operations, Clinical, Quality, Privacy and
+          Communications sign-off is recorded in the block.
         </p>
       );
     case "budget":

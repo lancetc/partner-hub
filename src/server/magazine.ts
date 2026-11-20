@@ -39,6 +39,7 @@ import { xrayApproved, xrayForReaders } from "@/lib/xray";
 import { resetApproved } from "@/lib/reset";
 import { lineApproved, lineForReaders } from "@/lib/line";
 import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
+import { journeyApproved, journeyForReaders } from "@/lib/journey";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -278,7 +279,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                     : // While You Wait: the scenario, without the summary checks or the model summary.
                       b.type === "bridge"
                       ? bridgeForReaders(b)
-                      : b,
+                      : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
+                        b.type === "journey"
+                        ? journeyForReaders(b)
+                        : b,
       ),
     })),
   })),
@@ -667,6 +671,7 @@ export function recordGuideEvent(
           "reset",
           "line",
           "bridge",
+          "journey",
           "process",
           "flashcards",
           "video",
@@ -1060,6 +1065,18 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unkeyed = draftBlocks.filter((b) => b.type === "line" && (!lineApproved(b) || b.cases.some((c) => c.status !== "approved")));
   // And While You Wait: its figures, status language and family summary need Operations, Finance, Quality, Privacy and Communications.
   const unpriced = draftBlocks.filter((b) => b.type === "bridge" && !bridgeApproved(b));
+  // And The SaH Journey: its pathway, fall branch, government claims and family access need their reviewers.
+  const unjourneyed = draftBlocks.filter((b) => b.type === "journey" && !journeyApproved(b));
+  if (unjourneyed.length)
+    throw Object.assign(
+      new HttpError(400, "The SaH Journey needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this."),
+      {
+        problems: unjourneyed.map(
+          (b) =>
+            `“${b.type === "journey" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+        ),
+      },
+    );
   if (unpriced.length)
     throw Object.assign(
       new HttpError(
