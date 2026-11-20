@@ -79,6 +79,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/characters",
+        label: "Characters and stories",
+        icon: "people",
+        description: "The fictional people who return across Topics and courses: their approved story, check-ins, Ava’s transmissions and Story Plans.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/images",
         label: "Image library",
         icon: "image",

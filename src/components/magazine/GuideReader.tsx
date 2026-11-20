@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import { BLOCK_LABELS, openActivities, pageBlocks, pageTitle, type Page } from "@/lib/magazine";
@@ -14,6 +14,7 @@ import { useSelfReview } from "./SelfReview";
 import { useMyNotes } from "./ReflectBlocks";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { playable } from "@/lib/magazineNarration";
+import { StoryAt, useStory } from "../story/StoryMoments";
 
 /*
   Reading a Magazine. A one-page Guide opens straight on its article; a Course opens on an overview
@@ -296,6 +297,14 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     useCallback(() => setStale(true), []),
   );
   const audioGuide = useAudioGuide(guide, send);
+  // Story moments placed beside this course's pages and blocks (docs/story-plans.md): approved, optional, never counted.
+  const story = useStory("guide", guide.id);
+  /** After a transmission's Begin: bring the activity it hands over to into view and give it focus. */
+  const beginAt = (id: string) => () => {
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    el?.focus({ preventScroll: true });
+  };
   // Self-review: "Test myself" in the rail (floating on a phone), and its Quick review dialog.
   const selfReview = useSelfReview({ guide, pageId: page.id, base, preview });
 
@@ -535,8 +544,9 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           }
         />
         <div className="flex min-w-0 flex-col gap-16">
+          <StoryAt moments={story} place={`page:${page.id}`} className={column} onBegin={beginAt(`section-${page.sections[0]?.id}`)} />
           {page.sections.map((s, i) => (
-            <section key={s.id} id={`section-${s.id}`} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8">
+            <section key={s.id} id={`section-${s.id}`} tabIndex={-1} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8 outline-none">
               <div className={cx(column, "mag-reveal")}>
                 <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">{String(i + 1).padStart(2, "0")}</p>
                 <h2 id={`h-${s.id}`} className="mt-1 font-serif text-3xl font-semibold tracking-tight">
@@ -544,9 +554,13 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 </h2>
               </div>
               {s.blocks.map((b) => (
-                <div key={b.id} className="mag-reveal" data-reveal={b.reveal}>
-                  <GuideBlock block={b} ctx={ctx} />
-                </div>
+                <Fragment key={b.id}>
+                  <StoryAt moments={story} place={b.id} className={column} onBegin={beginAt(`block-${b.id}`)} />
+                  <div id={`block-${b.id}`} tabIndex={-1} className="mag-reveal scroll-mt-24 outline-none" data-reveal={b.reveal}>
+                    <GuideBlock block={b} ctx={ctx} />
+                  </div>
+                  <StoryAt moments={story} place={b.id} position="after" className={column} />
+                </Fragment>
               ))}
             </section>
           ))}

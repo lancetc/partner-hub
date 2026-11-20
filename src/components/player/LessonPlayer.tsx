@@ -67,6 +67,7 @@ import { PathCelebration } from "../PathCelebration";
 import { Confetti } from "../Confetti";
 import { finishOpenTopic, readOpen } from "@/lib/openProgress";
 import { bookmarksOn } from "@/lib/features";
+import { StoryAt, useStory } from "../story/StoryMoments";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -124,6 +125,8 @@ export function LessonPlayer({
 }) {
   // Not signed in: no saved progress, bookmarks, comments or votes.
   const anonymous = Boolean(publicLink);
+  // Story moments placed on this Topic's cards (docs/story-plans.md), for people signed in to the Hub.
+  const story = useStory("topic", anonymous || reviewToken ? null : lesson.slug);
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
   const [phase, setPhase] = useState<Phase>("intro");
@@ -922,6 +925,9 @@ export function LessonPlayer({
               </div>
             )}
           </div>
+
+          {/* Story moments placed on this card: an approved line, a check-in or a transmission. Optional, and never counted. */}
+          <StoryAt moments={story} place={node.id} className="mb-4 text-ink" />
 
           {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
           {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}

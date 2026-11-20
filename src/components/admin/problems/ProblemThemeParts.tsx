@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { BARRIERS, PLAN_STEPS } from "@/lib/blockRegistry";
 import {
@@ -555,6 +556,7 @@ export function PlanTab({ d, act, busy }: TabProps) {
   const [note, setNote] = useState("");
   const [swap, setSwap] = useState<{ stepId: string; blockType: string; reason: string } | null>(null);
   const [add, setAdd] = useState({ blockType: "", step: "practise", reason: "", q: "" });
+  const router = useRouter();
   const r = d.response.data;
   const cov = d.plan.coverage;
   const steps = d.plan.steps;
@@ -634,6 +636,26 @@ export function PlanTab({ d, act, busy }: TabProps) {
           </p>
         )}
       </Section>
+
+      {r.learning !== "none" && (
+        <div className={cx(box, "mt-3 flex flex-wrap items-center gap-3")}>
+          <p className="min-w-0 flex-1 basis-72 text-sm">
+            <span className="font-semibold">Would a story help?</span> A Story Plan works out who this is happening to and which decision the learner makes,
+            before any blocks are chosen. It’s optional, and it starts from the behaviour and barrier recorded here.
+          </p>
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={busy}
+            onClick={async () => {
+              const out = await api<{ id?: string }>("/api/admin/story", { body: { action: "plan-from-theme", themeId: d.theme.id } }).catch(() => null);
+              if (out?.id) router.push(`/admin/characters/plans/${out.id}`);
+            }}
+          >
+            <Icon name="book" className="size-4" /> Plan a story
+          </button>
+        </div>
+      )}
 
       <Section
         title="The plan"

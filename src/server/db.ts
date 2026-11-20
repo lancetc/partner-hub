@@ -1290,6 +1290,66 @@ export function ensureProblemTables(db: { exec: (sql: string) => void }) {
 }
 
 /*
+  Story Plans and recurring characters (lib/story, server/story). A character's shared story sits beside its
+  photo-library row: a draft profile and numbered, immutable approved revisions; episodes in story order; where
+  each character appears; story moments (transmissions, returns, check-ins) with their own approved revisions;
+  placements, which pin the exact revision a Topic card or Magazine page shows; plans; and engagement events.
+*/
+export const STORY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS character_profiles (
+  character_id TEXT PRIMARY KEY, steward TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '[]', draft TEXT NOT NULL DEFAULT '{}',
+  revision INTEGER NOT NULL DEFAULT 0, sample INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS character_revisions (
+  character_id TEXT NOT NULL, number INTEGER NOT NULL, profile TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '',
+  approved_by TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (character_id, number)
+);
+CREATE TABLE IF NOT EXISTS story_episodes (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', when_label TEXT NOT NULL DEFAULT '', seq REAL NOT NULL DEFAULT 0,
+  people TEXT NOT NULL DEFAULT '[]', changes TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft',
+  sample INTEGER NOT NULL DEFAULT 0, approved_by TEXT, approved_at TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS story_appearances (
+  id TEXT PRIMARY KEY, character_id TEXT NOT NULL, episode_id TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '', page_id TEXT NOT NULL DEFAULT '',
+  version TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT 'focus', summary TEXT NOT NULL DEFAULT '', label TEXT NOT NULL DEFAULT '', href TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active', created_by TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS story_appearances_character ON story_appearances (character_id);
+CREATE TABLE IF NOT EXISTS story_moments (
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, speaker_id TEXT NOT NULL, featured_id TEXT NOT NULL DEFAULT '', episode_id TEXT NOT NULL DEFAULT '',
+  plan_id TEXT NOT NULL DEFAULT '', draft TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft', revision INTEGER NOT NULL DEFAULT 0,
+  sample INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS story_moment_revisions (
+  moment_id TEXT NOT NULL, number INTEGER NOT NULL, data TEXT NOT NULL, audio TEXT NOT NULL DEFAULT '{}', approved_by TEXT NOT NULL, approved_at TEXT NOT NULL,
+  PRIMARY KEY (moment_id, number)
+);
+CREATE TABLE IF NOT EXISTS story_placements (
+  id TEXT PRIMARY KEY, moment_id TEXT NOT NULL, revision INTEGER NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL, place TEXT NOT NULL DEFAULT '',
+  position TEXT NOT NULL DEFAULT 'before', content_version TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', placed_by TEXT NOT NULL, placed_at TEXT NOT NULL,
+  UNIQUE (moment_id, kind, ref, place)
+);
+CREATE INDEX IF NOT EXISTS story_placements_ref ON story_placements (kind, ref);
+CREATE TABLE IF NOT EXISTS story_plans (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, ref_kind TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '', theme_id TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'draft', sample INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS story_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, received_at TEXT NOT NULL, user_id TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '', event TEXT NOT NULL,
+  character_id TEXT NOT NULL DEFAULT '', moment_id TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '',
+  place TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '', idem TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS story_events_moment ON story_events (moment_id, event);
+`;
+const storyReady = new WeakSet<object>();
+/** Makes sure the story tables are there, for a server already running when they were added. */
+export function ensureStoryTables(db: { exec: (sql: string) => void }) {
+  if (storyReady.has(db)) return;
+  db.exec(STORY_SCHEMA);
+  storyReady.add(db);
+}
+
+/*
   Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
   (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
 */
@@ -1581,6 +1641,7 @@ export function migrate(db: Db) {
   db.exec(CHARACTERS_SCHEMA);
   db.exec(SANDBOX_SCHEMA);
   db.exec(PROBLEM_SCHEMA);
+  db.exec(STORY_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
