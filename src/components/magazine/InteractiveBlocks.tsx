@@ -53,6 +53,7 @@ import { RedPen } from "./RedPen";
 import { NotesDeck } from "./NotesDeck";
 import { PlaybookBlockView } from "./PlaybookBlock";
 import { DocumentAuditor } from "./DocumentAuditor";
+import { BudgetSandbox } from "./BudgetSandbox";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -166,6 +167,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <DocumentAuditor block={b} ctx={ctx} />;
     case "phonecall":
       return <Roleplay block={b} ctx={ctx} />;
+    case "sandbox":
+      return <BudgetSandbox block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

@@ -63,6 +63,8 @@ import { AUDIT_CASES } from "@/content/auditCases";
 import { freshAuditor } from "@/lib/auditor";
 import { PHONE_CALLS } from "@/content/phoneCalls";
 import { freshPhoneCall } from "@/lib/phonecall";
+import { freshSandbox } from "@/lib/sandbox";
+import { SANDBOX_CASES } from "@/content/sandboxCases";
 import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
 import { freshLine } from "@/lib/line";
@@ -153,6 +155,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   playbook: "clipboard",
   auditor: "shield",
   phonecall: "phone",
+  sandbox: "money",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -202,6 +205,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   playbook: "A procedure from the playbook library, always showing its current approved release, with Ask a Lead.",
   auditor: "A fictional contractor pack or invoice to inspect and mark, then Approve, Query or Reject current submission.",
   phonecall: "A difficult call from a fictional client or family member, typed or spoken, with case tools and a debrief in the learner’s own words.",
+  sandbox: "Build a Support at Home care plan with a fictional participant: the quarterly ledger, who pays which part, and an explanation to them.",
   mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
@@ -237,7 +241,10 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
-  { title: "Simulate", types: ["branching", "conversation", "phonecall", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget"] },
+  {
+    title: "Simulate",
+    types: ["branching", "conversation", "phonecall", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget", "sandbox"],
+  },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "mentor", "confidence"] },
 ];
@@ -476,6 +483,9 @@ function newBlock(item: PaletteItem): Block {
     case "phonecall":
       // Starts from the first pilot scene, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshPhoneCall(PHONE_CALLS[0].data) };
+    case "sandbox":
+      // Starts from the starter scenario, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshSandbox(SANDBOX_CASES[0].data) };
     case "mentor":
       // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
       return {
@@ -547,6 +557,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "xray") Object.assign(c, freshXRay(c));
   if (c.type === "auditor") Object.assign(c, freshAuditor(c));
   if (c.type === "phonecall") Object.assign(c, freshPhoneCall(c));
+  if (c.type === "sandbox") Object.assign(c, freshSandbox(c));
   if (c.type === "reset") Object.assign(c, freshReset(c));
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
@@ -702,6 +713,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.operations;
     case "phonecall":
       return !b.phone.approval.owner && !b.phone.approval.operations;
+    case "sandbox":
+      return !b.approval.owner && !b.approval.finance;
   }
 }
 

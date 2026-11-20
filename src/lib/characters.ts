@@ -127,6 +127,9 @@ export function charactersInBlock(b: Record<string, unknown>): { name: string; r
     case "conversation":
       add(b.person, "participant");
       break;
+    case "sandbox":
+      add(b.participant, "participant");
+      break;
     case "phonecall":
       add(b.person, "family");
       add((b.phone as Record<string, unknown> | undefined)?.client, "participant");

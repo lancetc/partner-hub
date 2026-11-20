@@ -39,6 +39,7 @@ import { RedPenEdit } from "./MagazineRedPenEdit";
 import { NotesDeckEdit } from "./MagazineNotesEdit";
 import { PlaybookEdit } from "./MagazinePlaybookEdit";
 import { PhoneCallEdit } from "./MagazinePhoneCallEdit";
+import { SandboxEdit } from "./MagazineSandboxEdit";
 import { AuditorEdit } from "./MagazineAuditorEdit";
 import { Icon, type IconName } from "../Icon";
 
@@ -252,6 +253,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <AuditorEdit block={b} update={update} />;
     case "phonecall":
       return <PhoneCallEdit block={b} update={update} />;
+    case "sandbox":
+      return <SandboxEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1491,6 +1494,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           The procedure lives in the playbook library (Admin, then Playbooks). This block always shows its current approved release, so editing it there updates
           every page it’s on. The course can’t be published until the snippet has an approved release.
+        </p>
+      );
+    case "sandbox":
+      return (
+        <p className="text-sm text-ink-muted">
+          A practice scenario: nothing a learner does quotes a real fee or changes a care plan. It can’t be published until Support at Home operations, Finance,
+          Quality and accessibility sign-off is recorded, on a ruleset that’s in date. Use Preview to build a plan and see every ledger line.
         </p>
       );
     case "phonecall":

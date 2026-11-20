@@ -1204,6 +1204,27 @@ export function ensureCharacterTable(db: { exec: (sql: string) => void }) {
 }
 
 /*
+  Budget Sandbox (lib/sandbox, server/sandbox): a learner's attempt at a care plan: the plan lines, their
+  explanation, and the ledger and feedback it was read against, with the ruleset and a hash of the scenario.
+  Theirs alone; authors see totals.
+*/
+export const SANDBOX_SCHEMA = `
+CREATE TABLE IF NOT EXISTS sandbox_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), key_hash TEXT NOT NULL, ruleset_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  coach TEXT, status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS sandbox_attempts_user ON sandbox_attempts (user_id, guide_id, block_id);
+`;
+const sandboxReady = new WeakSet<object>();
+/** Makes sure the Budget Sandbox table is there, for a server already running when it was added. */
+export function ensureSandbox(db: { exec: (sql: string) => void }) {
+  if (sandboxReady.has(db)) return;
+  db.exec(SANDBOX_SCHEMA);
+  sandboxReady.add(db);
+}
+
+/*
   Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
   (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
 */
@@ -1493,6 +1514,7 @@ export function migrate(db: Db) {
   db.exec(PLAYBOOK_SCHEMA);
   db.exec(AUDITOR_SCHEMA);
   db.exec(CHARACTERS_SCHEMA);
+  db.exec(SANDBOX_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

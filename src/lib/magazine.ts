@@ -20,6 +20,7 @@ import { parseNotesDeck, type NotesDeckData } from "./notes";
 import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
 import { parseAuditor, type AuditorBlockData } from "./auditor";
 import { parsePhoneCase, type PhoneCallData } from "./phonecall";
+import { parseSandbox, type SandboxBlockData } from "./sandbox";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -483,7 +484,8 @@ export type Block =
   | NotesDeckBlock
   | PlaybookBlock
   | AuditorBlock
-  | PhoneCallBlock;
+  | PhoneCallBlock
+  | SandboxBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -516,6 +518,8 @@ export type PlaybookBlock = Base & { type: "playbook" } & PlaybookBlockData;
 export type AuditorBlock = Base & { type: "auditor" } & AuditorBlockData;
 /** Tough Phone Call (lib/phonecall): a telephone preset of the conversational roleplay, with case tools, a privacy gate and a 0 to 3 debrief. */
 export type PhoneCallBlock = Base & { type: "phonecall" } & PhoneCallData;
+/** Budget Sandbox (lib/sandbox): a Support at Home care plan built with a fictional participant, its quarterly ledger, and an explanation to them. */
+export type SandboxBlock = Base & { type: "sandbox" } & SandboxBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -730,6 +734,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   playbook: "Live SOP playbook",
   auditor: "Document Auditor",
   phonecall: "Tough Phone Call",
+  sandbox: "Budget Sandbox",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1636,6 +1641,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "playbook", ...parsePlaybookBlock(o, where, { unfinished }) };
       case "auditor":
         return { ...base, type: "auditor", ...parseAuditor(o, where, { str, idOf, list, unfinished }) };
+      case "sandbox":
+        return { ...base, type: "sandbox", ...parseSandbox(o, where, { str, idOf, list, unfinished }) };
       case "phonecall": {
         const roleplay = readRoleplay(o.roleplay, `${where} call`);
         if (!roleplay) unfinished(`${where} needs its call: the caller, the scene and what’s worth doing.`);
@@ -2080,6 +2087,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "playbook") extra += 1;
     if (b.type === "auditor") extra += 10;
     if (b.type === "phonecall") extra += 6;
+    if (b.type === "sandbox") extra += 12;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }
