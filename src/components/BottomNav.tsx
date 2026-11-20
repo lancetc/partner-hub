@@ -6,6 +6,7 @@ import { Icon } from "./Icon";
 import { isActive, navItems } from "./nav";
 import { NavPending } from "./NavPending";
 import { cx } from "@/lib/format";
+import { FavouritesBottomLink } from "./favourites/FavouritesNav";
 
 /** Phone and tablet navigation within thumb reach; on a narrow phone the row scrolls sideways. Hidden inside the lesson player, which has its own controls, and on public links. */
 export function BottomNav() {
@@ -16,9 +17,9 @@ export function BottomNav() {
     <nav
       aria-label="Primary"
       data-bottom-nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
-      <ul className="flex overflow-x-auto sm:grid sm:grid-flow-col sm:auto-cols-fr">
+      <ul className="flex min-w-0 flex-1 overflow-x-auto sm:grid sm:grid-flow-col sm:auto-cols-fr">
         {navItems.map((item) => {
           const active = isActive(pathname, item.href);
           return (
@@ -39,6 +40,8 @@ export function BottomNav() {
           );
         })}
       </ul>
+      {/* Favourites stays put at the end while the rest of the row scrolls: one tap from any page, with its label. */}
+      <FavouritesBottomLink />
     </nav>
   );
 }

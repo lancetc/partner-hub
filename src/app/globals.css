@@ -735,6 +735,9 @@ input[type="range"].brand-range::-moz-range-thumb {
 }
 @media print { .mag-burst { display: none; } }
 
+/* A passage opened from Favourites (docs/job-aids.md): the part of the page it's in is outlined on arrival. */
+[id^="block-"]:target, [data-fav-target] { outline: 3px solid var(--focus); outline-offset: 10px; border-radius: 12px; }
+
 /*
   Ava Relay (components/relay/AvaRelay): a terminal-style dial bar and modal, dark teal in both themes. The bar's
   sweep runs while it dials, and each part of the modal gets one short, dim pulse as it resolves. With reduced
@@ -812,4 +815,5 @@ input[type="range"].brand-range::-moz-range-thumb {
   .relay-part[data-shown="true"][data-pulse="true"] { animation: none; }
 }
 .relay-dialog * { scrollbar-width: thin; scrollbar-color: var(--relay-line) transparent; }
+
 

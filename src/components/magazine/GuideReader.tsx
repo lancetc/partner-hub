@@ -16,6 +16,8 @@ import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { playable } from "@/lib/magazineNarration";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AvaRelay } from "../relay/AvaRelay";
+import { FavouriteBanner } from "../favourites/FavouriteBanner";
+import { Highlighter, SaveSection } from "../favourites/Highlighter";
 import { relayOn } from "@/lib/relayConfig";
 
 /*
@@ -301,6 +303,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
   const audioGuide = useAudioGuide(guide, send);
   // Story moments placed beside this course's pages and blocks (docs/story-plans.md): approved, optional, never counted.
   const story = useStory("guide", guide.id);
+  // Highlights (docs/job-aids.md): text selected inside the page's own content can be saved to Favourites.
+  const pageBody = useRef<HTMLDivElement>(null);
   /** After a transmission's Begin: bring the activity it hands over to into view and give it focus. */
   const beginAt = (id: string) => () => {
     const el = document.getElementById(id);
@@ -545,7 +549,9 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             )
           }
         />
-        <div className="flex min-w-0 flex-col gap-16">
+        <div ref={pageBody} className="flex min-w-0 flex-col gap-16">
+          {/* Opened from Favourites: the saved passage, where it stands against this version, and the way back. */}
+          <FavouriteBanner className={column} />
           {/* Ava Relay (docs/ava-relay.md): one dial bar, after the page's introduction and before its first block. Part of the page, not of its content. */}
           {relayOn(guide.doc.relay, page) && (
             <AvaRelay
@@ -565,6 +571,12 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 <h2 id={`h-${s.id}`} className="mt-1 font-serif text-3xl font-semibold tracking-tight">
                   {s.title}
                 </h2>
+                {/* The same as highlighting, with nothing to select: for touch, a keyboard or a screen reader. */}
+                {!preview && page.kind === "content" && (
+                  <p className="mt-2 print:hidden">
+                    <SaveSection source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} sectionId={s.id} />
+                  </p>
+                )}
               </div>
               {s.blocks.map((b) => (
                 <Fragment key={b.id}>
@@ -593,6 +605,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           />
         </div>
       </div>
+      {!preview && <Highlighter root={pageBody} source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} />}
       {selfReview.button("float")}
       {selfReview.dialog}
       {myNotes.dialog}

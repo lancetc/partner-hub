@@ -8,6 +8,7 @@ import { catalogueTopics } from "@/server/catalogue";
 import { currentUser } from "@/server/auth";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
+import { HomeFavourites } from "@/components/favourites/FavouritesList";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -26,6 +27,9 @@ export default function Home() {
       <Suspense fallback={<div className="min-h-[24rem]" aria-hidden />}>
         <Workspace />
       </Suspense>
+
+      {/* Your Favourites (docs/job-aids.md): the last few saved Job Aids and passages, and the way to Work Tools. */}
+      <HomeFavourites />
 
       <section aria-labelledby="discover" className="mt-12 border-t border-line pt-8">
         <h2 id="discover" data-build-step style={step(6)} className="font-serif text-3xl font-semibold tracking-tight">

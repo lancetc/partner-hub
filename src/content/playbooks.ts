@@ -34,6 +34,22 @@ const INVOICE_TEXT = [
   "If the rate doesn’t match the approved price list, raise a Finance query before re-submitting.",
 ].join("\n");
 
+const RATE_TEXT = [
+  "Before approving a supplier invoice:",
+  "Open the client’s current service agreement.",
+  "For each invoice line, compare the service, the date, the unit and the rate with the agreement.",
+  "If every line matches, continue with approval.",
+  "If a line differs, pause the approval and raise a query through the approved query process. Do not adjust the invoice yourself.",
+].join("\n");
+
+const ASK_TEXT = [
+  "Before proposing a change to how a person manages something that matters to them:",
+  "Ask what the activity means to them and how they manage it now.",
+  "Ask what they would want to keep doing.",
+  "Name any concern raised by a family member or supporter, and ask how they see it.",
+  "Agree what to try together, and when you will check how it is going.",
+].join("\n");
+
 export const SEED_SOURCES: SourceDoc[] = [
   {
     id: "incident-procedure",
@@ -49,7 +65,18 @@ export const SEED_SOURCES: SourceDoc[] = [
     system: "Hub policy record",
     owner: "Finance",
     audiences: ["partner", "coordinator", "staff"],
-    sections: [{ anchor: "rejected-invoice", heading: "Correcting a rejected supplier invoice", text: INVOICE_TEXT }],
+    sections: [
+      { anchor: "rejected-invoice", heading: "Correcting a rejected supplier invoice", text: INVOICE_TEXT },
+      { anchor: "rate-check", heading: "Checking the agreed rate before approving an invoice (editorial example)", text: RATE_TEXT },
+    ],
+  },
+  {
+    id: "choice-and-risk",
+    title: "Choice and risk conversations (placeholder Hub policy record)",
+    system: "Hub policy record",
+    owner: "Quality and Clinical Governance",
+    audiences: ["coordinator", "staff"],
+    sections: [{ anchor: "ask-first", heading: "Asking before proposing a change (editorial example)", text: ASK_TEXT }],
   },
 ];
 
@@ -59,6 +86,9 @@ export const SEED_CONTACTS: Contact[] = [
 ];
 
 const blankApprovals = { owner: "", clinical: "", quality: "" };
+/** What every seed shares until it says otherwise. */
+const aid = { template: "checklist" as const, trigger: "", minutes: 0, links: [], themeId: "" };
+const draft = { quick: "", example: "" };
 
 export const SEED_SNIPPETS: { id: string; data: SnippetData; release: Omit<ReleaseData, "sourceVersion" | "sourceChecksum" | "sourceText"> }[] = [
   {
@@ -75,6 +105,10 @@ export const SEED_SNIPPETS: { id: string; data: SnippetData; release: Omit<Relea
       contactKeys: ["incident-responder"],
       leads: [],
       tag: "incidents",
+      ...aid,
+      template: "escalation",
+      trigger: "You think a reportable incident may have happened.",
+      minutes: 2,
     },
     release: {
       steps: [
@@ -101,6 +135,7 @@ export const SEED_SNIPPETS: { id: string; data: SnippetData; release: Omit<Relea
       effectiveOn: "",
       reviewBy: "",
       ackRequired: true,
+      ...draft,
       approvals: blankApprovals,
     },
   },
@@ -118,6 +153,9 @@ export const SEED_SNIPPETS: { id: string; data: SnippetData; release: Omit<Relea
       contactKeys: ["finance-support"],
       leads: [],
       tag: "invoices",
+      ...aid,
+      trigger: "A supplier invoice has come back rejected.",
+      minutes: 3,
     },
     release: {
       steps: [
@@ -136,6 +174,78 @@ export const SEED_SNIPPETS: { id: string; data: SnippetData; release: Omit<Relea
       effectiveOn: "",
       reviewBy: "",
       ackRequired: false,
+      ...draft,
+      approvals: blankApprovals,
+    },
+  },
+  // The Job Aids pilot (docs/job-aids.md). Editorial examples on placeholder records: fictional, and unapproved until
+  // Operations, Finance and Quality supply and sign off the real steps.
+  {
+    id: "invoice-rate-check",
+    data: {
+      title: "Invoice rate check",
+      purpose: "Compare each invoice line with the current agreement before you approve it, and query a mismatch the approved way.",
+      roleLabel: "Care coordinators reviewing supplier invoices",
+      risk: "operational",
+      ownerTeam: "Finance",
+      audiences: ["coordinator", "staff"],
+      source: { docId: "supplier-invoices", anchor: "rate-check" },
+      fallback: { text: "This check is being updated. Contact Finance support before approving an invoice you’re unsure of.", contactKeys: ["finance-support"] },
+      contactKeys: ["finance-support"],
+      leads: [],
+      tag: "invoices",
+      ...aid,
+      trigger: "You are about to approve a supplier invoice.",
+      minutes: 2,
+    },
+    release: {
+      steps: [
+        { id: "open", kind: "now", text: "Open the client’s current service agreement.", why: "The agreement is what was agreed. A past invoice isn’t.", anchor: "rate-check" },
+        { id: "compare", kind: "now", text: "For each line, compare the service, the date, the unit and the rate with the agreement.", why: "A mismatch is usually in one line, not the total.", anchor: "rate-check" },
+        { id: "match", kind: "then", text: "If every line matches, continue with approval.", why: "", anchor: "rate-check" },
+        { id: "differs", kind: "exception", text: "If a line differs, pause the approval and raise a query through the approved query process. Don’t adjust the invoice yourself.", why: "", anchor: "rate-check" },
+      ],
+      changeSummary: "First release.",
+      effectiveOn: "",
+      reviewBy: "",
+      ackRequired: false,
+      quick: "Open the current agreement. Compare the service, date, unit and rate on each invoice line. If something differs, pause and follow the approved query process.",
+      example: "A made-up invoice has three lines. Two match the agreement. The third shows a weekend rate for a visit the agreement lists on a Tuesday. The coordinator pauses the approval and raises a query about that one line.",
+      approvals: blankApprovals,
+    },
+  },
+  {
+    id: "ask-before-changing-the-plan",
+    data: {
+      title: "Ask before changing the plan",
+      purpose: "Find out what matters to the person before you suggest a change, so the plan is one they helped make.",
+      roleLabel: "Care coordinators, before proposing a change with a client",
+      risk: "operational",
+      ownerTeam: "Quality and Clinical Governance",
+      audiences: ["coordinator", "staff"],
+      source: { docId: "choice-and-risk", anchor: "ask-first" },
+      fallback: { text: "This prompt is being updated. Talk to your team lead before proposing a change to a client’s plan.", contactKeys: [] },
+      contactKeys: [],
+      leads: [],
+      tag: "conversations",
+      ...aid,
+      template: "conversation",
+      trigger: "A family member has raised a worry, and you’re about to talk to the client.",
+      minutes: 3,
+    },
+    release: {
+      steps: [
+        { id: "means", kind: "now", text: "What does this mean to you, and how do you manage it now?", why: "You learn what any change has to fit around.", anchor: "ask-first" },
+        { id: "keep", kind: "now", text: "What would you want to keep doing?", why: "", anchor: "ask-first" },
+        { id: "concern", kind: "then", text: "Name the concern that was raised, and ask how they see it.", why: "The worry is real. So is their view of it.", anchor: "ask-first" },
+        { id: "agree", kind: "exception", text: "Agree what to try together, and when you’ll check how it’s going.", why: "", anchor: "ask-first" },
+      ],
+      changeSummary: "First release.",
+      effectiveOn: "",
+      reviewBy: "",
+      ackRequired: false,
+      quick: "Before you suggest anything, ask what this means to them, how they manage it now, and what they’d want to keep doing.",
+      example: "",
       approvals: blankApprovals,
     },
   },

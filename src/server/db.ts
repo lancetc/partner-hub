@@ -1134,6 +1134,38 @@ const missionReady = new WeakSet<object>();
   asked about a step, with their replies.
 */
 export const PLAYBOOK_SCHEMA = `
+-- Job Aids, Highlights and Favourites (docs/job-aids.md). A playbook is the Hub's Job Aid. A favourite is one
+-- person's private pointer to a whole aid or to a passage they highlighted: never a copy of guidance to rely on.
+-- "seen" is the aid release, or the course edition, the person last looked at, so a change can be shown once.
+CREATE TABLE IF NOT EXISTS favourites (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL CHECK (kind IN ('job_aid', 'passage')), target_id TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '', pinned INTEGER NOT NULL DEFAULT 0, seen TEXT NOT NULL DEFAULT '', saved_at TEXT NOT NULL, last_opened_at TEXT,
+  UNIQUE (user_id, kind, target_id)
+);
+CREATE INDEX IF NOT EXISTS favourites_user ON favourites (user_id, kind);
+-- A highlighted passage: the words as published when it was saved, where they were, and a hash so the same
+-- selection saved twice is one row. The words are published text only: the server checks they're in the source.
+CREATE TABLE IF NOT EXISTS saved_passages (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), source_kind TEXT NOT NULL CHECK (source_kind IN ('guide', 'aid')), source_id TEXT NOT NULL,
+  version TEXT NOT NULL, page_id TEXT NOT NULL DEFAULT '', section_id TEXT NOT NULL DEFAULT '', block_id TEXT NOT NULL DEFAULT '', source_title TEXT NOT NULL DEFAULT '',
+  quote TEXT NOT NULL, hash TEXT NOT NULL, whole_section INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, UNIQUE (user_id, source_kind, source_id, hash)
+);
+-- Use of Job Aids and Favourites: adoption, never completion or competence. No selected text is kept here.
+CREATE TABLE IF NOT EXISTS aid_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, received_at TEXT NOT NULL, user_id TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '', event TEXT NOT NULL,
+  snippet_id TEXT NOT NULL DEFAULT '', release INTEGER NOT NULL DEFAULT 0, source_kind TEXT NOT NULL DEFAULT '', source_id TEXT NOT NULL DEFAULT '', place TEXT NOT NULL DEFAULT '',
+  idem TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS aid_events_snippet ON aid_events (snippet_id, event);
+-- A Job Aid placed on a Topic card, by reference. Magazine placements are blocks in the course itself.
+CREATE TABLE IF NOT EXISTS aid_placements (
+  id TEXT PRIMARY KEY, snippet_id TEXT NOT NULL, slug TEXT NOT NULL, card TEXT NOT NULL, why TEXT NOT NULL DEFAULT '', placed_by TEXT NOT NULL, placed_at TEXT NOT NULL,
+  UNIQUE (snippet_id, slug, card)
+);
+-- The owner's decision at review: keep, revise, retarget, withdraw or close.
+CREATE TABLE IF NOT EXISTS aid_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, snippet_id TEXT NOT NULL, release INTEGER NOT NULL DEFAULT 0, decision TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', by_user TEXT NOT NULL, at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS playbook_sources (doc_id TEXT NOT NULL, version INTEGER NOT NULL, data TEXT NOT NULL, at TEXT NOT NULL, by_user TEXT NOT NULL, PRIMARY KEY (doc_id, version));
 CREATE TABLE IF NOT EXISTS playbook_contacts (key TEXT PRIMARY KEY, label TEXT NOT NULL, routes TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS playbook_snippets (id TEXT PRIMARY KEY, data TEXT NOT NULL, withdrawn INTEGER NOT NULL DEFAULT 0, withdrawn_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);

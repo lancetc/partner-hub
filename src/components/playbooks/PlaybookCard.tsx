@@ -10,6 +10,7 @@ import {
   NOT_AN_INCIDENT_REPORT,
   REPLY_LABELS,
   RISK,
+  AID_TEMPLATES,
   STEP_KINDS,
   UNCONTROLLED,
   type Issue,
@@ -17,6 +18,9 @@ import {
 } from "@/lib/playbook";
 import type { ResolvedSnippet } from "@/server/playbooks";
 import { Icon } from "../Icon";
+import { aidEvent } from "../favourites/favApi";
+import { Highlighter, SaveSection } from "../favourites/Highlighter";
+import { SaveNotice } from "../favourites/SaveNotice";
 
 /*
   A Live SOP playbook card (docs/live-playbooks.md), the same wherever it's placed: a Magazine block, the playbook
@@ -41,6 +45,9 @@ const showDate = (d: string) =>
     : "";
 
 export function PlaybookCard({ snippetId, preview }: { snippetId: string; preview?: boolean }) {
+  const body = useRef<HTMLDivElement>(null);
+  const [notice, setNotice] = useState<{ first: boolean } | null>(null);
+  const [saveError, setSaveError] = useState("");
   const url = `/api/playbooks/${snippetId}`;
   const loaded = useApi<ResolvedSnippet>(url);
   const [urgent, setUrgent] = useState(false);
@@ -52,7 +59,9 @@ export function PlaybookCard({ snippetId, preview }: { snippetId: string; previe
   useEffect(() => {
     if (!v || !v.permitted || !v.release || viewed.current || preview) return;
     viewed.current = true;
-    api(url, { body: { action: "viewed" } }).catch(() => undefined);
+    // Where they came from (Work Tools, a placement, Favourites) is counted with the view.
+    const from = new URLSearchParams(window.location.search).get("from") ?? (window.location.search.includes("fav=") ? "favourites" : "work-tools");
+    api(url, { body: { action: "viewed", from, key: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` } }).catch(() => undefined);
   }, [v, url, preview]);
 
   if (loaded.error) return <Frame title="Playbook">{<p role="alert">{loaded.error}</p>}</Frame>;
@@ -72,136 +81,196 @@ export function PlaybookCard({ snippetId, preview }: { snippetId: string; previe
   const safety = v.risk === "safety_critical";
 
   return (
-    <Frame title={v.title} risk={v.risk}>
-      <p className="text-lg">{v.purpose}</p>
-      <p className="mt-1 text-sm text-ink-muted">{v.roleLabel}</p>
+    <Frame title={v.title} risk={v.risk} template={AID_TEMPLATES[v.template].label}>
+      <div ref={body} data-hl="aid">
+        {v.trigger && (
+          <p className="text-lg">
+            <span className="font-semibold">Use when:</span> {v.trigger}
+          </p>
+        )}
+        <p className={v.trigger ? "mt-1" : "text-lg"}>{v.purpose}</p>
+        <p className="mt-1 text-sm text-ink-muted">
+          {v.roleLabel}
+          {v.minutes > 0 && ` · about ${v.minutes} min`}
+        </p>
 
-      {(safety || v.readiness === "fallback") && (
-        <div className="mt-3">
-          <button type="button" className={cx(secondary, "border-[#b3261e] text-[#b3261e]")} aria-expanded={urgent} onClick={() => setUrgent(!urgent)}>
-            <Icon name="alert" className="size-4" /> Urgent help
-          </button>
-          {urgent && <UrgentRoute v={v} />}
-        </div>
-      )}
+        {(safety || v.readiness === "fallback") && (
+          <div className="mt-3">
+            <button type="button" className={cx(secondary, "border-[#b3261e] text-[#b3261e]")} aria-expanded={urgent} onClick={() => setUrgent(!urgent)}>
+              <Icon name="alert" className="size-4" /> Urgent help
+            </button>
+            {urgent && <UrgentRoute v={v} />}
+          </div>
+        )}
 
-      {v.readiness === "fallback" ? (
-        <div className={cx(warn, "mt-4")} role="status">
-          <p className="font-semibold">Procedure temporarily unavailable</p>
-          {v.withdrawnReason && <p className="mt-1 text-sm">{v.withdrawnReason}</p>}
-          <p className="mt-2">{v.fallback.text}</p>
-          <Contacts list={v.fallback.contacts} />
-        </div>
-      ) : (
-        v.release && (
-          <>
-            <p className="mt-3 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-tealtint px-3 py-1 text-sm font-semibold">
-              <Icon name="circle-check" className="size-4" /> Approved · effective {showDate(v.release.effectiveOn)} · owner {v.ownerTeam} · release{" "}
-              {v.release.number}
-            </p>
-            {v.readiness === "review_due" && (
-              <p className={cx(warn, "mt-2 text-sm")}>
-                Due for review since {showDate(v.release.reviewBy)}. Its owner is checking it; it’s still the approved version.
+        {v.readiness === "fallback" ? (
+          <div className={cx(warn, "mt-4")} role="status">
+            <p className="font-semibold">Procedure temporarily unavailable</p>
+            {v.withdrawnReason && <p className="mt-1 text-sm">{v.withdrawnReason}</p>}
+            <p className="mt-2">{v.fallback.text}</p>
+            <Contacts list={v.fallback.contacts} />
+          </div>
+        ) : (
+          v.release && (
+            <>
+              <p className="mt-3 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-tealtint px-3 py-1 text-sm font-semibold">
+                <Icon name="circle-check" className="size-4" /> Approved · effective {showDate(v.release.effectiveOn)} · owner {v.ownerTeam} · release{" "}
+                {v.release.number}
               </p>
-            )}
-            {v.pending === "changed" && (
-              <p className={cx(warn, "mt-2 text-sm")}>
-                For owners and leads: the source has changed. A new release is waiting for owner review; readers still see this one.
-              </p>
-            )}
-            {v.pending === "unmapped" && (
-              <p className={cx(warn, "mt-2 text-sm")}>For owners and leads: the source section can’t be found. Map it in the playbook library.</p>
-            )}
-            {v.updatedSince.length > 0 && (
-              <div className={cx(box, "mt-3")}>
-                <p className="font-semibold">Updated since you last viewed</p>
-                <ul className="mt-1 list-disc pl-5 text-sm">
-                  {v.updatedSince.map((u) => (
-                    <li key={u.number}>
-                      Release {u.number}: {u.summary}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {v.release.ackRequired && !preview && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {v.acked ? (
-                  <span className="text-sm font-semibold">You’ve acknowledged release {v.release.number}.</span>
-                ) : (
-                  <button type="button" className={secondary} onClick={() => void post({ action: "ack" })}>
-                    I’ve read this release
-                  </button>
-                )}
-              </div>
-            )}
+              {v.readiness === "review_due" && (
+                <p className={cx(warn, "mt-2 text-sm")}>
+                  Due for review since {showDate(v.release.reviewBy)}. Its owner is checking it; it’s still the approved version.
+                </p>
+              )}
+              {v.pending === "changed" && (
+                <p className={cx(warn, "mt-2 text-sm")}>
+                  For owners and leads: the source has changed. A new release is waiting for owner review; readers still see this one.
+                </p>
+              )}
+              {v.pending === "unmapped" && (
+                <p className={cx(warn, "mt-2 text-sm")}>For owners and leads: the source section can’t be found. Map it in the playbook library.</p>
+              )}
+              {v.updatedSince.length > 0 && (
+                <div className={cx(box, "mt-3")}>
+                  <p className="font-semibold">Updated since you last viewed</p>
+                  <ul className="mt-1 list-disc pl-5 text-sm">
+                    {v.updatedSince.map((u) => (
+                      <li key={u.number}>
+                        Release {u.number}: {u.summary}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {v.release.ackRequired && !preview && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {v.acked ? (
+                    <span className="text-sm font-semibold">You’ve acknowledged release {v.release.number}.</span>
+                  ) : (
+                    <button type="button" className={secondary} onClick={() => void post({ action: "ack" })}>
+                      I’ve read this release
+                    </button>
+                  )}
+                </div>
+              )}
 
-            {(Object.keys(STEP_KINDS) as StepKind[]).map((kind) => {
-              const list = steps.filter((s) => s.kind === kind && s.text.trim());
-              if (!list.length) return null;
-              return (
-                <section key={kind} aria-label={STEP_KINDS[kind]} className={cx("mt-4", kind === "now" && "rounded-2xl ring-2 ring-[#b3261e]/40 p-3")}>
-                  <h4 className="text-sm font-extrabold uppercase tracking-[0.12em] text-accent">{STEP_KINDS[kind]}</h4>
-                  <ol className="mt-2 flex flex-col gap-2">
-                    {list.map((s) => {
-                      const n = steps.indexOf(s) + 1;
-                      return (
-                        <li key={s.id} className="grid grid-cols-[2rem_1fr] gap-2">
-                          <span className="font-serif text-lg font-semibold text-accent" aria-hidden>
-                            {n}
-                          </span>
-                          <div>
-                            <label className="flex items-start gap-2">
-                              <input
-                                type="checkbox"
-                                className="mt-1 size-5 shrink-0"
-                                checked={ticked.includes(s.id)}
-                                onChange={() => setTicked(ticked.includes(s.id) ? ticked.filter((x) => x !== s.id) : [...ticked, s.id])}
-                              />
-                              <span className="text-lg">
-                                <span className="sr-only">Step {n}: </span>
-                                {s.text}
-                              </span>
-                            </label>
-                            <div className="mt-1 flex flex-wrap gap-3 pl-7 text-sm">
-                              {s.why && (
-                                <details>
-                                  <summary className="cursor-pointer font-semibold text-accent">Why this matters</summary>
-                                  <p className="mt-1">{s.why}</p>
-                                </details>
-                              )}
-                              <button type="button" className="font-semibold text-accent underline" onClick={() => setAsking(s.id)}>
-                                Ask about this step
-                              </button>
+              {(Object.keys(STEP_KINDS) as StepKind[]).map((kind) => {
+                const list = steps.filter((s) => s.kind === kind && s.text.trim());
+                if (!list.length) return null;
+                return (
+                  <section key={kind} aria-label={v.groups[kind]} className={cx("mt-4", kind === "now" && "rounded-2xl ring-2 ring-[#b3261e]/40 p-3")}>
+                    <h4 className="text-sm font-extrabold uppercase tracking-[0.12em] text-accent">{v.groups[kind]}</h4>
+                    <ol className="mt-2 flex flex-col gap-2">
+                      {list.map((s) => {
+                        const n = steps.indexOf(s) + 1;
+                        return (
+                          <li key={s.id} className="grid grid-cols-[2rem_1fr] gap-2">
+                            <span className="font-serif text-lg font-semibold text-accent" aria-hidden>
+                              {n}
+                            </span>
+                            <div>
+                              <label className="flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 size-5 shrink-0"
+                                  checked={ticked.includes(s.id)}
+                                  onChange={() => setTicked(ticked.includes(s.id) ? ticked.filter((x) => x !== s.id) : [...ticked, s.id])}
+                                />
+                                <span className="text-lg">
+                                  <span className="sr-only">Step {n}: </span>
+                                  {s.text}
+                                </span>
+                              </label>
+                              <div className="mt-1 flex flex-wrap gap-3 pl-7 text-sm">
+                                {s.why && (
+                                  <details>
+                                    <summary className="cursor-pointer font-semibold text-accent">Why this matters</summary>
+                                    <p className="mt-1">{s.why}</p>
+                                  </details>
+                                )}
+                                <button type="button" className="font-semibold text-accent underline" onClick={() => setAsking(s.id)}>
+                                  Ask about this step
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </section>
-              );
-            })}
-            <p className="mt-2 text-xs text-ink-muted">Ticks are a reading aid on this screen only. They don’t record that anything was done.</p>
-            {v.contacts.length > 0 && (
-              <div className={cx(box, "mt-3")}>
-                <p className="font-semibold">Contacts for your role</p>
-                <Contacts list={v.contacts} />
-              </div>
-            )}
-          </>
-        )
-      )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </section>
+                );
+              })}
+              <p className="mt-2 text-xs text-ink-muted">Ticks are a reading aid on this screen only. They don’t record that anything was done.</p>
+              {v.release.example && (
+                <details className={cx(box, "mt-3")}>
+                  <summary className="cursor-pointer font-semibold">A worked example (made up)</summary>
+                  <p className="mt-2">{v.release.example}</p>
+                </details>
+              )}
+              {v.links.length > 0 && (
+                <div className={cx(box, "mt-3")}>
+                  <p className="font-semibold">Where to go from here</p>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {v.links.map((l) => (
+                      <li key={l.href}>
+                        <a
+                          href={l.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent underline underline-offset-2"
+                          onClick={() => !preview && aidEvent({ event: "current_source_opened", snippetId: v.id, place: "aid-link" })}
+                        >
+                          {l.label} <Icon name="external" className="size-4" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {v.contacts.length > 0 && (
+                <div className={cx(box, "mt-3")}>
+                  <p className="font-semibold">Contacts for your role</p>
+                  <Contacts list={v.contacts} />
+                </div>
+              )}
+            </>
+          )
+        )}
+      </div>
+      {!preview && v.release && v.readiness !== "fallback" && <Highlighter root={body} source="aid" id={v.id} />}
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
         <SourceButton v={v} />
-        <button type="button" className={secondary} aria-pressed={v.saved} disabled={preview} onClick={() => void post({ action: "save", on: !v.saved })}>
-          <Icon name={v.saved ? "bookmark-filled" : "bookmark"} className="size-4" /> {v.saved ? "In your Shift Wallet" : "Save to Shift Wallet"}
+        <button
+          type="button"
+          className={secondary}
+          aria-pressed={v.saved}
+          disabled={preview}
+          onClick={async () => {
+            setSaveError("");
+            try {
+              const r = await api<{ saved: boolean; first: boolean }>(url, { body: { action: "save", on: !v.saved } });
+              setNotice((n) => (r.saved ? { first: r.first || Boolean(n?.first) } : null));
+              loaded.reload();
+            } catch (e) {
+              // Not saved, and it says so.
+              setSaveError(e instanceof Error ? e.message : "That couldn’t be saved. Try again.");
+            }
+          }}
+        >
+          <Icon name={v.saved ? "bookmark-filled" : "bookmark"} className="size-4" /> {v.saved ? "In your Favourites" : "Save to Favourites"}
         </button>
+        {!preview && v.release && v.readiness !== "fallback" && <SaveSection source="aid" id={v.id} sectionId="aid" label="Save the key step" />}
         <button type="button" className={secondary} onClick={() => setAsking("")} disabled={preview}>
           <Icon name="chat" className="size-4" /> Flag a policy gap / Ask a lead
         </button>
       </div>
+      {saveError && (
+        <p role="alert" className="mt-2 text-sm font-semibold text-danger">
+          {saveError}
+        </p>
+      )}
+      {notice && <SaveNotice first={notice.first} onClose={() => setNotice(null)} />}
       {asking !== null && <AskForm v={v} stepId={asking} onClose={() => setAsking(null)} onDone={() => loaded.reload()} />}
       <Questions v={v} onChange={() => loaded.reload()} url={url} />
       <p className="mt-4 text-xs text-ink-muted">{UNCONTROLLED}</p>
@@ -209,11 +278,12 @@ export function PlaybookCard({ snippetId, preview }: { snippetId: string; previe
   );
 }
 
-function Frame({ title, risk, children }: { title: string; risk?: string; children: React.ReactNode }) {
+function Frame({ title, risk, template, children }: { title: string; risk?: string; template?: string; children: React.ReactNode }) {
   return (
-    <section aria-label={`Playbook: ${title}`} className="w-full rounded-3xl border border-line-strong bg-surface p-5 sm:p-7 print:border-black">
-      <p className="mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
-        <Icon name="clipboard" className="size-5" /> Playbook{risk ? ` · ${RISK[risk as keyof typeof RISK]}` : ""}
+    <section aria-label={`Job Aid: ${title}`} className="w-full rounded-3xl border border-line-strong bg-surface p-5 sm:p-7 print:border-black">
+      <p className="mb-2 flex flex-wrap items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
+        <Icon name="clipboard" className="size-5" /> Work tool{template ? ` · ${template}` : ""}
+        {risk ? ` · ${RISK[risk as keyof typeof RISK]}` : ""}
       </p>
       <h3 className="font-serif text-2xl font-semibold">{title}</h3>
       <div className="mt-1">{children}</div>

@@ -1,5 +1,7 @@
 # Live SOP playbooks
 
+> Since 21 November 2026 a playbook is the Hub’s **Job Aid**: learners find them in **Work Tools** (`/tools`) and save them to **Favourites**, and the library is called **Job Aids**. Everything below still holds. What was added is in [job-aids.md](job-aids.md).
+
 A playbook is a short, role-specific set of steps taken from an approved procedure (SOP). It appears in Magazine courses and on its own Resources page. It always shows the current approved release, and there's always a route to urgent help.
 
 It's built from four parts:

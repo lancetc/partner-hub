@@ -9,6 +9,7 @@ import type { User } from "./auth";
 import { forLearner, parseWebinar, type Row as WebinarRow } from "./webinars";
 import { missionSlugs } from "./challenges";
 import { keywords } from "@/lib/keywords";
+import { aidDocs } from "./favourites";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -86,7 +87,8 @@ function documents(db: Db, user: User): Doc[] {
     body: r.points.join(" "),
   }));
 
-  return [...topics, ...paths, ...webinars, ...news, ...library];
+  // Work Tools (docs/job-aids.md): Job Aids this person's role may open, found by the task they're for.
+  return [...aidDocs(db, user), ...topics, ...paths, ...webinars, ...news, ...library];
 }
 
 /** A short piece of the text around the first word that matched, so people can see why it came up. */

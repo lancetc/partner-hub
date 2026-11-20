@@ -68,6 +68,7 @@ import { Confetti } from "../Confetti";
 import { finishOpenTopic, readOpen } from "@/lib/openProgress";
 import { bookmarksOn } from "@/lib/features";
 import { StoryAt, useStory } from "../story/StoryMoments";
+import { AidSection } from "../playbooks/AidSection";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -127,6 +128,10 @@ export function LessonPlayer({
   const anonymous = Boolean(publicLink);
   // Story moments placed on this Topic's cards (docs/story-plans.md), for people signed in to the Hub.
   const story = useStory("topic", anonymous || reviewToken ? null : lesson.slug);
+  // Job Aids placed on this Topic's cards (docs/job-aids.md): by reference, for the reader's role only.
+  const aids = useApi<{ aids: { placementId: string; snippetId: string; card: string; why: string }[] }>(
+    anonymous || reviewToken ? null : `/api/playbooks?topic=${encodeURIComponent(lesson.slug)}`,
+  ).data?.aids;
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
   const [phase, setPhase] = useState<Phase>("intro");
@@ -928,6 +933,13 @@ export function LessonPlayer({
 
           {/* Story moments placed on this card: an approved line, a check-in or a transmission. Optional, and never counted. */}
           <StoryAt moments={story} place={node.id} className="mb-4 text-ink" />
+          {aids
+            ?.filter((a) => a.card === node.id)
+            .map((a) => (
+              <div key={a.placementId} className="mb-4 text-left text-ink">
+                <AidSection snippetId={a.snippetId} why={a.why} place={`topic:${lesson.slug}`} />
+              </div>
+            ))}
 
           {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
           {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}

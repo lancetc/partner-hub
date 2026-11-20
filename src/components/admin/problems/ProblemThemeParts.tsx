@@ -657,6 +657,63 @@ export function PlanTab({ d, act, busy }: TabProps) {
         </div>
       )}
 
+      {/* Job Aids (docs/job-aids.md): a tool for the moment of work is one possible response. Its use is adoption, kept apart from the work measure. */}
+      <div className={cx(box, "mt-3")}>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 basis-72 text-sm">
+            <span className="font-semibold">Would a Job Aid help?</span> A short tool people open at the moment of the task: a checklist, the questions to ask,
+            who to tell. It needs an approved source and its owner’s sign-off before anyone sees it.
+          </p>
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={busy}
+            onClick={async () => {
+              const out = await api<{ id?: string }>("/api/admin/playbooks", {
+                body: {
+                  action: "save-snippet",
+                  data: {
+                    title: d.theme.title.slice(0, 120),
+                    purpose: (r.desired || "").slice(0, 300),
+                    themeId: d.theme.id,
+                    audiences: ["staff"],
+                    risk: "operational",
+                    source: { docId: "", anchor: "" },
+                    fallback: { text: "", contactKeys: [] },
+                  },
+                },
+              }).catch(() => null);
+              if (out?.id) router.push(`/admin/playbooks?open=${out.id}`);
+            }}
+          >
+            <Icon name="clipboard" className="size-4" /> Start a Job Aid
+          </button>
+        </div>
+        {d.aids.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {d.aids.map((aid) => (
+              <li key={aid.id} className="rounded-xl bg-muted p-3">
+                <p>
+                  <Link href={`/admin/playbooks?open=${aid.id}`} className="font-semibold underline underline-offset-2">
+                    {aid.title}
+                  </Link>{" "}
+                  <span className="text-ink-muted">
+                    · {aid.release ? `release ${aid.release}` : "no approved release yet"}
+                    {aid.withdrawn && " · withdrawn"} · {aid.placements.length} {aid.placements.length === 1 ? "placement" : "placements"}
+                    {aid.review && ` · reviewed: ${aid.review.decision}`}
+                  </span>
+                </p>
+                <p className="text-ink-muted">
+                  In these dates: opened by {aid.viewers} of {aid.eligible} eligible{aid.thin ? " (too few to read anything from)" : ""}, saved {aid.saves}{" "}
+                  times, {aid.returns} {aid.returns === 1 ? "return" : "returns"} from Favourites, {aid.issues} {aid.issues === 1 ? "issue" : "issues"}{" "}
+                  reported. Tool use is adoption. It doesn’t show the work was done right: that’s the work measure above.
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <Section
         title="The plan"
         hint="Each step says why it’s there. Suggestions come from rules over the block registry, not from a model: accept, swap or remove them."

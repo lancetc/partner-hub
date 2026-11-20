@@ -1,6 +1,8 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import {
+  AID_EVENTS,
+  AID_TEMPLATES,
   checksum,
   cleanRelease,
   cleanSnippet,
@@ -9,6 +11,7 @@ import {
   lineDiff,
   readiness,
   releaseProblems,
+  type AidEvent,
   type Contact,
   type GapStatus,
   type Issue,
@@ -56,8 +59,25 @@ export function ensurePlaybooks(db: Db, now = new Date()) {
   ensureTables(db);
   if (seeded.has(db)) return;
   const at = now.toISOString();
-  for (const s of SEED_SOURCES)
-    db.prepare("INSERT OR IGNORE INTO playbook_sources (doc_id, version, data, at, by_user) VALUES (?, 1, ?, ?, 'seed')").run(s.id, JSON.stringify(s), at);
+  for (const s of SEED_SOURCES) {
+    const latest = db.prepare("SELECT version, data FROM playbook_sources WHERE doc_id = ? ORDER BY version DESC LIMIT 1").get(s.id) as
+      { version: number; data: string } | undefined;
+    if (!latest) {
+      db.prepare("INSERT OR IGNORE INTO playbook_sources (doc_id, version, data, at, by_user) VALUES (?, 1, ?, ?, 'seed')").run(s.id, JSON.stringify(s), at);
+      continue;
+    }
+    // A record seeded before a section was added to it (the Job Aids pilot's): the new section is appended as a new
+    // version. Sections already there are left exactly as they are, so nothing bound to them is flagged as changed.
+    const doc = JSON.parse(latest.data) as SourceDoc;
+    const missing = s.sections.filter((x) => !doc.sections.some((y) => y.anchor === x.anchor));
+    if (missing.length)
+      db.prepare("INSERT OR IGNORE INTO playbook_sources (doc_id, version, data, at, by_user) VALUES (?, ?, ?, ?, 'seed')").run(
+        s.id,
+        latest.version + 1,
+        JSON.stringify({ ...doc, sections: [...doc.sections, ...missing] }),
+        at,
+      );
+  }
   for (const c of SEED_CONTACTS)
     db.prepare("INSERT OR IGNORE INTO playbook_contacts (key, label, routes, updated_at) VALUES (?, ?, ?, ?)").run(
       c.key,
@@ -80,8 +100,47 @@ export function ensurePlaybooks(db: Db, now = new Date()) {
       at,
     );
   }
+  // The Shift Wallet became Favourites (docs/job-aids.md): saves made before then come across once, as they were.
+  db.exec(
+    "INSERT OR IGNORE INTO favourites (id, user_id, kind, target_id, saved_at) SELECT 'fav-' || lower(hex(randomblob(8))), user_id, 'job_aid', snippet_id, saved_at FROM playbook_saves",
+  );
   seeded.add(db);
 }
+
+/**
+  One use of a Job Aid or a Favourite, counted once however often it's sent. Who, in which role, which aid and
+  release, and where from. Never what was selected or typed.
+*/
+export function recordAidEvent(
+  db: Db,
+  user: User,
+  e: { event: AidEvent; snippetId?: string; release?: number; sourceKind?: string; sourceId?: string; place?: string; key?: string | null; at?: string },
+  now: Date,
+) {
+  if (!AID_EVENTS.includes(e.event)) throw new HttpError(400, "Unknown event.");
+  const key = typeof e.key === "string" && /^[A-Za-z0-9:._-]{6,120}$/.test(e.key) ? `${user.id}:${e.key}` : null;
+  const occurred = e.at && !Number.isNaN(Date.parse(e.at)) ? new Date(e.at).toISOString() : now.toISOString();
+  return db
+    .prepare(
+      "INSERT OR IGNORE INTO aid_events (at, received_at, user_id, audience, event, snippet_id, release, source_kind, source_id, place, idem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(
+      occurred,
+      now.toISOString(),
+      user.id,
+      user.audience,
+      e.event,
+      e.snippetId ?? "",
+      e.release ?? 0,
+      e.sourceKind ?? "",
+      e.sourceId ?? "",
+      (e.place ?? "").slice(0, 120),
+      key,
+    ).changes;
+}
+const favourite = (db: Db, userId: string, snippetId: string) =>
+  db.prepare("SELECT id, seen FROM favourites WHERE user_id = ? AND kind = 'job_aid' AND target_id = ?").get(userId, snippetId) as
+    { id: string; seen: string } | undefined;
 
 // ---------------------------------------------------------------------------------------------
 // Reading the library
@@ -166,6 +225,13 @@ export function resolveSnippet(db: Db, user: User, id: unknown, now: Date) {
     roleLabel: sn.roleLabel,
     risk: sn.risk,
     ownerTeam: sn.ownerTeam,
+    template: sn.template,
+    /** What the step groups are called for this kind of tool. */
+    groups: AID_TEMPLATES[sn.template].groups,
+    trigger: sn.trigger,
+    minutes: sn.minutes,
+    links: sn.links,
+    tag: sn.tag,
     readiness: ready,
     withdrawnReason: row.withdrawn ? row.withdrawn_reason : "",
     release:
@@ -178,12 +244,15 @@ export function resolveSnippet(db: Db, user: User, id: unknown, now: Date) {
             reviewBy: current.data.reviewBy,
             changeSummary: current.data.changeSummary,
             ackRequired: current.data.ackRequired,
+            quick: current.data.quick,
+            example: current.data.example,
+            approvedAt: current.approvedAt,
           },
     fallback: { text: sn.fallback.text, contacts: route(sn.fallback.contactKeys) },
     contacts: route(sn.contactKeys),
     updatedSince: changedSince.length ? changedSince.map((r) => ({ number: r.number, summary: r.data.changeSummary })) : [],
     acked,
-    saved: Boolean(db.prepare("SELECT 1 FROM playbook_saves WHERE user_id = ? AND snippet_id = ?").get(user.id, row.id)),
+    saved: Boolean(favourite(db, user.id, row.id)),
     // The full approved source, only for roles it's shared with. Otherwise, the reader is told it's an excerpt.
     source:
       sourceAllowed && section
@@ -215,13 +284,30 @@ export function acknowledge(db: Db, user: User, id: string, now: Date) {
   return { acked: true };
 }
 
-/** Save to (or remove from) the Shift Wallet: a reference to the snippet, never a copy. */
+/**
+  Save a whole Job Aid to Favourites, or take it out: a pointer to the aid, never a copy. Saving twice is one save.
+  `first`: this is the person's first favourite of any kind, so the page can say once where to find it.
+*/
 export function toggleSaved(db: Db, user: User, id: string, on: boolean, now: Date) {
   const r = resolveSnippet(db, user, id, now);
-  if (!r.permitted) throw new HttpError(403, "This playbook isn’t shared with your role.");
-  if (on) db.prepare("INSERT OR IGNORE INTO playbook_saves (user_id, snippet_id, saved_at) VALUES (?, ?, ?)").run(user.id, id, now.toISOString());
-  else db.prepare("DELETE FROM playbook_saves WHERE user_id = ? AND snippet_id = ?").run(user.id, id);
-  return { saved: on };
+  if (!r.permitted) throw new HttpError(403, "This Job Aid isn’t shared with your role.");
+  const had = favourite(db, user.id, id);
+  const release = r.release?.number ?? 0;
+  if (on && !had) {
+    db.prepare("INSERT OR IGNORE INTO favourites (id, user_id, kind, target_id, seen, saved_at) VALUES (?, ?, 'job_aid', ?, ?, ?)").run(
+      `fav-${randomUUID().replace(/-/g, "").slice(0, 16)}`,
+      user.id,
+      id,
+      String(release),
+      now.toISOString(),
+    );
+    recordAidEvent(db, user, { event: "job_aid_favourited", snippetId: id, release }, now);
+  } else if (!on && had) {
+    db.prepare("DELETE FROM favourites WHERE id = ?").run(had.id);
+    recordAidEvent(db, user, { event: "job_aid_unfavourited", snippetId: id, release }, now);
+  }
+  const count = (db.prepare("SELECT COUNT(*) AS n FROM favourites WHERE user_id = ?").get(user.id) as { n: number }).n;
+  return { saved: on, first: on && !had && count === 1 };
 }
 
 /** The playbooks a reader may see, for the Resources page: those with an approved release or a fallback, and whether they've saved each. */
@@ -240,9 +326,14 @@ export function playbookList(db: Db, user: User, now: Date) {
           title: sn.title,
           purpose: sn.purpose,
           risk: sn.risk,
+          template: sn.template,
+          trigger: sn.trigger,
+          minutes: sn.minutes,
+          tag: sn.tag,
+          roleLabel: sn.roleLabel,
           readiness: readiness(sn, Boolean(row.withdrawn), current, today(now)),
           number: current?.number ?? 0,
-          saved: Boolean(db.prepare("SELECT 1 FROM playbook_saves WHERE user_id = ? AND snippet_id = ?").get(user.id, row.id)),
+          saved: Boolean(favourite(db, user.id, row.id)),
         };
       })
       .filter(Boolean),
@@ -355,6 +446,7 @@ export function askLead(db: Db, user: User, input: Record<string, unknown>, now:
       if (had) return { route: had.status === "awaiting_review" ? ("review" as const) : ("posted" as const), id: had.id, status: had.status, repeated: true };
     }
     const id = `gap-${randomUUID().slice(0, 12)}`;
+    recordAidEvent(db, user, { event: "job_aid_issue_reported", snippetId: r.id, release: r.release?.number ?? 0, key: `gap:${id}` }, now);
     const held = gate.identifying.length > 0;
     const status: GapStatus = held ? "awaiting_review" : "posted";
     db.prepare(

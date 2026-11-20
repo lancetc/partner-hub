@@ -21,6 +21,48 @@ export const PB_AUDIENCES = { partner: "Care Partners", coordinator: "Care coord
 export type PbAudience = keyof typeof PB_AUDIENCES;
 export const STEP_KINDS = { now: "Do now", then: "Then", exception: "If this is different" } as const;
 export type StepKind = keyof typeof STEP_KINDS;
+/*
+  Job Aids (docs/job-aids.md). A playbook is the Hub's Job Aid: the same governed, versioned snippet, now with a
+  template that says how the tool is used, a "Use when" trigger in the worker's words, and a short quick action
+  for where it's embedded in learning. Learners see the library as Work Tools.
+*/
+export const AID_TEMPLATES = {
+  checklist: {
+    label: "Checklist",
+    hint: "A trigger, short steps, the exception and the next action.",
+    groups: { now: "Do now", then: "Then", exception: "If this is different" },
+  },
+  conversation: {
+    label: "Conversation prompt",
+    hint: "The goal, questions to ask, what to confirm and the follow-up.",
+    groups: { now: "Ask", then: "Confirm", exception: "Follow up" },
+  },
+  decision: {
+    label: "Decision path",
+    hint: "The condition, the authorised next step and the escalation route.",
+    groups: { now: "Check first", then: "Then", exception: "Escalate when" },
+  },
+  escalation: {
+    label: "Escalation map",
+    hint: "The signal, the immediate route, the contact or process and the recording step.",
+    groups: { now: "Do now", then: "Then record", exception: "If this is different" },
+  },
+  handover: {
+    label: "Handover template",
+    hint: "The required fields, the owner and the next contact.",
+    groups: { now: "Always include", then: "Then", exception: "If something is missing" },
+  },
+  briefing: {
+    label: "Change briefing",
+    hint: "What changed, from when, who it affects, what to do and the source.",
+    groups: { now: "What changed", then: "What you do", exception: "If this is different" },
+  },
+} as const;
+export type AidTemplate = keyof typeof AID_TEMPLATES;
+export type AidLink = { label: string; href: string };
+/** A page on the Hub, a web address, an email or a phone link. */
+export const safeAidLink = (href: string) => /^(\/(?!\/)|https:\/\/|mailto:|tel:)/.test(href);
+
 export const ISSUES = {
   unclear: "The step is unclear",
   outdated: "The source appears out of date",
@@ -41,6 +83,25 @@ export const GAP_STATUS = {
 export type GapStatus = keyof typeof GAP_STATUS;
 export const REPLY_LABELS = { peer: "Peer suggestion", lead: "Lead response", policy: "Policy-owner approved guidance" } as const;
 export type ReplyLabel = keyof typeof REPLY_LABELS;
+
+/** Use of a Job Aid or a Favourite. Adoption evidence only: none of these is a completion, a pass or a work outcome. */
+export const AID_EVENTS = [
+  "job_aid_viewed",
+  "job_aid_opened_from_placement",
+  "job_aid_favourited",
+  "job_aid_unfavourited",
+  "passage_selection_saved",
+  "favourites_opened",
+  "saved_item_opened",
+  "current_source_opened",
+  "job_aid_update_seen",
+  "job_aid_issue_reported",
+] as const;
+export type AidEvent = (typeof AID_EVENTS)[number];
+/** The events a page may send. Saves, views and reports are recorded by the server as they happen. */
+export const AID_CLIENT_EVENTS: AidEvent[] = ["job_aid_opened_from_placement", "favourites_opened", "current_source_opened"];
+export const REVIEW_DECISIONS = { keep: "Keep", revise: "Revise", retarget: "Retarget", withdraw: "Withdraw", close: "Close" } as const;
+export type ReviewDecision = keyof typeof REVIEW_DECISIONS;
 
 export const NOT_AN_INCIDENT_REPORT = "Asking here doesn’t report an incident or notify anyone of one.";
 export const UNCONTROLLED = "Printed or exported copies are uncontrolled. Check the current release in the Partner Hub before you rely on it.";
@@ -64,6 +125,16 @@ export type SnippetData = {
   /** Hub users alerted to questions; empty alerts every learning author. */
   leads: string[];
   tag: string;
+  /** How the tool is used: it names the groups its steps fall into. */
+  template: AidTemplate;
+  /** "Use when…", in the worker's words: what they are doing when this helps. */
+  trigger: string;
+  /** About how long it takes to use, in minutes. 0 when it isn't given. */
+  minutes: number;
+  /** Where to go from here: the agreement, the form, the queue. Never a phone number. */
+  links: AidLink[];
+  /** The Problem desk theme this answers, if any. */
+  themeId: string;
 };
 export type ReleaseData = {
   steps: Step[];
@@ -71,6 +142,10 @@ export type ReleaseData = {
   effectiveOn: string;
   reviewBy: string;
   ackRequired: boolean;
+  /** The essential action, in a sentence or two: what an embedded section shows. */
+  quick: string;
+  /** A worked example a reader can open. Fictional. */
+  example: string;
   approvals: { owner: string; clinical: string; quality: string };
   /** The source as it was when this release was written. */
   sourceVersion: number;
@@ -109,6 +184,14 @@ export function cleanSnippet(raw: unknown): SnippetData {
     contactKeys: keys(o.contactKeys),
     leads: (Array.isArray(o.leads) ? o.leads : []).filter((x): x is string => typeof x === "string").slice(0, 10),
     tag: s(o.tag, 40),
+    template: (Object.keys(AID_TEMPLATES) as AidTemplate[]).includes(o.template as AidTemplate) ? (o.template as AidTemplate) : "checklist",
+    trigger: s(o.trigger, 160),
+    minutes: Number.isFinite(Number(o.minutes)) ? Math.min(60, Math.max(0, Math.round(Number(o.minutes)))) : 0,
+    links: (Array.isArray(o.links) ? o.links : [])
+      .slice(0, 4)
+      .map((x) => ({ label: s(obj(x).label, 80).trim(), href: s(obj(x).href, 300).trim() }))
+      .filter((l) => l.label && safeAidLink(l.href)),
+    themeId: typeof o.themeId === "string" && /^[\w-]{1,60}$/.test(o.themeId) ? o.themeId : "",
   };
 }
 
@@ -130,6 +213,8 @@ export function cleanRelease(raw: unknown): ReleaseData {
     effectiveOn: date(o.effectiveOn),
     reviewBy: date(o.reviewBy),
     ackRequired: o.ackRequired === true,
+    quick: s(o.quick, 320),
+    example: s(o.example, 900),
     approvals: { owner: s(a.owner, 120), clinical: s(a.clinical, 120), quality: s(a.quality, 120) },
     sourceVersion: Number.isInteger(o.sourceVersion) ? (o.sourceVersion as number) : 0,
     sourceChecksum: s(o.sourceChecksum, 20),
@@ -146,7 +231,8 @@ export function releaseProblems(sn: SnippetData, r: ReleaseData, contacts: Conta
   const steps = r.steps.filter((x) => x.text.trim());
   if (steps.length < 1 || steps.length > 9) out.push("Add one to nine steps (three to seven is usual).");
   if (!steps.some((x) => x.kind === "now") && sn.risk === "safety_critical") out.push("A safety-critical procedure needs a “Do now” step.");
-  if (steps.some((x) => PHONE.test(x.text))) out.push("A step contains a phone number. Use a contact from the directory instead.");
+  if (steps.some((x) => PHONE.test(x.text)) || PHONE.test(r.quick) || PHONE.test(r.example)) out.push("A step contains a phone number. Use a contact from the directory instead.");
+  if (!sn.trigger.trim()) out.push("Say when to use it: the task the worker is doing, in their words.");
   if (!r.effectiveOn) out.push("Set the effective date.");
   if (!r.reviewBy || (today && r.reviewBy <= today)) out.push("Set a review date in the future.");
   if (!r.approvals.owner.trim()) out.push("Record the policy owner’s approval.");
@@ -228,10 +314,12 @@ export function gateQuestion(text: string): Gate {
 // The Magazine block
 // ---------------------------------------------------------------------------------------------
 
-export type PlaybookBlockData = { snippetId: string };
+/** A Job Aid placed in a page by reference: never a copy of its body. `why`: why it belongs at this point, shown with it. */
+export type PlaybookBlockData = { snippetId: string; why?: string };
 type Raw = Record<string, unknown>;
 export function parsePlaybookBlock(o: Raw, where: string, h: { unfinished: (p: string) => void }): PlaybookBlockData {
   const snippetId = typeof o.snippetId === "string" && /^[a-z0-9-]{1,80}$/.test(o.snippetId) ? o.snippetId : "";
-  if (!snippetId) h.unfinished(`${where} needs a playbook snippet.`);
-  return { snippetId };
+  if (!snippetId) h.unfinished(`${where} needs a Job Aid.`);
+  const why = typeof o.why === "string" ? o.why.trim().slice(0, 300) : "";
+  return { snippetId, ...(why && { why }) };
 }

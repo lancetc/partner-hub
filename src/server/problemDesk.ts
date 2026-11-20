@@ -54,6 +54,7 @@ import { PILOT_THEMES, PILOT_UNGROUPED } from "@/content/problemPilot";
 import { audit, ensureProblemTables, tx, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { createGuide } from "./magazine";
+import { aidReport } from "./favourites";
 import { searchCatalogue } from "./discovery";
 import { workbook, type Sheet } from "./xlsx";
 
@@ -485,6 +486,8 @@ export function themeDetail(db: Db, actor: User, themeId: unknown, input: { from
   return {
     asAt,
     range: { from, to },
+    /** Job Aids that answer this theme (docs/job-aids.md), with their use in the same dates: adoption, not a result. */
+    aids: aidReport(db, actor, { from, to }, now).aids.filter((a) => a.themeId === row.id),
     theme: {
       id: row.id,
       title: row.title,
@@ -1356,6 +1359,73 @@ export function exportRegister(db: Db, actor: User, input: { status?: unknown; r
     entity: "problem-desk",
     next: { themes: desk.themes.length, from: desk.range.from, to: desk.range.to, status: input.status ?? null, risk: input.risk ?? null },
     at: now,
+  });
+  // Job Aids linked to a theme (docs/job-aids.md): what was released, where it's placed and how it's used, with
+  // its denominator. Counts of people only: no one's Favourites list and no highlight is in an export.
+  const use = aidReport(db, actor, { from: desk.range.from, to: desk.range.to }, now);
+  sheets.push({
+    name: "Job Aids",
+    header: [
+      "Theme ID",
+      "Job Aid ID",
+      "Title",
+      "Template",
+      "Release",
+      "Released",
+      "Review by",
+      "Owner",
+      "Audience",
+      "Placements",
+      "Period",
+      "Eligible audience",
+      "People who opened it",
+      "Views",
+      "Opened from a placement",
+      "Saves to Favourites",
+      "Saved now",
+      "Returns from Favourites",
+      "Source links opened",
+      "Issues reported",
+      "Review decision",
+      "Review note",
+      "Note",
+      "Link",
+    ],
+    rows: use.aids
+      .filter((a) => a.themeId)
+      .map((a) => [
+        a.themeId,
+        a.id,
+        a.title,
+        a.template,
+        a.release || "No approved release",
+        a.releasedOn,
+        a.reviewBy || "Not set",
+        a.owner,
+        a.audiences.join(", "),
+        a.placements.map((p) => `${p.kind}: ${p.title}${p.live ? "" : " (not live)"}`).join("; ") || "Work Tools only",
+        `${use.range.from} to ${use.range.to}`,
+        a.eligible,
+        a.viewers,
+        a.views,
+        a.fromPlacement,
+        a.saves,
+        a.savedNow,
+        a.returns,
+        a.sourceClicks,
+        a.issues,
+        a.review?.decision ?? "Not reviewed yet",
+        a.review?.note ?? "",
+        [
+          a.withdrawn && "Withdrawn",
+          a.thin && `Fewer than ${use.thin} people: too few to read anything from`,
+          "Use is adoption evidence, not completion or a work result",
+        ]
+          .filter(Boolean)
+          .join(". "),
+        url(`/admin/playbooks?open=${a.id}`),
+      ]),
+    widths: [22, 26, 40, 20, 12, 14, 14, 26, 24, 44, 22, 16, 18, 10, 20, 18, 12, 20, 18, 16, 16, 44, 50, 44],
   });
   return { buffer: workbook(sheets), filename: `Problem desk decision register ${asAt.slice(0, 10)}.xlsx` };
 }

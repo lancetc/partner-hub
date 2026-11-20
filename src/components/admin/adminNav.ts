@@ -103,9 +103,10 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
         href: "/admin/playbooks",
-        label: "Playbooks",
+        label: "Job Aids",
         icon: "clipboard",
-        description: "Live SOP snippets: releases, source changes, withdrawal, the contact directory, and questions from Ask a Lead.",
+        description:
+          "Work Tools: short, approved tools for a task, with a source, an owner and a review date. Placed in courses and Topics by reference, saved to Favourites.",
         authorOnly: true,
       },
       {

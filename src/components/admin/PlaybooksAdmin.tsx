@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import {
@@ -20,6 +20,7 @@ import {
 import type { playbookLibrary } from "@/server/playbooks";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
+import { AidDraftPanel, AidFields, AidOps, AidReleaseFields, AidUseReport, SimilarAids } from "./JobAidAdmin";
 
 /*
   The playbook library for policy owners and learning authors (docs/live-playbooks.md). A snippet is a short,
@@ -41,6 +42,8 @@ const blankRelease = (): ReleaseData => ({
   effectiveOn: "",
   reviewBy: "",
   ackRequired: false,
+  quick: "",
+  example: "",
   approvals: { owner: "", clinical: "", quality: "" },
   sourceVersion: 0,
   sourceChecksum: "",
@@ -50,6 +53,13 @@ const blankRelease = (): ReleaseData => ({
 export function PlaybooksAdmin() {
   const lib = useApi<Loaded>("/api/admin/playbooks");
   const [open, setOpen] = useState<string | null>(null);
+  // A link from the Problem desk or an export opens one Job Aid directly (?open=id).
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("open");
+    // Known only in the browser, after the page has drawn.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (id) setOpen(id);
+  }, []);
   const [problems, setProblems] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const act = async (body: Record<string, unknown>) => {
@@ -71,13 +81,13 @@ export function PlaybooksAdmin() {
 
   if (lib.error)
     return (
-      <AdminShell title="Playbooks">
+      <AdminShell title="Job Aids">
         <ErrorNote text={lib.error} />
       </AdminShell>
     );
   if (!lib.data)
     return (
-      <AdminShell title="Playbooks">
+      <AdminShell title="Job Aids">
         <p className="text-ink-muted">Loading…</p>
       </AdminShell>
     );
@@ -85,7 +95,7 @@ export function PlaybooksAdmin() {
   const row = data.snippets.find((s) => s.id === open);
   if (row)
     return (
-      <AdminShell title={row.data.title || row.id} back={{ href: "/admin/playbooks", label: "Playbooks" }}>
+      <AdminShell title={row.data.title || row.id} back={{ href: "/admin/playbooks", label: "Job Aids" }}>
         <button type="button" className={cx(btn.quiet, "-mt-4 mb-2")} onClick={() => (setOpen(null), setProblems([]))}>
           <Icon name="arrow-left" className="size-4" /> All playbooks
         </button>
@@ -96,12 +106,13 @@ export function PlaybooksAdmin() {
 
   const waiting = data.snippets.flatMap((s) => s.questions.filter((q) => q.status === "awaiting_review").map((q) => ({ ...q, snippet: s })));
   return (
-    <AdminShell title="Playbooks">
+    <AdminShell title="Job Aids">
       <p className="max-w-3xl text-ink-muted">
-        Short, role-specific steps from approved procedures, placed in courses by reference. A release needs the policy owner’s approval (and Clinical and
-        Quality for safety-critical ones) before anyone sees it.{" "}
-        <Link href="/resources/playbooks" className="font-semibold text-accent underline">
-          See them as a reader
+        Job Aids: short tools for a named task, written from an approved procedure and placed in courses and Topics by reference. Learners find them in Work
+        Tools and save them to Favourites. A release needs the policy owner’s approval (and Clinical and Quality for safety-critical ones) before anyone sees
+        it.{" "}
+        <Link href="/tools" className="font-semibold text-accent underline">
+          See Work Tools as a reader
         </Link>
         .
       </p>
@@ -149,6 +160,7 @@ export function PlaybooksAdmin() {
         ))}
       </ul>
       <NewSnippet data={data} busy={busy} onMade={(id) => (lib.reload(), setOpen(id))} />
+      <AidUseReport />
       <Sources data={data} act={act} busy={busy} />
       <Contacts data={data} act={act} busy={busy} />
     </AdminShell>
@@ -336,7 +348,7 @@ function SnippetEditor({ row, data, act, busy }: { row: Row; data: Loaded; act: 
 
       <section className={box} aria-labelledby="settings">
         <h2 id="settings" className="font-semibold">
-          Snippet settings
+          Job Aid settings
         </h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <Field label="Title">
@@ -348,6 +360,7 @@ function SnippetEditor({ row, data, act, busy }: { row: Row; data: Loaded; act: 
           <Field label="Purpose" className="sm:col-span-2">
             <input className={input} value={sn.purpose} maxLength={300} onChange={(e) => edit((x) => void (x.purpose = e.target.value))} />
           </Field>
+          <AidFields sn={sn} edit={edit} />
           <Field label="Risk">
             <select className={input} value={sn.risk} onChange={(e) => edit((x) => void (x.risk = e.target.value as Risk))}>
               {(Object.keys(RISK) as Risk[]).map((r) => (
@@ -500,7 +513,19 @@ function SnippetEditor({ row, data, act, busy }: { row: Row; data: Loaded; act: 
             <Icon name="plus" className="size-4" /> Add a step
           </button>
         )}
+        <AidDraftPanel
+          id={row.id}
+          dirtySettings={JSON.stringify(sn) !== JSON.stringify(row.data)}
+          onUse={(d) =>
+            editRel((x) => {
+              x.steps = d.steps.map((s, i) => ({ id: `s${Date.now().toString(36)}${i}`, kind: s.kind, text: s.text, why: s.why, anchor: sn.source.anchor }));
+              x.quick = d.quick;
+              x.example = d.example;
+            })
+          }
+        />
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <AidReleaseFields rel={rel} editRel={editRel} />
           <Field label="What changed (shown to readers)" className="sm:col-span-3">
             <input className={input} value={rel.changeSummary} maxLength={400} onChange={(e) => editRel((x) => void (x.changeSummary = e.target.value))} />
           </Field>
@@ -567,6 +592,8 @@ function SnippetEditor({ row, data, act, busy }: { row: Row; data: Loaded; act: 
         </div>
       </section>
 
+      <AidOps id={row.id} released={Boolean(row.current)} />
+
       <section className={box} aria-labelledby="qs">
         <h2 id="qs" className="font-semibold">
           Questions ({row.questions.length})
@@ -627,8 +654,9 @@ function NewSnippet({ data, busy, onMade }: { data: Loaded; busy: boolean; onMad
   return (
     <section className={cx(box, "mt-6")} aria-labelledby="new">
       <h2 id="new" className="font-semibold">
-        New playbook snippet
+        New Job Aid
       </h2>
+      <p className="text-sm text-ink-muted">One aid per task. Before starting one, check whether an existing aid should be reused or revised.</p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <Field label="Title" className="min-w-64 flex-1">
           <input className={input} value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} />
@@ -662,6 +690,7 @@ function NewSnippet({ data, busy, onMade }: { data: Loaded; busy: boolean; onMad
           <Icon name="plus" className="size-4" /> Create
         </button>
       </div>
+      <SimilarAids title={title} onOpen={onMade} />
     </section>
   );
 }

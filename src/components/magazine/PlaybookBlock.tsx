@@ -1,7 +1,7 @@
 "use client";
 
 import type { PlaybookBlock } from "@/lib/magazine";
-import { PlaybookCard } from "../playbooks/PlaybookCard";
+import { AidSection } from "../playbooks/AidSection";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
 /*
@@ -10,5 +10,6 @@ import type { InteractiveContext } from "./InteractiveBlocks";
   release, and a withdrawal reaches all of them at once. In the editor's preview nothing is recorded.
 */
 export function PlaybookBlockView({ block: b, ctx }: { block: PlaybookBlock; ctx: InteractiveContext }) {
-  return <PlaybookCard snippetId={b.snippetId} preview={ctx.preview} />;
+  // A specially styled section with the essential action and a way to the full aid (docs/job-aids.md).
+  return <AidSection snippetId={b.snippetId} why={b.why} preview={ctx.preview} place="magazine" />;
 }

@@ -9,6 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { SearchButton } from "./SearchDialog";
 import { AccountMenu } from "./AccountMenu";
 import { InboxButton } from "./InboxButton";
+import { FavouritesHeaderLink } from "./favourites/FavouritesNav";
 import { Icon } from "./Icon";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -113,6 +114,7 @@ export function Header() {
               <span className="sr-only sm:hidden">Admin</span>
             </Link>
           )}
+          {me && <FavouritesHeaderLink />}
           <SearchButton />
           {me && <InboxButton />}
           <ThemeToggle />

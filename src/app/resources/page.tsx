@@ -90,7 +90,7 @@ export default function ResourcesPage() {
           <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
         </Link>
         <Link
-          href="/resources/playbooks"
+          href="/tools"
           className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
         >
           <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-action text-on-action">
