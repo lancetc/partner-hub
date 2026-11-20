@@ -66,6 +66,8 @@ import { LINE_CASES } from "@/content/lineCases";
 import { BRIDGE_CASES } from "@/content/bridgeCases";
 import { freshJourney } from "@/lib/journey";
 import { JOURNEY_CASES } from "@/content/journeyCases";
+import { freshBenchmark } from "@/lib/benchmark";
+import { BENCHMARK_CASES } from "@/content/benchmarkCases";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -134,6 +136,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   line: "sorting",
   bridge: "money",
   journey: "timeline",
+  benchmark: "people",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -176,6 +179,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   line: "Self-managed requests: the participant’s choice, check and agree first, or cannot authorise as requested, with the reason and next step.",
   bridge: "While someone waits for funding: compare CHSP, a private quote and the funded picture, then write the family a summary.",
   journey: "A Support at Home journey from four points of view, with decision points where a change affects each person differently.",
+  benchmark: "Lock in a decision on a fictional case, then see how peers chose (privacy-safe) beside the reviewed perspective.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -212,7 +216,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
-  { title: "Reflect & share", types: ["reflection", "wall", "poll", "confidence"] },
+  { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "confidence"] },
 ];
 
 /** A new, empty block of each kind. Ids are unique across the guide (choices included). */
@@ -437,6 +441,9 @@ function newBlock(item: PaletteItem): Block {
     case "journey":
       // Starts from Arthur's journey, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshJourney(JOURNEY_CASES[0].data) };
+    case "benchmark":
+      // Starts from the missed check-in case, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshBenchmark(BENCHMARK_CASES[0].data) };
     case "budget":
       return {
         id,
@@ -473,6 +480,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "reset") Object.assign(c, freshReset(c));
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
+  if (c.type === "benchmark") Object.assign(c, freshBenchmark(c));
   if (c.type === "poll") c.options = c.options.map((x) => ({ ...x, id: rid("opt") }));
   if (c.type === "hotspots") c.spots = c.spots.map((x) => ({ ...x, id: rid("spot") }));
   if (c.type === "sequencing") c.steps = c.steps.map((x) => ({ ...x, id: rid("step") }));
@@ -605,6 +613,8 @@ function isBlank(b: Block): boolean {
     case "bridge":
       return !b.approval.owner && !b.approval.finance;
     case "journey":
+      return !b.approval.owner && !b.approval.clinical;
+    case "benchmark":
       return !b.approval.owner && !b.approval.clinical;
   }
 }

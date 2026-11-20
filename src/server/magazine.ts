@@ -40,6 +40,7 @@ import { resetApproved } from "@/lib/reset";
 import { lineApproved, lineForReaders } from "@/lib/line";
 import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
 import { journeyApproved, journeyForReaders } from "@/lib/journey";
+import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -282,7 +283,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                       : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
                         b.type === "journey"
                         ? journeyForReaders(b)
-                        : b,
+                        : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
+                          b.type === "benchmark"
+                          ? benchmarkForReaders(b)
+                          : b,
       ),
     })),
   })),
@@ -672,6 +676,7 @@ export function recordGuideEvent(
           "line",
           "bridge",
           "journey",
+          "benchmark",
           "process",
           "flashcards",
           "video",
@@ -1067,6 +1072,18 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unpriced = draftBlocks.filter((b) => b.type === "bridge" && !bridgeApproved(b));
   // And The SaH Journey: its pathway, fall branch, government claims and family access need their reviewers.
   const unjourneyed = draftBlocks.filter((b) => b.type === "journey" && !journeyApproved(b));
+  // And a peer benchmark poll: its reviewed next step, escalation facts and disclosure threshold need their reviewers, and a current review date.
+  const unpolled = draftBlocks.filter((b) => b.type === "benchmark" && (!benchmarkApproved(b) || benchmarkStale(b, now.toISOString().slice(0, 10))));
+  if (unpolled.length)
+    throw Object.assign(
+      new HttpError(400, "A peer benchmark poll needs its sign-off, policy version and a current review date before it can be published. “Publish anyway” doesn’t cover this."),
+      {
+        problems: unpolled.map(
+          (b) =>
+            `“${b.type === "benchmark" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality and Privacy reviewers, the date, the policy and its version, and a review date that hasn’t passed.`,
+        ),
+      },
+    );
   if (unjourneyed.length)
     throw Object.assign(
       new HttpError(400, "The SaH Journey needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this."),

@@ -480,6 +480,40 @@ export const posts: Post[] = [
       attribution: "name",
     },
   },
+  {
+    // The canonical thread for the peer benchmark poll's fictional case (docs/peer-benchmark-poll.md).
+    id: "case-missed-check-in",
+    space: "coordinators",
+    authorId: "maya",
+    hoursAgo: 24 * 6,
+    title: "Fictional case: two missed check-in calls",
+    body: "A training case, not a real client: Mr Patel, who self-manages, hasn't answered two scheduled check-in calls. His daughter says he's fine, but she last spoke to him four days ago. What would you do next, and why?\n\nShare your reasoning about the made-up case only. Please don't describe real clients. A real concern goes through the operational process, not this thread.",
+    likes: 12,
+    comments: [
+      {
+        id: "mci1",
+        authorId: "leanne",
+        hoursAgo: 24 * 5,
+        body: "\"He's fine\" from four days ago isn't contact today. I'd check when anyone last actually spoke with him, try the other agreed ways to reach him, and look at his contact plan before deciding how urgent it is.",
+        likes: 24,
+      },
+      {
+        id: "mci2",
+        authorId: "tom",
+        hoursAgo: 24 * 5,
+        body: "Whatever I decide, I write down each attempt and who's following up by when. Two missed calls on their own don't tell me much; what the procedure says to do next does.",
+        likes: 18,
+      },
+      {
+        id: "mci3",
+        authorId: "grace",
+        hoursAgo: 24 * 4,
+        body: "If a worker couldn't get an answer at a scheduled visit, or there's a new health concern, that's a different urgency. Follow the escalation steps rather than waiting for another call.",
+        likes: 11,
+      },
+      { id: "mci4", authorId: "jess", hoursAgo: 24 * 3, body: "I'd probably just leave it until the next monthly call.", likes: 1 },
+    ],
+  },
 ];
 
 export type CommunityEvent = {

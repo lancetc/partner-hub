@@ -1122,6 +1122,28 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  Peer benchmark poll (lib/benchmark, server/benchmark): one locked decision per person per case version, with
+  their verified role and cohort at the time. Confidence, reason and reflection are private to them.
+*/
+export const BENCHMARK_SCHEMA = `
+CREATE TABLE IF NOT EXISTS benchmark_votes (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), block_id TEXT NOT NULL, version_key TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), revision_id TEXT NOT NULL, audience TEXT NOT NULL, cohort TEXT NOT NULL DEFAULT '',
+  eligible INTEGER NOT NULL DEFAULT 1, choice TEXT NOT NULL, confidence TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '',
+  reflection TEXT NOT NULL DEFAULT '', locked_at TEXT NOT NULL, viewed_at TEXT,
+  UNIQUE (guide_id, block_id, version_key, user_id)
+);
+CREATE INDEX IF NOT EXISTS benchmark_votes_tally ON benchmark_votes (guide_id, block_id, version_key, eligible, locked_at);
+`;
+const benchmarkReady = new WeakSet<object>();
+/** Makes sure the peer benchmark poll's table is there, for a server already running when it was added. */
+export function ensureBenchmark(db: { exec: (sql: string) => void }) {
+  if (benchmarkReady.has(db)) return;
+  db.exec(BENCHMARK_SCHEMA);
+  benchmarkReady.add(db);
+}
+
+/*
   The SaH Journey (lib/journey, server/journey): a learner's attempt: where they are, the lenses they opened,
   every try at each decision point, and the result. Each attempt keeps a hash of the decision keys.
 */
@@ -1281,6 +1303,7 @@ export function migrate(db: Db) {
   db.exec(LINE_SCHEMA);
   db.exec(BRIDGE_SCHEMA);
   db.exec(JOURNEY_SCHEMA);
+  db.exec(BENCHMARK_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
