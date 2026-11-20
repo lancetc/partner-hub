@@ -92,7 +92,7 @@ export function AccountMenu() {
             <Icon name="layers" /> My Capabilities
           </Link>
           <Link href="/onboarding" className={item} onClick={() => setOpen(false)}>
-            <Icon name="list" /> My onboarding
+            <Icon name="list" /> Your setup
           </Link>
           {me?.canReport && (
             <Link href={me.canAuthor ? "/admin/lessons" : "/admin/learning-paths"} className={item} onClick={() => setOpen(false)}>

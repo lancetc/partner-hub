@@ -981,6 +981,84 @@ export function ensureCapability(db: { exec: (sql: string) => void }) {
   capabilityReady.add(db);
 }
 
+/*
+  Onboarding (lib/onboarding, server/onboarding): the requirements matrix and its versions, each person's
+  and organisation's tasks, the documents they provide (the files are in a private folder, never in the
+  public uploads), "Check your starting point", and what happened when. A task's status, a document's
+  review, learning completion and the account being active are separate things.
+*/
+export const ONBOARDING_SCHEMA = `
+CREATE TABLE IF NOT EXISTS onb_configs (
+  version INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK (status IN ('draft', 'active', 'retired')),
+  tasks TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT, retired_at TEXT
+);
+-- A person's setup: when they began, where they left off, and when they started using the Hub.
+CREATE TABLE IF NOT EXISTS onb_instances (
+  user_id TEXT PRIMARY KEY REFERENCES users(id), config_version INTEGER, started_at TEXT NOT NULL,
+  last_step TEXT, wizard_done_at TEXT, activated_at TEXT, updated_at TEXT NOT NULL
+);
+-- One row per task per person, or per organisation for a task an organisation does once for all its people.
+CREATE TABLE IF NOT EXISTS onb_tasks (
+  id TEXT PRIMARY KEY, task_id TEXT NOT NULL, subject_kind TEXT NOT NULL CHECK (subject_kind IN ('person', 'org')), subject_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('in_progress', 'submitted', 'needs_action', 'approved')),
+  config_version INTEGER NOT NULL, data TEXT NOT NULL DEFAULT '{}', document_id TEXT,
+  submitted_by TEXT, submitted_at TEXT, reviewed_by TEXT, reviewed_at TEXT, reason TEXT, expires_at TEXT, updated_at TEXT NOT NULL,
+  UNIQUE (task_id, subject_kind, subject_id)
+);
+CREATE INDEX IF NOT EXISTS onb_tasks_status ON onb_tasks (status, submitted_at);
+CREATE INDEX IF NOT EXISTS onb_tasks_subject ON onb_tasks (subject_kind, subject_id);
+-- A file someone provided. The bytes are in the private onboarding folder under stored_name.
+CREATE TABLE IF NOT EXISTS onb_documents (
+  id TEXT PRIMARY KEY, task_row TEXT NOT NULL REFERENCES onb_tasks(id), original_name TEXT NOT NULL, mime TEXT NOT NULL, bytes INTEGER NOT NULL,
+  stored_name TEXT NOT NULL, uploaded_by TEXT NOT NULL, uploaded_at TEXT NOT NULL
+);
+-- "This isn't my role or organisation": a request, never a self-service change.
+CREATE TABLE IF NOT EXISTS onb_requests (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), message TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'resolved')), resolution TEXT NOT NULL DEFAULT '',
+  resolved_by TEXT, resolved_at TEXT, created_at TEXT NOT NULL
+);
+-- Letting someone start before every requirement is approved: always with a reason, a name and an end date.
+CREATE TABLE IF NOT EXISTS onb_overrides (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, granted_by TEXT NOT NULL,
+  granted_at TEXT NOT NULL, expires_on TEXT NOT NULL, ended_at TEXT
+);
+-- Check your starting point: a published set of approved Question Pool items for an audience.
+CREATE TABLE IF NOT EXISTS onb_instruments (
+  id TEXT PRIMARY KEY, audience TEXT NOT NULL, version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('draft', 'active', 'retired')),
+  title TEXT NOT NULL DEFAULT '', items TEXT NOT NULL DEFAULT '[]',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT,
+  UNIQUE (audience, version)
+);
+-- What one person was asked, as it read then, and what they said about themselves beforehand.
+CREATE TABLE IF NOT EXISTS onb_attempts (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), instrument_id TEXT NOT NULL, instrument_version INTEGER NOT NULL,
+  items TEXT NOT NULL, goal TEXT NOT NULL DEFAULT '', confidence INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('active', 'completed')), started_at TEXT NOT NULL, completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS onb_attempts_user ON onb_attempts (user_id, started_at);
+-- The first answer to each question, recorded before any feedback is shown. Never overwritten.
+CREATE TABLE IF NOT EXISTS onb_responses (
+  attempt_id TEXT NOT NULL REFERENCES onb_attempts(id), question_id TEXT NOT NULL, version INTEGER NOT NULL, competency_id TEXT,
+  choice_id TEXT NOT NULL, outcome TEXT NOT NULL CHECK (outcome IN ('right', 'other', 'unsure')), at TEXT NOT NULL,
+  PRIMARY KEY (attempt_id, question_id)
+);
+-- What happened and who did it. No file names, answers or reasons: those stay with their own rows.
+CREATE TABLE IF NOT EXISTS onb_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, subject_kind TEXT NOT NULL, subject_id TEXT NOT NULL,
+  task_id TEXT, event TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS onb_events_subject ON onb_events (subject_kind, subject_id);
+`;
+const onboardingReady = new WeakSet<object>();
+/** Makes sure the onboarding tables are there, for a server that was already running when they were added. */
+export function ensureOnboarding(db: { exec: (sql: string) => void }) {
+  if (onboardingReady.has(db)) return;
+  db.exec(ONBOARDING_SCHEMA);
+  onboardingReady.add(db);
+}
+
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
@@ -988,6 +1066,7 @@ export function migrate(db: Db) {
   db.exec(NOTES_SCHEMA);
   db.exec(DISCOVERY_SCHEMA);
   db.exec(CAPABILITY_SCHEMA);
+  db.exec(ONBOARDING_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");
