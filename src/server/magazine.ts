@@ -42,6 +42,7 @@ import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
 import { journeyApproved, journeyForReaders } from "@/lib/journey";
 import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 import { unpublishableTiles } from "./myths";
+import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -287,7 +288,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                         : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
                           b.type === "benchmark"
                           ? benchmarkForReaders(b)
-                          : b,
+                          : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
+                            b.type === "baton"
+                            ? batonForReaders(b)
+                            : b,
       ),
     })),
   })),
@@ -679,6 +683,7 @@ export function recordGuideEvent(
           "journey",
           "benchmark",
           "myths",
+          "baton",
           "process",
           "flashcards",
           "video",
@@ -1075,6 +1080,18 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   // And The SaH Journey: its pathway, fall branch, government claims and family access need their reviewers.
   const unjourneyed = draftBlocks.filter((b) => b.type === "journey" && !journeyApproved(b));
   // And a peer benchmark poll: its reviewed next step, escalation facts and disclosure threshold need their reviewers, and a current review date.
+  // And Pass the Baton: its roles, escalation language, budget assumptions and privacy rules need their reviewers.
+  const unrelayed = draftBlocks.filter((b) => b.type === "baton" && (!batonApproved(b) || batonStale(b, now.toISOString().slice(0, 10))));
+  if (unrelayed.length)
+    throw Object.assign(
+      new HttpError(400, "A Pass the Baton relay needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this."),
+      {
+        problems: unrelayed.map(
+          (b) =>
+            `“${b.type === "baton" ? b.title : ""}”: record the content owner, the Clinical, Care Operations, Finance, Quality and Privacy reviewers, the date, the policy or SOP IDs, and a review date that hasn’t passed.`,
+        ),
+      },
+    );
   // And Myth vs Reality: every tile it shows needs an approved version in the library that isn't under review.
   const untiled = draftBlocks.flatMap((b) => (b.type === "myths" ? unpublishableTiles(db, b.tileIds, now) : []));
   if (untiled.length)

@@ -14,6 +14,7 @@ import { parseBridge, type BridgeBlockData } from "./bridge";
 import { parseJourney, type JourneyBlockData } from "./journey";
 import { parseBenchmark, type BenchmarkBlockData } from "./benchmark";
 import { parseMythBlock, type MythBlockData } from "./myths";
+import { parseBaton, type BatonBlockData } from "./baton";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -471,7 +472,8 @@ export type Block =
   | BridgeBlock
   | JourneyBlock
   | BenchmarkBlock
-  | MythBlock;
+  | MythBlock
+  | BatonBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -492,6 +494,8 @@ export type JourneyBlock = Base & { type: "journey" } & JourneyBlockData;
 export type BenchmarkBlock = Base & { type: "benchmark" } & BenchmarkBlockData;
 /** Myth vs Reality tiles (lib/myths): client questions from the canonical tile library, each with an approved, copy-only reply. */
 export type MythBlock = Base & { type: "myths" } & MythBlockData;
+/** Pass the Baton (lib/baton): a role-handoff relay through a fictional participant's journey. */
+export type BatonBlock = Base & { type: "baton" } & BatonBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -697,6 +701,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   journey: "The SaH Journey",
   benchmark: "Peer benchmark poll",
   myths: "Myth vs Reality tiles",
+  baton: "Pass the Baton relay",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1592,6 +1597,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "benchmark", ...parseBenchmark(o, where, { str, idOf, list, unfinished }) };
       case "myths":
         return { ...base, type: "myths", ...parseMythBlock(o, where, { str, unfinished }) };
+      case "baton":
+        return { ...base, type: "baton", ...parseBaton(o, where, { str, idOf, list, unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -2015,6 +2022,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "journey") extra += 15;
     if (b.type === "benchmark") extra += 4;
     if (b.type === "myths") extra += b.tileIds.length;
+    if (b.type === "baton") extra += 12;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

@@ -34,6 +34,7 @@ import { BridgeEdit } from "./MagazineBridgeEdit";
 import { JourneyEdit } from "./MagazineJourneyEdit";
 import { BenchmarkEdit } from "./MagazineBenchmarkEdit";
 import { MythEdit } from "./MagazineMythEdit";
+import { BatonEdit } from "./MagazineBatonEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -234,6 +235,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <BenchmarkEdit block={b} update={update} />;
     case "myths":
       return <MythEdit block={b} update={update} />;
+    case "baton":
+      return <BatonEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1466,6 +1469,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A fictional journey: story times are never wait estimates. The course can’t be published until Care Operations, Clinical, Quality, Privacy and
           Communications sign-off is recorded in the block.
+        </p>
+      );
+    case "baton":
+      return (
+        <p className="text-sm text-ink-muted">
+          A simulation with fictional data. The roles, owners and channels are scenario roles until approved. The course can’t be published until Clinical,
+          Care Operations, Finance, Quality and Privacy sign-off is recorded in the block.
         </p>
       );
     case "myths":
