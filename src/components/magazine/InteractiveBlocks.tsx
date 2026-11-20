@@ -42,6 +42,7 @@ import { SignalCase } from "./SignalCase";
 import { MissionBoard } from "./MissionBoard";
 import { BalanceScale } from "./BalanceScale";
 import { InvoiceXRay } from "./InvoiceXRay";
+import { ExpectationReset } from "./ExpectationReset";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -130,6 +131,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <BalanceScale block={b} ctx={ctx} />;
     case "xray":
       return <InvoiceXRay block={b} ctx={ctx} />;
+    case "reset":
+      return <ExpectationReset block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useHydrated } from "@/lib/store";
+import { useApi } from "@/lib/api";
 import { ago, avatarColour, COMMUNITY_SIZE, events, initials, memberById, members, posts, spaces } from "@/content/community";
 import { Icon } from "../Icon";
 
@@ -19,12 +20,22 @@ function inDays(days: number) {
 
 export function HomeCommunity() {
   const hydrated = useHydrated();
-  const latest = [...posts].filter((p) => !p.pinned).sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 3);
+  // A post withdrawn by a moderator isn't shown here either.
+  const withdrawn = useApi<{ withdrawn: string[] }>("/api/community/moderation").data?.withdrawn ?? [];
+  const latest = [...posts]
+    .filter((p) => !p.pinned && !withdrawn.includes(p.id))
+    .sort((a, b) => a.hoursAgo - b.hoursAgo)
+    .slice(0, 3);
   const next = events[0];
   const online = members.filter((m) => m.online);
 
   return (
-    <section aria-labelledby="home-community" data-build-step style={{ "--step": 5 } as React.CSSProperties} className="mt-6 overflow-hidden rounded-3xl border border-line bg-surface">
+    <section
+      aria-labelledby="home-community"
+      data-build-step
+      style={{ "--step": 5 } as React.CSSProperties}
+      className="mt-6 overflow-hidden rounded-3xl border border-line bg-surface"
+    >
       <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[22rem_minmax(0,1fr)]">
         {/* The invitation. */}
         <div className="relative flex flex-col gap-4 overflow-hidden bg-[#008282] p-6 text-white sm:p-7">
@@ -66,7 +77,10 @@ export function HomeCommunity() {
             >
               Join the conversation <Icon name="arrow-right" className="size-4" />
             </Link>
-            <Link href="/community#events" className="inline-flex min-h-11 items-center rounded-full px-4 font-semibold text-white ring-1 ring-white/60 hover:bg-white/10">
+            <Link
+              href="/community#events"
+              className="inline-flex min-h-11 items-center rounded-full px-4 font-semibold text-white ring-1 ring-white/60 hover:bg-white/10"
+            >
               Events
             </Link>
           </div>

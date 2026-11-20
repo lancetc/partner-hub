@@ -1,8 +1,8 @@
 "use client";
 
 import { HeroStats, PageHero } from "../PageHero";
-import { useId, useState, useSyncExternalStore } from "react";
-import { useApi, type Me } from "@/lib/api";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { api, useApi, type Me } from "@/lib/api";
 import { useHydrated } from "@/lib/store";
 import { cx } from "@/lib/format";
 import {
@@ -90,7 +90,12 @@ export function Community() {
   const hydrated = useHydrated();
   const me = useApi<Me>("/api/me").data;
   const who = me?.user.id ?? "guest";
-  const you: You = { id: "you", name: me?.user.name ?? "You", photo: me?.user.avatar ?? null, role: me?.user.serviceRole ?? (me?.user.audience === "coordinator" ? "Care coordinator" : "Care Partner") };
+  const you: You = {
+    id: "you",
+    name: me?.user.name ?? "You",
+    photo: me?.user.avatar ?? null,
+    role: me?.user.serviceRole ?? (me?.user.audience === "coordinator" ? "Care coordinator" : "Care Partner"),
+  };
   const [saved, setSaved] = useState<Record<string, Mine>>({});
   const mine = saved[who] ?? (hydrated ? load(who) : EMPTY);
   const update = (change: (m: Mine) => Mine) => {
@@ -172,7 +177,13 @@ function Avatar({ person, size = "md", ring, level }: { person: Person; size?: "
     <span className="relative inline-flex shrink-0">
       {person.photo ? (
         // eslint-disable-next-line @next/next/no-img-element -- the person's own picture from this hub's avatar endpoint
-        <img src={person.photo} alt="" loading="lazy" decoding="async" className={cx("rounded-full object-cover ring-2", sizes[size], ring ?? "ring-surface")} />
+        <img
+          src={person.photo}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className={cx("rounded-full object-cover ring-2", sizes[size], ring ?? "ring-surface")}
+        />
       ) : (
         <span
           className={cx("grid place-items-center rounded-full font-mulish font-extrabold text-white ring-2", sizes[size], ring ?? "ring-surface")}
@@ -218,7 +229,21 @@ function Feed({
   const [space, setSpace] = useState<SpaceId | "all">("all");
   const [order, setOrder] = useState<"latest" | "top">("latest");
   const yours: FeedPost[] = mine.posts.map((p) => ({ ...p, authorId: "you", hoursAgo: hoursSince(p.at), likes: 0, comments: [], mine: true }));
-  const all = [...yours, ...posts];
+  // Moderation: a withdrawn post is hidden from everyone but moderators, here and in every lesson that refers to it.
+  const modApi = useApi<Moderation>("/api/community/moderation");
+  const mod = modApi.data;
+  const all = [...yours, ...posts.filter((p) => !mod?.withdrawn.includes(p.id) || mod.canModerate)];
+  // A link to one post (from a lesson's "View discussion") lands on it.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id.startsWith("post-")) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ block: "start" });
+      el?.focus();
+    }, 50);
+    return () => clearTimeout(t);
+  }, []);
   const shown = sortPosts(
     all.filter((p) => space === "all" || p.space === space),
     order,
@@ -257,11 +282,7 @@ function Feed({
             <span className="font-semibold text-ink">{spaces.find((s) => s.id === space)?.name}:</span> {spaces.find((s) => s.id === space)?.blurb}
           </p>
         )}
-        <Composer
-          you={you}
-          space={space === "all" ? "ask" : space}
-          onPost={(p) => update((m) => ({ ...m, posts: [p, ...m.posts] }))}
-        />
+        <Composer you={you} space={space === "all" ? "ask" : space} onPost={(p) => update((m) => ({ ...m, posts: [p, ...m.posts] }))} />
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-serif text-xl font-semibold">{space === "all" ? "Latest from everyone" : spaces.find((s) => s.id === space)?.name}</h2>
           <div className="flex rounded-full bg-muted p-1 text-sm font-semibold" role="group" aria-label="Sort posts">
@@ -280,7 +301,17 @@ function Feed({
         </div>
         {shown.length === 0 && <p className="rounded-2xl border border-dashed border-line p-6 text-center text-ink-muted">No posts here yet. Be the first!</p>}
         {shown.map((p) => (
-          <PostCard key={p.id} post={p} you={you} mine={mine} update={update} hydrated={hydrated} onSpace={setSpace} />
+          <PostCard
+            key={p.id}
+            post={p}
+            you={you}
+            mine={mine}
+            update={update}
+            hydrated={hydrated}
+            onSpace={setSpace}
+            mod={mod}
+            onModerated={(m) => modApi.setData(m)}
+          />
         ))}
       </div>
 
@@ -463,6 +494,72 @@ function Composer({ you, space, onPost }: { you: You; space: SpaceId; onPost: (p
   );
 }
 
+type Moderation = { withdrawn: string[]; canModerate: boolean; reasons: Record<string, string> };
+
+/** For moderators: withdraw a post (from the feed and every lesson that uses it), or put it back. */
+function ModerationBar({ postId, mod, onModerated }: { postId: string; mod: Moderation; onModerated?: (m: Moderation) => void }) {
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const withdrawn = mod.withdrawn.includes(postId);
+  const send = async (state: "withdrawn" | "published") => {
+    setProblem(null);
+    try {
+      onModerated?.(await api<Moderation>("/api/community/moderation", { body: { postId, state, reason } }));
+      setAsking(false);
+      setReason("");
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That didn’t save.");
+    }
+  };
+  return (
+    <div className={cx("mb-3 rounded-xl px-3 py-2 text-sm", withdrawn ? "bg-[#fff1cc] text-[#4a3400] dark:bg-[#3d2f08] dark:text-[#ffd97a]" : "bg-muted")}>
+      {withdrawn ? (
+        <p className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold">Withdrawn: hidden from the Community and from lessons.</span>
+          {mod.reasons[postId] && <span>{mod.reasons[postId]}</span>}
+          <button type="button" className="min-h-9 rounded-full px-3 font-semibold underline-offset-4 hover:underline" onClick={() => void send("published")}>
+            Put it back
+          </button>
+        </p>
+      ) : asking ? (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send("withdrawn");
+          }}
+        >
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
+            <span className="font-semibold">Why withdraw it?</span>
+            <input
+              className="min-h-10 rounded-lg border border-line bg-surface px-2"
+              value={reason}
+              maxLength={300}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+          <button type="submit" className="min-h-10 rounded-full bg-[#c7393e] px-4 font-semibold text-white">
+            Withdraw
+          </button>
+          <button type="button" className="min-h-10 rounded-full px-3 font-semibold" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="min-h-9 font-semibold text-ink-muted hover:text-ink hover:underline" onClick={() => setAsking(true)}>
+          Moderate: withdraw this post
+        </button>
+      )}
+      {problem && (
+        <p role="alert" className="mt-1">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PostCard({
   post,
   you,
@@ -470,6 +567,8 @@ function PostCard({
   update,
   hydrated,
   onSpace,
+  mod,
+  onModerated,
 }: {
   post: FeedPost;
   you: You;
@@ -477,6 +576,8 @@ function PostCard({
   update: Update;
   hydrated: boolean;
   onSpace: (s: SpaceId) => void;
+  mod?: Moderation | null;
+  onModerated?: (m: Moderation) => void;
 }) {
   const author: Person & { role: string; region?: string } = post.mine ? { ...you, region: undefined } : memberById(post.authorId)!;
   const space = spaces.find((s) => s.id === post.space)!;
@@ -493,7 +594,8 @@ function PostCard({
   const level = post.mine ? undefined : levelFor(memberById(post.authorId)!.points.all).level;
 
   return (
-    <article className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+    <article id={post.mine ? undefined : `post-${post.id}`} tabIndex={-1} className="rounded-2xl border border-line bg-surface p-4 outline-none sm:p-5">
+      {!post.mine && mod?.canModerate && <ModerationBar postId={post.id} mod={mod} onModerated={onModerated} />}
       <header className="flex items-start gap-3">
         <Avatar person={author} level={level} />
         <div className="min-w-0 flex-1">
@@ -526,7 +628,9 @@ function PostCard({
         </button>
       )}
 
-      {post.poll && <Poll postId={post.id} poll={post.poll} vote={mine.votes[post.id]} onVote={(o) => update((m) => ({ ...m, votes: { ...m.votes, [post.id]: o } }))} />}
+      {post.poll && (
+        <Poll postId={post.id} poll={post.poll} vote={mine.votes[post.id]} onVote={(o) => update((m) => ({ ...m, votes: { ...m.votes, [post.id]: o } }))} />
+      )}
 
       <footer className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
         <button
@@ -598,7 +702,12 @@ function PostCard({
           })}
           <Reply
             you={you}
-            onReply={(body) => update((m) => ({ ...m, replies: { ...m.replies, [post.id]: [...(m.replies[post.id] ?? []), { id: `r-${Date.now()}`, body, at: new Date().toISOString() }] } }))}
+            onReply={(body) =>
+              update((m) => ({
+                ...m,
+                replies: { ...m.replies, [post.id]: [...(m.replies[post.id] ?? []), { id: `r-${Date.now()}`, body, at: new Date().toISOString() }] },
+              }))
+            }
           />
         </div>
       )}
@@ -695,9 +804,7 @@ function DateBlock({ event, hydrated, small }: { event: CommunityEvent; hydrated
       )}
       aria-hidden
     >
-      <span className={cx("font-extrabold uppercase", small ? "text-[0.6rem]" : "text-xs")}>
-        {d?.toLocaleDateString("en-AU", { month: "short" })}
-      </span>
+      <span className={cx("font-extrabold uppercase", small ? "text-[0.6rem]" : "text-xs")}>{d?.toLocaleDateString("en-AU", { month: "short" })}</span>
       <span className={cx("font-extrabold leading-none", small ? "text-lg" : "text-2xl")}>{d?.getDate()}</span>
     </span>
   );
@@ -784,9 +891,7 @@ function Members() {
   const [group, setGroup] = useState<(typeof ROLE_GROUPS)[number]["id"]>("all");
   const q = query.trim().toLowerCase();
   const shown = members.filter(
-    (m) =>
-      ROLE_GROUPS.find((g) => g.id === group)!.match(m) &&
-      (!q || [m.name, m.role, m.region, ...m.askMeAbout].some((s) => s.toLowerCase().includes(q))),
+    (m) => ROLE_GROUPS.find((g) => g.id === group)!.match(m) && (!q || [m.name, m.role, m.region, ...m.askMeAbout].some((s) => s.toLowerCase().includes(q))),
   );
   return (
     <div>
@@ -856,7 +961,8 @@ function Members() {
               </ul>
             </div>
             <p className="text-xs text-ink-muted">
-              Member for {m.joinedMonthsAgo >= 12 ? `${Math.floor(m.joinedMonthsAgo / 12)} year${m.joinedMonthsAgo >= 24 ? "s" : ""}` : `${m.joinedMonthsAgo} months`} ·{" "}
+              Member for{" "}
+              {m.joinedMonthsAgo >= 12 ? `${Math.floor(m.joinedMonthsAgo / 12)} year${m.joinedMonthsAgo >= 24 ? "s" : ""}` : `${m.joinedMonthsAgo} months`} ·{" "}
               {m.points.all.toLocaleString("en-AU")} points
             </p>
           </li>
@@ -905,7 +1011,13 @@ function Leaderboard({ you, yourPoints }: { you: You; yourPoints: number }) {
               <span
                 className={cx(
                   "grid size-8 shrink-0 place-items-center rounded-full font-mulish text-sm font-extrabold",
-                  i === 0 ? "bg-[#fab53d] text-[#102a43]" : i === 1 ? "bg-[#d9dee5] text-[#102a43]" : i === 2 ? "bg-[#e7b48a] text-[#102a43]" : "text-ink-muted",
+                  i === 0
+                    ? "bg-[#fab53d] text-[#102a43]"
+                    : i === 1
+                      ? "bg-[#d9dee5] text-[#102a43]"
+                      : i === 2
+                        ? "bg-[#e7b48a] text-[#102a43]"
+                        : "text-ink-muted",
                 )}
               >
                 {i + 1}

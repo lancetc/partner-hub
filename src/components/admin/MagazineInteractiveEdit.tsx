@@ -28,6 +28,7 @@ import { SignalEdit } from "./MagazineSignalEdit";
 import { MissionEdit } from "./MagazineMissionEdit";
 import { BalanceEdit } from "./MagazineBalanceEdit";
 import { XRayEdit } from "./MagazineXRayEdit";
+import { ResetEdit } from "./MagazineResetEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -216,6 +217,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <BalanceEdit block={b} update={update} />;
     case "xray":
       return <XRayEdit block={b} update={update} />;
+    case "reset":
+      return <ResetEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1419,6 +1422,14 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A training case: nothing a learner does in it creates a claim, payment or message. It can’t be published until Finance, Care Operations and Quality
           sign-off and the ruleset version are recorded in the block. Use Preview to work it through.
+        </p>
+      );
+    case "reset":
+      return (
+        <p className="text-sm text-ink-muted">
+          Peer approaches come from the Community and follow its moderation. A course can’t be published until Care Operations, Quality, Privacy and
+          Communications sign-off and the source version are recorded in the block. Use Preview to try the Community’s empty, withdrawn, stale and offline
+          states.
         </p>
       );
     case "budget":

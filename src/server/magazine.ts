@@ -36,6 +36,7 @@ import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
 import { balanceApproved, balanceForReaders } from "@/lib/balance";
 import { xrayApproved, xrayForReaders } from "@/lib/xray";
+import { resetApproved } from "@/lib/reset";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -655,6 +656,7 @@ export function recordGuideEvent(
           "mission",
           "balance",
           "xray",
+          "reset",
           "process",
           "flashcards",
           "video",
@@ -1042,6 +1044,21 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unbalanced = draftBlocks.filter((b) => b.type === "balance" && !balanceApproved(b));
   // And an Invoice X-Ray: its eligibility answers, arithmetic and scripts are Finance, Care Operations and Quality judgements.
   const unchecked = draftBlocks.filter((b) => b.type === "xray" && !xrayApproved(b));
+  // And an Expectation Reset: its scripts speak for Trilogy Care to waiting families, so Care Operations, Quality, Privacy and Communications sign off.
+  const unreviewed = draftBlocks.filter((b) => b.type === "reset" && !resetApproved(b));
+  if (unreviewed.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "An Expectation Reset timeline needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unreviewed.map(
+          (b) =>
+            `“${b.type === "reset" ? b.title : ""}”: record the content owner, the Care Operations, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+        ),
+      },
+    );
   if (unchecked.length)
     throw Object.assign(
       new HttpError(

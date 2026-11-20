@@ -1122,6 +1122,37 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  The Expectation Reset (lib/reset, server/reset) and Community moderation for learning reuse.
+  - community_moderation: a moderator's decision about a Community post. A withdrawn post disappears from the
+    Community feed and from every lesson that refers to it, at once. The post itself isn't copied anywhere.
+  - learning_flags: "Flag as out of date" on a reviewed script or a peer approach, for the content owner.
+  - reset_progress: a learner's own progress (markers opened, private first takes, saved phrases).
+*/
+export const RESET_SCHEMA = `
+CREATE TABLE IF NOT EXISTS community_moderation (
+  post_id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK (state IN ('published', 'withdrawn')), reason TEXT NOT NULL DEFAULT '',
+  by_user TEXT NOT NULL REFERENCES users(id), at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS learning_flags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), block_id TEXT NOT NULL, marker_id TEXT NOT NULL,
+  target TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), text TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')), created_at TEXT NOT NULL, resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS learning_flags_open ON learning_flags (guide_id, status);
+CREATE TABLE IF NOT EXISTS reset_progress (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), block_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
+  state TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL, PRIMARY KEY (guide_id, block_id, user_id)
+);
+`;
+const resetReady = new WeakSet<object>();
+/** Makes sure the Expectation Reset and Community moderation tables are there, for a server already running when they were added. */
+export function ensureReset(db: { exec: (sql: string) => void }) {
+  if (resetReady.has(db)) return;
+  db.exec(RESET_SCHEMA);
+  resetReady.add(db);
+}
+
+/*
   Invoice X-Ray (lib/xray, server/xray): a learner's attempt at a case: each line's outcome, reason and
   evidence, the split, and their script. Theirs alone; authors see totals. Each attempt keeps the edition and a
   hash of the case and its answer key.
@@ -1187,6 +1218,7 @@ export function migrate(db: Db) {
   db.exec(MISSION_SCHEMA);
   db.exec(BALANCE_SCHEMA);
   db.exec(XRAY_SCHEMA);
+  db.exec(RESET_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

@@ -177,6 +177,35 @@ export type Post = {
   comments: Comment[];
   pinned?: boolean;
   poll?: { options: { id: string; label: string; votes: number }[] };
+  /**
+    Reuse in learning (the Expectation Reset block, docs/expectation-reset.md). A post appears in a lesson only
+    when the contributor's role is verified, they've agreed to reuse, the community team has approved it for
+    learning, it matches the lesson's stage, and it's within its review date. The post stays the one canonical
+    copy: the lesson links back here and follows its moderation.
+  */
+  learning?: PostReuse;
+};
+
+export type PostReuse = {
+  /** Story stages it suits, such as "awaiting-allocation". */
+  stages: string[];
+  /** Roles it's written for. */
+  roles: string[];
+  verified: boolean;
+  consent: boolean;
+  reuse: "approved" | "pending";
+  /** After this day (YYYY-MM-DD) it's out of date until reviewed again. */
+  reviewDue: string;
+  /** "When I used this": a fictionalised situation, never a real client. */
+  when: string;
+  script: string;
+  next: string;
+  /** Show the contributor by name, or by role only. */
+  attribution: "name" | "role";
+  /** It describes an offer (such as a free chat) that the business has to approve before it's described as available. */
+  offer?: boolean;
+  /** A short note when it's a different, defensible approach. */
+  differs?: string;
 };
 
 export const posts: Post[] = [
@@ -243,8 +272,20 @@ export const posts: Post[] = [
     body: "Summer's nearly here up north. Before a hot day I check:\n• Is the fan or air con working, and do they know how to use it?\n• Water within reach, and something they like to drink\n• Curtains drawn on the hot side by mid-morning\n• Medications that need keeping cool\n• Someone checking in on the hottest afternoons\n\nWhat would you add?",
     likes: 39,
     comments: [
-      { id: "h1", authorId: "mei", hoursAgo: 18, body: "Ice blocks and fruit count as fluids, and are much easier to say yes to than another glass of water.", likes: 15 },
-      { id: "h2", authorId: "dan", hoursAgo: 16, body: "Get the air con filters cleaned before December. Half the 'broken' units I see are just clogged.", likes: 13 },
+      {
+        id: "h1",
+        authorId: "mei",
+        hoursAgo: 18,
+        body: "Ice blocks and fruit count as fluids, and are much easier to say yes to than another glass of water.",
+        likes: 15,
+      },
+      {
+        id: "h2",
+        authorId: "dan",
+        hoursAgo: 16,
+        body: "Get the air con filters cleaned before December. Half the 'broken' units I see are just clogged.",
+        likes: 13,
+      },
     ],
   },
   {
@@ -286,9 +327,7 @@ export const posts: Post[] = [
     title: "Unplanned weight loss: the signs anyone can notice",
     body: "You don't need scales to spot it. Watch for loose rings, belts on a new notch, clothes hanging differently, a fridge with the same food in it week after week. If you notice any of these, tell the coordinator. It's one of the earliest signs something's changed.",
     likes: 28,
-    comments: [
-      { id: "m1", authorId: "sam", hoursAgo: 50, body: "The fridge one is so true. I see it before anyone else does.", likes: 9 },
-    ],
+    comments: [{ id: "m1", authorId: "sam", hoursAgo: 50, body: "The fridge one is so true. I see it before anyone else does.", likes: 9 }],
   },
   {
     id: "first-30",
@@ -311,7 +350,9 @@ export const posts: Post[] = [
     title: "Shout-out to Nick 👏",
     body: "Nick spent half an hour on the phone helping a podiatrist in our region with footwear advice for a client with diabetes. Didn't have to, just did. This is what the community is for.",
     likes: 26,
-    comments: [{ id: "n1", authorId: "nick", hoursAgo: 90, body: "Happy to help anytime. Feet are my favourite topic, unfortunately for my family.", likes: 10 }],
+    comments: [
+      { id: "n1", authorId: "nick", hoursAgo: 90, body: "Happy to help anytime. Feet are my favourite topic, unfortunately for my family.", likes: 10 },
+    ],
   },
   {
     id: "new-jess",
@@ -322,10 +363,122 @@ export const posts: Post[] = [
     body: "Two months in. Loving it, but some days I'm not sure I'm doing it right. What's the one thing you'd tell your first-month self?",
     likes: 42,
     comments: [
-      { id: "j1", authorId: "grace", hoursAgo: 118, body: "You're allowed to say 'I don't know, I'll find out'. Clients trust that more than a guess.", likes: 21 },
+      {
+        id: "j1",
+        authorId: "grace",
+        hoursAgo: 118,
+        body: "You're allowed to say 'I don't know, I'll find out'. Clients trust that more than a guess.",
+        likes: 21,
+      },
       { id: "j2", authorId: "rob", hoursAgo: 110, body: "Write it down before you leave the driveway. You won't remember at 5pm.", likes: 16 },
       { id: "j3", authorId: "priya", hoursAgo: 100, body: "The small talk is the work. That's how you notice when something's off.", likes: 19 },
     ],
+  },
+  // Waiting for funding: peer approaches, approved for reuse in the Expectation Reset lessons. All fictionalised composites.
+  {
+    id: "waiting-rhythm",
+    space: "coordinators",
+    authorId: "tom",
+    hoursAgo: 24 * 9,
+    title: "Waiting for funding: I ask how often they want to hear from me",
+    body: "When someone's approved but still waiting for funding, I stopped ringing every week by default. I ask what suits them: a short call every fortnight, or only if something changes. Most people pick one, and it's on record.\n\nWhat I say: \"I don't have a start date for you yet. Would a short check-in every couple of weeks suit, or would you rather I only call if something changes?\"",
+    likes: 31,
+    comments: [
+      { id: "wr1", authorId: "leanne", hoursAgo: 24 * 8, body: "Same. And I always say who to ring sooner if things change.", likes: 9 },
+      { id: "wr2", authorId: "maya", hoursAgo: 24 * 8, body: "Approved for the waiting-period lessons, with Tom's OK. Thanks Tom.", likes: 5 },
+    ],
+    learning: {
+      stages: ["awaiting-allocation"],
+      roles: ["care_coordinator", "care_partner"],
+      verified: true,
+      consent: true,
+      reuse: "approved",
+      reviewDue: "2027-05-20",
+      when: "An older man approved months ago, still waiting for funding, tired of calls that had no news.",
+      script: "I don't have a start date for you yet. Would a short check-in every couple of weeks suit, or would you rather I only call if something changes?",
+      next: "Record the rhythm they chose, and who they call sooner if anything changes.",
+      attribution: "name",
+    },
+  },
+  {
+    id: "waiting-changed",
+    space: "coordinators",
+    authorId: "leanne",
+    hoursAgo: 24 * 16,
+    title: "The question I never skip on a waiting call",
+    body: "\"Has anything changed about the help you need since we last spoke?\" A fall, a hospital stay, a carer who's not coping: that's when a Support Plan Review might be needed, and it doesn't wait for funding.\n\nIf it's urgent, it goes straight through the clinical pathway. Not the Community, not a sticky note.",
+    likes: 44,
+    comments: [
+      { id: "wc1", authorId: "grace", hoursAgo: 24 * 15, body: "Yes. And write down what they said in their words.", likes: 12 },
+      { id: "wc2", authorId: "tom", hoursAgo: 24 * 14, body: "This one question has caught two falls for me this year.", likes: 8 },
+    ],
+    learning: {
+      stages: ["awaiting-allocation"],
+      roles: ["care_coordinator", "care_partner"],
+      verified: true,
+      consent: true,
+      reuse: "approved",
+      reviewDue: "2027-05-20",
+      when: "A daughter rang for a date; on the call it came out her father had fallen twice.",
+      script: "Before the date question: has anything changed about the help you need since we last spoke?",
+      next: "If needs have changed, follow the care pathway and consider a Support Plan Review. If it's urgent, escalate now.",
+      attribution: "role",
+    },
+  },
+  {
+    id: "waiting-chat",
+    space: "coordinators",
+    authorId: "tom",
+    hoursAgo: 24 * 24,
+    title: "A planning chat while they wait",
+    body: "With consent, I offered a short home safety and planning chat while the family waited. We agreed what had changed, what they wanted to ask, and who'd follow up. I was clear it wasn't a clinical assessment and that services hadn't started.",
+    likes: 22,
+    comments: [
+      {
+        id: "wh1",
+        authorId: "maya",
+        hoursAgo: 24 * 22,
+        body: "Whether this is something we offer, and how, is a business call. Check before you mention it.",
+        likes: 7,
+      },
+    ],
+    learning: {
+      stages: ["awaiting-allocation"],
+      roles: ["care_coordinator"],
+      verified: true,
+      consent: true,
+      reuse: "approved",
+      reviewDue: "2027-05-20",
+      when: "A family anxious about the house while they waited for funding.",
+      script:
+        "While you're waiting, would it help to have a short chat about what's changed and what you'd like to ask? It isn't an assessment, and your services haven't started yet.",
+      next: "Agree what changed, their questions, and who follows up.",
+      attribution: "name",
+      offer: true,
+      differs: "A more hands-on approach. Only where Trilogy Care has approved the offer.",
+    },
+  },
+  {
+    id: "waiting-promise",
+    space: "coordinators",
+    authorId: "leanne",
+    hoursAgo: 24 * 30,
+    title: "What I told a family who kept ringing",
+    body: "I told them it'd almost certainly be next month, just to settle things down. It worked, for a while.",
+    likes: 3,
+    comments: [{ id: "wp1", authorId: "grace", hoursAgo: 24 * 29, body: "Careful: if it isn't next month, that's a harder call.", likes: 6 }],
+    learning: {
+      stages: ["awaiting-allocation"],
+      roles: ["care_coordinator"],
+      verified: true,
+      consent: false,
+      reuse: "pending",
+      reviewDue: "2027-05-20",
+      when: "A family ringing every few days.",
+      script: "It'll almost certainly be next month.",
+      next: "",
+      attribution: "name",
+    },
   },
 ];
 
