@@ -44,6 +44,7 @@ import { BalanceScale } from "./BalanceScale";
 import { InvoiceXRay } from "./InvoiceXRay";
 import { ExpectationReset } from "./ExpectationReset";
 import { LineDrawer } from "./LineDrawer";
+import { BridgePractice } from "./WhileYouWait";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -136,6 +137,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <ExpectationReset block={b} ctx={ctx} />;
     case "line":
       return <LineDrawer block={b} ctx={ctx} />;
+    case "bridge":
+      return <BridgePractice block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

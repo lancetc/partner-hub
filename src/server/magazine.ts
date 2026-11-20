@@ -38,6 +38,7 @@ import { balanceApproved, balanceForReaders } from "@/lib/balance";
 import { xrayApproved, xrayForReaders } from "@/lib/xray";
 import { resetApproved } from "@/lib/reset";
 import { lineApproved, lineForReaders } from "@/lib/line";
+import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -274,7 +275,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                   : // Where Is the Line?: the requests and choices, without the answers.
                     b.type === "line"
                     ? lineForReaders(b)
-                    : b,
+                    : // While You Wait: the scenario, without the summary checks or the model summary.
+                      b.type === "bridge"
+                      ? bridgeForReaders(b)
+                      : b,
       ),
     })),
   })),
@@ -662,6 +666,7 @@ export function recordGuideEvent(
           "xray",
           "reset",
           "line",
+          "bridge",
           "process",
           "flashcards",
           "video",
@@ -1053,6 +1058,21 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unreviewed = draftBlocks.filter((b) => b.type === "reset" && !resetApproved(b));
   // And Where Is the Line?: its answer keys are clinical and policy judgements, signed off card by card and as a deck.
   const unkeyed = draftBlocks.filter((b) => b.type === "line" && (!lineApproved(b) || b.cases.some((c) => c.status !== "approved")));
+  // And While You Wait: its figures, status language and family summary need Operations, Finance, Quality, Privacy and Communications.
+  const unpriced = draftBlocks.filter((b) => b.type === "bridge" && !bridgeApproved(b));
+  if (unpriced.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A While You Wait calculator needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unpriced.map(
+          (b) =>
+            `“${b.type === "bridge" ? b.title : ""}”: record the content owner, the Operations, Finance, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+        ),
+      },
+    );
   if (unkeyed.length)
     throw Object.assign(
       new HttpError(

@@ -63,6 +63,7 @@ import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
 import { freshLine } from "@/lib/line";
 import { LINE_CASES } from "@/content/lineCases";
+import { BRIDGE_CASES } from "@/content/bridgeCases";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -129,6 +130,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   xray: "search",
   reset: "timeline",
   line: "sorting",
+  bridge: "money",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -169,6 +171,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   xray: "A fictional quote or receipt, line by line: eligible, contribution, needs review or private, with the split and an explanation.",
   reset: "A waiting-period story with markers that open a reviewed check-in script and moderated peer approaches from the Community.",
   line: "Self-managed requests: the participant’s choice, check and agree first, or cannot authorise as requested, with the reason and next step.",
+  bridge: "While someone waits for funding: compare CHSP, a private quote and the funded picture, then write the family a summary.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -203,7 +206,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "reset", "process", "hotspots"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "checklist", "quiz"] },
-  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "budget"] },
+  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "confidence"] },
 ];
@@ -424,6 +427,9 @@ function newBlock(item: PaletteItem): Block {
     case "line":
       // Starts from the draft deck: no card can be served or published until its answer is signed off.
       return { id, type, ...freshLine(LINE_CASES[0].data) };
+    case "bridge":
+      // Starts from the practice scenario, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(BRIDGE_CASES[0].data) };
     case "budget":
       return {
         id,
@@ -588,6 +594,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.operations;
     case "line":
       return !b.approval.owner && !b.approval.clinical;
+    case "bridge":
+      return !b.approval.owner && !b.approval.finance;
   }
 }
 

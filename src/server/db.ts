@@ -1122,6 +1122,24 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  "While You Wait" (lib/bridge, server/bridge): a learner's practice work (their adjusted scenario, summary and
+  its check). The live-call tool stores nothing: its inputs live only in the open page.
+*/
+export const BRIDGE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS bridge_progress (
+  guide_id TEXT NOT NULL REFERENCES magazine_guides(id), block_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
+  state TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL, PRIMARY KEY (guide_id, block_id, user_id)
+);
+`;
+const bridgeReady = new WeakSet<object>();
+/** Makes sure the While You Wait table is there, for a server already running when it was added. */
+export function ensureBridge(db: { exec: (sql: string) => void }) {
+  if (bridgeReady.has(db)) return;
+  db.exec(BRIDGE_SCHEMA);
+  bridgeReady.add(db);
+}
+
+/*
   "Where Is the Line?" (lib/line, server/line): a learner's attempt at a deck: the order, each card's lane, reason
   and action, replays and the second pass. Each attempt keeps the edition and a hash of the deck's answer keys,
   so a changed key is never silently applied to a past attempt.
@@ -1241,6 +1259,7 @@ export function migrate(db: Db) {
   db.exec(XRAY_SCHEMA);
   db.exec(RESET_SCHEMA);
   db.exec(LINE_SCHEMA);
+  db.exec(BRIDGE_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

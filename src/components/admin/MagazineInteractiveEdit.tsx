@@ -30,6 +30,7 @@ import { BalanceEdit } from "./MagazineBalanceEdit";
 import { XRayEdit } from "./MagazineXRayEdit";
 import { ResetEdit } from "./MagazineResetEdit";
 import { LineEdit } from "./MagazineLineEdit";
+import { BridgeEdit } from "./MagazineBridgeEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -222,6 +223,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <ResetEdit block={b} update={update} />;
     case "line":
       return <LineEdit block={b} update={update} />;
+    case "bridge":
+      return <BridgeEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1440,6 +1443,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A practice deck: nothing a learner does in it approves funding or contacts anyone. Only approved cards within their review date are served, and the
           course can’t be published until every card and the deck are signed off. Use Preview to try it.
+        </p>
+      );
+    case "bridge":
+      return (
+        <p className="text-sm text-ink-muted">
+          Practice mode: every number is fictional and labelled so. The course can’t be published until Operations, Finance, Quality, Privacy and Communications
+          sign-off is recorded in the block. Staff use the live-call version at /tools/while-you-wait once it’s released.
         </p>
       );
     case "budget":
