@@ -3,6 +3,8 @@ import { parseVideoLink } from "./videoLinks";
 import { narrationState, pageSnapshot } from "./magazineNarration";
 import { reviewChecks } from "./magazineReview";
 import { guideChecks, type GuideMode, type GuidePurpose } from "./magazineGuide";
+import { DEFAULT_METER, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "./roleplay";
+import { parseSignal, type SignalBlockData } from "./signal";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -256,7 +258,18 @@ export type BranchingBlock = Base & { type: "branching"; title: string; scenes: 
   and sees coaching and how the person replies. Bounded choices, not an open chat.
 */
 export type ConversationTurn = { id: string; line: string; responses: { id: string; text: string; verdict: Verdict; feedback: string; reply: string }[] };
-export type ConversationBlock = Base & { type: "conversation"; person: string; role: string; setting: string; turns: ConversationTurn[] } & WithPhoto;
+export type ConversationBlock = Base & {
+  type: "conversation";
+  person: string;
+  role: string;
+  setting: string;
+  turns: ConversationTurn[];
+  /**
+    Free conversation (lib/roleplay): the learner types or speaks a reply and the character answers. When
+    set, this is what learners get; the turns above stay as the version to fall back to if it can't run.
+  */
+  roleplay?: Roleplay;
+} & WithPhoto;
 /** A picture or document with mistakes to find, each at a point on it (x, y as percentages). */
 export type SpotBlock = Base & {
   type: "spot";
@@ -439,7 +452,10 @@ export type Block =
   | PerspectivesBlock
   | PulseBlock
   | ActionBlock
-  | GuideBlock;
+  | GuideBlock
+  | SignalBlock;
+/** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
+export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -635,6 +651,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   pulse: "Pulse check",
   action: "Action note",
   guide: "AI Learning Guide",
+  signal: "Spot the Signal",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1131,10 +1148,76 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       case "conversation": {
         const raw = list(o.turns, where, "turns", 12);
         if (!raw.length) unfinished(`${where} needs at least one turn.`);
+        // Free conversation: every part of the scene a model works within is authored here, and required.
+        const scene = ((): { roleplay?: Roleplay } => {
+          const r = o.roleplay as Record<string, unknown> | undefined;
+          if (!r || typeof r !== "object") return {};
+          const at = `${where} free conversation`;
+          const texts = (v: unknown, what: string, max: number, n: number) =>
+            (Array.isArray(v) ? v : [])
+              .slice(0, n)
+              .map((x, i) => str(x, `${at} ${what} ${i + 1}`, { max }) ?? "")
+              .filter(Boolean);
+          const num = (v: unknown, lo: number, hi: number, d: number) =>
+            Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, Math.round(Number(v)))) : d;
+          const states = texts(r.states, "state", 40, 6);
+          if (states.length < 3) unfinished(`${at} needs at least 3 states, the last one for a safety concern.`);
+          const moves = list(r.moves, at, "things worth doing", 10).map((m, i) => ({
+            id: idOf(m?.id, `${at} good move ${i + 1}`),
+            dimension: (typeof m?.dimension === "string" && m.dimension in DIMENSIONS ? m.dimension : "listening") as Dimension,
+            text: str(m?.text, `${at} good move ${i + 1}`, { required: true, max: 200 }) ?? "",
+            example: str(m?.example, `${at} good move ${i + 1} example`, { max: 300 }) ?? "",
+          }));
+          if (moves.length < 2) unfinished(`${at} needs at least 2 things worth doing, so the debrief has something to point to.`);
+          const risks = list(r.risks, at, "unsafe moves", 10).map((x, i) => ({
+            id: idOf(x?.id, `${at} unsafe move ${i + 1}`),
+            text: str(x?.text, `${at} unsafe move ${i + 1}`, { required: true, max: 200 }) ?? "",
+            caution: str(x?.caution, `${at} unsafe move ${i + 1} caution`, { required: true, max: 600 }) ?? "",
+          }));
+          if (!risks.length) unfinished(`${at} needs at least one unsafe move, with the caution to show for it.`);
+          const safety = list(r.safety, at, "safety rules", 8).map((x, i) => {
+            const phrases = texts(x?.phrases, `safety rule ${i + 1} phrase`, 60, 20).filter((p) => p.length >= 3);
+            if (!phrases.length) unfinished(`${at} safety rule ${i + 1} needs at least one phrase to listen for.`);
+            return {
+              id: idOf(x?.id, `${at} safety rule ${i + 1}`),
+              label: str(x?.label, `${at} safety rule ${i + 1}`, { required: true, max: 80 }) ?? "",
+              phrases,
+              response: str(x?.response, `${at} safety rule ${i + 1}: what the learner sees`, { required: true, max: 600 }) ?? "",
+              guidance: str(x?.guidance, `${at} safety rule ${i + 1} escalation guidance`, { required: true, max: 800 }) ?? "",
+            };
+          });
+          if (!safety.length) unfinished(`${at} needs at least one safety rule: what stops the scene, and the escalation guidance for this role.`);
+          const minTurns = num(r.minTurns, TURN_RANGE.min, TURN_RANGE.max, 3);
+          const href = typeof r.guidanceHref === "string" ? r.guidanceHref.trim() : "";
+          return {
+            roleplay: {
+              goal: str(r.goal, `${at}: what they’re practising`, { required: true, max: 300 }) ?? "",
+              learnerRole: str(r.learnerRole, `${at}: who the learner is`, { required: true, max: 200 }) ?? "",
+              facts: texts(r.facts, "fact", 300, 8),
+              profile: str(r.profile, `${at}: who the character is`, { required: true, max: 2000 }) ?? "",
+              opening: str(r.opening, `${at}: the opening line`, { required: true, max: 600 }) ?? "",
+              meterTitle: str(r.meterTitle, `${at} indicator title`, { max: 60 }) || DEFAULT_METER,
+              states,
+              // It can't start in the last state: that one is only reached by a safety rule.
+              start: Math.min(Math.max(0, states.length - 2), num(r.start, 0, 5, 1)),
+              hideMeter: r.hideMeter === true,
+              minTurns,
+              maxTurns: Math.max(minTurns, num(r.maxTurns, TURN_RANGE.min, TURN_RANGE.max, 6)),
+              moves,
+              risks,
+              safety,
+              guidanceLabel: str(r.guidanceLabel, `${at} guidance`, { max: 120 }) ?? "",
+              // A page on the Hub or a web address; anything else is dropped.
+              guidanceHref: href && safeHref(href) ? href.slice(0, 300) : "",
+              voice: r.voice === true,
+            },
+          };
+        })();
         return {
           ...base,
           type: "conversation",
           ...photo(o, where),
+          ...scene,
           person: str(o.person, `${where} person`, { required: true, max: 80 }) ?? "",
           role: str(o.role, `${where} role`, { max: 120 }) ?? "",
           setting: str(o.setting, `${where} setting`, { max: 600 }) ?? "",
@@ -1444,6 +1527,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           ...(o.anonymous === true && { anonymous: true }),
         };
       }
+      case "signal":
+        return { ...base, type: "signal", ...parseSignal(o, where, { str, idOf, list, unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -1857,6 +1942,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "action") extra += 1;
     if (b.type === "reflection") extra += 3;
     if (b.type === "budget") extra += 3;
+    if (b.type === "signal") extra += 12;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

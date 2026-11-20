@@ -37,6 +37,8 @@ import { RichText } from "../RichText";
 import type { ReaderNote } from "@/server/magazine";
 import { ReflectBlock } from "./ReflectBlocks";
 import { GuidePlayer } from "./LearningGuide";
+import { Roleplay } from "./Roleplay";
+import { SignalCase } from "./SignalCase";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -108,7 +110,7 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
     case "branching":
       return <Branching block={b} ctx={ctx} />;
     case "conversation":
-      return <Conversation block={b} ctx={ctx} />;
+      return <ConversationPractice block={b} ctx={ctx} />;
     case "spot":
       return <Spot block={b} ctx={ctx} />;
     case "confidence":
@@ -117,6 +119,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <Reflection block={b} ctx={ctx} />;
     case "budget":
       return <Budget block={b} ctx={ctx} />;
+    case "signal":
+      return <SignalCase block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":
@@ -1926,5 +1930,28 @@ function FillBlank({ block: b, ctx }: { block: FillBlankBlock; ctx: InteractiveC
       )}
       {checked && <Checked score={score} total={gaps.length} feedback={b.feedback} onRetry={score < gaps.length ? () => setChecked(false) : undefined} />}
     </div>
+  );
+}
+
+/**
+  A conversation practice is either free conversation (the learner types or speaks, lib/roleplay) or a
+  choice of responses. A block set to free conversation still has its choices: they're what the learner
+  gets if they'd rather, or if the character can't reply.
+*/
+function ConversationPractice({ block: b, ctx }: { block: ConversationBlock; ctx: InteractiveContext }) {
+  const [choices, setChoices] = useState(false);
+  const scene = b.roleplay;
+  if (scene && !choices) return <Roleplay block={{ ...b, roleplay: scene }} ctx={ctx} onChoices={() => setChoices(true)} />;
+  return (
+    <>
+      <Conversation block={b} ctx={ctx} />
+      {scene && (
+        <p className="mx-auto mt-2 w-full max-w-[46rem]">
+          <button type="button" className="min-h-11 font-semibold text-accent underline-offset-4 hover:underline" onClick={() => setChoices(false)}>
+            Back to saying it in your own words
+          </button>
+        </p>
+      )}
+    </>
   );
 }

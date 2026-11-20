@@ -16,8 +16,12 @@ async function openai(path: string, body: unknown, timeout = 120_000) {
   try {
     res = await fetch(`https://api.openai.com/v1/${path}`, {
       method: "POST",
-      headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      // A form (an audio file to transcribe) sets its own content type.
+      headers:
+        body instanceof FormData
+          ? { authorization: `Bearer ${process.env.OPENAI_API_KEY}` }
+          : { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
+      body: body instanceof FormData ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
       cache: "no-store",
     });
@@ -73,6 +77,22 @@ export async function openaiJson<T>(prompt: string, check: (value: unknown) => s
 }
 
 /** OpenAI's voices for the Audio Guide, with how each sounds. */
+/**
+  Speech to text, for a learner who speaks a roleplay reply. The audio goes to OpenAI and comes back as
+  words; nothing here keeps it. English, and told only that it's a short spoken reply.
+*/
+export async function openaiTranscribe(audio: Blob, filename: string): Promise<string> {
+  if (!openaiReady()) throw new HttpError(503, "Speech isn’t available: OpenAI isn’t connected. You can type instead.");
+  const form = new FormData();
+  form.set("file", audio, filename);
+  form.set("model", process.env.OPENAI_STT_MODEL || "gpt-4o-mini-transcribe");
+  form.set("language", "en");
+  form.set("response_format", "json");
+  const r = await openai("audio/transcriptions", form, 45_000);
+  const d = (await r.json()) as { text?: string };
+  return (d.text ?? "").trim();
+}
+
 export const OPENAI_VOICES: { id: string; label: string }[] = [
   { id: "sage", label: "Sage: calm and warm" },
   { id: "coral", label: "Coral: bright and friendly" },

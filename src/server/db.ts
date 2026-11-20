@@ -1059,6 +1059,59 @@ export function ensureOnboarding(db: { exec: (sql: string) => void }) {
   onboardingReady.add(db);
 }
 
+/*
+  Conversational roleplay (lib/roleplay, server/roleplay): a learner's attempts at a free-conversation
+  practice and the turns in each. The words are the learner's own: only they can read them back. No audio
+  is ever stored. Each attempt keeps the edition and a hash of the scene it was run against.
+*/
+export const ROLEPLAY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS roleplay_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), scene_hash TEXT NOT NULL, engine TEXT NOT NULL DEFAULT '',
+  state INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('active', 'finished')),
+  outcome TEXT, safety_rule TEXT, debrief_seen_at TEXT, started_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS roleplay_attempts_user ON roleplay_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS roleplay_turns (
+  attempt_id TEXT NOT NULL REFERENCES roleplay_attempts(id), n INTEGER NOT NULL, turn_id TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('text', 'voice')), text TEXT NOT NULL,
+  -- What speech recognition heard, when the learner corrected it before sending. Superseded by text.
+  heard TEXT, moves TEXT NOT NULL DEFAULT '[]', risks TEXT NOT NULL DEFAULT '[]', unclear INTEGER NOT NULL DEFAULT 0,
+  state_before INTEGER NOT NULL, state_after INTEGER NOT NULL, reply TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '', at TEXT NOT NULL,
+  PRIMARY KEY (attempt_id, n), UNIQUE (attempt_id, turn_id)
+);
+`;
+const roleplayReady = new WeakSet<object>();
+/** Makes sure the roleplay tables are there, for a server that was already running when they were added. */
+export function ensureRoleplay(db: { exec: (sql: string) => void }) {
+  if (roleplayReady.has(db)) return;
+  db.exec(ROLEPLAY_SCHEMA);
+  roleplayReady.add(db);
+}
+
+/*
+  Spot the Signal (lib/signal, server/signal): a learner's attempt at a case. What they highlighted, chose
+  and wrote is theirs and only they read it back; authors see totals. Each attempt keeps the edition and a
+  hash of the case and its answers, so a later change to the case doesn't rewrite a past result.
+*/
+export const SIGNAL_SCHEMA = `
+CREATE TABLE IF NOT EXISTS signal_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), key_hash TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), retries INTEGER NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS signal_attempts_user ON signal_attempts (user_id, guide_id, block_id);
+`;
+const signalReady = new WeakSet<object>();
+/** Makes sure the Spot the Signal table is there, for a server that was already running when it was added. */
+export function ensureSignal(db: { exec: (sql: string) => void }) {
+  if (signalReady.has(db)) return;
+  db.exec(SIGNAL_SCHEMA);
+  signalReady.add(db);
+}
+
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
@@ -1067,6 +1120,8 @@ export function migrate(db: Db) {
   db.exec(DISCOVERY_SCHEMA);
   db.exec(CAPABILITY_SCHEMA);
   db.exec(ONBOARDING_SCHEMA);
+  db.exec(ROLEPLAY_SCHEMA);
+  db.exec(SIGNAL_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

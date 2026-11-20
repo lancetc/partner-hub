@@ -32,6 +32,7 @@ import { questionsInGuide } from "@/lib/questionPool";
 import { afterPublish, publishGate } from "./questionPool";
 import { guideForReaders, guideIdentity } from "./learningGuide";
 import { reviewRequired } from "./topicApproval";
+import { signalApproved, signalForReaders } from "@/lib/signal";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -240,6 +241,28 @@ export function practiceSummary(doc: GuideDoc) {
 /** The document without its self-review questions, for a reader. */
 const withoutPractice = (doc: GuideDoc): GuideDoc => ({ schema: doc.schema, pages: doc.pages, ...(doc.audio && { audio: doc.audio }) });
 
+/**
+  A conversation practice's scene, for a reader: what they're told going in, without the character's
+  profile, the list of moves it's read against, or the safety rules. Those stay on the server.
+*/
+const withoutScenes = (doc: GuideDoc): GuideDoc => ({
+  ...doc,
+  pages: doc.pages.map((p) => ({
+    ...p,
+    sections: p.sections.map((s) => ({
+      ...s,
+      blocks: s.blocks.map((b) =>
+        b.type === "conversation" && b.roleplay
+          ? { ...b, roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] } }
+          : // Spot the Signal: the case, without what marks an answer right.
+            b.type === "signal"
+            ? signalForReaders(b)
+            : b,
+      ),
+    })),
+  })),
+});
+
 /** A published course the person may read, or 404: outside the audience looks the same as not existing. */
 function publishedFor(db: Db, user: User, slugOrId: string) {
   const g = guideBySlug(db, slugOrId) ?? guideById(db, slugOrId);
@@ -418,7 +441,7 @@ export function readGuide(db: Db, user: User, slug: string) {
     publishedAt: r.published_at,
     completion: r.completion,
     // Guide recordings only when they're cleared to play (and not withdrawn); never the self-review answers.
-    doc: withoutPractice(guideForReaders(db, doc)),
+    doc: withoutScenes(withoutPractice(guideForReaders(db, doc))),
     /** The Hub's AI Learning Guide: its name, introduction and portrait. */
     guide: guideIdentity(db),
     /** Self-review: on, and how many questions each page has (null when it's off). */
@@ -616,6 +639,7 @@ export function recordGuideEvent(
           "conversation",
           "spot",
           "budget",
+          "signal",
           "process",
           "flashcards",
           "video",
@@ -993,6 +1017,22 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     throw Object.assign(new HttpError(400, `Resolve ${blocking.length === 1 ? "1 check" : `${blocking.length} checks`} before publishing.`), {
       problems: blocking,
     });
+  // One thing "Publish anyway" can't waive: a Spot the Signal case teaches a regulatory judgement, so it never
+  // reaches learners without its Clinical and Quality approval and source version on record.
+  const unapproved = allBlocks(readGuideDoc(a.doc, { draft: true })).filter((b) => b.type === "signal" && !signalApproved(b));
+  if (unapproved.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A Spot the Signal case needs its Clinical and Quality approval and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unapproved.map(
+          (b) =>
+            `“${b.type === "signal" ? b.title : ""}”: record the content owner, clinical reviewer, Quality reviewer, approval date, and the policy source and version.`,
+        ),
+      },
+    );
   // The Question Pool's gate (only when "require approval" is on): every question an approved version.
   publishGate(db, questionsInGuide({ id: a.id, title: a.title, audience: "" }, readGuideDoc(a.doc, { draft: true }), "next", true), now);
   const prev = a.publishedRevisionId ? revisionById(db, a.publishedRevisionId) : undefined;

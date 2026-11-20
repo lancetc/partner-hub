@@ -23,6 +23,8 @@ import { DescribeButton, ImageDropZone, PictureButtons } from "./ImagePicker";
 import { RichEditable } from "./RichEditable";
 import { InlineText, MediaSlot, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { column } from "../magazine/GuideBlocks";
+import { RoleplaySettings } from "./MagazineRoleplayEdit";
+import { SignalEdit } from "./MagazineSignalEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -203,6 +205,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <ReflectionEdit block={b} update={update} />;
     case "budget":
       return <BudgetEdit block={b} update={update} />;
+    case "signal":
+      return <SignalEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1246,11 +1250,8 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
       );
     }
     case "conversation":
-      return (
-        <p className="text-sm text-ink-muted">
-          Each turn, readers choose what to say and see your coaching and how {b.person || "the person"} replies. Each turn needs a best response.
-        </p>
-      );
+      // Choices only, or free conversation as well (the scene an AI character works within).
+      return <RoleplaySettings block={b} update={update} />;
     case "spot":
       return (
         <>
@@ -1382,6 +1383,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
             post. Answers carry over when you publish a new edition, as long as the block stays.
           </p>
         </>
+      );
+    case "signal":
+      return (
+        <p className="text-sm text-ink-muted">
+          A training case: nothing a learner does in it contacts anyone. Its answers are a regulatory judgement, so it can’t be published until Clinical and
+          Quality approval and the source version are recorded in the block. Use Preview to work it through as a learner.
+        </p>
       );
     case "budget":
       return <p className="text-sm text-ink-muted">The figures are for practice. Flag the block Illustrative below so reviewers know they’re made up.</p>;
