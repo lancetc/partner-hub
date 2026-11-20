@@ -1122,6 +1122,38 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
+  (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
+*/
+export const MENTOR_SCHEMA = `
+CREATE TABLE IF NOT EXISTS mentor_notes (
+  id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, author_user TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT,
+  PRIMARY KEY (id, version)
+);
+CREATE TABLE IF NOT EXISTS mentor_note_helpful (
+  note_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), at TEXT NOT NULL, PRIMARY KEY (note_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS mentor_note_saves (
+  user_id TEXT NOT NULL REFERENCES users(id), note_id TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY (user_id, note_id)
+);
+CREATE TABLE IF NOT EXISTS mentor_note_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL, note_id TEXT NOT NULL, version INTEGER NOT NULL, event TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), state TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, started_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+`;
+const mentorReady = new WeakSet<object>();
+/** Makes sure the Notes to a Younger Me tables are there, for a server already running when they were added. */
+export function ensureMentorNotes(db: { exec: (sql: string) => void }) {
+  if (mentorReady.has(db)) return;
+  db.exec(MENTOR_SCHEMA);
+  mentorReady.add(db);
+}
+
+/*
   Red Pen (lib/redpen, server/redpen): a learner's critique: the autosaved draft, every submission (the first is
   never changed), whether they compared, and a private reflection. Each attempt keeps a hash of the rubric.
 */
@@ -1375,6 +1407,7 @@ export function migrate(db: Db) {
   db.exec(MYTHS_SCHEMA);
   db.exec(BATON_SCHEMA);
   db.exec(REDPEN_SCHEMA);
+  db.exec(MENTOR_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

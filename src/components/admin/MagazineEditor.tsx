@@ -145,6 +145,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   myths: "flashcards",
   baton: "route",
   redpen: "pen",
+  mentor: "mail",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -191,6 +192,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   myths: "Client questions from the tile library: a 30-second answer, the exception, the source, and an approved reply to copy.",
   baton: "A role-handoff relay: pass the right facts to the right person, name an owner, confirm receipt, escalate what’s urgent.",
   redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
+  mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -227,7 +229,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "baton", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
-  { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "confidence"] },
+  { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "mentor", "confidence"] },
 ];
 
 /** A new, empty block of each kind. Ids are unique across the guide (choices included). */
@@ -455,6 +457,9 @@ function newBlock(item: PaletteItem): Block {
     case "benchmark":
       // Starts from the missed check-in case, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshBenchmark(BENCHMARK_CASES[0].data) };
+    case "mentor":
+      // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
+      return { id, type, title: "Notes to a younger me", intro: "", topics: ["boundaries", "calls"], audiences: [], selection: "hybrid", noteIds: [], count: 3, deal: true, contribute: false, mode: "read", reflection: "Which part would you keep, in your own words?" };
     case "redpen":
       // Starts from Dot's care plan goal, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshRedPen(REDPEN_CASES[0].data) };
@@ -644,6 +649,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.clinical;
     case "redpen":
       return !b.approval.owner && !b.approval.clinical;
+    case "mentor":
+      return !b.noteIds.length && !b.topics.length;
   }
 }
 

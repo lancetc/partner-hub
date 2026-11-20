@@ -569,6 +569,33 @@ export const posts: Post[] = [
       },
     ],
   },
+  // The canonical threads for the "Notes to a Younger Me" seed cards (docs/notes-to-a-younger-me.md). Illustrative cards with fictional mentors.
+  ...(
+    [
+      ["note-thread-gardener", "“I thought saying yes to everything made me a good Care Partner.”", "A warm boundary is still help."],
+      [
+        "note-thread-fix-today",
+        "“I thought every call had to end with the problem fixed.”",
+        "People cope with ‘not yet’ better than a promise that falls through.",
+      ],
+      ["note-thread-silence", "“I thought silence on the phone meant I’d said something wrong.”", "A pause is often someone taking it in."],
+      [
+        "note-thread-number",
+        "“I thought giving clients my personal number showed I cared.”",
+        "Caring includes making sure help reaches the right person at any hour.",
+      ],
+      ["note-thread-ask", "“I thought asking for help meant I wasn’t ready for the job.”", "Asking early is part of the job."],
+    ] as const
+  ).map(([id, title, line], i): Post => ({
+    id,
+    space: "start",
+    authorId: "maya",
+    hoursAgo: 24 * (3 + i),
+    title: `Note to a younger me: ${title}`,
+    body: `An illustrative card from the Notes to a Younger Me deck, with a fictional mentor. ${line}\n\nWhat would you tell your week-three self? Talk about the moment, not real clients: please leave out names and details that could identify anyone.`,
+    likes: 6 + i,
+    comments: [],
+  })),
 ];
 
 export type CommunityEvent = {

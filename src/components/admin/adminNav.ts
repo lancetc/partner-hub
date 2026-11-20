@@ -80,6 +80,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
+        href: "/admin/mentor-notes",
+        label: "Mentor notes",
+        icon: "mail",
+        description: "Notes to a Younger Me: review contributed notes, approve edits, flag or withdraw cards.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/myths",
         label: "Myth vs Reality",
         icon: "flashcards",

@@ -36,6 +36,7 @@ import { BenchmarkEdit } from "./MagazineBenchmarkEdit";
 import { MythEdit } from "./MagazineMythEdit";
 import { BatonEdit } from "./MagazineBatonEdit";
 import { RedPenEdit } from "./MagazineRedPenEdit";
+import { NotesDeckEdit } from "./MagazineNotesEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -240,6 +241,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <BatonEdit block={b} update={update} />;
     case "redpen":
       return <RedPenEdit block={b} update={update} />;
+    case "mentor":
+      return <NotesDeckEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1472,6 +1475,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A fictional journey: story times are never wait estimates. The course can’t be published until Care Operations, Clinical, Quality, Privacy and
           Communications sign-off is recorded in the block.
+        </p>
+      );
+    case "mentor":
+      return (
+        <p className="text-sm text-ink-muted">
+          Cards come from the note library (Admin, then Mentor notes). Only reviewed notes are dealt; the course can’t be published while a pinned card
+          isn’t reviewed or the topic has too few reviewed notes.
         </p>
       );
     case "redpen":

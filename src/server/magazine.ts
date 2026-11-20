@@ -42,6 +42,7 @@ import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
 import { journeyApproved, journeyForReaders } from "@/lib/journey";
 import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 import { unpublishableTiles } from "./myths";
+import { deckProblems } from "./notes";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 
@@ -689,6 +690,7 @@ export function recordGuideEvent(
           "myths",
           "baton",
           "redpen",
+          "mentor",
           "process",
           "flashcards",
           "video",
@@ -1128,6 +1130,13 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
             `“${b.type === "baton" ? b.title : ""}”: record the content owner, the Clinical, Care Operations, Finance, Quality and Privacy reviewers, the date, the policy or SOP IDs, and a review date that hasn’t passed.`,
         ),
       },
+    );
+  // And Notes to a Younger Me: pinned cards must be reviewed, and a pool needs enough reviewed notes on its topic.
+  const undealt = draftBlocks.flatMap((b) => (b.type === "mentor" ? deckProblems(db, b, now) : []));
+  if (undealt.length)
+    throw Object.assign(
+      new HttpError(400, "A Notes to a Younger Me deck needs reviewed notes before the course can be published. “Publish anyway” doesn’t cover this."),
+      { problems: undealt },
     );
   // And Myth vs Reality: every tile it shows needs an approved version in the library that isn't under review.
   const untiled = draftBlocks.flatMap((b) => (b.type === "myths" ? unpublishableTiles(db, b.tileIds, now) : []));

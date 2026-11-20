@@ -16,6 +16,7 @@ import { parseBenchmark, type BenchmarkBlockData } from "./benchmark";
 import { parseMythBlock, type MythBlockData } from "./myths";
 import { parseBaton, type BatonBlockData } from "./baton";
 import { parseRedPen, type RedPenBlockData } from "./redpen";
+import { parseNotesDeck, type NotesDeckData } from "./notes";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -475,7 +476,8 @@ export type Block =
   | BenchmarkBlock
   | MythBlock
   | BatonBlock
-  | RedPenBlock;
+  | RedPenBlock
+  | NotesDeckBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -500,6 +502,8 @@ export type MythBlock = Base & { type: "myths" } & MythBlockData;
 export type BatonBlock = Base & { type: "baton" } & BatonBlockData;
 /** Red Pen (lib/redpen): critique and rewrite a flawed care plan goal or progress note from a fictional case. */
 export type RedPenBlock = Base & { type: "redpen" } & RedPenBlockData;
+/** Notes to a Younger Me (lib/notes): a deck of mentor cards from the reviewed note library. */
+export type NotesDeckBlock = Base & { type: "mentor" } & NotesDeckData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -707,6 +711,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   myths: "Myth vs Reality tiles",
   baton: "Pass the Baton relay",
   redpen: "Red Pen critique",
+  mentor: "Notes to a Younger Me deck",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1606,6 +1611,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "baton", ...parseBaton(o, where, { str, idOf, list, unfinished }) };
       case "redpen":
         return { ...base, type: "redpen", ...parseRedPen(o, where, { str, idOf, list, unfinished }) };
+      case "mentor":
+        return { ...base, type: "mentor", ...parseNotesDeck(o, where, { str, unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -2031,6 +2038,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "myths") extra += b.tileIds.length;
     if (b.type === "baton") extra += 12;
     if (b.type === "redpen") extra += 8;
+    if (b.type === "mentor") extra += b.count;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }
