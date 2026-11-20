@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
-import type { ConversationBlock } from "@/lib/magazine";
+import type { ConversationBlock, PhoneCallBlock } from "@/lib/magazine";
 import { blankRoleplay, DEFAULT_STATES, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "@/lib/roleplay";
 import type { testTurn, voiceStatus } from "@/server/roleplay";
 import { btn, ErrorNote, Field, input } from "./ui";
@@ -20,7 +20,9 @@ import { Icon } from "../Icon";
 type Voice = ReturnType<typeof voiceStatus>;
 type Tested = Awaited<ReturnType<typeof testTurn>>;
 
-export function RoleplaySettings({ block: b, update }: { block: ConversationBlock; update: Update }) {
+export function RoleplaySettings({ block: b, update }: { block: ConversationBlock | PhoneCallBlock; update: Update }) {
+  // A Tough Phone Call is always free conversation: it has no choices to fall back to, so it can't be turned off.
+  const call = b.type === "phonecall";
   const scene = b.roleplay;
   const set = (fn: (s: Roleplay) => void, tag?: string) =>
     update<ConversationBlock>(b.id, (x) => void (x.roleplay && fn(x.roleplay)), tag && `${b.id}:rp:${tag}`);
@@ -41,11 +43,13 @@ export function RoleplaySettings({ block: b, update }: { block: ConversationBloc
     );
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-ink-muted">
-        <strong className="text-ink">Free conversation is on.</strong> Learners type or speak; an AI plays {b.person || "the character"} inside the scene below.
-        It can only use what you write here, and it never writes the feedback: the debrief is your wording with the learner’s own words as evidence. The choices
-        in the block are still there for anyone who’d rather choose, or if the character can’t reply.
-      </p>
+      {!call && (
+        <p className="text-sm text-ink-muted">
+          <strong className="text-ink">Free conversation is on.</strong> Learners type or speak; an AI plays {b.person || "the character"} inside the scene
+          below. It can only use what you write here, and it never writes the feedback: the debrief is your wording with the learner’s own words as evidence.
+          The choices in the block are still there for anyone who’d rather choose, or if the character can’t reply.
+        </p>
+      )}
       <Field label="What they’re practising">
         <input className={input} value={scene.goal} maxLength={300} onChange={(e) => set((s) => void (s.goal = e.target.value), "goal")} />
       </Field>
@@ -293,16 +297,18 @@ export function RoleplaySettings({ block: b, update }: { block: ConversationBloc
       <VoiceSwitch scene={scene} onChange={(on) => set((s) => void (s.voice = on))} />
       <TryScene block={b} />
 
-      <button
-        type="button"
-        className={btn.quiet}
-        onClick={() => {
-          if (window.confirm("Turn free conversation off for this block? The scene you’ve written here is removed. The choices stay."))
-            update<ConversationBlock>(b.id, (x) => void delete x.roleplay);
-        }}
-      >
-        Turn free conversation off
-      </button>
+      {!call && (
+        <button
+          type="button"
+          className={btn.quiet}
+          onClick={() => {
+            if (window.confirm("Turn free conversation off for this block? The scene you’ve written here is removed. The choices stay."))
+              update<ConversationBlock>(b.id, (x) => void delete x.roleplay);
+          }}
+        >
+          Turn free conversation off
+        </button>
+      )}
     </div>
   );
 }
@@ -360,7 +366,7 @@ function VoiceSwitch({ scene, onChange }: { scene: Roleplay; onChange: (on: bool
 }
 
 /** Try a reply against the scene as written, and see why it came out the way it did. Nothing is stored. */
-function TryScene({ block }: { block: ConversationBlock }) {
+function TryScene({ block }: { block: ConversationBlock | PhoneCallBlock }) {
   const [text, setText] = useState("");
   const [out, setOut] = useState<Tested | null>(null);
   const [problem, setProblem] = useState<string | null>(null);

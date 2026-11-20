@@ -164,6 +164,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <PlaybookBlockView block={b} ctx={ctx} />;
     case "auditor":
       return <DocumentAuditor block={b} ctx={ctx} />;
+    case "phonecall":
+      return <Roleplay block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

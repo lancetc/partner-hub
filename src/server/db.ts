@@ -1081,6 +1081,13 @@ CREATE TABLE IF NOT EXISTS roleplay_turns (
   reason TEXT NOT NULL DEFAULT '', at TEXT NOT NULL,
   PRIMARY KEY (attempt_id, n), UNIQUE (attempt_id, turn_id)
 );
+-- A Tough Phone Call's simulated lookups (lib/phonecall): which case tool, after how many turns. Each once per attempt.
+CREATE TABLE IF NOT EXISTS roleplay_lookups (
+  attempt_id TEXT NOT NULL REFERENCES roleplay_attempts(id), action_id TEXT NOT NULL, after_turn INTEGER NOT NULL, at TEXT NOT NULL,
+  PRIMARY KEY (attempt_id, action_id)
+);
+-- "Rewrite a line" after a phone call's debrief: counted, never stored as a turn.
+CREATE TABLE IF NOT EXISTS roleplay_rewrites (attempt_id TEXT NOT NULL REFERENCES roleplay_attempts(id), n INTEGER NOT NULL, at TEXT NOT NULL);
 `;
 const roleplayReady = new WeakSet<object>();
 /** Makes sure the roleplay tables are there, for a server that was already running when they were added. */

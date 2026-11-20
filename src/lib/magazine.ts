@@ -3,7 +3,7 @@ import { parseVideoLink } from "./videoLinks";
 import { narrationState, pageSnapshot } from "./magazineNarration";
 import { reviewChecks } from "./magazineReview";
 import { guideChecks, type GuideMode, type GuidePurpose } from "./magazineGuide";
-import { DEFAULT_METER, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "./roleplay";
+import { blankRoleplay, DEFAULT_METER, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "./roleplay";
 import { parseSignal, type SignalBlockData } from "./signal";
 import { parseMission, type MissionBlockData } from "./mission";
 import { parseBalance, type BalanceBlockData } from "./balance";
@@ -19,6 +19,7 @@ import { parseRedPen, type RedPenBlockData } from "./redpen";
 import { parseNotesDeck, type NotesDeckData } from "./notes";
 import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
 import { parseAuditor, type AuditorBlockData } from "./auditor";
+import { parsePhoneCase, type PhoneCallData } from "./phonecall";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -481,7 +482,8 @@ export type Block =
   | RedPenBlock
   | NotesDeckBlock
   | PlaybookBlock
-  | AuditorBlock;
+  | AuditorBlock
+  | PhoneCallBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -512,6 +514,8 @@ export type NotesDeckBlock = Base & { type: "mentor" } & NotesDeckData;
 export type PlaybookBlock = Base & { type: "playbook" } & PlaybookBlockData;
 /** Document Auditor (lib/auditor): a fictional contractor pack or invoice, inspected and marked, then Approve, Query or Reject current submission. */
 export type AuditorBlock = Base & { type: "auditor" } & AuditorBlockData;
+/** Tough Phone Call (lib/phonecall): a telephone preset of the conversational roleplay, with case tools, a privacy gate and a 0 to 3 debrief. */
+export type PhoneCallBlock = Base & { type: "phonecall" } & PhoneCallData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -725,6 +729,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   mentor: "Notes to a Younger Me deck",
   playbook: "Live SOP playbook",
   auditor: "Document Auditor",
+  phonecall: "Tough Phone Call",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -926,6 +931,69 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     const raw = Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
     if (raw.length > max) problems.push(`${where} has more than ${max} ${what}.`);
     return raw.slice(0, max);
+  };
+
+  /** The free-conversation scene a model works within: every part of it authored, and required. Shared by conversations and phone calls. */
+  const readRoleplay = (v: unknown, at: string): Roleplay | undefined => {
+    const r = v as Record<string, unknown> | undefined;
+    if (!r || typeof r !== "object") return undefined;
+    const texts = (v: unknown, what: string, max: number, n: number) =>
+      (Array.isArray(v) ? v : [])
+        .slice(0, n)
+        .map((x, i) => str(x, `${at} ${what} ${i + 1}`, { max }) ?? "")
+        .filter(Boolean);
+    const num = (v: unknown, lo: number, hi: number, d: number) =>
+      Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, Math.round(Number(v)))) : d;
+    const states = texts(r.states, "state", 40, 6);
+    if (states.length < 3) unfinished(`${at} needs at least 3 states, the last one for a safety concern.`);
+    const moves = list(r.moves, at, "things worth doing", 10).map((m, i) => ({
+      id: idOf(m?.id, `${at} good move ${i + 1}`),
+      dimension: (typeof m?.dimension === "string" && m.dimension in DIMENSIONS ? m.dimension : "listening") as Dimension,
+      text: str(m?.text, `${at} good move ${i + 1}`, { required: true, max: 200 }) ?? "",
+      example: str(m?.example, `${at} good move ${i + 1} example`, { max: 300 }) ?? "",
+    }));
+    if (moves.length < 2) unfinished(`${at} needs at least 2 things worth doing, so the debrief has something to point to.`);
+    const risks = list(r.risks, at, "unsafe moves", 10).map((x, i) => ({
+      id: idOf(x?.id, `${at} unsafe move ${i + 1}`),
+      text: str(x?.text, `${at} unsafe move ${i + 1}`, { required: true, max: 200 }) ?? "",
+      caution: str(x?.caution, `${at} unsafe move ${i + 1} caution`, { required: true, max: 600 }) ?? "",
+    }));
+    if (!risks.length) unfinished(`${at} needs at least one unsafe move, with the caution to show for it.`);
+    const safety = list(r.safety, at, "safety rules", 8).map((x, i) => {
+      const phrases = texts(x?.phrases, `safety rule ${i + 1} phrase`, 60, 20).filter((p) => p.length >= 3);
+      if (!phrases.length) unfinished(`${at} safety rule ${i + 1} needs at least one phrase to listen for.`);
+      return {
+        id: idOf(x?.id, `${at} safety rule ${i + 1}`),
+        label: str(x?.label, `${at} safety rule ${i + 1}`, { required: true, max: 80 }) ?? "",
+        phrases,
+        response: str(x?.response, `${at} safety rule ${i + 1}: what the learner sees`, { required: true, max: 600 }) ?? "",
+        guidance: str(x?.guidance, `${at} safety rule ${i + 1} escalation guidance`, { required: true, max: 800 }) ?? "",
+      };
+    });
+    if (!safety.length) unfinished(`${at} needs at least one safety rule: what stops the scene, and the escalation guidance for this role.`);
+    const minTurns = num(r.minTurns, TURN_RANGE.min, TURN_RANGE.max, 3);
+    const href = typeof r.guidanceHref === "string" ? r.guidanceHref.trim() : "";
+    return {
+      goal: str(r.goal, `${at}: what they’re practising`, { required: true, max: 300 }) ?? "",
+      learnerRole: str(r.learnerRole, `${at}: who the learner is`, { required: true, max: 200 }) ?? "",
+      facts: texts(r.facts, "fact", 300, 8),
+      profile: str(r.profile, `${at}: who the character is`, { required: true, max: 2000 }) ?? "",
+      opening: str(r.opening, `${at}: the opening line`, { required: true, max: 600 }) ?? "",
+      meterTitle: str(r.meterTitle, `${at} indicator title`, { max: 60 }) || DEFAULT_METER,
+      states,
+      // It can't start in the last state: that one is only reached by a safety rule.
+      start: Math.min(Math.max(0, states.length - 2), num(r.start, 0, 5, 1)),
+      hideMeter: r.hideMeter === true,
+      minTurns,
+      maxTurns: Math.max(minTurns, num(r.maxTurns, TURN_RANGE.min, TURN_RANGE.max, 6)),
+      moves,
+      risks,
+      safety,
+      guidanceLabel: str(r.guidanceLabel, `${at} guidance`, { max: 120 }) ?? "",
+      // A page on the Hub or a web address; anything else is dropped.
+      guidanceHref: href && safeHref(href) ? href.slice(0, 300) : "",
+      voice: r.voice === true,
+    };
   };
 
   const block = (v: unknown, where: string): Block | null => {
@@ -1222,70 +1290,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         const raw = list(o.turns, where, "turns", 12);
         if (!raw.length) unfinished(`${where} needs at least one turn.`);
         // Free conversation: every part of the scene a model works within is authored here, and required.
-        const scene = ((): { roleplay?: Roleplay } => {
-          const r = o.roleplay as Record<string, unknown> | undefined;
-          if (!r || typeof r !== "object") return {};
-          const at = `${where} free conversation`;
-          const texts = (v: unknown, what: string, max: number, n: number) =>
-            (Array.isArray(v) ? v : [])
-              .slice(0, n)
-              .map((x, i) => str(x, `${at} ${what} ${i + 1}`, { max }) ?? "")
-              .filter(Boolean);
-          const num = (v: unknown, lo: number, hi: number, d: number) =>
-            Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, Math.round(Number(v)))) : d;
-          const states = texts(r.states, "state", 40, 6);
-          if (states.length < 3) unfinished(`${at} needs at least 3 states, the last one for a safety concern.`);
-          const moves = list(r.moves, at, "things worth doing", 10).map((m, i) => ({
-            id: idOf(m?.id, `${at} good move ${i + 1}`),
-            dimension: (typeof m?.dimension === "string" && m.dimension in DIMENSIONS ? m.dimension : "listening") as Dimension,
-            text: str(m?.text, `${at} good move ${i + 1}`, { required: true, max: 200 }) ?? "",
-            example: str(m?.example, `${at} good move ${i + 1} example`, { max: 300 }) ?? "",
-          }));
-          if (moves.length < 2) unfinished(`${at} needs at least 2 things worth doing, so the debrief has something to point to.`);
-          const risks = list(r.risks, at, "unsafe moves", 10).map((x, i) => ({
-            id: idOf(x?.id, `${at} unsafe move ${i + 1}`),
-            text: str(x?.text, `${at} unsafe move ${i + 1}`, { required: true, max: 200 }) ?? "",
-            caution: str(x?.caution, `${at} unsafe move ${i + 1} caution`, { required: true, max: 600 }) ?? "",
-          }));
-          if (!risks.length) unfinished(`${at} needs at least one unsafe move, with the caution to show for it.`);
-          const safety = list(r.safety, at, "safety rules", 8).map((x, i) => {
-            const phrases = texts(x?.phrases, `safety rule ${i + 1} phrase`, 60, 20).filter((p) => p.length >= 3);
-            if (!phrases.length) unfinished(`${at} safety rule ${i + 1} needs at least one phrase to listen for.`);
-            return {
-              id: idOf(x?.id, `${at} safety rule ${i + 1}`),
-              label: str(x?.label, `${at} safety rule ${i + 1}`, { required: true, max: 80 }) ?? "",
-              phrases,
-              response: str(x?.response, `${at} safety rule ${i + 1}: what the learner sees`, { required: true, max: 600 }) ?? "",
-              guidance: str(x?.guidance, `${at} safety rule ${i + 1} escalation guidance`, { required: true, max: 800 }) ?? "",
-            };
-          });
-          if (!safety.length) unfinished(`${at} needs at least one safety rule: what stops the scene, and the escalation guidance for this role.`);
-          const minTurns = num(r.minTurns, TURN_RANGE.min, TURN_RANGE.max, 3);
-          const href = typeof r.guidanceHref === "string" ? r.guidanceHref.trim() : "";
-          return {
-            roleplay: {
-              goal: str(r.goal, `${at}: what they’re practising`, { required: true, max: 300 }) ?? "",
-              learnerRole: str(r.learnerRole, `${at}: who the learner is`, { required: true, max: 200 }) ?? "",
-              facts: texts(r.facts, "fact", 300, 8),
-              profile: str(r.profile, `${at}: who the character is`, { required: true, max: 2000 }) ?? "",
-              opening: str(r.opening, `${at}: the opening line`, { required: true, max: 600 }) ?? "",
-              meterTitle: str(r.meterTitle, `${at} indicator title`, { max: 60 }) || DEFAULT_METER,
-              states,
-              // It can't start in the last state: that one is only reached by a safety rule.
-              start: Math.min(Math.max(0, states.length - 2), num(r.start, 0, 5, 1)),
-              hideMeter: r.hideMeter === true,
-              minTurns,
-              maxTurns: Math.max(minTurns, num(r.maxTurns, TURN_RANGE.min, TURN_RANGE.max, 6)),
-              moves,
-              risks,
-              safety,
-              guidanceLabel: str(r.guidanceLabel, `${at} guidance`, { max: 120 }) ?? "",
-              // A page on the Hub or a web address; anything else is dropped.
-              guidanceHref: href && safeHref(href) ? href.slice(0, 300) : "",
-              voice: r.voice === true,
-            },
-          };
-        })();
+        const rp = readRoleplay(o.roleplay, `${where} free conversation`);
+        const scene = rp ? { roleplay: rp } : {};
         return {
           ...base,
           type: "conversation",
@@ -1630,6 +1636,21 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "playbook", ...parsePlaybookBlock(o, where, { unfinished }) };
       case "auditor":
         return { ...base, type: "auditor", ...parseAuditor(o, where, { str, idOf, list, unfinished }) };
+      case "phonecall": {
+        const roleplay = readRoleplay(o.roleplay, `${where} call`);
+        if (!roleplay) unfinished(`${where} needs its call: the caller, the scene and what’s worth doing.`);
+        const p = o.phone && typeof o.phone === "object" ? (o.phone as Record<string, unknown>) : {};
+        return {
+          ...base,
+          type: "phonecall",
+          title: str(o.title, `${where} title`, { required: true, max: 160 }) ?? "",
+          person: str(o.person, `${where} caller`, { required: true, max: 80 }) ?? "",
+          role: str(o.role, `${where} caller’s relationship`, { max: 120 }) ?? "",
+          setting: str(o.setting, `${where} setting`, { max: 600 }) ?? "",
+          roleplay: roleplay ?? blankRoleplay(),
+          phone: parsePhoneCase(p, where, roleplay, { str, idOf, list, unfinished }),
+        };
+      }
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -2058,6 +2079,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "mentor") extra += b.count;
     if (b.type === "playbook") extra += 1;
     if (b.type === "auditor") extra += 10;
+    if (b.type === "phonecall") extra += 6;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

@@ -2,6 +2,8 @@
 
 Built from the PRD *AI voice-driven de-escalation roleplay* (19 November 2026). This note records how v1 works, the decisions made, and what is left. It covers the PRD's release steps 1 and 2: text roleplay with authored state and rubric, and speech in and out in the same block.
 
+A telephone preset of this engine, with case tools, a privacy gate and a 0 to 3 debrief, is the **Tough Phone Call** block: see [tough-phone-call.md](tough-phone-call.md).
+
 In the Magazine editor: select a **Conversation simulator** block → in its settings, **Let learners say it in their own words**.
 
 ## What it is

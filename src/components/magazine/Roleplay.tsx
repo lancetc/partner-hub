@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
-import type { ConversationBlock } from "@/lib/magazine";
+import type { ConversationBlock, PhoneCallBlock } from "@/lib/magazine";
+import { phoneResult, phoneToolsView, type Lookup, type PhoneResult, type PhoneToolsView } from "@/lib/phonecall";
 import {
   buildDebrief,
   DIMENSIONS,
@@ -24,6 +25,7 @@ import type { roleplayState, testTurn } from "@/server/roleplay";
 import { Icon } from "../Icon";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
+import { CaseTools, PhoneBrief, PhoneDebrief } from "./PhoneCall";
 
 /*
   A conversation practice in free conversation (docs/voice-roleplay.md): the learner types or speaks what
@@ -32,11 +34,24 @@ import type { InteractiveContext } from "./InteractiveBlocks";
   is a made-up scene's state rather than a measure of anything. The debrief has no score.
 
   In the editor's preview the same screen runs against the block as written, storing nothing.
+
+  A Tough Phone Call (docs/tough-phone-call.md) uses this same screen, with case tools beside the call and its own
+  debrief, and has no choose-a-response version to fall back to.
 */
 
 type State = ReturnType<typeof roleplayState>;
 type Tested = Awaited<ReturnType<typeof testTurn>>;
-type View = { id: string; status: "active" | "finished"; state: number; outcome: Outcome | null; turns: TurnResult[]; debrief: Debrief | null };
+type View = {
+  id: string;
+  status: "active" | "finished";
+  state: number;
+  outcome: Outcome | null;
+  turns: TurnResult[];
+  debrief: (Debrief & { phone?: PhoneResult | null }) | null;
+  phone?: PhoneToolsView | null;
+  /** The editor's preview keeps its lookups here; a learner's are on the server. */
+  lookups?: Lookup[];
+};
 
 const primary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
@@ -44,8 +59,17 @@ const secondary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong bg-surface px-4 font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
 const quiet = "inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-semibold text-accent hover:bg-muted disabled:opacity-60";
 
-export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBlock & { roleplay: Scene }; ctx: InteractiveContext; onChoices: () => void }) {
+export function Roleplay({
+  block: b,
+  ctx,
+  onChoices,
+}: {
+  block: (ConversationBlock | PhoneCallBlock) & { roleplay: Scene };
+  ctx: InteractiveContext;
+  onChoices?: () => void;
+}) {
   const scene = b.roleplay;
+  const phone = b.type === "phonecall" ? b.phone : null;
   const ids = useId();
   const url = `/api/magazine/${ctx.guideId}/roleplay`;
   const loaded = useApi<State>(ctx.preview ? null : `${url}?block=${b.id}`);
@@ -58,6 +82,8 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
   /** The turn in flight, so a retry sends the same turn and can't be counted twice. */
   const pending = useRef<string | null>(null);
   const [aloud, setAloud] = useState(false);
+  /** On a narrow screen, a phone call shows the call or its case tools, one at a time, with labelled tabs. */
+  const [pane, setPane] = useState<"call" | "tools">("call");
   const player = useRef<HTMLAudioElement | null>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState<"idle" | "recording" | "working">("idle");
@@ -89,7 +115,17 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
     setProblem(null);
     setBusy(true);
     try {
-      if (ctx.preview) setLocal({ id: "preview", status: "active", state: scene.start, outcome: null, turns: [], debrief: null });
+      if (ctx.preview)
+        setLocal({
+          id: "preview",
+          status: "active",
+          state: scene.start,
+          outcome: null,
+          turns: [],
+          debrief: null,
+          lookups: [],
+          phone: phone ? phoneToolsView(phone, 0, []) : null,
+        });
       else setLocal((await api<State>(url, { body: { action: "start", blockId: b.id } })).attempt as View);
       setText("");
       setHeard(null);
@@ -115,6 +151,7 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
             history: attempt.turns.map((t) => ({ text: t.text, reply: t.reply })),
             state: attempt.state,
             text,
+            lookups: (attempt.lookups ?? []).map((l) => l.actionId),
           },
         });
         const turns: TurnResult[] = [
@@ -138,7 +175,8 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
           turns,
           status: out.ended ? "finished" : "active",
           outcome: out.ended,
-          debrief: out.ended ? previewDebrief(scene, turns, tags, out.ended, out.safety) : null,
+          debrief: out.ended ? previewDebrief(b, turns, tags, out.ended, out.safety, attempt.lookups ?? []) : null,
+          phone: phone ? phoneToolsView(phone, turns.length, attempt.lookups ?? []) : null,
         };
         (next as View & { tags?: PreviewTags[] }).tags = tags;
       } else {
@@ -171,11 +209,28 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
           ...attempt,
           status: "finished",
           outcome,
-          debrief: previewDebrief(scene, attempt.turns, (attempt as View & { tags?: PreviewTags[] }).tags ?? [], outcome, null),
+          debrief: previewDebrief(b, attempt.turns, (attempt as View & { tags?: PreviewTags[] }).tags ?? [], outcome, null, attempt.lookups ?? []),
         });
       } else setLocal((await api<{ attempt: View }>(url, { body: { action: "finish", attemptId: attempt.id, how } })).attempt);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That didn’t save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** A phone call's case tool: a simulated lookup between replies. */
+  const lookup = async (actionId: string) => {
+    if (!attempt || !phone) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      if (ctx.preview) {
+        const lookups = [...(attempt.lookups ?? []), { actionId, afterTurn: attempt.turns.length }];
+        setLocal({ ...attempt, lookups, phone: phoneToolsView(phone, attempt.turns.length, lookups) });
+      } else setLocal((await api<{ attempt: View }>(url, { body: { action: "lookup", attemptId: attempt.id, actionId } })).attempt);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That didn’t open.");
     } finally {
       setBusy(false);
     }
@@ -220,16 +275,18 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
 
   if (!ctx.preview && loaded.error)
     return (
-      <Shell person={b.person}>
+      <Shell person={b.person} call={phone ? { title: (b as PhoneCallBlock).title, role: b.role } : undefined}>
         <p role="alert">{loaded.error}</p>
-        <button type="button" className={secondary} onClick={onChoices}>
-          Do the choose-a-response version
-        </button>
+        {onChoices && (
+          <button type="button" className={secondary} onClick={onChoices}>
+            Do the choose-a-response version
+          </button>
+        )}
       </Shell>
     );
   if (!ctx.preview && !loaded.data)
     return (
-      <Shell person={b.person}>
+      <Shell person={b.person} call={phone ? { title: (b as PhoneCallBlock).title, role: b.role } : undefined}>
         <p className="text-ink-muted">Loading…</p>
       </Shell>
     );
@@ -237,8 +294,9 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
   // Before starting: what the scene is, who you are in it, and what happens to what you say.
   if (!attempt)
     return (
-      <Shell person={b.person}>
+      <Shell person={b.person} call={phone ? { title: (b as PhoneCallBlock).title, role: b.role } : undefined}>
         {b.setting && <p className="text-lg">{b.setting}</p>}
+        {phone && <PhoneBrief phone={phone} />}
         <dl className="mt-3 grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
           <dt className="font-semibold">You are</dt>
           <dd>{scene.learnerRole}</dd>
@@ -258,7 +316,8 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
           )}
         </dl>
         <p className="mt-3 text-sm text-ink-muted">
-          About {Math.max(4, scene.maxTurns + 1)} minutes, {scene.minTurns} to {scene.maxTurns} replies from you. {FICTION_NOTICE}
+          {phone ? "" : `About ${Math.max(4, scene.maxTurns + 1)} minutes, `}
+          {scene.minTurns} to {scene.maxTurns} replies from you{phone ? ", typed or spoken. Between replies you can use the case tools." : "."} {FICTION_NOTICE}
         </p>
         <details className="mt-1 text-sm text-ink-muted">
           <summary className="min-h-11 cursor-pointer py-2 font-semibold text-ink">What happens to what you say</summary>
@@ -273,13 +332,25 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
         )}
         <div className="mt-3 flex flex-wrap gap-3">
           <button type="button" className={primary} disabled={busy || aiDown} onClick={() => void start()}>
-            Start the conversation
+            {phone ? (
+              <>
+                <Icon name="phone" className="size-4" /> Answer the call
+              </>
+            ) : (
+              "Start the conversation"
+            )}
           </button>
-          <button type="button" className={secondary} onClick={onChoices}>
-            Choose from responses instead
-          </button>
+          {onChoices && (
+            <button type="button" className={secondary} onClick={onChoices}>
+              Choose from responses instead
+            </button>
+          )}
         </div>
-        {aiDown && <p className="mt-2 text-sm text-ink-muted">The character can’t reply right now. The choose-a-response version works without it.</p>}
+        {aiDown && (
+          <p className="mt-2 text-sm text-ink-muted">
+            The character can’t reply right now.{onChoices ? " The choose-a-response version works without it." : " Try again later."}
+          </p>
+        )}
         {ctx.preview && <p className="mt-2 text-sm text-ink-muted">Preview: this runs the scene as it’s written in the editor. Nothing is recorded.</p>}
       </Shell>
     );
@@ -288,163 +359,234 @@ export function Roleplay({ block: b, ctx, onChoices }: { block: ConversationBloc
   const showMeter = !scene.hideMeter;
   const last = attempt.turns.at(-1);
   return (
-    <Shell person={b.person}>
+    <Shell person={b.person} call={phone ? { title: (b as PhoneCallBlock).title, role: b.role } : undefined}>
       <p className="text-sm text-ink-muted">{FICTION_NOTICE}</p>
       {showMeter && !finished && <Meter scene={scene} state={attempt.state} caption={last?.caption ?? ""} />}
 
-      <div ref={transcript} className="mt-4 flex flex-col gap-3" role="log" aria-label={`Conversation with ${b.person}`}>
-        <Line who={b.person} them onListen={!ctx.preview && loaded.data?.ai !== false ? () => play(0) : undefined}>
-          {scene.opening}
-        </Line>
-        {attempt.turns.map((t) => (
-          <div key={t.n} className="contents">
-            <Line who="You">{t.text}</Line>
-            <Line who={t.safety ? "Scene paused" : b.person} them onListen={!ctx.preview && !t.safety ? () => play(t.n) : undefined}>
-              {t.reply}
-            </Line>
-          </div>
-        ))}
-      </div>
-
-      {problem && (
-        <div role="alert" className="mt-3 rounded-2xl bg-muted px-4 py-3">
-          <p>{problem}</p>
-          <p className="mt-1 text-sm text-ink-muted">Your replies so far are kept.</p>
-          <button type="button" className={cx(quiet, "mt-1")} onClick={onChoices}>
-            Switch to choosing from responses
-          </button>
+      {phone && attempt.phone && !finished && (
+        <div
+          role="tablist"
+          aria-label="Call and case tools"
+          className="mt-4 flex gap-1 rounded-full border border-line-strong bg-surface p-1 text-sm font-semibold lg:hidden"
+        >
+          {(
+            [
+              ["call", "The call"],
+              ["tools", attempt.phone.urgent ? "Case tools (urgent)" : "Case tools"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={pane === v}
+              onClick={() => setPane(v)}
+              className={cx("min-h-10 flex-1 rounded-full px-3", pane === v ? "bg-action text-on-action" : "hover:bg-muted")}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       )}
-
-      {!finished ? (
-        <form
-          className="mt-4 flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          <label htmlFor={`${ids}-say`} className="font-semibold">
-            What do you say to {b.person}?
-          </label>
-          <textarea
-            id={`${ids}-say`}
-            className="min-h-24 w-full rounded-2xl border border-line-strong bg-bg px-3 py-2 text-base"
-            maxLength={MAX_REPLY}
-            value={text}
-            aria-describedby={`${ids}-hint`}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <p id={`${ids}-hint`} className="text-sm text-ink-muted">
-            {heard !== null
-              ? "This is what was heard. Fix anything that’s wrong before you send: only what’s in the box is used."
-              : `Reply ${attempt.turns.length + 1} of up to ${scene.maxTurns}. Say it the way you would in person.`}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="submit" className={primary} disabled={busy || text.trim().length < 2 || recording !== "idle"}>
-              {busy ? "Sending…" : "Send"}
-            </button>
-            {voice && (
-              <button
-                type="button"
-                className={secondary}
-                aria-pressed={recording === "recording"}
-                disabled={busy || recording === "working"}
-                onClick={() => void record()}
-              >
-                <Icon name="mic" className="size-4" />
-                {recording === "recording"
-                  ? "Stop recording"
-                  : recording === "working"
-                    ? "Turning it into text…"
-                    : heard !== null
-                      ? "Record again"
-                      : "Speak instead"}
-              </button>
-            )}
-            {recording === "recording" && (
-              <span role="status" className="font-semibold">
-                Recording… press Stop when you’ve finished.
-              </span>
-            )}
-            <button type="button" className={cx(quiet, "ml-auto")} disabled={busy} onClick={() => void finish("help")}>
-              <Icon name="phone" className="size-4" /> Ask for help
-            </button>
-            <button type="button" className={quiet} disabled={busy} onClick={() => void finish("stop")}>
-              Exit practice
-            </button>
+      <div className={cx(phone && "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]")}>
+        {phone && attempt.phone && (
+          <div className={cx("lg:order-last", (pane !== "tools" || finished) && "hidden lg:block")}>
+            <CaseTools phone={phone} view={attempt.phone} busy={busy} finished={finished} onLookup={(id) => void lookup(id)} />
           </div>
-          {!ctx.preview && (
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" className="size-4 accent-[var(--color-action)]" checked={aloud} onChange={(e) => setAloud(e.target.checked)} />
-              Read {b.person}’s replies aloud in a synthetic voice
-            </label>
+        )}
+        <div className={cx("min-w-0", phone && pane !== "call" && !finished && "hidden lg:block")}>
+          {phone && attempt.phone?.urgent && !finished && (
+            <p role="alert" className="mb-3 rounded-2xl bg-[#fde2e0] p-3 text-sm font-semibold text-[#5c1410] lg:hidden dark:bg-[#3d1512] dark:text-[#ffb4ab]">
+              Immediate wellbeing check: open Case tools to escalate before anything routine.
+            </p>
           )}
-        </form>
-      ) : (
-        attempt.debrief && (
-          <DebriefView
-            key={attempt.id}
-            scene={scene}
-            debrief={attempt.debrief}
-            preview={Boolean(ctx.preview)}
-            onSeen={async () => {
-              if (ctx.preview) return;
-              const out = await api<{ practised: boolean }>(url, { body: { action: "seen", attemptId: attempt.id } }).catch(() => null);
-              // Reaching an end and reading the debrief is what counts as having practised.
-              if (out?.practised) {
-                ctx.activity(b.id, { outcome: attempt.outcome ?? undefined });
-                ctx.engaged(b.id);
-              }
-            }}
-            onAgain={() => void start()}
-            onChoices={onChoices}
-            onDelete={
-              ctx.preview
-                ? undefined
-                : async () => {
-                    await api(url, { body: { action: "delete", attemptId: attempt.id } }).catch(() => {});
-                    setLocal(null);
-                    loaded.reload();
+          <div ref={transcript} className="mt-4 flex flex-col gap-3" role="log" aria-label={`Conversation with ${b.person}`}>
+            <Line who={b.person} them onListen={!ctx.preview && loaded.data?.ai !== false ? () => play(0) : undefined}>
+              {scene.opening}
+            </Line>
+            {attempt.turns.map((t) => (
+              <div key={t.n} className="contents">
+                <Line who="You">{t.text}</Line>
+                <Line who={t.safety ? "Scene paused" : b.person} them onListen={!ctx.preview && !t.safety ? () => play(t.n) : undefined}>
+                  {t.reply}
+                </Line>
+              </div>
+            ))}
+          </div>
+
+          {problem && (
+            <div role="alert" className="mt-3 rounded-2xl bg-muted px-4 py-3">
+              <p>{problem}</p>
+              <p className="mt-1 text-sm text-ink-muted">Your replies so far are kept.</p>
+              {onChoices && (
+                <button type="button" className={cx(quiet, "mt-1")} onClick={onChoices}>
+                  Switch to choosing from responses
+                </button>
+              )}
+            </div>
+          )}
+
+          {!finished ? (
+            <form
+              className="mt-4 flex flex-col gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send();
+              }}
+            >
+              <label htmlFor={`${ids}-say`} className="font-semibold">
+                What do you say to {b.person}?
+              </label>
+              <textarea
+                id={`${ids}-say`}
+                className="min-h-24 w-full rounded-2xl border border-line-strong bg-bg px-3 py-2 text-base"
+                maxLength={MAX_REPLY}
+                value={text}
+                aria-describedby={`${ids}-hint`}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <p id={`${ids}-hint`} className="text-sm text-ink-muted">
+                {heard !== null
+                  ? "This is what was heard. Fix anything that’s wrong before you send: only what’s in the box is used."
+                  : `Reply ${attempt.turns.length + 1} of up to ${scene.maxTurns}. Say it the way you would ${phone ? "on the phone" : "in person"}.`}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" className={primary} disabled={busy || text.trim().length < 2 || recording !== "idle"}>
+                  {busy ? "Sending…" : "Send"}
+                </button>
+                {voice && (
+                  <button
+                    type="button"
+                    className={secondary}
+                    aria-pressed={recording === "recording"}
+                    disabled={busy || recording === "working"}
+                    onClick={() => void record()}
+                  >
+                    <Icon name="mic" className="size-4" />
+                    {recording === "recording"
+                      ? "Stop recording"
+                      : recording === "working"
+                        ? "Turning it into text…"
+                        : heard !== null
+                          ? "Record again"
+                          : "Speak instead"}
+                  </button>
+                )}
+                {recording === "recording" && (
+                  <span role="status" className="font-semibold">
+                    Recording… press Stop when you’ve finished.
+                  </span>
+                )}
+                <button type="button" className={cx(quiet, "ml-auto")} disabled={busy} onClick={() => void finish("help")}>
+                  <Icon name="phone" className="size-4" /> Ask for help
+                </button>
+                <button type="button" className={quiet} disabled={busy} onClick={() => void finish("stop")}>
+                  Exit practice
+                </button>
+              </div>
+              {!ctx.preview && (
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input type="checkbox" className="size-4 accent-[var(--color-action)]" checked={aloud} onChange={(e) => setAloud(e.target.checked)} />
+                  Read {b.person}’s replies aloud in a synthetic voice
+                </label>
+              )}
+            </form>
+          ) : (
+            attempt.debrief && (
+              <DebriefView
+                key={attempt.id}
+                scene={scene}
+                debrief={attempt.debrief}
+                call={
+                  attempt.debrief.phone
+                    ? {
+                        result: attempt.debrief.phone,
+                        turns: attempt.turns,
+                        opening: scene.opening,
+                        person: b.person,
+                        onRewrite: ctx.preview
+                          ? undefined
+                          : (n: number, text: string) => api(url, { body: { action: "rewrite", attemptId: attempt.id, n, text } }),
+                      }
+                    : undefined
+                }
+                preview={Boolean(ctx.preview)}
+                onSeen={async () => {
+                  if (ctx.preview) return;
+                  const out = await api<{ practised: boolean }>(url, { body: { action: "seen", attemptId: attempt.id } }).catch(() => null);
+                  // Reaching an end and reading the debrief is what counts as having practised.
+                  if (out?.practised) {
+                    ctx.activity(b.id, { outcome: attempt.outcome ?? undefined });
+                    ctx.engaged(b.id);
                   }
-            }
-          />
-        )
-      )}
+                }}
+                onAgain={() => void start()}
+                onChoices={onChoices}
+                onDelete={
+                  ctx.preview
+                    ? undefined
+                    : async () => {
+                        await api(url, { body: { action: "delete", attemptId: attempt.id } }).catch(() => {});
+                        setLocal(null);
+                        loaded.reload();
+                      }
+                }
+              />
+            )
+          )}
+        </div>
+      </div>
     </Shell>
   );
 }
 
 type PreviewTags = { moves: { id: string; quote: string }[]; risks: { id: string; quote: string }[]; unclear: boolean };
 /** The editor's preview builds its debrief in the browser: the author's copy of the block has the whole scene. */
-const previewDebrief = (scene: Scene, turns: TurnResult[], tags: PreviewTags[], outcome: Outcome, safety: Debrief["safety"]) =>
-  buildDebrief(
-    scene,
-    turns.map((t, i) => ({
-      n: t.n,
-      text: t.text,
-      moves: tags[i]?.moves ?? [],
-      risks: tags[i]?.risks ?? [],
-      unclear: tags[i]?.unclear ?? false,
-      stateAfter: t.stateAfter,
-      caption: t.caption,
-    })),
-    outcome,
-    safety,
-  );
+function previewDebrief(
+  b: (ConversationBlock | PhoneCallBlock) & { roleplay: Scene },
+  turns: TurnResult[],
+  tags: PreviewTags[],
+  outcome: Outcome,
+  safety: Debrief["safety"],
+  lookups: Lookup[],
+): Debrief & { phone: PhoneResult | null } {
+  const scene = b.roleplay;
+  const done = turns.map((t, i) => ({
+    n: t.n,
+    text: t.text,
+    moves: tags[i]?.moves ?? [],
+    risks: tags[i]?.risks ?? [],
+    unclear: tags[i]?.unclear ?? false,
+    stateAfter: t.stateAfter,
+    caption: t.caption,
+  }));
+  return {
+    ...buildDebrief(scene, done, outcome, safety),
+    phone: b.type === "phonecall" ? phoneResult(scene, b.phone, done, lookups, outcome !== "ended") : null,
+  };
+}
 
-function Shell({ person, children }: { person: string; children: React.ReactNode }) {
+function Shell({ person, call, children }: { person: string; call?: { title: string; role: string }; children: React.ReactNode }) {
   return (
     <section
-      aria-label={`Conversation practice with ${person}`}
-      className="mx-auto w-full max-w-[46rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-7"
+      aria-label={call ? `Practice call: ${call.title}` : `Conversation practice with ${person}`}
+      className={cx("mx-auto w-full rounded-3xl border border-line-strong bg-surface p-5 sm:p-7", call ? "max-w-[64rem]" : "max-w-[46rem]")}
     >
       <p className="mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
-        <Icon name="mic" className="size-5" /> Conversation practice · fictional AI character
+        <Icon name={call ? "phone" : "mic"} className="size-5" />{" "}
+        {call ? "Tough Phone Call · practice call with a fictional AI character" : "Conversation practice · fictional AI character"}
       </p>
+      {call && <h3 className="font-serif text-2xl font-semibold">{call.title}</h3>}
       <div className="flex items-center gap-3">
         <CharacterPortrait name={person} />
-        <h3 className="font-serif text-2xl font-semibold">{person}</h3>
+        {call ? (
+          <p className="text-lg">
+            <span className="font-semibold">{person}</span>
+            {call.role ? `, ${call.role}` : ""}
+          </p>
+        ) : (
+          <h3 className="font-serif text-2xl font-semibold">{person}</h3>
+        )}
       </div>
       <div className="mt-2">{children}</div>
     </section>
@@ -502,14 +644,16 @@ function DebriefView({
   onAgain,
   onChoices,
   onDelete,
+  call,
 }: {
   scene: Scene;
   debrief: Debrief;
   preview: boolean;
   onSeen: () => Promise<void>;
   onAgain: () => void;
-  onChoices: () => void;
+  onChoices?: () => void;
   onDelete?: () => Promise<void>;
+  call?: React.ComponentProps<typeof PhoneDebrief>;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   // Shown means read, as far as the Hub can know.
@@ -518,6 +662,35 @@ function DebriefView({
     void onSeen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  if (call)
+    return (
+      <>
+        <PhoneDebrief {...call} />
+        {d.safety && (
+          <div className="mt-3 rounded-2xl bg-[#fff1cc] p-4 text-[#4a3400] dark:bg-[#3d2f08] dark:text-[#ffd97a]">
+            <p className="font-semibold">{d.safety.label}: what to do</p>
+            <p className="mt-1">{d.safety.guidance}</p>
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className={primary} onClick={onAgain}>
+            <Icon name="refresh" className="size-4" /> Try the call again
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              className={quiet}
+              onClick={() => {
+                if (window.confirm("Delete this call? What you said in it is removed for good. Having practised stays on your record.")) void onDelete();
+              }}
+            >
+              <Icon name="trash" className="size-4" /> Delete this call
+            </button>
+          )}
+        </div>
+        {preview && <p className="mt-2 text-sm text-ink-muted">Preview: nothing was recorded.</p>}
+      </>
+    );
   return (
     <div className="mt-5 border-t border-line pt-4">
       <h4 ref={heading} tabIndex={-1} className="font-serif text-xl font-semibold outline-none">
@@ -615,9 +788,11 @@ function DebriefView({
         <button type="button" className={primary} onClick={onAgain}>
           <Icon name="refresh" className="size-4" /> Try again
         </button>
-        <button type="button" className={secondary} onClick={onChoices}>
-          Compare with the choose-a-response version
-        </button>
+        {onChoices && (
+          <button type="button" className={secondary} onClick={onChoices}>
+            Compare with the choose-a-response version
+          </button>
+        )}
         {onDelete && (
           <button
             type="button"

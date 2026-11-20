@@ -38,6 +38,7 @@ import { BatonEdit } from "./MagazineBatonEdit";
 import { RedPenEdit } from "./MagazineRedPenEdit";
 import { NotesDeckEdit } from "./MagazineNotesEdit";
 import { PlaybookEdit } from "./MagazinePlaybookEdit";
+import { PhoneCallEdit } from "./MagazinePhoneCallEdit";
 import { AuditorEdit } from "./MagazineAuditorEdit";
 import { Icon, type IconName } from "../Icon";
 
@@ -249,6 +250,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <PlaybookEdit block={b} update={update} />;
     case "auditor":
       return <AuditorEdit block={b} update={update} />;
+    case "phonecall":
+      return <PhoneCallEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1486,8 +1489,16 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
     case "playbook":
       return (
         <p className="text-sm text-ink-muted">
-          The procedure lives in the playbook library (Admin, then Playbooks). This block always shows its current approved release, so editing it there
-          updates every page it’s on. The course can’t be published until the snippet has an approved release.
+          The procedure lives in the playbook library (Admin, then Playbooks). This block always shows its current approved release, so editing it there updates
+          every page it’s on. The course can’t be published until the snippet has an approved release.
+        </p>
+      );
+    case "phonecall":
+      return (
+        <p className="text-sm text-ink-muted">
+          A practice call with a fictional AI character. Nothing a learner does changes a real invoice, roster or complaint. It can’t be published until Care
+          Operations, Quality and Privacy (and Finance, for a billing call) sign-off is recorded, and its sources are in date. Use Preview, or Try a reply, to
+          test it.
         </p>
       );
     case "auditor":
@@ -1501,22 +1512,22 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
     case "mentor":
       return (
         <p className="text-sm text-ink-muted">
-          Cards come from the note library (Admin, then Mentor notes). Only reviewed notes are dealt; the course can’t be published while a pinned card
-          isn’t reviewed or the topic has too few reviewed notes.
+          Cards come from the note library (Admin, then Mentor notes). Only reviewed notes are dealt; the course can’t be published while a pinned card isn’t
+          reviewed or the topic has too few reviewed notes.
         </p>
       );
     case "redpen":
       return (
         <p className="text-sm text-ink-muted">
-          A synthetic case: never paste a real care plan or note. The course can’t be published until Clinical, Quality and Privacy sign-off is recorded in
-          the block.
+          A synthetic case: never paste a real care plan or note. The course can’t be published until Clinical, Quality and Privacy sign-off is recorded in the
+          block.
         </p>
       );
     case "baton":
       return (
         <p className="text-sm text-ink-muted">
-          A simulation with fictional data. The roles, owners and channels are scenario roles until approved. The course can’t be published until Clinical,
-          Care Operations, Finance, Quality and Privacy sign-off is recorded in the block.
+          A simulation with fictional data. The roles, owners and channels are scenario roles until approved. The course can’t be published until Clinical, Care
+          Operations, Finance, Quality and Privacy sign-off is recorded in the block.
         </p>
       );
     case "myths":
@@ -1529,8 +1540,8 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
     case "benchmark":
       return (
         <p className="text-sm text-ink-muted">
-          Peer results are what people chose, never the answer. The course can’t be published until Care Operations, Clinical, Quality and Privacy sign-off
-          is recorded in the block, or once it’s past its review date.
+          Peer results are what people chose, never the answer. The course can’t be published until Care Operations, Clinical, Quality and Privacy sign-off is
+          recorded in the block, or once it’s past its review date.
         </p>
       );
     case "budget":

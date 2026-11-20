@@ -46,6 +46,7 @@ import { deckProblems } from "./notes";
 import { playbookBlockProblems } from "./playbooks";
 import { charactersAfterPublish } from "./characters";
 import { auditorForReaders, auditorHardProblems } from "@/lib/auditor";
+import { phoneForReaders, phoneHardProblems } from "@/lib/phonecall";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 
@@ -269,40 +270,43 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
       blocks: s.blocks.map((b) =>
         b.type === "conversation" && b.roleplay
           ? { ...b, roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] } }
-          : // Spot the Signal: the case, without what marks an answer right.
-            b.type === "signal"
-            ? signalForReaders(b)
-            : // The Mission Board: the case and board, without what marks a choice right.
-              b.type === "mission"
-              ? missionForReaders(b)
-              : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
-                b.type === "balance"
-                ? balanceForReaders(b)
-                : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
-                  b.type === "xray"
-                  ? xrayForReaders(b)
-                  : // Where Is the Line?: the requests and choices, without the answers.
-                    b.type === "line"
-                    ? lineForReaders(b)
-                    : // While You Wait: the scenario, without the summary checks or the model summary.
-                      b.type === "bridge"
-                      ? bridgeForReaders(b)
-                      : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
-                        b.type === "journey"
-                        ? journeyForReaders(b)
-                        : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
-                          b.type === "benchmark"
-                          ? benchmarkForReaders(b)
-                          : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
-                            b.type === "baton"
-                            ? batonForReaders(b)
-                            : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
-                              b.type === "redpen"
-                              ? redPenForReaders(b)
-                              : // Document Auditor: the documents, records and rules, without the answer key.
-                                b.type === "auditor"
-                                ? auditorForReaders(b)
-                                : b,
+          : // A Tough Phone Call: the same, and the case tools without what they reveal, who may be told what, or the urgent cue.
+            b.type === "phonecall"
+            ? { ...b, roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] }, phone: phoneForReaders(b.phone) }
+            : // Spot the Signal: the case, without what marks an answer right.
+              b.type === "signal"
+              ? signalForReaders(b)
+              : // The Mission Board: the case and board, without what marks a choice right.
+                b.type === "mission"
+                ? missionForReaders(b)
+                : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
+                  b.type === "balance"
+                  ? balanceForReaders(b)
+                  : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
+                    b.type === "xray"
+                    ? xrayForReaders(b)
+                    : // Where Is the Line?: the requests and choices, without the answers.
+                      b.type === "line"
+                      ? lineForReaders(b)
+                      : // While You Wait: the scenario, without the summary checks or the model summary.
+                        b.type === "bridge"
+                        ? bridgeForReaders(b)
+                        : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
+                          b.type === "journey"
+                          ? journeyForReaders(b)
+                          : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
+                            b.type === "benchmark"
+                            ? benchmarkForReaders(b)
+                            : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
+                              b.type === "baton"
+                              ? batonForReaders(b)
+                              : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
+                                b.type === "redpen"
+                                ? redPenForReaders(b)
+                                : // Document Auditor: the documents, records and rules, without the answer key.
+                                  b.type === "auditor"
+                                  ? auditorForReaders(b)
+                                  : b,
       ),
     })),
   })),
@@ -682,6 +686,7 @@ export function recordGuideEvent(
         ![
           "branching",
           "conversation",
+          "phonecall",
           "spot",
           "budget",
           "signal",
@@ -1147,6 +1152,13 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
         "A Document Auditor case needs its sign-off, in-date rules and fictional details before it can be published. “Publish anyway” doesn’t cover this.",
       ),
       { problems: unaudited },
+    );
+  // And a Tough Phone Call: its billing answers, escalation route, complaint handling and privacy rules need Finance, Care Operations, Quality and Privacy, and its sources must be in date.
+  const uncalled = draftBlocks.flatMap((b) => (b.type === "phonecall" ? phoneHardProblems(b.title, b.phone, now.toISOString().slice(0, 10)) : []));
+  if (uncalled.length)
+    throw Object.assign(
+      new HttpError(400, "A Tough Phone Call needs its sign-off and in-date sources before it can be published. “Publish anyway” doesn’t cover this."),
+      { problems: uncalled },
     );
   // And a Live SOP playbook: the snippet must have an approved release that isn't withdrawn.
   const unreleased = draftBlocks.flatMap((b) => (b.type === "playbook" ? playbookBlockProblems(db, b.snippetId, now) : []));

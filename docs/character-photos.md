@@ -18,6 +18,7 @@ The portrait shows beside the person's name in:
 - **The SaH Journey:** each named persona.
 - **Conversation practice:** shown when the author hasn't chosen a photo for the block. The author's own photo always wins.
 - **Voice role-play:** the character.
+- **Tough Phone Call:** the caller. The caller and the client are both added to the roster when the course is published.
 
 The roster is fetched once per page. A name with no portrait shows exactly as before. The name is always written beside the picture, so the picture itself is decorative to screen readers (`alt=""`). The library keeps a written description for authors.
 

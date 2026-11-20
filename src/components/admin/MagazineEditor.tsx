@@ -61,6 +61,8 @@ import { freshXRay } from "@/lib/xray";
 import { XRAY_CASES } from "@/content/xrayCases";
 import { AUDIT_CASES } from "@/content/auditCases";
 import { freshAuditor } from "@/lib/auditor";
+import { PHONE_CALLS } from "@/content/phoneCalls";
+import { freshPhoneCall } from "@/lib/phonecall";
 import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
 import { freshLine } from "@/lib/line";
@@ -150,6 +152,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   mentor: "mail",
   playbook: "clipboard",
   auditor: "shield",
+  phonecall: "phone",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -198,6 +201,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
   playbook: "A procedure from the playbook library, always showing its current approved release, with Ask a Lead.",
   auditor: "A fictional contractor pack or invoice to inspect and mark, then Approve, Query or Reject current submission.",
+  phonecall: "A difficult call from a fictional client or family member, typed or spoken, with case tools and a debrief in the learner’s own words.",
   mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
@@ -233,7 +237,7 @@ const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
-  { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget"] },
+  { title: "Simulate", types: ["branching", "conversation", "phonecall", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "mentor", "confidence"] },
 ];
@@ -469,9 +473,26 @@ function newBlock(item: PaletteItem): Block {
     case "auditor":
       // Starts from the first starter case, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshAuditor(AUDIT_CASES[0].data) };
+    case "phonecall":
+      // Starts from the first pilot scene, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshPhoneCall(PHONE_CALLS[0].data) };
     case "mentor":
       // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
-      return { id, type, title: "Notes to a younger me", intro: "", topics: ["boundaries", "calls"], audiences: [], selection: "hybrid", noteIds: [], count: 3, deal: true, contribute: false, mode: "read", reflection: "Which part would you keep, in your own words?" };
+      return {
+        id,
+        type,
+        title: "Notes to a younger me",
+        intro: "",
+        topics: ["boundaries", "calls"],
+        audiences: [],
+        selection: "hybrid",
+        noteIds: [],
+        count: 3,
+        deal: true,
+        contribute: false,
+        mode: "read",
+        reflection: "Which part would you keep, in your own words?",
+      };
     case "redpen":
       // Starts from Dot's care plan goal, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshRedPen(REDPEN_CASES[0].data) };
@@ -480,7 +501,17 @@ function newBlock(item: PaletteItem): Block {
       return { id, type, ...freshBaton(BATON_CASES[0].data) };
     case "myths":
       // Points at the seed tiles in the library; they show to learners only once each is approved there.
-      return { id, type, title: "Myth vs Reality", intro: "", tileIds: SEED_TILES.map((t) => t.id), mode: "learning", practice: true, showCopy: true, toOpen: 3 };
+      return {
+        id,
+        type,
+        title: "Myth vs Reality",
+        intro: "",
+        tileIds: SEED_TILES.map((t) => t.id),
+        mode: "learning",
+        practice: true,
+        showCopy: true,
+        toOpen: 3,
+      };
     case "budget":
       return {
         id,
@@ -515,6 +546,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "balance") Object.assign(c, freshBalance(c));
   if (c.type === "xray") Object.assign(c, freshXRay(c));
   if (c.type === "auditor") Object.assign(c, freshAuditor(c));
+  if (c.type === "phonecall") Object.assign(c, freshPhoneCall(c));
   if (c.type === "reset") Object.assign(c, freshReset(c));
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
@@ -668,6 +700,8 @@ function isBlank(b: Block): boolean {
       return !b.snippetId;
     case "auditor":
       return !b.approval.owner && !b.approval.operations;
+    case "phonecall":
+      return !b.phone.approval.owner && !b.phone.approval.operations;
   }
 }
 

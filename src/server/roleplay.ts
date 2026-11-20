@@ -1,6 +1,17 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
-import { allBlocks, GuideDocError, readGuideDoc, type ConversationBlock, type GuideDoc } from "@/lib/magazine";
+import { allBlocks, GuideDocError, readGuideDoc, type ConversationBlock, type GuideDoc, type PhoneCallBlock } from "@/lib/magazine";
+import {
+  DISCLOSURE_ID,
+  mayShare,
+  PERMISSIONS,
+  phoneResult,
+  phoneToolsView,
+  restrictedSaid,
+  visibleActions,
+  type PhoneCase,
+  type PhoneResult,
+} from "@/lib/phonecall";
 import {
   allowedState,
   buildDebrief,
@@ -35,6 +46,10 @@ import { claudeConfigured, openaiJson, openaiReady, openaiTextModel, openaiTrans
   The learner's words are theirs: only they can read their conversation. Authors get counts. Audio is
   transcribed and discarded. Nothing here is a pass, a score or evidence of competence.
 */
+
+/** A block a character can be talked to in: a conversation set to free conversation, or a Tough Phone Call. */
+type SceneBlock = (ConversationBlock | PhoneCallBlock) & { roleplay: Roleplay };
+const phoneOf = (b: SceneBlock): PhoneCase | null => (b.type === "phonecall" ? b.phone : null);
 
 const setting = (db: Db, key: string) => (db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined)?.value ?? null;
 const aiConnected = () => claudeConfigured() || openaiReady();
@@ -101,10 +116,10 @@ function log(db: Db, a: Pick<AttemptRow, "user_id" | "guide_id" | "revision_id" 
 }
 
 /** The free-conversation block in the edition this person reads, or a 404. */
-function blockIn(doc: GuideDoc, blockId: unknown): ConversationBlock & { roleplay: Roleplay } {
+function blockIn(doc: GuideDoc, blockId: unknown): SceneBlock {
   const b = allBlocks(doc).find((x) => x.id === blockId);
-  if (!b || b.type !== "conversation" || !b.roleplay) throw new HttpError(404, "That conversation practice isn’t here.");
-  return b as ConversationBlock & { roleplay: Roleplay };
+  if (!b || !((b.type === "conversation" && b.roleplay) || b.type === "phonecall")) throw new HttpError(404, "That conversation practice isn’t here.");
+  return b as SceneBlock;
 }
 
 function load(db: Db, user: User, guideId: string, blockId: unknown, revisionId?: unknown) {
@@ -115,6 +130,17 @@ function load(db: Db, user: User, guideId: string, blockId: unknown, revisionId?
 }
 
 const turnsOf = (db: Db, attemptId: string) => db.prepare("SELECT * FROM roleplay_turns WHERE attempt_id = ? ORDER BY n").all(attemptId) as TurnRow[];
+/** A phone call's lookups, in the order they were made, with how many turns had been taken at the time. */
+const lookupsOf = (db: Db, attemptId: string) =>
+  (
+    db.prepare("SELECT action_id, after_turn FROM roleplay_lookups WHERE attempt_id = ? ORDER BY at, rowid").all(attemptId) as {
+      action_id: string;
+      after_turn: number;
+    }[]
+  ).map((l) => ({ actionId: l.action_id, afterTurn: l.after_turn }));
+/** Whether the learner had checked what the caller may be told, before turn n. */
+const checkedBefore = (p: PhoneCase, lookups: { actionId: string; afterTurn: number }[], n: number) =>
+  lookups.some((l) => l.afterTurn < n && p.actions.find((x) => x.id === l.actionId)?.kind === "permission");
 
 function ownAttempt(db: Db, user: User, attemptId: unknown): AttemptRow {
   ensureRoleplay(db);
@@ -142,34 +168,39 @@ const turnView = (t: TurnRow, scene: Roleplay, last: boolean, a: AttemptRow): Tu
   };
 };
 
-function debriefOf(db: Db, a: AttemptRow, scene: Roleplay): Debrief | null {
+function debriefOf(db: Db, a: AttemptRow, block: SceneBlock): (Debrief & { phone?: PhoneResult }) | null {
+  const scene = block.roleplay;
   if (a.status !== "finished" || !a.outcome) return null;
   const rule = scene.safety.find((s) => s.id === a.safety_rule);
-  return buildDebrief(
-    scene,
-    turnsOf(db, a.id).map((t) => ({
-      n: t.n,
-      text: t.text,
-      moves: JSON.parse(t.moves) as { id: string; quote: string }[],
-      risks: JSON.parse(t.risks) as { id: string; quote: string }[],
-      unclear: t.unclear === 1,
-      stateAfter: t.state_after,
-      caption: t.caption,
-    })),
-    a.outcome,
-    rule ? { label: rule.label, guidance: rule.guidance } : null,
-  );
+  const turns = turnsOf(db, a.id).map((t) => ({
+    n: t.n,
+    text: t.text,
+    moves: JSON.parse(t.moves) as { id: string; quote: string }[],
+    risks: JSON.parse(t.risks) as { id: string; quote: string }[],
+    unclear: t.unclear === 1,
+    stateAfter: t.state_after,
+    caption: t.caption,
+  }));
+  const phone = phoneOf(block);
+  return {
+    ...buildDebrief(scene, turns, a.outcome, rule ? { label: rule.label, guidance: rule.guidance } : null),
+    // A phone call adds its six dimensions, ending and recommendation, from the same turns and its lookups.
+    ...(phone ? { phone: phoneResult(scene, phone, turns, lookupsOf(db, a.id), a.outcome !== "ended") } : {}),
+  };
 }
 
-function attemptView(db: Db, a: AttemptRow, scene: Roleplay) {
+function attemptView(db: Db, a: AttemptRow, block: SceneBlock) {
+  const scene = block.roleplay;
   const turns = turnsOf(db, a.id);
+  const phone = phoneOf(block);
   return {
     id: a.id,
     status: a.status,
     state: a.state,
     outcome: a.outcome,
     turns: turns.map((t, i) => turnView(t, scene, i === turns.length - 1, a)),
-    debrief: debriefOf(db, a, scene),
+    debrief: debriefOf(db, a, block),
+    phone: phone ? phoneToolsView(phone, turns.length, lookupsOf(db, a.id)) : null,
     /** The scene was edited after this attempt: it's kept as it was, and a new attempt uses the new scene. */
     earlierScene: a.scene_hash !== sceneHash(scene),
   };
@@ -185,7 +216,7 @@ export function roleplayState(db: Db, user: User, guideId: string, blockId: unkn
     )
     .get(user.id, edition.guide.id, block.id, edition.revision.id) as AttemptRow | undefined;
   return {
-    attempt: a ? attemptView(db, a, block.roleplay) : null,
+    attempt: a ? attemptView(db, a, block) : null,
     ai: aiConnected(),
     voice: block.roleplay.voice && voiceOn(db) && openaiReady(),
     attempts: (
@@ -222,7 +253,7 @@ export function startAttempt(db: Db, user: User, guideId: string, input: { revis
     log(db, { user_id: user.id, guide_id: edition.guide.id, revision_id: edition.revision.id, block_id: block.id }, "roleplay.started", {}, now);
   });
   // The attempt just made, whatever else was started in the same instant.
-  return { ...roleplayState(db, user, guideId, block.id), attempt: attemptView(db, ownAttempt(db, user, id), block.roleplay) };
+  return { ...roleplayState(db, user, guideId, block.id), attempt: attemptView(db, ownAttempt(db, user, id), block) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -245,8 +276,24 @@ const defaultJudge: Judge = async (prompt, check) =>
     ? (await askForJson<Judgement>([{ type: "text", text: prompt }], check, { onText: () => {}, onPhase: () => {} }, "low")).value
     : await openaiJson<Judgement>(prompt, check);
 
-export function turnPrompt(block: ConversationBlock & { roleplay: Roleplay }, history: { reply: string; text: string }[], state: number, learnerText: string) {
+export function turnPrompt(
+  block: SceneBlock,
+  history: { reply: string; text: string }[],
+  state: number,
+  learnerText: string,
+  call: { checked: boolean; opened: string[] } = { checked: false, opened: [] },
+) {
   const s = block.roleplay;
+  const p = phoneOf(block);
+  // A phone call: who's calling, what may be shared, and the case file, so a made-up reason or promise can be recognised.
+  const phoneContext = p
+    ? `\n\nThis is a phone call about ${p.client}. ${block.person}, the character, is the caller: they have phoned the learner, who works for Trilogy Care. ${block.person} is not Trilogy Care staff. They can't look anything up, check permissions, explain records or say what Trilogy Care will do; they speak only as themselves, about their own worries, and respond to what the learner says. The things worth doing below are for the learner: the caller never asks those questions or makes those moves themselves, and only says what someone in their position would know. The caller ${p.claims.replace(/^Says/, "says")}.\nFor judging only (the caller doesn't know this): what the caller may be told is "${PERMISSIONS[p.permission.state]}". ${call.checked ? "The learner has checked this." : "The learner hasn't checked this yet."}\nFor judging only, the case file the learner can see (the caller doesn't know what's in it). The learner has opened: ${call.opened.length ? call.opened.join(", ") : "nothing yet"}.\n<case_file>\n${p.actions
+        .filter((a) => a.kind !== "complaint" && a.kind !== "escalate")
+        .map((a) => `${a.label}: ${a.facts.join(" ")}`)
+        .join(
+          "\n",
+        )}\n</case_file>\nIf the learner states a reason, amount, time or outcome that isn't in the case file, or promises something it doesn't support, tag the matching unsafe move. A reason or fact that matches what's in a record the learner has opened is accurate: never tag that as a guess or a made-up reason. Whether it should have been shared with this caller is checked separately, not by you. The caller never repeats or reveals anything from the case file they wouldn't know themselves, and doesn't calm down just because the learner uses a particular word.`
+    : "";
   // The last state is a safety rule's to reach, so it isn't offered.
   const states = s.states.slice(0, -1);
   const lines = [`${block.person}: ${s.opening}`, ...history.flatMap((h) => [`Learner: ${h.text}`, `${block.person}: ${h.reply}`])];
@@ -263,7 +310,7 @@ ${block.setting || "(not given)"}
 </setting>
 
 The learner is: ${s.learnerRole}. They are practising: ${s.goal}
-What the learner would know: ${s.facts.length ? s.facts.join(" ") : "(nothing more)"}
+What the learner would know: ${s.facts.length ? s.facts.join(" ") : "(nothing more)"}${phoneContext}
 
 How the scene is going is one of these states, from calmest to most concerning:
 ${states.map((x, i) => `${i}: ${x}`).join("\n")}
@@ -327,11 +374,12 @@ export function judgementIssues(value: unknown, scene: Roleplay): string[] {
   model's answer held to what the scene allows. Used for a learner's turn and for an author trying a scene.
 */
 export async function runTurn(
-  block: ConversationBlock & { roleplay: Roleplay },
+  block: SceneBlock,
   history: { reply: string; text: string }[],
   state: number,
   learnerText: string,
   judge: Judge = defaultJudge,
+  call: { checked: boolean; opened: string[] } = { checked: false, opened: [] },
 ) {
   const scene = block.roleplay;
   const n = history.length + 1;
@@ -350,7 +398,7 @@ export async function runTurn(
       rule,
     };
   // 2. The model, within the scene.
-  const j = await judge(turnPrompt(block, history, state, learnerText), (v) => judgementIssues(v, scene));
+  const j = await judge(turnPrompt(block, history, state, learnerText, call), (v) => judgementIssues(v, scene));
   const issues = judgementIssues(j, scene);
   if (issues.length) throw new HttpError(502, "The character couldn’t reply just then.");
   // 3. Held to the scene: only what the learner actually said counts as evidence.
@@ -358,6 +406,12 @@ export async function runTurn(
     list.filter((x) => said(learnerText, x.quote)).map((x) => ({ id: x.id, quote: x.quote.trim().slice(0, 200) }));
   const moves = j.unclear ? [] : kept(j.moves);
   const risks = j.unclear ? [] : kept(j.risks);
+  const p = phoneOf(block);
+  // A phone call's privacy gate, by rule: a restricted detail said before it's clear the caller may hear it. Not the model's call.
+  const leaked = p ? restrictedSaid(learnerText, p.restricted) : null;
+  if (p && leaked && !mayShare(p, call.checked)) risks.push({ id: DISCLOSURE_ID, quote: leaked });
+  // A phone call's urgent cue arrives on its authored turn, in the caller's own words, so it can't be missed or reworded.
+  const cue = p?.urgent && p.urgent.afterTurn === n ? ` ${p.urgent.cue}` : "";
   const stateAfter = allowedState(state, j.state, scene.states.length);
   const done = n >= scene.maxTurns || (j.end === true && n >= scene.minTurns);
   return {
@@ -366,7 +420,7 @@ export async function runTurn(
     unclear: j.unclear === true || (!moves.length && !risks.length && learnerText.split(/\s+/).length < 3),
     stateAfter,
     caption: text(j.caption, 200),
-    reply: j.reply.trim(),
+    reply: `${j.reply.trim()}${cue}`,
     reason: stateAfter === state ? "held" : stateAfter < state ? "eased" : "rose",
     ended: done ? ((stateAfter === 0 ? "settled" : "unresolved") as Outcome) : null,
     rule: null,
@@ -387,7 +441,7 @@ export async function submitTurn(db: Db, user: User, guideId: string, input: Rec
   if (!turnId) throw new HttpError(400, "That turn can’t be sent. Try again.");
   const before = turnsOf(db, a.id);
   const again = before.find((t) => t.turn_id === turnId);
-  if (again) return { attempt: attemptView(db, ownAttempt(db, user, a.id), scene) };
+  if (again) return { attempt: attemptView(db, ownAttempt(db, user, a.id), block) };
   if (a.status !== "active") throw new HttpError(400, "This practice has finished. Start again to have another go.");
   // The scene they started is the scene they finish: an edit in between doesn't change it under them.
   if (a.scene_hash !== sceneHash(scene)) throw new HttpError(409, "This practice was updated while you were in it. Start again to use the new version.");
@@ -401,12 +455,15 @@ export async function submitTurn(db: Db, user: User, guideId: string, input: Rec
   ).n;
   if (recent >= TURNS_PER_HOUR) throw new HttpError(429, "That’s a lot of practice for one hour. Take a break and come back to it.");
 
+  const phone = phoneOf(block);
+  const lookups = phone ? lookupsOf(db, a.id) : [];
   const out = await runTurn(
     block,
     before.map((t) => ({ reply: t.reply, text: t.text })),
     a.state,
     spoken,
     judge,
+    phone ? callContext(phone, lookups, before.length + 1) : undefined,
   );
   const mode = input.mode === "voice" ? "voice" : "text";
   // What speech recognition heard is kept only when the learner corrected it, marked as superseded by what they sent.
@@ -444,7 +501,7 @@ export async function submitTurn(db: Db, user: User, guideId: string, input: Rec
     log(db, a, "roleplay.turn", { n: before.length + 1, mode, corrected: Boolean(heard && heard !== spoken) }, now);
     if (out.ended) log(db, a, "roleplay.finished", { outcome: out.ended, turns: before.length + 1 }, now);
   });
-  return { attempt: attemptView(db, ownAttempt(db, user, a.id), scene) };
+  return { attempt: attemptView(db, ownAttempt(db, user, a.id), block) };
 }
 
 /** Ending without another turn: asking for help (a good outcome in its own right), or simply stopping. */
@@ -456,7 +513,7 @@ export function finishAttempt(db: Db, user: User, guideId: string, input: Record
     db.prepare("UPDATE roleplay_attempts SET status = 'finished', outcome = ?, finished_at = ? WHERE id = ?").run(outcome, now.toISOString(), a.id);
     log(db, a, "roleplay.finished", { outcome, turns: turnsOf(db, a.id).length }, now);
   }
-  return { attempt: attemptView(db, ownAttempt(db, user, a.id), block.roleplay) };
+  return { attempt: attemptView(db, ownAttempt(db, user, a.id), block) };
 }
 
 /** The learner has read the debrief: that, with reaching an end, is what "practised" means. */
@@ -469,11 +526,93 @@ export function debriefSeen(db: Db, user: User, guideId: string, input: Record<s
   return { ok: true, practised: a.status === "finished" && a.outcome !== "ended" };
 }
 
+/** What a phone call's turn n can rely on: whether the caller's permissions were checked before it, and which records were open. */
+function callContext(p: PhoneCase, lookups: { actionId: string; afterTurn: number }[], n: number) {
+  return {
+    checked: checkedBefore(p, lookups, n),
+    opened: lookups.filter((l) => l.afterTurn < n).map((l) => p.actions.find((x) => x.id === l.actionId)?.label ?? l.actionId),
+  };
+}
+
+/**
+  A phone call's simulated lookup: checking the caller's permissions, opening a record, asking about immediate
+  effects, the urgent escalation (only once its cue has been heard) or recording a complaint. Each is made once,
+  between turns, and reveals only its authored facts. Nothing real is looked up or changed.
+*/
+export function lookup(db: Db, user: User, guideId: string, input: Record<string, unknown>, now: Date) {
+  const a = ownAttempt(db, user, input.attemptId);
+  const { block } = load(db, user, guideId, a.block_id);
+  const phone = phoneOf(block);
+  if (!phone) throw new HttpError(400, "This practice has no case tools.");
+  if (a.status !== "active") throw new HttpError(400, "This call has finished. Start again to have another go.");
+  const turns = turnsOf(db, a.id).length;
+  const action = visibleActions(phone, turns).find((x) => x.id === input.actionId);
+  if (!action) throw new HttpError(404, "That isn’t one of the case tools.");
+  db.prepare("INSERT OR IGNORE INTO roleplay_lookups (attempt_id, action_id, after_turn, at) VALUES (?, ?, ?, ?)").run(
+    a.id,
+    action.id,
+    turns,
+    now.toISOString(),
+  );
+  log(db, a, "roleplay.lookup", { kind: action.kind, after: turns }, now);
+  return { attempt: attemptView(db, ownAttempt(db, user, a.id), block) };
+}
+
+const REWRITES_PER_CALL = 5;
+
+/**
+  After a phone call's debrief, the learner can try one of their lines again and see how it would read: the
+  same rules and model, against the call as it was at that point. Nothing is stored but a count, and the
+  attempt itself is never changed.
+*/
+export async function rewriteLine(db: Db, user: User, guideId: string, input: Record<string, unknown>, judge: Judge = defaultJudge) {
+  const a = ownAttempt(db, user, input.attemptId);
+  const { block } = load(db, user, guideId, a.block_id);
+  const phone = phoneOf(block);
+  if (!phone) throw new HttpError(400, "Rewriting a line is for phone calls.");
+  if (a.status !== "finished") throw new HttpError(400, "Finish the call first.");
+  const turns = turnsOf(db, a.id);
+  const n = Math.round(Number(input.n));
+  const t = turns.find((x) => x.n === n);
+  if (!t) throw new HttpError(404, "That line isn’t here.");
+  const line = text(input.text, MAX_REPLY);
+  if (line.length < 2) throw new HttpError(400, "Write the line you’d say instead.");
+  const used = (db.prepare("SELECT COUNT(*) AS n FROM roleplay_rewrites WHERE attempt_id = ?").get(a.id) as { n: number }).n;
+  if (used >= REWRITES_PER_CALL) throw new HttpError(429, "That’s the rewrites for this call. Try the whole call again instead.");
+  const before = turns.filter((x) => x.n < n);
+  const out = await runTurn(
+    block,
+    before.map((x) => ({ reply: x.reply, text: x.text })),
+    t.state_before,
+    line,
+    judge,
+    callContext(phone, lookupsOf(db, a.id), n),
+  );
+  db.prepare("INSERT INTO roleplay_rewrites (attempt_id, n, at) VALUES (?, ?, ?)").run(a.id, n, new Date().toISOString());
+  const scene = block.roleplay;
+  return {
+    n,
+    left: REWRITES_PER_CALL - used - 1,
+    unclear: out.unclear,
+    safety: out.rule ? { label: out.rule.label, guidance: out.rule.guidance } : null,
+    moves: out.moves.map((m) => ({ quote: m.quote, text: scene.moves.find((x) => x.id === m.id)?.text ?? m.id })),
+    risks: out.risks.map((r) => ({
+      quote: r.quote,
+      text:
+        r.id === DISCLOSURE_ID
+          ? "Shared a restricted detail before it was clear the caller could be told"
+          : (scene.risks.find((x) => x.id === r.id)?.text ?? r.id),
+    })),
+  };
+}
+
 /** Removes one of the learner's own attempts and everything they said in it. */
 export function deleteAttempt(db: Db, user: User, input: Record<string, unknown>) {
   const a = ownAttempt(db, user, input.attemptId);
   tx(db, () => {
     db.prepare("DELETE FROM roleplay_turns WHERE attempt_id = ?").run(a.id);
+    db.prepare("DELETE FROM roleplay_lookups WHERE attempt_id = ?").run(a.id);
+    db.prepare("DELETE FROM roleplay_rewrites WHERE attempt_id = ?").run(a.id);
     db.prepare("DELETE FROM roleplay_attempts WHERE id = ?").run(a.id);
   });
   return { deleted: true };
@@ -551,6 +690,8 @@ export function roleplayStats(db: Db, actor: User, guideId: string) {
   with why the state and tags came out as they did. Nothing is stored.
 */
 export async function testTurn(db: Db, actor: User, input: Record<string, unknown>, judge: Judge = defaultJudge) {
+  // For a phone call, the author says which lookups the learner has made so far.
+  const lookedUp = Array.isArray(input.lookups) ? input.lookups.filter((x): x is string => typeof x === "string").slice(0, 10) : [];
   requireAuthor(actor);
   if (!aiConnected()) throw new HttpError(503, "Neither Claude nor OpenAI is connected, so the character can’t reply.");
   // The scene has to be complete to run: the same checks as publishing.
@@ -581,7 +722,21 @@ export async function testTurn(db: Db, actor: User, input: Record<string, unknow
   const state = Number.isFinite(Number(input.state)) ? Math.round(Number(input.state)) : block.roleplay.start;
   const line = text(input.text, MAX_REPLY);
   if (line.length < 2) throw new HttpError(400, "Type what the learner says.");
-  const out = await runTurn(block, history, state, line, judge);
+  const phone = phoneOf(block);
+  const out = await runTurn(
+    block,
+    history,
+    state,
+    line,
+    judge,
+    phone
+      ? callContext(
+          phone,
+          lookedUp.map((actionId) => ({ actionId, afterTurn: 0 })),
+          history.length + 1,
+        )
+      : undefined,
+  );
   const scene = block.roleplay;
   return {
     stateBefore: state,
@@ -591,7 +746,13 @@ export async function testTurn(db: Db, actor: User, input: Record<string, unknow
     ended: out.ended,
     unclear: out.unclear,
     moves: out.moves.map((m) => ({ ...m, text: scene.moves.find((x) => x.id === m.id)?.text ?? m.id })),
-    risks: out.risks.map((r) => ({ ...r, text: scene.risks.find((x) => x.id === r.id)?.text ?? r.id })),
+    risks: out.risks.map((r) => ({
+      ...r,
+      text:
+        r.id === DISCLOSURE_ID
+          ? "Shared a restricted detail before it was clear the caller could be told"
+          : (scene.risks.find((x) => x.id === r.id)?.text ?? r.id),
+    })),
     safety: out.rule ? { label: out.rule.label, guidance: out.rule.guidance } : null,
     why: out.rule
       ? `Safety rule “${out.rule.label}” matched, so no model was asked.`
