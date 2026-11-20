@@ -58,6 +58,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/learning-guide",
+        label: "AI Learning Guide",
+        icon: "play",
+        description: "The Hub’s one recorded, scripted AI guide: who it is, everywhere it’s used, and withdrawing a recording when guidance changes.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/images",
         label: "Image library",
         icon: "image",

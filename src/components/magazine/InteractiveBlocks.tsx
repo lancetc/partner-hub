@@ -36,6 +36,8 @@ import {
 import { RichText } from "../RichText";
 import type { ReaderNote } from "@/server/magazine";
 import { ReflectBlock } from "./ReflectBlocks";
+import { GuidePlayer } from "./LearningGuide";
+import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
 
@@ -80,6 +82,9 @@ export type InteractiveContext = {
   find: (blockId: string) => Block | undefined;
   /** The learner opened a perspectives panel. */
   opened: (blockId: string) => void;
+  /** The Hub's AI Learning Guide (its name, introduction and portrait), and what a learner did with a recording. */
+  guide: GuideIdentity;
+  guideEvent: (blockId: string, outcome: "started" | "paused" | "completed" | "transcript" | "read_first" | "source") => void;
 };
 
 const column = "mx-auto w-full max-w-[42rem]";
@@ -131,6 +136,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
     case "pulse":
     case "action":
       return <ReflectBlock block={b} ctx={ctx} />;
+    case "guide":
+      return <GuidePlayer block={b} ctx={ctx} />;
     default:
       return null;
   }

@@ -49,6 +49,7 @@ import { canConvert, convertBlock, convertLoses, CONVERTIBLE, type ConvertibleTy
 import { DEFAULT_AUDIO } from "@/lib/magazineNarration";
 import { MagazineRevise, type RevisionChange } from "./MagazineRevise";
 import { SelfReviewManager, SelfReviewPanel } from "./MagazineSelfReview";
+import { GuideEdit, LearningGuideSettings } from "./MagazineGuideEdit";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
 import { Icon, type IconName } from "../Icon";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
@@ -121,6 +122,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   perspectives: "people",
   pulse: "gauge",
   action: "target",
+  guide: "play",
 };
 const BLOCK_HINTS: Record<BlockType, string> = {
   text: "Paragraphs, lists and links, with an optional heading.",
@@ -154,6 +156,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   perspectives: "Two or three curated viewpoints to compare, with what the guidance says.",
   pulse: "One tap: confidence or a view, never scored. Pair two to show the change.",
   action: "One concrete thing to try at work, and later whether they did.",
+  guide: "The Hub’s AI Learning Guide: a recorded, scripted video or voice-over, with its script to read.",
 };
 
 /**
@@ -173,7 +176,7 @@ const openStudioFor = new Set<string>();
 
 /** The palette's categories, so the longer list stays easy to scan. Each block is in one. */
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
-  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "callout", "ack"] },
+  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "process", "hotspots"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "budget"] },
@@ -313,6 +316,8 @@ function newBlock(item: PaletteItem): Block {
       return { id, type, prompt: "", media: { src: "", alt: "" }, mistakes: [] };
     case "confidence":
       return { id, type, statement: "", low: "Not confident", high: "Very confident" };
+    case "guide":
+      return { id, type, mode: "transmission", purpose: "scene", script: "", status: "draft" };
     case "journal":
       return { id, type, prompt: "" };
     case "perspectives":
@@ -493,6 +498,8 @@ function isBlank(b: Block): boolean {
       return !b.prompt && !b.media.src && !b.mistakes.length;
     case "confidence":
       return !b.statement;
+    case "guide":
+      return !b.script && !b.media;
     case "journal":
       return !b.prompt;
     case "perspectives":
@@ -1975,6 +1982,8 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
       );
     case "video":
       return <VideoEdit block={b} update={update} />;
+    case "guide":
+      return <GuideEdit block={b} update={update} />;
     case "textMedia":
       if (b.wrap !== false)
         return (
@@ -3167,6 +3176,7 @@ function BlockSettings({
           onChange={(l) => update<typeof b>(b.id, (x) => void (x.resource = l), `${b.id}:resource`)}
         />
       )}
+      {b.type === "guide" && <LearningGuideSettings block={b} update={update} doc={doc} />}
       <InteractiveSettings block={b} update={update} doc={doc} />
 
       <Segmented

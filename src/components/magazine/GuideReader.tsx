@@ -363,6 +363,9 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       setReflections((r) => ({ ...r, [blockId]: saved }));
       return saved;
     },
+    guide: guide.guide,
+    // What they did with a guide recording: for the course's analytics only. Nothing waits on it.
+    guideEvent: (blockId, outcome) => void send("events", { event: "guide", blockId, detail: { outcome } }).catch(() => {}),
     notes,
     find: (blockId) => pages.flatMap(pageBlocks).find((x) => x.id === blockId),
     saveNote: async (blockId, patch) => {

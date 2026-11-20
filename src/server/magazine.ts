@@ -30,6 +30,7 @@ import { quizOffer } from "./pathQuiz";
 import { liveItems } from "@/lib/magazineReview";
 import { questionsInGuide } from "@/lib/questionPool";
 import { afterPublish, publishGate } from "./questionPool";
+import { guideForReaders, guideIdentity } from "./learningGuide";
 import { reviewRequired } from "./topicApproval";
 
 /*
@@ -335,7 +336,10 @@ export function readGuide(db: Db, user: User, slug: string) {
     pageMinutes: Object.fromEntries(doc.pages.map((pg) => [pg.id, pageMinutes(pg)])),
     publishedAt: r.published_at,
     completion: r.completion,
-    doc: withoutPractice(doc),
+    // Guide recordings only when they're cleared to play (and not withdrawn); never the self-review answers.
+    doc: withoutPractice(guideForReaders(db, doc)),
+    /** The Hub's AI Learning Guide: its name, introduction and portrait. */
+    guide: guideIdentity(db),
     /** Self-review: on, and how many questions each page has (null when it's off). */
     practice: practiceSummary(doc),
     progress: {
@@ -563,6 +567,15 @@ export function recordGuideEvent(
         detail,
         at: now,
       });
+      return { ok: true };
+    }
+    if (input.event === "guide") {
+      // The AI Learning Guide: what the learner did with a recording. Never an activity, never a completion.
+      const outcome = String((input.detail as { outcome?: unknown } | undefined)?.outcome);
+      if (!["started", "paused", "completed", "transcript", "read_first", "source"].includes(outcome)) throw new HttpError(400, "Unknown guide event.");
+      const page = doc.pages.find((x) => pageBlocks(x).some((b) => b.id === input.blockId && b.type === "guide"));
+      if (!page) throw new HttpError(400, "That isn’t in this course.");
+      event(db, { user: user.id, guide: g.id, revision: r.id, event: `guide.${outcome}`, page: page.id, block: String(input.blockId), at: now });
       return { ok: true };
     }
     if (input.event === "narration") {
@@ -1051,6 +1064,7 @@ export function previewGuide(db: Db, actor: User, id: string): ReaderGuide {
     completion: a.completion,
     // An author's preview keeps the questions: it runs reviews in the browser, recording nothing.
     doc: a.doc,
+    guide: guideIdentity(db),
     practice: practiceSummary(a.doc),
     progress: { lastPage: null, lastSection: null, answers: {}, finished: [], started: false, reflections: {}, notes: {} },
     completed: null,

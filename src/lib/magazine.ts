@@ -2,6 +2,7 @@ import { safeHref } from "./richText";
 import { parseVideoLink } from "./videoLinks";
 import { narrationState, pageSnapshot } from "./magazineNarration";
 import { reviewChecks } from "./magazineReview";
+import { guideChecks, type GuideMode, type GuidePurpose } from "./magazineGuide";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -359,6 +360,51 @@ export const PULSE_DEFAULTS = {
 } as const;
 export const ACTION_STATUSES = { tried: "Tried it", not_yet: "Not yet", adjusted: "Adjusted my plan" } as const;
 export type ActionStatus = keyof typeof ACTION_STATUSES;
+/*
+  The AI Learning Guide (lib/magazineGuide): a recorded, scripted segment from the Hub's one AI guide. The
+  script is the content; the video or audio is made from it, must match it, and is watched through before
+  learners get it. Never an activity: playing it finishes nothing.
+*/
+export type GuideMedia = {
+  kind: "video" | "audio";
+  /** Uploaded to the Hub. */
+  src: string;
+  poster?: string;
+  /** A WebVTT captions file (video). */
+  captions?: string;
+  seconds?: number;
+  /** The script it was made from: out of date when the script's words change. */
+  scriptHash: string;
+  /** Someone watched it all the way through against the script. */
+  checked?: { by: string; at: string };
+  producedBy?: string;
+  /** The provider's reference for the render, when there is one. */
+  providerRef?: string;
+};
+export type GuideBlock = Base & {
+  type: "guide";
+  mode: GuideMode;
+  purpose: GuidePurpose;
+  /** What the guide says: the approved, learner-facing transcript. */
+  script: string;
+  /** One prompt or takeaway shown on screen. */
+  screenText?: string;
+  /** A short label in the frame ("Case 03"). */
+  caseLabel?: string;
+  /** Voice over context: what the learner looks at while the guide speaks. */
+  context?: Media;
+  status: "draft" | "approved";
+  approved?: { by: string; at: string; hash: string };
+  owner?: string;
+  source?: { label: string; href?: string };
+  /** Shown as "Content reviewed by …" only when this review exists. */
+  reviewed?: { by: string; on: string };
+  pronunciation?: string;
+  /** A decision this is feedback on: shown once the learner has answered it. */
+  after?: string;
+  media?: GuideMedia;
+};
+
 export const REFLECT_TYPES = ["journal", "perspectives", "pulse", "action"] as const;
 
 export type Block =
@@ -392,7 +438,8 @@ export type Block =
   | JournalBlock
   | PerspectivesBlock
   | PulseBlock
-  | ActionBlock;
+  | ActionBlock
+  | GuideBlock;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -529,6 +576,8 @@ export function activityDone(b: Block, answers: Record<string, string>, quizzes:
     // choosing not to, both count).
     case "perspectives":
     case "pulse":
+    // The AI Learning Guide: playing (or not playing) a recording finishes nothing.
+    case "guide":
       return null;
     case "journal":
     case "action":
@@ -580,6 +629,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   perspectives: "Compare perspectives",
   pulse: "Pulse check",
   action: "Action note",
+  guide: "AI Learning Guide",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1231,6 +1281,71 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           })),
         };
       }
+      case "guide": {
+        const keep = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
+        const when = (x: unknown) => (typeof x === "string" && !Number.isNaN(Date.parse(x)) ? new Date(x).toISOString() : new Date(0).toISOString());
+        const site = (x: unknown, what: string) => {
+          const v = keep(x, 300);
+          if (v && !isSiteMedia(v)) problems.push(`${where} ${what} must be uploaded to the Hub.`);
+          return v && isSiteMedia(v) ? v : "";
+        };
+        const mm = o.media as Record<string, unknown> | undefined;
+        const src = mm ? site(mm.src, "recording") : "";
+        const poster = mm ? site(mm.poster, "poster") : "";
+        const captions = mm ? site(mm.captions, "captions file") : "";
+        const ck = mm?.checked as Record<string, unknown> | undefined;
+        const ap = o.approved as Record<string, unknown> | undefined;
+        const sc = o.source as Record<string, unknown> | undefined;
+        const srcLabel = sc ? keep(sc.label, 200) : "";
+        const srcHref = sc ? keep(sc.href, 500) : "";
+        if (srcHref && !safeHref(srcHref)) problems.push(`${where} source link must be a web address or a page on the Hub.`);
+        const rv = o.reviewed as Record<string, unknown> | undefined;
+        const ctx = o.context as { src?: unknown } | undefined;
+        const seconds = Math.round(Number(mm?.seconds) * 10) / 10;
+        const screenText = keep(o.screenText, 200);
+        const caseLabel = keep(o.caseLabel, 40);
+        const owner = keep(o.owner, 120);
+        const pronunciation = keep(o.pronunciation, 600);
+        const after = typeof o.after === "string" && ID.test(o.after) ? o.after : undefined;
+        const producedBy = keep(mm?.producedBy, 120);
+        const providerRef = keep(mm?.providerRef, 200);
+        return {
+          ...base,
+          type: "guide",
+          mode: o.mode === "inset" || o.mode === "voice" ? o.mode : "transmission",
+          purpose: o.purpose === "attention" || o.purpose === "question" || o.purpose === "consequence" || o.purpose === "bridge" ? o.purpose : "scene",
+          script: str(o.script, `${where} script`, { max: 3000 }) ?? "",
+          ...(screenText && { screenText }),
+          ...(caseLabel && { caseLabel }),
+          ...(ctx?.src && typeof ctx.src === "string" ? { context: media(o.context, `${where} context`) } : {}),
+          status: o.status === "approved" ? "approved" : "draft",
+          ...(ap &&
+            typeof ap.by === "string" &&
+            typeof ap.hash === "string" && { approved: { by: ap.by.slice(0, 120), at: when(ap.at), hash: ap.hash.slice(0, 40) } }),
+          ...(owner && { owner }),
+          ...(srcLabel && { source: { label: srcLabel, ...(srcHref && safeHref(srcHref) && { href: srcHref }) } }),
+          ...(rv &&
+            typeof rv.by === "string" &&
+            rv.by.trim() &&
+            typeof rv.on === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(rv.on) && { reviewed: { by: rv.by.trim().slice(0, 120), on: rv.on } }),
+          ...(pronunciation && { pronunciation }),
+          ...(after && { after }),
+          ...(src && {
+            media: {
+              kind: mm?.kind === "audio" ? ("audio" as const) : ("video" as const),
+              src,
+              ...(poster && { poster }),
+              ...(captions && { captions }),
+              ...(seconds > 0 && { seconds }),
+              scriptHash: keep(mm?.scriptHash, 40),
+              ...(ck && typeof ck.by === "string" && { checked: { by: ck.by.slice(0, 120), at: when(ck.at) } }),
+              ...(producedBy && { producedBy }),
+              ...(providerRef && { providerRef }),
+            },
+          }),
+        };
+      }
       case "journal": {
         const scaffold = str(o.scaffold, `${where} scaffold`, { max: 300 });
         const minutes = Math.round(Number(o.minutes));
@@ -1651,6 +1766,8 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
         if (b.type === "reflection" && !b.guidance) suggestions.push(`${where}: add guidance on what a good answer covers, so Claude’s feedback is useful.`);
         // Reflect and apply: a pair must still be there, earlier in the course, and ask the same thing.
         for (const p of reflectChecks(b, doc)) (p.blocks ? blocking : suggestions).push(`${where}: ${p.text}`);
+        // The AI Learning Guide: an approved script, and media made from it that someone has watched through.
+        if (b.type === "guide") for (const p of guideChecks(b, doc)) (p.blocks ? blocking : suggestions).push(`${where}: ${p.text}`);
         if (b.type === "budget" && !b.flag) suggestions.push(`${where}: mark the budget Illustrative, so reviewers know the figures are made up.`);
         if (b.type === "accordion")
           b.items.forEach((it, j) => {
@@ -1727,6 +1844,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "fillblank") n += words(b.text);
     if (b.type === "confidence") extra += 0.25;
     if (b.type === "journal") extra += b.minutes ?? 2;
+    if (b.type === "guide") n += words(b.script);
     if (b.type === "perspectives")
       n += words(b.prompt) + b.views.reduce((a, v) => a + words(v.title) + words(v.reasoning) + words(v.misses), 0) + words(b.guidance?.body);
     if (b.type === "pulse") extra += 0.25;
