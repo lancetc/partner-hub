@@ -61,6 +61,8 @@ import { freshXRay } from "@/lib/xray";
 import { XRAY_CASES } from "@/content/xrayCases";
 import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
+import { freshLine } from "@/lib/line";
+import { LINE_CASES } from "@/content/lineCases";
 import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
@@ -126,6 +128,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   balance: "sliders",
   xray: "search",
   reset: "timeline",
+  line: "sorting",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -165,6 +168,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   balance: "A person’s choice that carries risk: build a plan that supports both, then test it against a new fact.",
   xray: "A fictional quote or receipt, line by line: eligible, contribution, needs review or private, with the split and an explanation.",
   reset: "A waiting-period story with markers that open a reviewed check-in script and moderated peer approaches from the Community.",
+  line: "Self-managed requests: the participant’s choice, check and agree first, or cannot authorise as requested, with the reason and next step.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
   hotspots: "Points on a picture to open, for exploring a screen, form or room.",
@@ -198,7 +202,7 @@ const openStudioFor = new Set<string>();
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "reset", "process", "hotspots"] },
-  { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "checklist", "quiz"] },
+  { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "budget"] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
   { title: "Reflect & share", types: ["reflection", "wall", "poll", "confidence"] },
@@ -417,6 +421,9 @@ function newBlock(item: PaletteItem): Block {
     case "reset":
       // Starts from the starter story, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshReset(RESET_CASES[0].data) };
+    case "line":
+      // Starts from the draft deck: no card can be served or published until its answer is signed off.
+      return { id, type, ...freshLine(LINE_CASES[0].data) };
     case "budget":
       return {
         id,
@@ -451,6 +458,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "balance") Object.assign(c, freshBalance(c));
   if (c.type === "xray") Object.assign(c, freshXRay(c));
   if (c.type === "reset") Object.assign(c, freshReset(c));
+  if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "poll") c.options = c.options.map((x) => ({ ...x, id: rid("opt") }));
   if (c.type === "hotspots") c.spots = c.spots.map((x) => ({ ...x, id: rid("spot") }));
   if (c.type === "sequencing") c.steps = c.steps.map((x) => ({ ...x, id: rid("step") }));
@@ -578,6 +586,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.finance;
     case "reset":
       return !b.approval.owner && !b.approval.operations;
+    case "line":
+      return !b.approval.owner && !b.approval.clinical;
   }
 }
 

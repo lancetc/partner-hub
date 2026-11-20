@@ -37,6 +37,7 @@ import { missionApproved, missionForReaders } from "@/lib/mission";
 import { balanceApproved, balanceForReaders } from "@/lib/balance";
 import { xrayApproved, xrayForReaders } from "@/lib/xray";
 import { resetApproved } from "@/lib/reset";
+import { lineApproved, lineForReaders } from "@/lib/line";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -270,7 +271,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                 : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
                   b.type === "xray"
                   ? xrayForReaders(b)
-                  : b,
+                  : // Where Is the Line?: the requests and choices, without the answers.
+                    b.type === "line"
+                    ? lineForReaders(b)
+                    : b,
       ),
     })),
   })),
@@ -657,6 +661,7 @@ export function recordGuideEvent(
           "balance",
           "xray",
           "reset",
+          "line",
           "process",
           "flashcards",
           "video",
@@ -1046,6 +1051,21 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unchecked = draftBlocks.filter((b) => b.type === "xray" && !xrayApproved(b));
   // And an Expectation Reset: its scripts speak for Trilogy Care to waiting families, so Care Operations, Quality, Privacy and Communications sign off.
   const unreviewed = draftBlocks.filter((b) => b.type === "reset" && !resetApproved(b));
+  // And Where Is the Line?: its answer keys are clinical and policy judgements, signed off card by card and as a deck.
+  const unkeyed = draftBlocks.filter((b) => b.type === "line" && (!lineApproved(b) || b.cases.some((c) => c.status !== "approved")));
+  if (unkeyed.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "“Where Is the Line?” needs every card approved and the deck signed off before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unkeyed.map(
+          (b) =>
+            `“${b.type === "line" ? b.title : ""}”: approve each card with its Clinical or Quality approver and review date, and record the deck’s owner, Care Partner, Clinical and Quality reviewers, date, and policy set version.`,
+        ),
+      },
+    );
   if (unreviewed.length)
     throw Object.assign(
       new HttpError(

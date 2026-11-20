@@ -29,6 +29,7 @@ import { MissionEdit } from "./MagazineMissionEdit";
 import { BalanceEdit } from "./MagazineBalanceEdit";
 import { XRayEdit } from "./MagazineXRayEdit";
 import { ResetEdit } from "./MagazineResetEdit";
+import { LineEdit } from "./MagazineLineEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -219,6 +220,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <XRayEdit block={b} update={update} />;
     case "reset":
       return <ResetEdit block={b} update={update} />;
+    case "line":
+      return <LineEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1430,6 +1433,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
           Peer approaches come from the Community and follow its moderation. A course can’t be published until Care Operations, Quality, Privacy and
           Communications sign-off and the source version are recorded in the block. Use Preview to try the Community’s empty, withdrawn, stale and offline
           states.
+        </p>
+      );
+    case "line":
+      return (
+        <p className="text-sm text-ink-muted">
+          A practice deck: nothing a learner does in it approves funding or contacts anyone. Only approved cards within their review date are served, and the
+          course can’t be published until every card and the deck are signed off. Use Preview to try it.
         </p>
       );
     case "budget":
