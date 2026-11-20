@@ -90,6 +90,22 @@ export default function ResourcesPage() {
           <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
         </Link>
         <Link
+          href="/resources/playbooks"
+          className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
+        >
+          <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-2xl bg-action text-on-action">
+            <Icon name="clipboard" className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">Playbooks</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">
+              The steps that matter, from the approved SOP
+            </span>
+            <span className="mt-1 block text-ink-muted">Always the current release for your role, with a route to urgent help.</span>
+          </span>
+          <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+        </Link>
+        <Link
           href="/webinars"
           className="group flex items-center gap-4 rounded-3xl bg-muted p-5 ring-1 ring-line transition hover:shadow-md hover:ring-action sm:p-6"
         >

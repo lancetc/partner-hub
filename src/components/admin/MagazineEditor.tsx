@@ -146,6 +146,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   baton: "route",
   redpen: "pen",
   mentor: "mail",
+  playbook: "clipboard",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -192,6 +193,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   myths: "Client questions from the tile library: a 30-second answer, the exception, the source, and an approved reply to copy.",
   baton: "A role-handoff relay: pass the right facts to the right person, name an owner, confirm receipt, escalate what’s urgent.",
   redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
+  playbook: "A procedure from the playbook library, always showing its current approved release, with Ask a Lead.",
   mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
@@ -224,7 +226,7 @@ const openStudioFor = new Set<string>();
 
 /** The palette's categories, so the longer list stays easy to scan. Each block is in one. */
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
-  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "ack"] },
+  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
   { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
   { title: "Simulate", types: ["branching", "conversation", "signal", "mission", "balance", "xray", "bridge", "baton", "budget"] },
@@ -457,6 +459,9 @@ function newBlock(item: PaletteItem): Block {
     case "benchmark":
       // Starts from the missed check-in case, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshBenchmark(BENCHMARK_CASES[0].data) };
+    case "playbook":
+      // Points at the incident first-steps playbook; it shows once its release is approved in the library.
+      return { id, type, snippetId: "sirs-first-steps" };
     case "mentor":
       // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
       return { id, type, title: "Notes to a younger me", intro: "", topics: ["boundaries", "calls"], audiences: [], selection: "hybrid", noteIds: [], count: 3, deal: true, contribute: false, mode: "read", reflection: "Which part would you keep, in your own words?" };
@@ -651,6 +656,8 @@ function isBlank(b: Block): boolean {
       return !b.approval.owner && !b.approval.clinical;
     case "mentor":
       return !b.noteIds.length && !b.topics.length;
+    case "playbook":
+      return !b.snippetId;
   }
 }
 

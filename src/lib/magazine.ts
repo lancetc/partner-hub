@@ -17,6 +17,7 @@ import { parseMythBlock, type MythBlockData } from "./myths";
 import { parseBaton, type BatonBlockData } from "./baton";
 import { parseRedPen, type RedPenBlockData } from "./redpen";
 import { parseNotesDeck, type NotesDeckData } from "./notes";
+import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -477,7 +478,8 @@ export type Block =
   | MythBlock
   | BatonBlock
   | RedPenBlock
-  | NotesDeckBlock;
+  | NotesDeckBlock
+  | PlaybookBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -504,6 +506,8 @@ export type BatonBlock = Base & { type: "baton" } & BatonBlockData;
 export type RedPenBlock = Base & { type: "redpen" } & RedPenBlockData;
 /** Notes to a Younger Me (lib/notes): a deck of mentor cards from the reviewed note library. */
 export type NotesDeckBlock = Base & { type: "mentor" } & NotesDeckData;
+/** Live SOP-to-Playbook (lib/playbook): a procedure resolved from the playbook library to its current approved release. */
+export type PlaybookBlock = Base & { type: "playbook" } & PlaybookBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -648,6 +652,9 @@ export function activityDone(b: Block, answers: Record<string, string>, quizzes:
     // The AI Learning Guide: playing (or not playing) a recording finishes nothing.
     case "guide":
       return null;
+    // A Live SOP playbook is reference: reading it, or not, finishes nothing (docs/live-playbooks.md).
+    case "playbook":
+      return null;
     case "journal":
     case "action":
       if (!b.required) return null;
@@ -712,6 +719,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   baton: "Pass the Baton relay",
   redpen: "Red Pen critique",
   mentor: "Notes to a Younger Me deck",
+  playbook: "Live SOP playbook",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1613,6 +1621,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "redpen", ...parseRedPen(o, where, { str, idOf, list, unfinished }) };
       case "mentor":
         return { ...base, type: "mentor", ...parseNotesDeck(o, where, { str, unfinished }) };
+      case "playbook":
+        return { ...base, type: "playbook", ...parsePlaybookBlock(o, where, { unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -2039,6 +2049,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "baton") extra += 12;
     if (b.type === "redpen") extra += 8;
     if (b.type === "mentor") extra += b.count;
+    if (b.type === "playbook") extra += 1;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

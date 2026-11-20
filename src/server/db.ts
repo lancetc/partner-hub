@@ -1122,6 +1122,40 @@ CREATE INDEX IF NOT EXISTS mission_attempts_user ON mission_attempts (user_id, g
 const missionReady = new WeakSet<object>();
 /** Makes sure the Mission Board table is there, for a server that was already running when it was added. */
 /*
+  Live SOP-to-Playbook (lib/playbook, server/playbooks): Hub policy records (every version kept), the contact
+  directory, snippets and their releases, what each reader last viewed, acknowledged and saved, and the questions
+  asked about a step, with their replies.
+*/
+export const PLAYBOOK_SCHEMA = `
+CREATE TABLE IF NOT EXISTS playbook_sources (doc_id TEXT NOT NULL, version INTEGER NOT NULL, data TEXT NOT NULL, at TEXT NOT NULL, by_user TEXT NOT NULL, PRIMARY KEY (doc_id, version));
+CREATE TABLE IF NOT EXISTS playbook_contacts (key TEXT PRIMARY KEY, label TEXT NOT NULL, routes TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS playbook_snippets (id TEXT PRIMARY KEY, data TEXT NOT NULL, withdrawn INTEGER NOT NULL DEFAULT 0, withdrawn_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS playbook_releases (
+  snippet_id TEXT NOT NULL, number INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('draft', 'in_review', 'approved', 'superseded')),
+  data TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT, approved_at TEXT, PRIMARY KEY (snippet_id, number)
+);
+CREATE TABLE IF NOT EXISTS playbook_views (user_id TEXT NOT NULL REFERENCES users(id), snippet_id TEXT NOT NULL, number INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (user_id, snippet_id));
+CREATE TABLE IF NOT EXISTS playbook_acks (user_id TEXT NOT NULL REFERENCES users(id), snippet_id TEXT NOT NULL, number INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (user_id, snippet_id, number));
+CREATE TABLE IF NOT EXISTS playbook_saves (user_id TEXT NOT NULL REFERENCES users(id), snippet_id TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY (user_id, snippet_id));
+CREATE TABLE IF NOT EXISTS playbook_gaps (
+  id TEXT PRIMARY KEY, snippet_id TEXT NOT NULL, release_number INTEGER NOT NULL, step_id TEXT NOT NULL DEFAULT '', issue TEXT NOT NULL, question TEXT NOT NULL,
+  author_id TEXT NOT NULL REFERENCES users(id), route TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', idem_key TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (author_id, idem_key)
+);
+CREATE TABLE IF NOT EXISTS playbook_gap_replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, gap_id TEXT NOT NULL REFERENCES playbook_gaps(id), author_id TEXT NOT NULL REFERENCES users(id),
+  label TEXT NOT NULL CHECK (label IN ('peer', 'lead', 'policy')), body TEXT NOT NULL, release_number INTEGER NOT NULL, at TEXT NOT NULL
+);
+`;
+const playbookReady = new WeakSet<object>();
+/** Makes sure the playbook tables are there, for a server already running when they were added. */
+export function ensurePlaybooks(db: { exec: (sql: string) => void }) {
+  if (playbookReady.has(db)) return;
+  db.exec(PLAYBOOK_SCHEMA);
+  playbookReady.add(db);
+}
+
+/*
   Notes to a Younger Me (lib/notes, server/notes): the mentor note library (every version kept), helpful votes
   (one per person), private Pocket Deck saves (pointers, not copies), card events, and each learner's deck.
 */
@@ -1408,6 +1442,7 @@ export function migrate(db: Db) {
   db.exec(BATON_SCHEMA);
   db.exec(REDPEN_SCHEMA);
   db.exec(MENTOR_SCHEMA);
+  db.exec(PLAYBOOK_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

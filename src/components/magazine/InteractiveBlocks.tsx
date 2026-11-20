@@ -51,6 +51,7 @@ import { MythTilesBlock } from "./MythTilesBlock";
 import { BatonRelay } from "./BatonRelay";
 import { RedPen } from "./RedPen";
 import { NotesDeck } from "./NotesDeck";
+import { PlaybookBlockView } from "./PlaybookBlock";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -157,6 +158,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <RedPen block={b} ctx={ctx} />;
     case "mentor":
       return <NotesDeck block={b} ctx={ctx} />;
+    case "playbook":
+      return <PlaybookBlockView block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

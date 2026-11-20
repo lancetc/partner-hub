@@ -80,6 +80,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/facts", label: "Facts", icon: "doc", description: "Rates, dates and numbers used across topics.", authorOnly: true },
       {
+        href: "/admin/playbooks",
+        label: "Playbooks",
+        icon: "clipboard",
+        description: "Live SOP snippets: releases, source changes, withdrawal, the contact directory, and questions from Ask a Lead.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/mentor-notes",
         label: "Mentor notes",
         icon: "mail",

@@ -43,6 +43,7 @@ import { journeyApproved, journeyForReaders } from "@/lib/journey";
 import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 import { unpublishableTiles } from "./myths";
 import { deckProblems } from "./notes";
+import { playbookBlockProblems } from "./playbooks";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 
@@ -1129,6 +1130,15 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
           (b) =>
             `“${b.type === "baton" ? b.title : ""}”: record the content owner, the Clinical, Care Operations, Finance, Quality and Privacy reviewers, the date, the policy or SOP IDs, and a review date that hasn’t passed.`,
         ),
+      },
+    );
+  // And a Live SOP playbook: the snippet must have an approved release that isn't withdrawn.
+  const unreleased = draftBlocks.flatMap((b) => (b.type === "playbook" ? playbookBlockProblems(db, b.snippetId, now) : []));
+  if (unreleased.length)
+    throw Object.assign(
+      new HttpError(400, "A playbook block needs an approved release before the course can be published. “Publish anyway” doesn’t cover this."),
+      {
+        problems: unreleased,
       },
     );
   // And Notes to a Younger Me: pinned cards must be reviewed, and a pool needs enough reviewed notes on its topic.
