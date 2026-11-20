@@ -6,6 +6,7 @@ import { guideChecks, type GuideMode, type GuidePurpose } from "./magazineGuide"
 import { DEFAULT_METER, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "./roleplay";
 import { parseSignal, type SignalBlockData } from "./signal";
 import { parseMission, type MissionBlockData } from "./mission";
+import { parseBalance, type BalanceBlockData } from "./balance";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -455,11 +456,14 @@ export type Block =
   | ActionBlock
   | GuideBlock
   | SignalBlock
-  | MissionBlock;
+  | MissionBlock
+  | BalanceBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
 export type MissionBlock = Base & { type: "mission" } & MissionBlockData;
+/** Dignity of Risk and Duty of Care Balance Scale (lib/balance): a plan built around a person's choice that carries risk, checked against authored criteria. */
+export type BalanceBlock = Base & { type: "balance" } & BalanceBlockData;
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
 /**
@@ -657,6 +661,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   guide: "AI Learning Guide",
   signal: "Spot the Signal",
   mission: "First 30 Days Mission Board",
+  balance: "Dignity of Risk Balance Scale",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1536,6 +1541,8 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "signal", ...parseSignal(o, where, { str, idOf, list, unfinished }) };
       case "mission":
         return { ...base, type: "mission", ...parseMission(o, where, { str, idOf, list, unfinished }) };
+      case "balance":
+        return { ...base, type: "balance", ...parseBalance(o, where, { str, idOf, list, unfinished }) };
       case "budget": {
         const raw = list(o.services, where, "services", 12);
         if (!raw.length) unfinished(`${where} needs at least one service.`);
@@ -1951,6 +1958,7 @@ export function pageMinutes(page: Page) {
     if (b.type === "budget") extra += 3;
     if (b.type === "signal") extra += 12;
     if (b.type === "mission") extra += 15;
+    if (b.type === "balance") extra += 10;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

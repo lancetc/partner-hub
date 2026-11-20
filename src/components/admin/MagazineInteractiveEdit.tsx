@@ -26,6 +26,7 @@ import { column } from "../magazine/GuideBlocks";
 import { RoleplaySettings } from "./MagazineRoleplayEdit";
 import { SignalEdit } from "./MagazineSignalEdit";
 import { MissionEdit } from "./MagazineMissionEdit";
+import { BalanceEdit } from "./MagazineBalanceEdit";
 import { Icon, type IconName } from "../Icon";
 
 /*
@@ -210,6 +211,8 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <SignalEdit block={b} update={update} />;
     case "mission":
       return <MissionEdit block={b} update={update} />;
+    case "balance":
+      return <BalanceEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1399,6 +1402,13 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         <p className="text-sm text-ink-muted">
           A training case: nothing a learner does in it rosters, starts care, issues a statement or contacts anyone. It can’t be published until Care
           Operations, Supplier Compliance, Finance and Quality sign-off and the source version are recorded in the block. Use Preview to work it through.
+        </p>
+      );
+    case "balance":
+      return (
+        <p className="text-sm text-ink-muted">
+          A training case: nothing a learner does in it changes a real care plan or record. It can’t be published until Clinical, Quality and Care Operations
+          sign-off (and WHS, where workers are at risk) and the source version are recorded in the block. Use Preview to work it through.
         </p>
       );
     case "budget":

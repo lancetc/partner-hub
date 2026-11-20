@@ -40,6 +40,7 @@ import { GuidePlayer } from "./LearningGuide";
 import { Roleplay } from "./Roleplay";
 import { SignalCase } from "./SignalCase";
 import { MissionBoard } from "./MissionBoard";
+import { BalanceScale } from "./BalanceScale";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -124,6 +125,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <SignalCase block={b} ctx={ctx} />;
     case "mission":
       return <MissionBoard block={b} ctx={ctx} />;
+    case "balance":
+      return <BalanceScale block={b} ctx={ctx} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

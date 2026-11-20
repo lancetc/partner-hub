@@ -34,6 +34,7 @@ import { guideForReaders, guideIdentity } from "./learningGuide";
 import { reviewRequired } from "./topicApproval";
 import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
+import { balanceApproved, balanceForReaders } from "@/lib/balance";
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -261,7 +262,10 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
             : // The Mission Board: the case and board, without what marks a choice right.
               b.type === "mission"
               ? missionForReaders(b)
-              : b,
+              : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
+                b.type === "balance"
+                ? balanceForReaders(b)
+                : b,
       ),
     })),
   })),
@@ -645,6 +649,7 @@ export function recordGuideEvent(
           "budget",
           "signal",
           "mission",
+          "balance",
           "process",
           "flashcards",
           "video",
@@ -1028,6 +1033,21 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   const unapproved = draftBlocks.filter((b) => b.type === "signal" && !signalApproved(b));
   // The same for a Mission Board: its dates, screening routes and statement rules are policy, signed off by the teams that own them.
   const unsigned = draftBlocks.filter((b) => b.type === "mission" && !missionApproved(b));
+  // And a Balance Scale: its rules about choice, falls, worker safety and funded workers are clinical and policy judgements.
+  const unbalanced = draftBlocks.filter((b) => b.type === "balance" && !balanceApproved(b));
+  if (unbalanced.length)
+    throw Object.assign(
+      new HttpError(
+        400,
+        "A Balance Scale case needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+      ),
+      {
+        problems: unbalanced.map(
+          (b) =>
+            `“${b.type === "balance" ? b.title : ""}”: record the content owner, the Clinical, Quality and Care Operations reviewers (and WHS, where workers are at risk), the date, and the policy source and version.`,
+        ),
+      },
+    );
   if (unsigned.length)
     throw Object.assign(
       new HttpError(
