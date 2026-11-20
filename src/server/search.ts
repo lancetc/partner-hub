@@ -8,6 +8,7 @@ import type { Db } from "./db";
 import type { User } from "./auth";
 import { forLearner, parseWebinar, type Row as WebinarRow } from "./webinars";
 import { missionSlugs } from "./challenges";
+import { keywords } from "@/lib/keywords";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -159,24 +160,6 @@ export function savedItems(db: Db, user: User, ids: string[]): SearchResult[] {
 }
 
 /* For the topic assistant: the hub content most related to a question, in full, best first. */
-
-const STOP = new Set(
-  "a about after all also am an and any are as at be been before but by can could did do does doing for from get got had has have how i if in into is it its just me my need no not of on or our should so than that the their them then there these they this to up us was we what when where which who why will with would you your".split(
-    " ",
-  ),
-);
-const keywords = (text: string) => [
-  ...new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s'-]/gu, " ")
-      .split(/\s+/)
-      .map((w) => w.replace(/^'+|'+$/g, ""))
-      .filter((w) => w.length > 2 && !STOP.has(w))
-      // "visits" finds "visit": a simple plural trim, enough for short questions.
-      .map((w) => (w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)),
-  ),
-];
 
 export type RelatedDoc = { id: string; title: string; href: string; meta: string; text: string };
 

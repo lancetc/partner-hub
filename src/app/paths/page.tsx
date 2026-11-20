@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getDb } from "@/server/db";
 import { currentUser } from "@/server/auth";
 import { browseLearningPaths, myCertificates, slugsFor } from "@/server/learningPaths";
@@ -36,10 +37,36 @@ export default function LearningPathsPage() {
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
       </Suspense>
+      <MyDiscoveryPanel />
       <Suspense>
         <Paths />
       </Suspense>
     </div>
+  );
+}
+
+/** The way to My Discovery: the learner's own paths, which are kept apart from the ones set for them. */
+function MyDiscoveryPanel() {
+  return (
+    <section aria-labelledby="my-discovery" className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-surface p-5 ring-1 ring-line">
+      <div className="min-w-0 flex-1 basis-72">
+        <h2 id="my-discovery" className="font-serif text-xl font-semibold">
+          My Discovery
+        </h2>
+        <p className="mt-1 text-ink-muted">
+          Make your own path around something you want to get better at. Tell the Hub your goal and it suggests a short route through what’s published, or build
+          one yourself. It’s yours to change, and separate from the training below.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Link href="/discovery" className="inline-flex min-h-11 items-center rounded-full bg-action px-5 font-semibold text-on-action hover:opacity-90">
+          Create a Discovery Path
+        </Link>
+        <Link href="/discovery" className="inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 font-semibold hover:bg-muted">
+          Open My Discovery
+        </Link>
+      </div>
+    </section>
   );
 }
 

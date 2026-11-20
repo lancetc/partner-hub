@@ -29,6 +29,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
       { href: "/admin/learning-paths", label: "Discovery Paths", icon: "route", description: "Learning paths: sets of topics in order, assigned to people." },
       {
+        href: "/admin/discovery",
+        label: "Discovery gaps",
+        icon: "search",
+        description: "What learners look for in My Discovery and don't find, and the topics they've asked for.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/challenges",
         label: "Challenges",
         icon: "flag",

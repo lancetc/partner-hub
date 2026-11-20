@@ -48,6 +48,7 @@ import { CardComments } from "./CardComments";
 import { ReportProblem } from "./ReportProblem";
 import { OfflineButton } from "../OfflineButton";
 import { EnrolButton } from "../EnrolButton";
+import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { PublicQr } from "../PublicQr";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
@@ -450,6 +451,10 @@ export function LessonPlayer({
         />
         {!preview && !anonymous && !personal && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
         {enrol && !preview && !anonymous && lesson.track !== "reinforcement" && <TopicEnrol slug={lesson.slug} />}
+        {/* Save it to a personal Discovery Path (not for follow-up steps or challenge missions, which can't be saved). */}
+        {enrol && !preview && !anonymous && !personal && lesson.track !== "reinforcement" && (
+          <AddToDiscovery itemKey={`topic:${lesson.slug}`} className="mt-3" />
+        )}
         {!preview && !anonymous && !personal && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
@@ -2414,7 +2419,10 @@ function Wall({
           {!others.length && <p className={cx("text-sm", note)}>You’re the first. Come back later to see what others add.</p>}
           <ul className="flex flex-col gap-2">
             {others.map((p) => (
-              <li key={p.id} className={cx("rounded-2xl p-3 text-ink [text-shadow:none]", tinted ? "bg-surface shadow-sm" : "bg-surface/90 shadow-sm ring-1 ring-line")}>
+              <li
+                key={p.id}
+                className={cx("rounded-2xl p-3 text-ink [text-shadow:none]", tinted ? "bg-surface shadow-sm" : "bg-surface/90 shadow-sm ring-1 ring-line")}
+              >
                 <p className="whitespace-pre-line">{p.text}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
                   {p.by && <span className="font-semibold text-ink">{p.by}</span>}

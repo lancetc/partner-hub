@@ -24,7 +24,8 @@ export function isActive(pathname: string, href: string) {
   // The eLearning courses live in Magazine; a course's player is at /elearning/[id].
   if (href === "/magazine") return pathname.startsWith("/magazine") || pathname.startsWith("/elearning");
   // Webinars, the journey map and Challenges (with a single challenge at /challenge/[id]) sit under Resources.
-  if (href === "/resources")
-    return ["/resources", "/webinars", "/journey", "/challenges", "/challenge/"].some((p) => pathname.startsWith(p));
+  if (href === "/resources") return ["/resources", "/webinars", "/journey", "/challenges", "/challenge/"].some((p) => pathname.startsWith(p));
+  // My Discovery (a learner's own Discovery Paths) sits with the paths.
+  if (href === "/paths") return pathname.startsWith("/paths") || pathname.startsWith("/discovery");
   return pathname.startsWith(href);
 }

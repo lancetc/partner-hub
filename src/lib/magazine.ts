@@ -458,6 +458,11 @@ export type Page = {
     `false`). What counts for each kind of block is in activityDone.
   */
   allActivities?: false;
+  /**
+    Makes sense read by itself (docs/discovery-paths.md): learners can save this page to a personal
+    Discovery Path and it can be suggested for a goal. Off, only the whole course is offered.
+  */
+  standalone?: true;
   hero?: Media;
   /** The page's spoken introduction (Audio Guide). */
   narration?: Narration;
@@ -1549,6 +1554,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       kind: p?.kind === "assessment" ? "assessment" : "content",
       required: p?.required !== false,
       ...(p?.allActivities === false && { allActivities: false as const }),
+      ...(p?.standalone === true && p?.kind !== "assessment" && { standalone: true as const }),
       ...(hero?.src && { hero }),
       ...((n) => (n ? { narration: n } : {}))(narration(p?.narration, where)),
       sections,

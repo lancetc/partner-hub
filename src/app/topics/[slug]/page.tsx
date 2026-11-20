@@ -87,7 +87,14 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/topics/[slug]">
       // ?card=<id> opens a bookmarked card (as a review).
       startAt={typeof query.card === "string" ? query.card : undefined}
       instanceId={typeof instance === "string" && /^\d+$/.test(instance) ? instance : undefined}
-      backTo={challengeId ? { href: `/challenge/${challengeId}`, label: "Back to the challenge" } : undefined}
+      backTo={
+        challengeId
+          ? { href: `/challenge/${challengeId}`, label: "Back to the challenge" }
+          : // ?discovery=<id>: opened from one of their own Discovery Paths.
+            typeof query.discovery === "string" && /^[\w-]+$/.test(query.discovery)
+            ? { href: `/discovery/${query.discovery}`, label: "Back to your Discovery Path" }
+            : undefined
+      }
       skipHolds={canSkipHolds(db, user.id, lesson.slug)}
       // On finishing, the next topic in their learning path (not for a challenge mission or a follow-up step).
       nextTopic={challengeId || typeof instance === "string" ? null : nextTopicAfter(db, user, lesson.slug)}

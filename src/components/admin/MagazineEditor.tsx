@@ -1589,6 +1589,23 @@ function PageSettings({
           </span>
         </span>
       </label>
+      {page.kind !== "assessment" && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-[var(--color-action)]"
+            checked={page.standalone === true}
+            onChange={(e) => updatePage(page.id, (x) => (e.target.checked ? void (x.standalone = true) : void delete x.standalone))}
+          />
+          <span>
+            Suitable as a standalone reference
+            <span className="block text-xs text-ink-muted">
+              This page makes sense without the pages before it. Learners can save it to their own Discovery Path, and it can be suggested for a goal. Leave it
+              off and only the whole course is offered.
+            </span>
+          </span>
+        </label>
+      )}
       <div className="flex flex-wrap gap-2">
         <button type="button" className={btn.secondary} onClick={onDuplicate}>
           <Icon name="copy" className="size-4" /> Duplicate page

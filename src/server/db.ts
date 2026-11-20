@@ -841,11 +841,62 @@ export function seedStaff(db: Db) {
   if (!db.prepare("SELECT 1 FROM users WHERE superadmin = 1").get()) db.prepare("UPDATE users SET superadmin = 1 WHERE id = ?").run("jordan");
 }
 
+/*
+  Discovery Paths (lib/discovery, server/discovery): a learner's own routes through published Topics and
+  Magazine content. A step points at the content by its stable id; nothing is copied. A path's progress is
+  personal ("Reviewed for now", "Explored") and is kept apart from every completion and certificate table.
+*/
+export const DISCOVERY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS discovery_paths (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL, goal TEXT NOT NULL DEFAULT '', purpose TEXT NOT NULL DEFAULT '',
+  experience TEXT, minutes INTEGER,
+  state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'active', 'paused', 'archived')),
+  -- When every step had been explored for the first time. Personal: nothing official follows from it.
+  explored_at TEXT, last_opened_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS discovery_paths_user ON discovery_paths (user_id);
+CREATE TABLE IF NOT EXISTS discovery_steps (
+  id TEXT PRIMARY KEY, path_id TEXT NOT NULL REFERENCES discovery_paths(id), position INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('topic', 'course', 'page')), ref TEXT NOT NULL, page_id TEXT NOT NULL DEFAULT '',
+  -- The titles as they read when saved: the learner's own history, kept if the content is retired.
+  title TEXT NOT NULL, parent_title TEXT,
+  phase TEXT, reason TEXT, note TEXT NOT NULL DEFAULT '', revisit INTEGER NOT NULL DEFAULT 0,
+  reviewed_at TEXT, saved_version TEXT, opened_version TEXT, opened_at TEXT, added_at TEXT NOT NULL,
+  UNIQUE (path_id, kind, ref, page_id)
+);
+-- What was suggested for a goal and what became of it. The goal itself isn't kept here: only its key words.
+CREATE TABLE IF NOT EXISTS discovery_recommendations (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, path_id TEXT, goal_words TEXT NOT NULL, audience TEXT NOT NULL,
+  experience TEXT, minutes INTEGER, considered TEXT NOT NULL, offered TEXT NOT NULL, engine TEXT NOT NULL,
+  outcome TEXT NOT NULL CHECK (outcome IN ('offered', 'accepted', 'edited', 'empty')), at TEXT NOT NULL
+);
+-- A learner asking for learning the Hub doesn't have yet. Reviewed by an author; nothing is generated from it.
+CREATE TABLE IF NOT EXISTS discovery_requests (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), goal TEXT NOT NULL, context TEXT NOT NULL DEFAULT '',
+  audience TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'reviewing', 'planned', 'published', 'declined')),
+  note TEXT NOT NULL DEFAULT '', link TEXT, handled_by TEXT, handled_at TEXT, created_at TEXT NOT NULL
+);
+-- What happened, never what was written: no goal, note or request text.
+CREATE TABLE IF NOT EXISTS discovery_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT NOT NULL, path_id TEXT, item_key TEXT,
+  event TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '{}'
+);
+`;
+const discoveryReady = new WeakSet<object>();
+/** Makes sure the Discovery Path tables are there, for a server that was already running when they were added. */
+export function ensureDiscovery(db: { exec: (sql: string) => void }) {
+  if (discoveryReady.has(db)) return;
+  db.exec(DISCOVERY_SCHEMA);
+  discoveryReady.add(db);
+}
+
 export function migrate(db: Db) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
   db.exec(POOL_SCHEMA);
   db.exec(NOTES_SCHEMA);
+  db.exec(DISCOVERY_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

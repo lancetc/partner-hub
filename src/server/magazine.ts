@@ -1,5 +1,5 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   COMPLETION_MODES,
   GUIDE_AUDIENCES,
@@ -289,6 +289,60 @@ export function learnerGuides(db: Db, user: User, now = new Date()) {
         lastReadAt: p?.updated_at ?? null,
       };
     });
+}
+
+/**
+  For Discovery Paths (server/discovery.ts): every published course this person may read, with its pages,
+  where they are in it, and the words on each page for matching a goal. `restricted` lists the published
+  courses they may not read, by id only, so a saved step can say "you no longer have access" and nothing more.
+*/
+export function discoveryCourses(db: Db, user: User) {
+  const rows = db.prepare("SELECT * FROM magazine_guides WHERE status = 'published' AND revision_id IS NOT NULL").all() as GuideRow[];
+  const courses = rows
+    .filter((g) => canRead(user, g))
+    .map((g) => {
+      const r = revisionById(db, g.revision_id!)!;
+      const doc = readGuideDoc(JSON.parse(r.doc), { draft: true });
+      const p = progressOf(db, g.id, user.id);
+      const done = latestCompletion(db, g.id, user.id);
+      const finished = new Set(p ? finishedPages(db, g.id, user.id, p.revision_id) : []);
+      const review = practiceSummary(doc);
+      return {
+        id: g.id,
+        slug: g.slug,
+        title: r.title,
+        standfirst: r.standfirst,
+        minutes: r.minutes,
+        edition: r.number,
+        publishedAt: r.published_at,
+        state: done?.kind === "completed" ? ("completed" as const) : p ? ("started" as const) : ("new" as const),
+        lastPage: p && doc.pages.some((x) => x.id === p.last_page) ? p.last_page : null,
+        practice: Boolean(review),
+        pages: doc.pages.map((page) => {
+          const blocks = pageBlocks(page);
+          return {
+            id: page.id,
+            title: page.title,
+            purpose: page.purpose,
+            kind: page.kind,
+            standalone: page.standalone === true && page.kind === "content",
+            minutes: pageMinutes(page),
+            finished: finished.has(page.id),
+            // Changes only when this page does, so another page's edit doesn't flag it as updated.
+            version: createHash("sha1").update(JSON.stringify(page)).digest("hex").slice(0, 12),
+            practice: review?.pages[page.id]
+              ? "Quick review"
+              : blocks.some((b) => b.type === "decision" || b.type === "branching" || b.type === "conversation")
+                ? "A decision to practise"
+                : blocks.some((b) => b.type === "quiz")
+                  ? "Check questions"
+                  : null,
+            content: page.sections.map((s) => ({ title: s.title, blocks: s.blocks })),
+          };
+        }),
+      };
+    });
+  return { courses, restricted: rows.filter((g) => !canRead(user, g)).map((g) => g.id) };
 }
 
 export type QuizState = { pathId: string; pathName: string; passed: boolean; available: boolean; passMark: number | null };

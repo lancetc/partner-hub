@@ -12,6 +12,7 @@ import type { ReflectionSaved } from "./InteractiveBlocks";
 import { AudioGuideCard } from "./AudioGuide";
 import { useSelfReview } from "./SelfReview";
 import { useMyNotes } from "./ReflectBlocks";
+import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { playable } from "@/lib/magazineNarration";
 
 /*
@@ -463,6 +464,11 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             </span>
             {/* On a phone the reading rail is a menu, so My notes sits here. */}
             {myNotes.button && <span className="lg:hidden">{myNotes.button}</span>}
+            {!preview && (
+              <span className="lg:hidden">
+                <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />
+              </span>
+            )}
             {page.kind === "content" && audioGuide.audio && (audioGuide.offered || playable(page.narration, audioGuide.audio)) && (
               <AudioGuideCard
                 key={page.id}
@@ -518,10 +524,12 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           active={active}
           finished={finished}
           extra={
-            (selfReview.available || myNotes.available) && (
-              <div className="flex flex-col gap-2">
+            (selfReview.available || myNotes.available || !preview) && (
+              <div className="flex flex-col items-start gap-2">
                 {selfReview.button("rail")}
                 {myNotes.button}
+                {/* Save this page (or, when it isn't offered by itself, its course) to a personal Discovery Path. */}
+                {!preview && <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />}
               </div>
             )
           }
