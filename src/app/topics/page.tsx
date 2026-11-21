@@ -28,15 +28,17 @@ export default function LearningPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       <PageHero
-        eyebrow="Trilogy Care learning"
+        eyebrow="Short and practical"
         title="Topics"
+        // A gardener at his potting-shed table trying something on his phone, on the right, with lawn behind the words.
+        image={{ src: "/images/hero-gardener-phone.webp", width: 1914, height: 822, position: "80% 36%" }}
         aside={
           <Suspense>
             <TopicStats />
           </Suspense>
         }
       >
-        Short, practical topics you can finish between visits. Your place is saved as you go.
+        Quick topics to finish between visits. Pick one up when you have ten minutes, and your place is saved as you go.
       </PageHero>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />

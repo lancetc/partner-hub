@@ -414,68 +414,85 @@ function Callout({ block: b, ctx }: { block: CalloutBlock; ctx: BlockContext }) 
   const [ticked, setTicked] = useState(ctx.answers[`done:${b.id}`] === "1");
   // The celebration plays only at the moment of ticking, not on coming back to it.
   const [justTicked, setJustTicked] = useState(false);
+  // An optional picture strip: a band across the top on a phone, a strip down the right side from tablet width up.
+  const strip = b.media?.src ? b.media : null;
   return (
-    <aside className={cx(column, "rounded-2xl border-l-4 p-5", look.box)} aria-label={b.label ?? CALLOUTS[b.style]}>
-      <p className={cx("mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.1em]", look.mark)}>
-        <Icon name={look.icon} className="size-5" /> {b.label ?? CALLOUTS[b.style]}
-      </p>
-      <RichText text={b.body} className="leading-relaxed" />
-      {b.link && (
-        <Link href={b.link.href} className="mt-3 inline-flex items-center gap-1 font-semibold text-accent hover:underline">
-          {b.link.label} <Icon name="arrow-right" className="size-4" />
-        </Link>
+    <aside
+      className={cx(column, "rounded-2xl border-l-4", strip ? "flex flex-col overflow-hidden sm:flex-row" : "p-5", look.box)}
+      aria-label={b.label ?? CALLOUTS[b.style]}
+    >
+      {strip && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={strip.src}
+          alt={strip.decorative ? "" : strip.alt}
+          loading="lazy"
+          className="h-32 w-full shrink-0 bg-muted object-cover sm:order-last sm:h-auto sm:w-36 lg:w-44"
+          style={strip.position ? { objectPosition: strip.position } : undefined}
+        />
       )}
-      {b.confirm && (
-        <label
-          className={cx(
-            "relative mt-4 flex items-start gap-3 rounded-xl border-2 bg-surface p-3 font-semibold transition-colors duration-300",
-            ticked ? "border-[#2f8f5b] bg-[#f3fbf6] dark:bg-[#17301f]" : "cursor-pointer border-line-strong hover:border-action",
-            justTicked && "mag-confirmed",
-          )}
-        >
-          {justTicked && (
-            // A little burst from the box: decoration only.
-            <span aria-hidden className="mag-burst">
-              {Array.from({ length: 12 }, (_, i) => {
-                const angle = (i / 12) * Math.PI * 2;
-                const reach = 34 + (i % 3) * 10;
-                return (
-                  <span
-                    key={i}
-                    style={
-                      {
-                        "--dx": `${Math.round(Math.cos(angle) * reach)}px`,
-                        "--dy": `${Math.round(Math.sin(angle) * reach)}px`,
-                        background: ["#008282", "#fab53d", "#2f8f5b", "#5fc9c9"][i % 4],
-                      } as React.CSSProperties
-                    }
-                  />
-                );
-              })}
-            </span>
-          )}
-          <input
-            type="checkbox"
-            className="relative mt-0.5 size-5 shrink-0 accent-[var(--color-action)]"
-            checked={ticked}
-            aria-readonly={ticked}
-            onChange={(e) => {
-              if (!e.target.checked || ticked) return;
-              setTicked(true);
-              setJustTicked(true);
-              ctx.engaged(b.id);
-            }}
-          />
-          <span>
-            {b.confirm}
-            {ticked && (
-              <span className="mag-confirm-note mt-0.5 flex items-center gap-1 text-sm font-normal text-[#0f5b3a] dark:text-[#8fe0b5]" role="status">
-                <Icon name="circle-check" className="size-4" /> Confirmed. Thank you.
+      <div className={cx(strip && "min-w-0 flex-1 p-5")}>
+        <p className={cx("mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.1em]", look.mark)}>
+          <Icon name={look.icon} className="size-5" /> {b.label ?? CALLOUTS[b.style]}
+        </p>
+        <RichText text={b.body} className="leading-relaxed" />
+        {b.link && (
+          <Link href={b.link.href} className="mt-3 inline-flex items-center gap-1 font-semibold text-accent hover:underline">
+            {b.link.label} <Icon name="arrow-right" className="size-4" />
+          </Link>
+        )}
+        {b.confirm && (
+          <label
+            className={cx(
+              "relative mt-4 flex items-start gap-3 rounded-xl border-2 bg-surface p-3 font-semibold transition-colors duration-300",
+              ticked ? "border-[#2f8f5b] bg-[#f3fbf6] dark:bg-[#17301f]" : "cursor-pointer border-line-strong hover:border-action",
+              justTicked && "mag-confirmed",
+            )}
+          >
+            {justTicked && (
+              // A little burst from the box: decoration only.
+              <span aria-hidden className="mag-burst">
+                {Array.from({ length: 12 }, (_, i) => {
+                  const angle = (i / 12) * Math.PI * 2;
+                  const reach = 34 + (i % 3) * 10;
+                  return (
+                    <span
+                      key={i}
+                      style={
+                        {
+                          "--dx": `${Math.round(Math.cos(angle) * reach)}px`,
+                          "--dy": `${Math.round(Math.sin(angle) * reach)}px`,
+                          background: ["#008282", "#fab53d", "#2f8f5b", "#5fc9c9"][i % 4],
+                        } as React.CSSProperties
+                      }
+                    />
+                  );
+                })}
               </span>
             )}
-          </span>
-        </label>
-      )}
+            <input
+              type="checkbox"
+              className="relative mt-0.5 size-5 shrink-0 accent-[var(--color-action)]"
+              checked={ticked}
+              aria-readonly={ticked}
+              onChange={(e) => {
+                if (!e.target.checked || ticked) return;
+                setTicked(true);
+                setJustTicked(true);
+                ctx.engaged(b.id);
+              }}
+            />
+            <span>
+              {b.confirm}
+              {ticked && (
+                <span className="mag-confirm-note mt-0.5 flex items-center gap-1 text-sm font-normal text-[#0f5b3a] dark:text-[#8fe0b5]" role="status">
+                  <Icon name="circle-check" className="size-4" /> Confirmed. Thank you.
+                </span>
+              )}
+            </span>
+          </label>
+        )}
+      </div>
     </aside>
   );
 }

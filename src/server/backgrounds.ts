@@ -31,7 +31,7 @@ function removeUpload(bg: Background) {
   if (bg.kind !== "upload" || !UPLOAD_NAME.test(bg.file)) return;
   for (const file of [bg.file, uploadSmallName(bg.file)]) {
     try {
-      fs.unlinkSync(path.join(DIR, file));
+      fs.unlinkSync(path.join(/*turbopackIgnore: true*/ DIR, file));
     } catch {
       // Already gone.
     }
@@ -75,7 +75,7 @@ export async function uploadBackground(db: Db, user: User, file: File, now: Date
   fs.mkdirSync(DIR, { recursive: true });
   const name = `${user.id.replace(/[^\w-]/g, "")}-${randomBytes(6).toString("hex")}.webp`;
   fs.writeFileSync(path.join(DIR, name), large.data);
-  fs.writeFileSync(path.join(DIR, uploadSmallName(name)), small);
+  fs.writeFileSync(path.join(/*turbopackIgnore: true*/ DIR, uploadSmallName(name)), small);
   return save(db, user, { kind: "upload", file: name, width: large.info.width, height: large.info.height, color }, now);
 }
 
@@ -83,7 +83,7 @@ export async function uploadBackground(db: Db, user: User, file: File, now: Date
 export function readBackground(file: string) {
   if (!UPLOAD_NAME.test(file)) return undefined;
   try {
-    return fs.readFileSync(path.join(DIR, file));
+    return fs.readFileSync(path.join(/*turbopackIgnore: true*/ DIR, file));
   } catch {
     return undefined;
   }

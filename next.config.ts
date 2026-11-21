@@ -35,6 +35,9 @@ const nextConfig: NextConfig = {
       { source: "/learning/:path*", destination: "/topics/:path*", permanent: true },
       // The Coordinator's Day moved from Challenges to Play.
       { source: "/challenges/coordinators-day", destination: "/play/coordinators-day", permanent: true },
+      // Playbooks became Job Aids, and their library is Work Tools (docs/job-aids.md).
+      { source: "/resources/playbooks", destination: "/tools", permanent: true },
+      { source: "/resources/playbooks/:id", destination: "/tools/:id", permanent: true },
     ];
   },
   experimental: {

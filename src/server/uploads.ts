@@ -64,7 +64,7 @@ const toItem = (r: UploadRow) => ({
 const hashOf = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 function fileHash(filename: string) {
   try {
-    return hashOf(fs.readFileSync(path.join(DIR, filename)));
+    return hashOf(fs.readFileSync(path.join(/*turbopackIgnore: true*/ DIR, filename)));
   } catch {
     return null;
   }
@@ -121,7 +121,7 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
   }
   const filename = `${randomUUID()}.${ext}`;
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(path.join(DIR, filename), buf, { flag: "wx" });
+  fs.writeFileSync(path.join(/*turbopackIgnore: true*/ DIR, filename), buf, { flag: "wx" });
   db.prepare(
     "INSERT INTO uploads (filename, original_name, mime, bytes, width, height, uploaded_by, uploaded_at, credit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(filename, name, mime, buf.length, width, height, actor.id, now.toISOString(), credit ? JSON.stringify(credit) : null);
@@ -152,7 +152,7 @@ export function readUpload(db: Db, filename: string) {
 
 function readFile(row: UploadRow) {
   try {
-    return { body: fs.readFileSync(path.join(DIR, row.filename)), mime: row.mime, name: row.original_name };
+    return { body: fs.readFileSync(path.join(/*turbopackIgnore: true*/ DIR, row.filename)), mime: row.mime, name: row.original_name };
   } catch {
     // On the online demo, a file from the shipped content.
     const body = snapshotFile("uploads", row.filename);

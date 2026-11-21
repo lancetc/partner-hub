@@ -75,3 +75,21 @@ describe("text and media", () => {
     expect(page.sections.flatMap((x) => x.blocks).find((x) => x.type === "textMedia")).not.toHaveProperty("wrap");
   });
 });
+
+describe("a callout's picture strip", () => {
+  const callout = (extra: object) => withBlock({ type: "callout", style: "tip", label: "Cultural safety", body: "Ask what matters to the person.", ...extra });
+  it("keeps a picture with which part shows, and drops one that hasn't been chosen", () => {
+    const d = readGuideDoc(callout({ media: { src: "/images/home-hero.webp", alt: "A carer and a client", position: "30% 60%" } }));
+    expect(d.pages[0].sections[0].blocks[0]).toMatchObject({ type: "callout", media: { src: "/images/home-hero.webp", alt: "A carer and a client", position: "30% 60%" } });
+    const empty = readGuideDoc(callout({ media: { src: "", alt: "" } }));
+    expect(empty.pages[0].sections[0].blocks[0]).not.toHaveProperty("media");
+  });
+
+  it("refuses another site's picture, and needs a description or the decorative tick before publishing", () => {
+    expect(() => readGuideDoc(callout({ media: { src: "https://elsewhere.example/a.png", alt: "x" } }))).toThrow(/uploaded to the Hub/);
+    const undescribed = readGuideDoc(callout({ media: { src: "/images/home-hero.webp", alt: "" } }), { draft: true });
+    expect(publishChecks(undescribed, "confirm").blocking.join(" ")).toMatch(/describe the picture strip, or mark it decorative/);
+    const decorative = readGuideDoc(callout({ media: { src: "/images/home-hero.webp", alt: "", decorative: true } }));
+    expect(publishChecks(decorative, "confirm").blocking.join(" ")).not.toMatch(/picture strip/);
+  });
+});

@@ -25,6 +25,8 @@ export default function ResourcesPage() {
       <PageHero
         eyebrow="Look it up"
         title="Resources"
+        // A colleague making notes at her table by the louvres, laptop open, on the right, with the weatherboards behind the words.
+        image={{ src: "/images/hero-notes-at-table.webp", width: 1914, height: 822, position: "80% 29%" }}
         aside={
           <HeroStats
             stats={[
@@ -34,7 +36,7 @@ export default function ResourcesPage() {
           />
         }
       >
-        Guides, templates, webinars, the client journey, challenges and contacts you can come back to. Demonstration content.
+        The reference shelf, for when you need an answer now: guides, templates, webinars, the client journey and who to contact. Demonstration content.
       </PageHero>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">

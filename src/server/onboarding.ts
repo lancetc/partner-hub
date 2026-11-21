@@ -571,7 +571,7 @@ export async function uploadDocument(db: Db, user: User, taskId: unknown, file: 
   const id = newId("doc");
   const stored = `${randomUUID()}.${type.ext}`;
   mkdirSync(DIR, { recursive: true });
-  writeFileSync(path.join(DIR, stored), buf, { flag: "wx" });
+  writeFileSync(path.join(/*turbopackIgnore: true*/ DIR, stored), buf, { flag: "wx" });
   tx(db, () => {
     touch(db, user, now);
     const standing = before?.status === "approved" ? { standing: before.expires_at } : before ? JSON.parse(before.data) : {};
@@ -609,7 +609,7 @@ export function readDocument(db: Db, user: User, id: unknown, now: Date) {
     if (!task || !domain || !reviews(capAccess(db, user), domain, task)) throw new HttpError(404, "That document isn’t available.");
     audit(db, { actor: user.id, event: "onboarding.document_viewed", entity: `onboarding_task:${row.id}`, at: now });
   }
-  return { buffer: readFileSync(path.join(DIR, doc.stored_name)), mime: doc.mime, name: doc.original_name };
+  return { buffer: readFileSync(path.join(/*turbopackIgnore: true*/ DIR, doc.stored_name)), mime: doc.mime, name: doc.original_name };
 }
 
 /** "Start using the Hub": only once every required task is approved, or someone has made a dated exception. */

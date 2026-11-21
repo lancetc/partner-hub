@@ -112,8 +112,10 @@ export function Community() {
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       {/* The community at a glance. */}
       <PageHero
-        eyebrow="Trilogy Care Community"
+        eyebrow="Together"
         title="Learn from each other"
+        // Colleagues, clients and a gardener at a garden lunch outside a Queenslander, across the middle and right, with lawn behind the words.
+        image={{ src: "/images/hero-garden-lunch.webp", width: 1914, height: 822, position: "70% 26%" }}
         aside={
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex -space-x-2" aria-hidden>

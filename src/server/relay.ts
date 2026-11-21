@@ -312,7 +312,7 @@ export function findSources(db: Db, user: User, course: RelayCourse, question: s
           .join(" · "),
         text: `${pb.purpose}\n${pb.steps.map((st, i) => `${i + 1}. ${st.text}${st.why ? ` (${st.why})` : ""}`).join("\n")}`,
         reviewDue: pb.reviewDue,
-        href: `/resources/playbooks/${pb.id}`,
+        href: `/tools/${pb.id}`,
         revision: `release ${pb.number}`,
         anchor: step?.id ?? "",
       });

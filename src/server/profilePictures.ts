@@ -27,7 +27,7 @@ export const pictureUrl = (file: string | null) => (file ? `/api/avatars/${file}
 function removeFile(file: string | null) {
   if (!file || !NAME.test(file)) return;
   try {
-    fs.unlinkSync(path.join(DIR, file));
+    fs.unlinkSync(path.join(/*turbopackIgnore: true*/ DIR, file));
   } catch {
     // Already gone.
   }
@@ -71,7 +71,7 @@ export function removePicture(db: Db, user: User, now: Date) {
 export function readPicture(file: string) {
   if (!NAME.test(file)) return undefined;
   try {
-    return fs.readFileSync(path.join(DIR, file));
+    return fs.readFileSync(path.join(/*turbopackIgnore: true*/ DIR, file));
   } catch {
     // On the online demo, a picture from the shipped content.
     return snapshotFile("avatars", file);

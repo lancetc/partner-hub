@@ -12,7 +12,7 @@ import path from "node:path";
 const root = () => process.env.HUB_ELEARNING_DIR ?? path.join(process.cwd(), "data", "elearning");
 const versionDir = (versionId: string) => {
   if (!/^[a-z0-9-]{8,64}$/.test(versionId)) throw new Error("Bad version id.");
-  return path.join(root(), versionId);
+  return path.join(/*turbopackIgnore: true*/ root(), versionId);
 };
 
 /** Resolves a path inside a version's files, refusing anything that would land outside them. */

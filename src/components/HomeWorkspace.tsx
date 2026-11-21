@@ -7,7 +7,6 @@ import { useHub, useHydrated } from "@/lib/store";
 import { cx, formatDate } from "@/lib/format";
 import { sinceLastVisit, type VisitItem } from "@/lib/sinceLastVisit";
 import type { TopicSummary } from "@/lib/topicSummary";
-import { greeting } from "./HomeWelcome";
 import { AskTrilogy } from "./AskTrilogy";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
@@ -53,8 +52,6 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
     } catch {}
   }, [me.user.id]);
 
-  const first = me.user.name.trim().split(/\s+/)[0];
-  const role = me.user.audience === "coordinator" ? "Coordinator workspace" : me.user.audience === "staff" ? "Trilogy Care workspace" : "Care Partner workspace";
   const all = box ? [...box.action, ...box.updates, ...box.activity] : [];
   const summary = box ? sinceLastVisit(all, last, now) : null;
   const todo = box?.action.filter((a) => !a.done) ?? [];
@@ -72,21 +69,8 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
   const percent = live.length ? Math.round((pathDone / live.length) * 100) : null;
 
   return (
-    <section aria-labelledby="workspace-heading" className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p data-build-step style={step(0)} className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
-            {role}
-          </p>
-          <h1 id="workspace-heading" data-build-step style={step(1)} className="mt-1 font-serif text-4xl font-semibold tracking-tight sm:text-[2.75rem]">
-            {greeting(now)}, {first}.
-          </h1>
-          <p data-build-step style={step(1)} className="mt-1 text-lg text-ink-muted">
-            Here’s what’s relevant to you this week.
-          </p>
-        </div>
-      </div>
-
+    // The greeting is in the homepage's cover (home/HomeHero), straight above this.
+    <section aria-label="Your workspace" className="flex flex-col gap-5">
       {summary && (
         <p data-build-step style={step(2)} className="flex items-start gap-3 rounded-2xl bg-tealtint px-4 py-3">
           <Icon name="spark" className="mt-0.5 size-5 shrink-0 text-[#008282] dark:text-[#3cb8b9]" />

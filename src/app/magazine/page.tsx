@@ -13,7 +13,7 @@ import { MagazineBrowser, type BrowseGuide } from "@/components/magazine/Magazin
 
 export const metadata: Metadata = {
   title: "Magazine",
-  description: "Longer guides to read at a desk: real situations, worked examples and the decisions care coordinators make.",
+  description: "Longer reads for when you can focus: articles, in-depth guides and courses built around real situations and the decisions behind them.",
   alternates: { canonical: "/magazine" },
 };
 
@@ -22,15 +22,17 @@ export default function MagazinePage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       <PageHero
-        eyebrow="Trilogy Care learning"
+        eyebrow="Take your time"
         title="Magazine"
+        // A colleague settled in at her kitchen table with a laptop and a cup of tea, on the right, with a sunlit wall behind the words.
+        image={{ src: "/images/magazine-reading.webp", width: 1915, height: 821, position: "80% 23%" }}
         aside={
           <Suspense>
             <GuideStats />
           </Suspense>
         }
       >
-        Longer reads for your desk: guides, courses and interactive eLearning, built around real situations and the decisions you make.
+        Somewhere to slow down and go deeper. Articles, longer guides and courses built around real situations and the decisions behind them.
       </PageHero>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />

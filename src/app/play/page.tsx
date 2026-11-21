@@ -22,6 +22,8 @@ export default function PlayPage() {
       <PageHero
         eyebrow="Learn by doing"
         title="Play"
+        // A colleague in headphones working through something at his table by the louvres, on the right, with a sunlit wall behind the words.
+        image={{ src: "/images/hero-headphones-notes.webp", width: 1914, height: 822, position: "88% 32%" }}
         aside={
           <HeroStats
             stats={[
@@ -32,8 +34,8 @@ export default function PlayPage() {
           />
         }
       >
-        Three games for learning by doing. Work through a coordinator’s day from the first call to handover, walk a street full of clients who need a
-        hand, or get people talking about the moments that matter in care.
+        Games to practise in. Run a coordinator’s day from first call to handover, help a street full of clients, or get people talking about the moments that
+        matter in care.
       </PageHero>
 
       {/* The three games across on a computer, two on a tablet, with why play underneath. */}

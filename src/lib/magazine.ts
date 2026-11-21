@@ -219,6 +219,8 @@ export type CalloutBlock = Base & {
   body: string;
   link?: { href: string; label: string };
   confirm?: string;
+  /** An optional picture, shown as a vertical strip down the callout's right side (a band across the top on a phone). */
+  media?: Media;
 };
 export type Verdict = "best" | "acceptable" | "risky";
 /** An optional photo in a circle beside the question (a person, say), as on a decision question. */
@@ -1153,6 +1155,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           body: str(o.body, `${where} text`, { required: true, max: 3000 }) ?? "",
           ...(l && { link: l }),
           ...(confirm && { confirm }),
+          ...(o.media && (o.media as { src?: unknown }).src ? { media: media(o.media, `${where} picture`) } : {}),
         };
       }
       case "decision": {
@@ -1967,6 +1970,8 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
         }
         if ((b.type === "image" || (b.type === "textMedia" && !b.video)) && !b.media.decorative && !b.media.alt)
           blocking.push(`${where}: describe the picture, or mark it decorative.`);
+        if (b.type === "callout" && b.media?.src && !b.media.decorative && !b.media.alt)
+          blocking.push(`${where}: describe the picture strip, or mark it decorative.`);
         // A video block, or the video in a text-and-media block: the same checks.
         const vid = b.type === "video" ? b : b.type === "textMedia" ? videoOf(b) : null;
         if (vid?.embed && !vid.captionsOnPlayer) blocking.push(`${where}: confirm the video has captions on ${EMBED_NAME[vid.embed.provider]}.`);

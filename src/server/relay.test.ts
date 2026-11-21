@@ -293,7 +293,7 @@ describe("work guidance", () => {
       {
         ref: "S1",
         title: "Suspected SIRS Priority 1: first steps",
-        href: "/resources/playbooks/sirs-first-steps",
+        href: "/tools/sirs-first-steps",
         meta: "Release 1 · effective 2026-01-01 · owner: Quality and Clinical Governance · review by 2027-06-30",
       },
     ]);

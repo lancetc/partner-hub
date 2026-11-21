@@ -26,7 +26,7 @@ export function restoreDatabase(file: string) {
 export function snapshotFile(folder: "uploads" | "avatars", name: string) {
   if (!on() || name !== path.basename(name)) return undefined;
   try {
-    return fs.readFileSync(path.join(dir(), folder, name));
+    return fs.readFileSync(path.join(/*turbopackIgnore: true*/ dir(), folder, name));
   } catch {
     return undefined;
   }

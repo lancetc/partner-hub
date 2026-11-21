@@ -24,15 +24,17 @@ export default function LearningPathsPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       <PageHero
-        eyebrow="Trilogy Care learning"
+        eyebrow="Step by step"
         title="Discovery Paths"
+        // A colleague on a garden bench working through something on her phone, on the right, with lawn behind the words.
+        image={{ src: "/images/hero-bench-reading.webp", width: 1914, height: 822, position: "80% 14%" }}
         aside={
           <Suspense>
             <PathStats />
           </Suspense>
         }
       >
-        Build your knowledge and skills through training programs made up of short, practical topics. Complete each topic in order to earn your certificate.
+        Topics set in order to build a skill from the ground up. Follow a path through to the end and earn its certificate.
       </PageHero>
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />

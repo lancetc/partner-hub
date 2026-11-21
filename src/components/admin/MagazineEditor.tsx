@@ -2262,31 +2262,43 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
         tip: "border-[#008282] bg-tealtint",
       }[b.style];
       return (
-        <aside className={cx(column, "rounded-2xl border-l-4 p-5", look)}>
-          <InlineText
-            value={b.label ?? ""}
-            onChange={(v) => update<typeof b>(b.id, (x) => void (x.label = v), `${b.id}:label`)}
-            placeholder={CALLOUTS[b.style]}
-            className="mb-2 font-mulish text-sm font-extrabold uppercase tracking-[0.1em]"
-          />
-          <RichEditable
-            value={b.body}
-            onChange={(v) => update<typeof b>(b.id, (x) => void (x.body = v), `${b.id}:body`)}
-            placeholder="What should stand out"
-            className="leading-relaxed"
-          />
-          {b.link?.label && <p className="mt-3 font-semibold text-accent">{b.link.label} →</p>}
-          {b.confirm !== undefined && (
-            <div className="mt-4 flex items-start gap-3 rounded-xl border-2 border-line-strong bg-surface p-3 font-semibold">
-              <input type="checkbox" className="mt-1 size-5 shrink-0" disabled aria-label="Readers tick this" />
-              <InlineText
-                value={b.confirm}
-                onChange={(v) => update<typeof b>(b.id, (x) => void (x.confirm = v), `${b.id}:confirm`)}
-                placeholder="What readers confirm (I understand and agree)"
-                className="flex-1"
-              />
-            </div>
+        <aside className={cx(column, "rounded-2xl border-l-4", b.media?.src ? "flex flex-col overflow-hidden sm:flex-row" : "p-5", look)}>
+          {/* The picture strip, as readers see it. It's chosen in the block's settings. */}
+          {b.media?.src && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={b.media.src}
+              alt=""
+              className="h-32 w-full shrink-0 bg-muted object-cover sm:order-last sm:h-auto sm:w-36 lg:w-44"
+              style={b.media.position ? { objectPosition: b.media.position } : undefined}
+            />
           )}
+          <div className={cx(b.media?.src && "min-w-0 flex-1 p-5")}>
+            <InlineText
+              value={b.label ?? ""}
+              onChange={(v) => update<typeof b>(b.id, (x) => void (x.label = v), `${b.id}:label`)}
+              placeholder={CALLOUTS[b.style]}
+              className="mb-2 font-mulish text-sm font-extrabold uppercase tracking-[0.1em]"
+            />
+            <RichEditable
+              value={b.body}
+              onChange={(v) => update<typeof b>(b.id, (x) => void (x.body = v), `${b.id}:body`)}
+              placeholder="What should stand out"
+              className="leading-relaxed"
+            />
+            {b.link?.label && <p className="mt-3 font-semibold text-accent">{b.link.label} →</p>}
+            {b.confirm !== undefined && (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border-2 border-line-strong bg-surface p-3 font-semibold">
+                <input type="checkbox" className="mt-1 size-5 shrink-0" disabled aria-label="Readers tick this" />
+                <InlineText
+                  value={b.confirm}
+                  onChange={(v) => update<typeof b>(b.id, (x) => void (x.confirm = v), `${b.id}:confirm`)}
+                  placeholder="What readers confirm (I understand and agree)"
+                  className="flex-1"
+                />
+              </div>
+            )}
+          </div>
         </aside>
       );
     }
@@ -2929,6 +2941,84 @@ function EmbedLinkField({ onEmbed }: { onEmbed: (e: VideoEmbed) => void }) {
   );
 }
 
+/**
+  A callout's optional picture strip (in the block's settings): down the callout's right side, a band across the top
+  on a phone. Choose it from an upload, the library or AI, describe it (or mark it decorative), drag to choose which
+  part shows, or take it away.
+*/
+function CalloutPicture({ block: b, update }: { block: Extract<Block, { type: "callout" }>; update: Update }) {
+  if (!b.media)
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-accent hover:underline"
+        onClick={() => update<typeof b>(b.id, (x) => void (x.media = { src: "", alt: "" }))}
+      >
+        <Icon name="image" className="size-4" /> Add a picture strip
+      </button>
+    );
+  const remove = () => update<typeof b>(b.id, (x) => void delete x.media);
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-muted/50 p-3">
+      <p className="text-sm font-semibold">Picture strip</p>
+      {!b.media.src ? (
+        <>
+          <MediaSlot
+            media={b.media}
+            aspect="aspect-[3/4]"
+            onPick={(src) => update<typeof b>(b.id, (x) => void (x.media = src ? { src, alt: "" } : undefined))}
+          />
+          <button type="button" className="self-start text-xs font-semibold text-accent hover:underline" onClick={remove}>
+            Remove picture strip
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-ink-muted">Drag the picture to choose which part shows in the strip.</p>
+          <RepositionPicture
+            media={b.media}
+            className="aspect-[3/4] w-40 rounded-xl bg-muted object-cover"
+            onMove={(p) => update<typeof b>(b.id, (x) => void (p ? (x.media!.position = p) : delete x.media!.position))}
+          />
+          {/* Replace it (upload, the library or AI), crop it, or take it away. */}
+          <PictureButtons
+            picture={{ src: b.media.src, width: 0, height: 0 }}
+            onChange={(p, how, alt) =>
+              update<typeof b>(b.id, (x) => {
+                if (!p) {
+                  delete x.media;
+                  return;
+                }
+                // A cropped copy keeps its description; a different picture needs a new one.
+                const cropped = how === "crop";
+                x.media = { src: p.src, alt: cropped ? (x.media?.alt ?? "") : (alt ?? ""), ...(x.media?.decorative && { decorative: true }) };
+              })
+            }
+          />
+          <DescribeButton src={b.media.src} context={b.body} onAlt={(alt) => update<typeof b>(b.id, (x) => void (x.media!.alt = alt))} />
+          <input
+            className={cx(input, "min-h-10 text-sm", !b.media.alt && !b.media.decorative && "border-danger")}
+            placeholder="Describe the picture"
+            aria-label="Picture description"
+            value={b.media.alt}
+            disabled={b.media.decorative}
+            onChange={(e) => update<typeof b>(b.id, (x) => void (x.media!.alt = e.target.value), `${b.id}:alt`)}
+          />
+          <label className="flex items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-action)]"
+              checked={Boolean(b.media.decorative)}
+              onChange={(e) => update<typeof b>(b.id, (x) => void (x.media!.decorative = e.target.checked || undefined))}
+            />
+            Decorative: it adds nothing the callout doesn’t say
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** The question, its answers, and the feedback on each, all on the page. */
 function DecisionEdit({ block: b, update }: { block: Extract<Block, { type: "decision" }>; update: Update }) {
   return (
@@ -3389,6 +3479,7 @@ function BlockSettings({
               </span>
             </span>
           </label>
+          <CalloutPicture block={b} update={update} />
         </>
       )}
       {b.type === "decision" && (

@@ -30,7 +30,7 @@ type View = "grid" | "list";
 
 /*
   The default is "By subject": one list in the subjects' fixed order (the same as the chips), so it reads
-  the same every visit. (What's assigned or under way is already in Your learning and Assigned to you.)
+  the same every visit. (What's assigned or under way is already in Your learning.)
   "Suggested for you" is the personal order: under way and assigned first, finished last.
 */
 const SORTS: { value: Sort; label: string }[] = [
@@ -226,36 +226,7 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
   };
   return (
     <div className="mt-8 flex flex-col gap-12">
-      {assigned.length > 0 && (
-        <section aria-labelledby="assigned">
-          <h2 id="assigned" className="mb-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">
-            Assigned to you
-          </h2>
-          <ul className="grid gap-4 md:grid-cols-2">
-            {assigned.map((l) => {
-              const s = label(l);
-              return (
-                <li key={l.slug} className="relative flex gap-4 rounded-3xl border-2 border-action/40 bg-tealtint p-4">
-                  <StoryVisual {...l.visual} alt="" className="size-24 shrink-0 rounded-2xl" iconSize="size-6" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="font-mulish text-xs font-bold text-warm">Required{l.assignment?.due && ` · due ${formatDate(l.assignment.due)}`}</p>
-                    <h3 className="font-serif text-xl font-semibold leading-snug">
-                      <Link href={`/topics/${l.slug}`} className="after:absolute after:inset-0 after:content-['']">
-                        {l.title}
-                      </Link>
-                    </h3>
-                    <p className="text-sm text-ink-muted">{s?.text ?? " "}</p>
-                    <span className="mt-auto inline-flex items-center gap-1 font-semibold text-accent">
-                      {s?.cta ?? "Open"} <Icon name="arrow-right" className="size-4" />
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
+      {/* Required topics aren't listed again here: Your learning, above, already shows what's assigned. */}
       {enrolled.length > 0 && (
         <section aria-labelledby="enrolled">
           <h2 id="enrolled" className="mb-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">

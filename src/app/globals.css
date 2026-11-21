@@ -817,3 +817,265 @@ input[type="range"].brand-range::-moz-range-thumb {
 .relay-dialog * { scrollbar-width: thin; scrollbar-color: var(--relay-line) transparent; }
 
 
+
+/*
+  The homepage's cover (components/home/HomeHero.tsx) fills the page's sheet: side to side and up to its top edge,
+  cropped by the sheet's rounded corners. The page column (max-w-7xl, centred in <main>) is narrower than <main> on
+  wide screens, so <main> is made a size container here and the cover reaches out to its edges in cqw. Upwards it
+  cancels the page's top padding (1.5rem, 2rem on large screens).
+*/
+main#main:has(.hub-hero-bleed) {
+  container-type: inline-size;
+}
+.hub-hero-bleed {
+  margin-top: -1.5rem;
+  margin-inline: calc(50% - 50cqw);
+}
+@media (min-width: 1024px) {
+  .hub-hero-bleed { margin-top: -2rem; }
+}
+/* Where the glass sheet is drawn, the cover takes its rounded top corners. */
+:root:has(> body > .hub-backdrop) .hub-hero-bleed {
+  border-radius: 1.75rem 1.75rem 0 0;
+}
+
+/*
+  The sign-in page (components/SignIn.tsx) stands alone on white, in either theme, because its scene is painted
+  onto white. No footer, and no space kept for the phone bar, which isn't shown there.
+*/
+body:has([data-signin-page]) {
+  background: #ffffff;
+  padding-bottom: 0;
+}
+body:has([data-signin-page]) > footer {
+  display: none;
+}
+
+/* Arriving: the logo, the scene, the heading and the button rise into place in turn (each sets --delay). */
+@keyframes signin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.signin-rise {
+  animation: signin-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) var(--delay, 0s) both;
+}
+
+/*
+  Dusk: each light in the scene comes on in turn (--on) and then breathes slowly. A warm glow added over the
+  picture with "screen", so it brightens what's under it and never darkens it.
+*/
+@keyframes signin-lamp-on {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes signin-lamp-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.signin-lamp {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle, rgb(255 222 160 / 0.95) 0%, rgb(255 196 112 / 0.5) 30%, rgb(255 180 90 / 0) 68%);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation:
+    signin-lamp-on 1.4s ease-out var(--on, 1s) forwards,
+    signin-lamp-breathe 5.5s ease-in-out calc(var(--on, 1s) + 1.4s) infinite;
+}
+.signin-door {
+  position: absolute;
+  border-radius: 45%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(ellipse at center, rgb(255 236 196 / 0.75) 0%, rgb(150 235 225 / 0.35) 40%, rgb(150 235 225 / 0) 72%);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: signin-lamp-on 1.6s ease-out 1.5s forwards;
+  transition:
+    opacity 0.7s ease,
+    scale 0.9s cubic-bezier(0.3, 0.6, 0.2, 1);
+}
+
+/* Walking in: the doorway brightens, the scene eases towards it, and the words step back. */
+.signin-scene {
+  transform-origin: 79.6% 55%;
+  transition: transform 0.9s cubic-bezier(0.4, 0.1, 0.2, 1);
+}
+
+/*
+  Hovering the scene, with a mouse: a very slow zoom, about fifteen seconds to reach 7%. It uses the separate scale
+  property, so it sits on top of the arrival's movement and the walk-in's zoom instead of replacing them. Leaving
+  settles it back in a second or two.
+*/
+.signin-stage {
+  transform-origin: 50% 60%;
+  scale: 1;
+  transition: scale 1.8s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .signin-stage:hover {
+    scale: 1.07;
+    transition: scale 15s cubic-bezier(0.15, 0.4, 0.25, 1);
+  }
+}
+.signin-fade {
+  transition: opacity 0.5s ease;
+}
+[data-entering] .signin-scene {
+  transform: scale(1.12);
+}
+[data-entering] .signin-door {
+  animation: none;
+  opacity: 1;
+  scale: 2.2;
+}
+[data-entering] .signin-fade {
+  opacity: 0.25;
+}
+
+/*
+  The sign-in button is soft to the touch. Every few seconds, once the page has arrived, it gives a small jelly
+  wobble and a teal ripple, so the eye finds it. Hovering lifts it; pressing squashes it, and it springs back.
+  Once pressed it bounces once and the arrow slides towards the door.
+*/
+@keyframes signin-nudge {
+  0%,
+  16%,
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 0 rgb(14 124 123 / 0);
+  }
+  3% {
+    transform: scale(1.07, 0.93);
+    box-shadow: 0 0 0 6px rgb(14 124 123 / 0.22);
+  }
+  6% {
+    transform: scale(0.95, 1.06);
+  }
+  9% {
+    transform: scale(1.03, 0.97);
+    box-shadow: 0 0 0 14px rgb(14 124 123 / 0);
+  }
+  12% {
+    transform: scale(0.99, 1.01);
+  }
+}
+@keyframes signin-press {
+  0% {
+    transform: scale(0.9, 0.84);
+  }
+  40% {
+    transform: scale(1.06, 0.95);
+  }
+  70% {
+    transform: scale(0.98, 1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes signin-arrow {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+.signin-cta {
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.7, 0.64, 1),
+    background-color 0.2s ease;
+  animation: signin-nudge 6s ease-in-out 2.6s infinite;
+}
+.signin-cta:is(:hover, :focus-visible, :active) {
+  animation: none;
+}
+.signin-cta:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+.signin-cta:active {
+  transform: scale(0.92, 0.86);
+  transition-duration: 0.08s;
+}
+.signin-cta:hover .signin-cta-arrow {
+  animation: signin-arrow 0.9s ease-in-out infinite;
+}
+[data-entering] .signin-cta {
+  animation: signin-press 0.6s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+[data-entering] .signin-cta-arrow {
+  transform: translateX(6px);
+  transition: transform 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin-rise {
+    animation: none;
+  }
+  .signin-cta,
+  .signin-cta:hover,
+  .signin-cta:active,
+  [data-entering] .signin-cta,
+  .signin-cta:hover .signin-cta-arrow,
+  [data-entering] .signin-cta-arrow {
+    animation: none;
+    transform: none;
+    transition: background-color 0.2s ease;
+  }
+  .signin-lamp,
+  .signin-door {
+    animation: none;
+    opacity: 0.7;
+  }
+  .signin-scene,
+  .signin-door,
+  .signin-fade {
+    transition: none;
+  }
+  [data-entering] .signin-scene {
+    transform: none;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

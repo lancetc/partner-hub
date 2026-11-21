@@ -176,7 +176,8 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
     <div className="mt-8 flex flex-col gap-12">
       <section aria-labelledby="all-magazines">
         <h2 id="all-magazines" className="font-serif text-2xl font-semibold">
-          {filtering ? "Results" : "All magazines"} <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : guides.length})</span>
+          {filtering ? "Results" : "Browse the Magazine"}{" "}
+          <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : guides.length})</span>
         </h2>
 
         {/* Search, filters and sort: the same toolbar as Topics and Discovery Paths. */}

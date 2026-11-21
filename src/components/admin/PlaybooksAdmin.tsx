@@ -280,7 +280,7 @@ function SnippetEditor({ row, data, act, busy }: { row: Row; data: Loaded; act: 
               Withdraw everywhere
             </button>
           )}
-          <Link href={`/resources/playbooks/${row.id}`} className={btn.secondary}>
+          <Link href={`/tools/${row.id}`} className={btn.secondary}>
             View as a reader
           </Link>
         </div>

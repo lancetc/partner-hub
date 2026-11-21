@@ -45,13 +45,16 @@ export function Header() {
   return (
     <header data-site-header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
-        <Link href="/" translate="no" className="flex min-w-0 shrink items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
-          <Logo className="h-8 w-auto shrink-0 sm:h-10" />
-          {/* On phones and laptops the buttons and menu need the room, so the logo stands alone. */}
-          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:max-2xl:hidden" />
-          <span className="sr-only font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:max-2xl:sr-only 2xl:whitespace-nowrap">
-            Partner Hub
-          </span>
+        <Link href="/" translate="no" className="flex shrink-0 items-center gap-2 rounded-lg sm:gap-3" aria-label="Trilogy Care Partner Hub home">
+          {/* The smaller logo on small laptops (1024 to 1279px), where the menu and the buttons only just fit. */}
+          <Logo className="h-8 w-auto shrink-0 sm:h-10 lg:max-xl:h-8" />
+          {/*
+            "Partner Hub" beside the logo only on tablets, where there's no menu next to it. From laptop width up the
+            menu, Admin, Favourites and the buttons need the whole row (the header never gets wider than 1280px), so
+            the logo stands alone; on phones the buttons need the room.
+          */}
+          <span aria-hidden className="hidden h-6 w-px bg-line-strong sm:block lg:hidden" />
+          <span className="sr-only whitespace-nowrap font-mulish text-sm font-bold tracking-wide text-ink-muted sm:not-sr-only lg:sr-only">Partner Hub</span>
         </Link>
 
         <nav aria-label="Primary" className="ml-2 hidden lg:block xl:ml-6">
@@ -65,7 +68,7 @@ export function Header() {
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cx(
-                      "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors xl:px-4",
+                      "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors lg:max-xl:px-2 xl:px-4",
                       // The current page and hover: solid white over the glass header. Dark mode keeps its own shades, so the
                       // light text stays readable.
                       active ? "bg-white text-ink dark:bg-tealtint" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
@@ -105,13 +108,14 @@ export function Header() {
                 window.location.assign("/admin/lessons");
               }}
               className={cx(
-                "mr-1 inline-flex min-h-11 items-center gap-2 rounded-full border px-3 text-[0.95rem] font-semibold sm:px-4",
+                "mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border px-3 text-[0.95rem] font-semibold sm:px-4 lg:max-xl:px-3",
                 inAdmin ? "border-action bg-tealtint text-ink" : "border-line-strong text-ink hover:bg-muted",
               )}
             >
               <Icon name="lock" className="size-4" />
-              <span className="hidden sm:inline">Admin</span>
-              <span className="sr-only sm:hidden">Admin</span>
+              {/* Named on screen except on phones and small laptops, where the row needs the room; always named for a screen reader. */}
+              <span className="hidden sm:inline lg:max-xl:hidden">Admin</span>
+              <span className="sr-only sm:hidden lg:max-xl:inline">Admin</span>
             </Link>
           )}
           {me && <FavouritesHeaderLink />}

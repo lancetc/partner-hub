@@ -1,46 +1,64 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { clearOfflineData } from "@/lib/offlineLessons";
-import { Logo } from "./Header";
 import { Icon } from "./Icon";
 
 /*
   Sign-in (prototype). Real sign-in will be handled by each person's organisation (single sign-on), so
-  these buttons are placeholders: every one of them signs in as the demo author, Jordan Lee.
+  the button is a placeholder: it signs in as the demo author, Jordan Lee.
+
+  The page stands alone on white: the logo, the scene, one line and one button. It stays white in the dark
+  theme too, because the scene is painted onto white (globals.css hides the footer here).
+
+  Three small touches, all in globals.css under "The sign-in page":
+  - the page arrives: the scene rises into place, then the heading, then the button;
+  - the lights come on at dusk, one after another, and keep a slow glow;
+  - signing in walks you in: the office doorway brightens, the scene eases towards it, and the Hub's own
+    homepage build-up takes over.
+  Anyone who has asked their device for less motion gets the page still, with the lights simply on.
 */
 
 const DEMO_ACCOUNT = "jordan";
+const INK = "text-[#102a43]";
+const MUTED = "text-[#3d5068]";
+/** How long the walk-in takes before the Hub opens, when the device allows motion. */
+const WALK_IN_MS = 900;
 
-const OPTIONS = [
-  {
-    id: "staff",
-    label: "Continue with your Trilogy Care account",
-    hint: "Trilogy Care staff and care coordinators",
-    icon: "building",
-    primary: true,
-  },
-  {
-    id: "partner",
-    label: "Continue with your organisation’s account",
-    hint: "Care Partner and provider organisations",
-    icon: "briefcase",
-  },
-  { id: "email", label: "Email me a sign-in link", hint: "If your organisation doesn’t use single sign-on", icon: "mail" },
-] as const;
+/**
+  Where each light is in the scene, as a percentage of its width and height, how big its glow is (percent of the
+  scene's width), and when it comes on (seconds after the page opens). Read off the picture: if the picture
+  changes, these change with it.
+*/
+const LAMPS = [
+  { x: 28.6, y: 33.2, size: 7, on: 0.9 }, // the verandah wall lamp
+  { x: 37.2, y: 67.5, size: 5, on: 1.15 }, // the path bollard by the ramp
+  { x: 14.2, y: 70, size: 6, on: 1.35 }, // the up-light under the frangipani
+  { x: 73.2, y: 37, size: 6, on: 1.05 }, // the office's left wall light
+  { x: 85.7, y: 32.6, size: 6, on: 1.25 }, // the office's right wall light
+  { x: 80.7, y: 39.2, size: 4.5, on: 1.45 }, // the pendant inside
+  { x: 89, y: 71, size: 6, on: 1.6 }, // the up-light by the office garden
+];
+
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function SignIn() {
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  async function signIn(id: string) {
-    setBusy(id);
+  async function signIn() {
+    setBusy(true);
     setProblem(null);
     try {
       // Nothing kept for offline use stays from whoever used this device before.
       await clearOfflineData().catch(() => {});
-      await api("/api/demo/session", { body: { userId: DEMO_ACCOUNT } });
+      // The walk-in plays while the sign-in happens; whichever takes longer sets when the Hub opens.
+      await Promise.all([
+        api("/api/demo/session", { body: { userId: DEMO_ACCOUNT } }),
+        new Promise((done) => setTimeout(done, reducedMotion() ? 0 : WALK_IN_MS)),
+      ]);
       // The homepage builds itself from the top down once (see buildScript in app/layout).
       try {
         sessionStorage.setItem("tc-build", "1");
@@ -51,86 +69,85 @@ export function SignIn() {
       window.location.assign(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch (e) {
       setProblem((e as Error).message);
-      setBusy(null);
+      setBusy(false);
     }
   }
 
   return (
-    <div className="grid min-h-dvh grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-      {/* The welcome side: brand colours, what the hub is for. */}
-      <section className="relative hidden overflow-hidden bg-[#008282] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="xMaxYMax slice" viewBox="0 0 600 800">
-          <circle cx="560" cy="120" r="200" fill="#3cb8b9" opacity="0.35" />
-          <circle cx="500" cy="760" r="150" fill="#fab53d" opacity="0.3" />
-          <circle cx="60" cy="700" r="90" fill="#c7393e" opacity="0.3" />
-        </svg>
-        <p className="relative font-mulish text-sm font-extrabold uppercase tracking-[0.16em] text-[#bdeeee]">Partner Hub</p>
-        <div className="relative max-w-lg">
-          <h2 className="font-serif text-5xl font-semibold leading-tight">Learn, share and stay up to date.</h2>
-          <p className="mt-4 text-xl text-white/90">News, practical learning and a community of Care Partners and coordinators, all in one place.</p>
-          <ul className="mt-8 flex flex-col gap-3 text-lg">
-            {["Short topics built around real visits", "Learning paths with certificates", "A community to learn from each other"].map((t) => (
-              <li key={t} className="flex items-center gap-3">
-                <span className="grid size-7 place-items-center rounded-full bg-white/20">
-                  <Icon name="check" className="size-4" />
-                </span>
-                {t}
-              </li>
+    <div
+      data-signin-page
+      data-entering={busy ? "" : undefined}
+      className={`flex min-h-dvh flex-col items-center overflow-hidden bg-white px-4 py-8 sm:px-8 sm:py-10 ${INK}`}
+    >
+      <Image
+        src="/brand/trilogy-logo.svg"
+        alt="Trilogy Care"
+        width={1789}
+        height={576}
+        priority
+        className="signin-rise signin-fade h-10 w-auto sm:h-12"
+        style={{ "--delay": "0.05s" } as React.CSSProperties}
+      />
+
+      <div className="my-auto flex w-full max-w-5xl flex-col items-center py-6">
+        {/*
+          Edge to edge on a phone, where the page's side margin would otherwise shrink the scene further. Hovering it
+          with a mouse zooms it in very slowly (globals.css, .signin-stage).
+        */}
+        <div className="signin-rise signin-stage -mx-4 w-[calc(100%+2rem)] sm:mx-0 sm:w-full" style={{ "--delay": "0.15s" } as React.CSSProperties}>
+          <div className="signin-scene relative isolate">
+            <Image
+              src="/brand/login-scene.webp"
+              alt="An older woman on the verandah of her Queenslander home, and a care team gathered on the garden path at dusk."
+              width={1428}
+              height={498}
+              priority
+              sizes="(min-width: 1088px) 1024px, 100vw"
+              className="block h-auto w-full"
+            />
+            {LAMPS.map((l) => (
+              <span
+                key={`${l.x}-${l.y}`}
+                aria-hidden
+                className="signin-lamp"
+                style={{ left: `${l.x}%`, top: `${l.y}%`, width: `${l.size}%`, "--on": `${l.on}s` } as React.CSSProperties}
+              />
             ))}
-          </ul>
-        </div>
-        <p className="relative text-sm text-white/75">Empowering older Australians to live independently in the home they love, for longer.</p>
-      </section>
-
-      {/* Sign-in. */}
-      <section className="flex items-center justify-center px-4 py-10 sm:px-8">
-        <div className="w-full max-w-md">
-          <Logo className="h-10 w-auto" />
-          <h1 className="mt-8 font-serif text-4xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-2 text-lg text-ink-muted">Use the account your organisation gave you.</p>
-
-          <ul className="mt-8 flex flex-col gap-3">
-            {OPTIONS.map((o) => (
-              <li key={o.id}>
-                <button
-                  type="button"
-                  onClick={() => signIn(o.id)}
-                  disabled={busy !== null}
-                  className={
-                    "primary" in o
-                      ? "flex min-h-16 w-full items-center gap-4 rounded-2xl bg-[#008282] px-5 text-left text-white shadow-sm hover:bg-[#006b6b] disabled:opacity-70"
-                      : "flex min-h-16 w-full items-center gap-4 rounded-2xl border border-line-strong bg-surface px-5 text-left hover:border-[#008282] hover:bg-muted disabled:opacity-70"
-                  }
-                >
-                  <Icon name={o.icon} className="size-6 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{busy === o.id ? "Signing you in…" : o.label}</span>
-                    <span className={"primary" in o ? "block text-sm text-white/85" : "block text-sm text-ink-muted"}>{o.hint}</span>
-                  </span>
-                  <Icon name="arrow-right" className="size-5 shrink-0" />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {problem && (
-            <p role="alert" className="mt-3 text-sm font-semibold text-danger">
-              {problem}
-            </p>
-          )}
-
-          <p className="mt-6 text-sm text-ink-muted">
-            Trouble signing in? Call the Trilogy Care team on <span className="font-semibold text-ink">1300 459 190</span>.
-          </p>
-
-          <div className="mt-8 flex gap-3 rounded-2xl bg-gold/15 px-4 py-3 text-sm">
-            <Icon name="info" className="mt-0.5 size-4 shrink-0" />
-            <p>
-              <span className="font-semibold">Prototype.</span> Sign-in will be handled by your organisation. For now every button signs you in as{" "}
-              <span className="font-semibold">Jordan Lee</span>, the demo learning author. You can switch demo accounts from the account menu.
-            </p>
+            {/* The open office door: a soft glow at rest, and where the walk-in heads when you sign in. */}
+            <span aria-hidden className="signin-door" style={{ left: "79.6%", top: "55%", width: "9%", height: "42%" }} />
           </div>
         </div>
-      </section>
+        <h1
+          className="signin-rise signin-fade mt-4 text-center font-serif text-4xl font-semibold tracking-tight sm:text-5xl"
+          style={{ "--delay": "0.45s" } as React.CSSProperties}
+        >
+          Partner Hub
+        </h1>
+        <p className={`signin-rise signin-fade mt-2 text-center text-lg ${MUTED}`} style={{ "--delay": "0.55s" } as React.CSSProperties}>
+          Learn, share and stay up to date.
+        </p>
+
+        {/* The rise is on the wrapper so the button's own squish and nudge (globals.css, .signin-cta) don't fight it. */}
+        <div className="signin-rise mt-8" style={{ "--delay": "0.7s" } as React.CSSProperties}>
+          <button
+            type="button"
+            onClick={signIn}
+            disabled={busy}
+            className="signin-cta inline-flex min-h-14 items-center gap-3 rounded-full bg-[#0e7c7b] px-8 text-lg font-semibold text-white shadow-sm hover:bg-[#0a6463] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0e7c7b] disabled:opacity-90"
+          >
+            {busy ? "Signing you in…" : "Sign in with Trilogy Care"}
+            <Icon name="arrow-right" className="signin-cta-arrow size-5" />
+          </button>
+        </div>
+        <p role="status" className="sr-only">
+          {busy ? "Signing you in" : ""}
+        </p>
+        {problem && (
+          <p role="alert" className="mt-3 text-center font-semibold text-[#d32f2f]">
+            {problem}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
