@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RELAY_PILOT_DOC } from "@/content/relayPilot";
+import { RETURN_PILOT_DOC } from "@/content/livingPilot";
 import { publishChecks, readGuideDoc } from "./magazine";
 import {
   answerKind,
@@ -28,7 +29,8 @@ import { cleanRelayCourse, cleanRelayPage, relayChecks, relayForReaders, relayOn
 /* Ava Relay's rules: the dial and modal states, what Ava may be told, the tags an answer carries, and the checks before a question goes anywhere. */
 
 const run = (events: RelayEvent[], reduced = false, from: RelayState = RELAY_IDLE) => events.reduce((s, e) => relayNext(s, e, reduced), from);
-const doc = readGuideDoc(RELAY_PILOT_DOC, { draft: true });
+// The rose garden, then Dot's return at the markets as a second page: what the relay does across two pages.
+const doc = readGuideDoc({ ...RELAY_PILOT_DOC, pages: [...RELAY_PILOT_DOC.pages, ...RETURN_PILOT_DOC.pages] }, { draft: true });
 const [roses, markets] = doc.pages;
 
 describe("the dial bar and the modal", () => {
@@ -208,7 +210,7 @@ describe("what Ava is told", () => {
 
   it("on the next page: this page in full and a short recap of the one before", () => {
     const next = relayContext(doc, markets.id, { "first-question": "ask-dot" }, { courseTitle: "Dot and the rose garden", activity: "markets-question" })!;
-    expect(next.page.title).toBe("A morning at the markets");
+    expect(next.page.title).toBe("Dot at the markets");
     expect(next.page.text).toContain("Saturday markets");
     expect(next.earlier).toHaveLength(1);
     expect(next.earlier[0].text).toContain("Fiona rings on a Tuesday");

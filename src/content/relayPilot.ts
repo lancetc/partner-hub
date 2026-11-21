@@ -1,10 +1,13 @@
 import type { GuideDoc } from "@/lib/magazine";
 
 /*
-  The Ava Relay pilot (docs/ava-relay.md): a two-page Magazine course that follows the Story Plan pilot, "Dot and
-  the roses: ask before you suggest". Fictional, for editorial review. Page one sits at the approved episode "Dot
-  and the roses" and has the decision; page two sits at "A morning at the markets". It says nothing about Dot
-  that her approved story doesn't already say: no fall, no diagnosis, no outcome.
+  The Ava Relay pilot (docs/ava-relay.md): a one-page Magazine course that follows the Story Plan pilot, "Dot and
+  the roses: ask before you suggest". Fictional, for editorial review. The page sits at the approved episode "Dot
+  and the roses" and has the decision. It says nothing about Dot that her approved story doesn't already say: no
+  fall, no diagnosis, no outcome.
+
+  What happens a few weeks later, at the markets, is its own short course (content/livingPilot.ts): a return
+  episode a learner is invited back to, not a second page they walk straight into.
 
   An author adds it as a draft from Administration → Ava Relay. Nothing is published, and the test answers aren't
   marked reviewed: that is for a person to do.
@@ -101,65 +104,6 @@ export const RELAY_PILOT_DOC: GuideDoc = {
               type: "text",
               heading: "Why asking comes first",
               body: "A plan Dot helps make is one she is likely to use. The question isn’t whether Fiona is right to worry. It’s what Dot is trying to keep in her life, and what she and her coordinator can agree to try, and then check.",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "the-markets",
-      title: "A morning at the markets",
-      purpose: "A few weeks later, the same question turns up somewhere new.",
-      template: "blank",
-      kind: "content",
-      required: true,
-      relay: {
-        purpose: "Help the learner see that the question they asked about the roses applies again at the markets, and find their own first question.",
-        beat: "Transfer: the same question in a new place",
-        episode: "ep-markets",
-        activity: "markets-question",
-        characters: [{ id: "dot", revision: 0 }],
-        opening: "We’ve moved on a few weeks. Dot’s talking about the Saturday markets now. What do you notice that’s the same as last time?",
-        prompts: ["What’s the same here?", "What does Dot want to keep doing?", "What would I ask first?"],
-        hold: [],
-        redirect: "",
-        notes: "",
-      },
-      sections: [
-        {
-          id: "saturday",
-          title: "Saturday",
-          blocks: [
-            {
-              id: "markets-scene",
-              type: "text",
-              body: "A few weeks on, Dot mentions the Saturday markets. She likes to choose her own plants there. It’s a fair walk from the car park, and Fiona has offered to pick the plants up for her instead.",
-            },
-            {
-              id: "markets-question",
-              type: "decision",
-              prompt: "Fiona’s offer sounds helpful. What would you want to understand before you respond?",
-              choices: [
-                {
-                  id: "what-matters",
-                  text: "What going to the markets herself gives Dot that a delivery of plants wouldn’t.",
-                  verdict: "best",
-                  feedback:
-                    "The same question as the roses, in a new place: what is Dot trying to keep doing, and how? Choosing her own plants may be the point.",
-                },
-                {
-                  id: "how-far",
-                  text: "Exactly how far the walk from the car park is.",
-                  verdict: "acceptable",
-                  feedback: "Useful to know, and worth asking Dot about. It tells you about the obstacle, though, before you know what the outing is for.",
-                },
-                {
-                  id: "accept-offer",
-                  text: "Nothing more. Fiona’s offer solves it.",
-                  verdict: "risky",
-                  feedback: "It solves getting plants to the house. It may not be what Dot wants from a Saturday morning, and she hasn’t been asked.",
-                },
-              ],
             },
           ],
         },

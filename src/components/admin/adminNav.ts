@@ -43,6 +43,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/signal-room",
+        label: "Signal Room",
+        icon: "gauge",
+        description: "One verified theme over time: its signals, the response, what learners did and the work measure, kept apart. Where a review is recorded.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/challenges",
         label: "Challenges",
         icon: "flag",

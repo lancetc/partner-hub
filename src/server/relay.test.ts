@@ -16,6 +16,7 @@ import {
   type RelayStreamEvent,
 } from "./relay";
 import { createRelayPilot, relayReport } from "./relayAdmin";
+import { RETURN_PILOT_DOC } from "@/content/livingPilot";
 import { playbooksForRelay } from "./playbooks";
 import type { RelayRequest } from "./relayModel";
 import { relayCanon } from "./story";
@@ -64,7 +65,7 @@ const lastQuestion = () => model.calls[model.calls.length - 1].messages.at(-1)!.
 
 /** The pilot course, reviewed and published: what a coordinator would read. */
 function publishPilot() {
-  const made = createRelayPilot(db, jordan, now);
+  const made = createRelayPilot(db, jordan, now, RETURN_PILOT_DOC.pages);
   const a = authorGuide(db, jordan, made.id);
   const doc = structuredClone(a.doc);
   for (const p of doc.pages) if (p.relay) p.relay.reviewed = { by: jordan.id, at: now.toISOString(), hash: reviewHash(doc.relay, p.relay) };
@@ -100,7 +101,7 @@ beforeEach(() => {
 
 describe("publishing a course with Ava on it", () => {
   it("is held until each page's test answers are reviewed, and Ava must be approved canon", () => {
-    const made = createRelayPilot(db, jordan, now);
+    const made = createRelayPilot(db, jordan, now, RETURN_PILOT_DOC.pages);
     expect(() => publishGuide(db, jordan, made.id, "Too soon", now)).toThrow(/Resolve 2 checks/);
     expect(authorGuide(db, jordan, made.id).checks.blocking.join(" ")).toContain("run the test questions and mark the answers reviewed");
     // The pilot pins each person at their approved version.
@@ -234,11 +235,11 @@ describe("in this story", () => {
     const second = link(riley, "the-markets");
     expect(second.sessionId).toBe(l.sessionId);
     expect(second.card).toMatchObject({
-      page: "A morning at the markets",
+      page: "Dot at the markets",
       scene: "A few weeks later: A morning at the markets",
       where: "Page 2 of 2 · Before the decision question",
     });
-    expect(second.card.people.map((p) => p.name)).toEqual(["Dot"]);
+    expect(second.card.people.map((p) => p.name)).toEqual(["Dot", "Fiona"]);
     expect(second.prompts.story).toEqual(["What’s the same here?", "What does Dot want to keep doing?", "What would I ask first?"]);
     expect(second.resumed).toBe(true);
     expect(second.turns.map((t) => [t.role, t.pageTitle])).toEqual([
@@ -249,9 +250,9 @@ describe("in this story", () => {
     expect(lastContext()).toContain("Saturday markets");
     expect(lastContext()).toContain("A morning at the markets. A few weeks on, Dot is thinking about the Saturday markets");
     expect(lastContext()).toContain("<earlier_pages>");
-    expect(lastContext()).not.toContain("Choosing her own plants may be the point");
+    expect(lastContext()).not.toContain("This finds out what the offer would replace");
     expect(model.calls.at(-1)!.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
-    expect(turn!.pageTitle).toBe("A morning at the markets");
+    expect(turn!.pageTitle).toBe("Dot at the markets");
     // A fresh conversation drops the old words at once.
     const fresh = link(riley, "the-markets", { fresh: true });
     expect(fresh.sessionId).not.toBe(l.sessionId);

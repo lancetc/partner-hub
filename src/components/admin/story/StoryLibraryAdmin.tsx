@@ -88,6 +88,9 @@ export function StoryLibraryAdmin() {
         <Link href="/admin/images/characters" className={btn.secondary}>
           <Icon name="image" className="size-4" /> Character photos
         </Link>
+        <Link href="/admin/characters/returns" className={btn.secondary}>
+          <Icon name="refresh" className="size-4" /> Return episodes
+        </Link>
         <Link href="/admin/characters/report" className={btn.secondary}>
           <Icon name="gauge" className="size-4" /> Story report
         </Link>

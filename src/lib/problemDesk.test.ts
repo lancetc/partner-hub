@@ -79,7 +79,7 @@ describe("counting", () => {
       ["close", "2026-07-21"],
       ["reopen", "2026-08-02"],
     ]);
-    expect(trend([long, kase([["initial", "2026-07-03"]])], "2026-06", "2026-08")).toEqual([
+    expect(trend([long, kase([["initial", "2026-07-03"]])], "2026-06", "2026-08")).toMatchObject([
       { bucket: "2026-06", newCases: 1, followUps: 1, reopened: 0 },
       { bucket: "2026-07", newCases: 1, followUps: 1, reopened: 0 },
       { bucket: "2026-08", newCases: 0, followUps: 0, reopened: 1 },

@@ -342,7 +342,7 @@ export function assistCanon(db: Db, actor: User, now = new Date()) {
   Who may change shared canon. Where the steward is a named person in the Hub, it's them or a superadmin; where it's
   a team ("Partner Enablement"), any learning author, as for the rest of publishing.
 */
-function mayApprove(db: Db, actor: User, steward: string) {
+export function mayApprove(db: Db, actor: User, steward: string) {
   if (!steward || isSuperadmin(actor) || steward === actor.id || steward.toLowerCase() === actor.name.toLowerCase()) return true;
   return !db.prepare("SELECT 1 FROM users WHERE id = ? OR name = ? COLLATE NOCASE").get(steward, steward);
 }

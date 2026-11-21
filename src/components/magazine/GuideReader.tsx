@@ -17,6 +17,7 @@ import { playable } from "@/lib/magazineNarration";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AvaRelay } from "../relay/AvaRelay";
 import { FavouriteBanner } from "../favourites/FavouriteBanner";
+import { ReturnOpeningPanel, useReturnOpening } from "../living/ReturnOpening";
 import { Highlighter, SaveSection } from "../favourites/Highlighter";
 import { relayOn } from "@/lib/relayConfig";
 
@@ -303,6 +304,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
   const audioGuide = useAudioGuide(guide, send);
   // Story moments placed beside this course's pages and blocks (docs/story-plans.md): approved, optional, never counted.
   const story = useStory("guide", guide.id);
+  // A return episode: what opens this page if it comes back to an earlier story, with a private line only its learner gets.
+  const returning = useReturnOpening(guide.slug, page.id, Boolean(preview));
   // Highlights (docs/job-aids.md): text selected inside the page's own content can be saved to Favourites.
   const pageBody = useRef<HTMLDivElement>(null);
   /** After a transmission's Begin: bring the activity it hands over to into view and give it focus. */
@@ -552,6 +555,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
         <div ref={pageBody} className="flex min-w-0 flex-col gap-16">
           {/* Opened from Favourites: the saved passage, where it stands against this version, and the way back. */}
           <FavouriteBanner className={column} />
+          {/* A return episode (docs/living-cases.md): where we left the person, what's changed, what to decide. Before Ava's bar. */}
+          {returning.opening && <ReturnOpeningPanel key={returning.opening.id} opening={returning.opening} noteId={returning.noteId} className={column} />}
           {/* Ava Relay (docs/ava-relay.md): one dial bar, after the page's introduction and before its first block. Part of the page, not of its content. */}
           {relayOn(guide.doc.relay, page) && (
             <AvaRelay

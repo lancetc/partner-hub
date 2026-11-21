@@ -99,15 +99,18 @@ Reply with JSON only: {"opening":"…","prompts":["…","…","…"],"rationale"
 // The pilot course
 // ---------------------------------------------------------------------------------------------
 
-/** Adds the two-page Dot and Ava pilot as a draft course, with each character at their current approved version. */
-export function createRelayPilot(db: Db, actor: User, now: Date) {
+/**
+  Adds the Dot and Ava pilot as a draft course, with each character at their current approved version. One page:
+  Dot's return at the markets is its own short course (server/living). `more` adds further pages after it.
+*/
+export function createRelayPilot(db: Db, actor: User, now: Date, more: GuideDoc["pages"] = []) {
   requireAuthor(actor);
   const choices = relayChoices(db, actor, now);
   if (!choices.ava) throw new HttpError(400, "Approve Ava’s story profile in Characters and stories first.");
   const current = new Map(choices.people.map((p) => [p.id, p.revision]));
   const doc: GuideDoc = {
     ...RELAY_PILOT_DOC,
-    pages: RELAY_PILOT_DOC.pages.map((p) => ({
+    pages: [...RELAY_PILOT_DOC.pages, ...more].map((p) => ({
       ...p,
       relay: p.relay && {
         ...p.relay,

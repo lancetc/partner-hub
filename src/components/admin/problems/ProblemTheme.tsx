@@ -108,6 +108,14 @@ export function ProblemTheme({ id }: { id: string }) {
         {t.verified ? <Badge tone="good">Grouping verified</Badge> : <Badge tone="warn">Candidate: not yet verified</Badge>}
         {t.sample && <Badge>Sample data</Badge>}
         {t.owner && <span className="text-sm text-ink-muted">Owner: {t.owner}</span>}
+        {t.verified && (
+          <a
+            href={`/admin/signal-room/${t.id}`}
+            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-accent underline underline-offset-2"
+          >
+            <Icon name="gauge" className="size-4" /> See it over time in the Signal Room
+          </a>
+        )}
       </div>
       {t.mergedInto && (
         <p className="mt-3 rounded-xl bg-muted p-3 text-sm">
@@ -185,7 +193,7 @@ function SignalsTab({ d, act, busy }: TabProps) {
     priorityNote: t.priorityNote,
   });
   const [status, setStatus] = useState<{ status: ThemeStatus; note: string }>({ status: t.status, note: "" });
-  const [newCase, setNewCase] = useState({ source: "complaint" as SourceKind, sourceRef: "", on: "", summary: "" });
+  const [newCase, setNewCase] = useState({ source: "complaint" as SourceKind, sourceRef: "", on: "", summary: "", party: "" });
   const [event, setEvent] = useState<{ caseId: string; kind: EventKind; on: string; note: string } | null>(null);
   const router = useRouter();
   const [picked, setPicked] = useState<string[]>([]);
@@ -240,6 +248,7 @@ function SignalsTab({ d, act, busy }: TabProps) {
                   />
                   {SOURCES[k.source]} {k.sourceRef}
                 </label>
+                {k.party && <Badge>{k.party}</Badge>}
                 {k.falseMatch ? (
                   <Badge tone="warn">False match: not counted</Badge>
                 ) : (
@@ -289,7 +298,7 @@ function SignalsTab({ d, act, busy }: TabProps) {
                     value={event.kind}
                     onChange={(e) => setEvent({ ...event, kind: e.target.value as EventKind })}
                   >
-                    {(["update", "change", "close", "reopen"] as EventKind[]).map((x) => (
+                    {(["update", "change", "repeat", "close", "reopen"] as EventKind[]).map((x) => (
                       <option key={x} value={x}>
                         {EVENT_KINDS[x]}
                       </option>
@@ -353,7 +362,7 @@ function SignalsTab({ d, act, busy }: TabProps) {
           className={cx(box, "mt-3 grid gap-3 sm:grid-cols-[12rem_1fr_11rem]")}
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await act({ action: "add-case", id: t.id, themeId: t.id, ...newCase })) setNewCase({ ...newCase, sourceRef: "", summary: "" });
+            if (await act({ action: "add-case", id: t.id, themeId: t.id, ...newCase })) setNewCase({ ...newCase, sourceRef: "", summary: "", party: "" });
           }}
         >
           <p className="font-semibold sm:col-span-3">Link another case</p>
@@ -384,6 +393,13 @@ function SignalsTab({ d, act, busy }: TabProps) {
             value={newCase.on}
             onChange={(e) => setNewCase({ ...newCase, on: e.target.value })}
             required
+          />
+          <input
+            aria-label="Who it concerns, de-identified"
+            className={cx(input, "sm:col-span-3")}
+            placeholder="Who it concerns, de-identified (for example: Partner business A). Optional"
+            value={newCase.party}
+            onChange={(e) => setNewCase({ ...newCase, party: e.target.value })}
           />
           <textarea
             aria-label="De-identified summary"

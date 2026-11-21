@@ -10,8 +10,11 @@ import type { Barrier } from "./blockRegistry";
 
   Counting rules, kept apart everywhere:
   - a case is one unique issue in its source system;
-  - a case event is one dated contact about it: the initial report, a follow-up, a material change, a closure, a
-    reopening. One case with three follow-ups is one case and four contact events;
+  - a case event is one dated contact about it: the initial report, a follow-up, a material change, a repeat
+    contact, a closure, a reopening. One case with three follow-ups is one case and four contact events;
+  - an update (a follow-up or a material change) is new information on the same case. A repeat contact is the same
+    person or business coming back because the issue is unresolved or has happened again. Both are contacts; only
+    the second is counted as a repeat. Neither is ever another unique case;
   - a theme is a human-reviewed grouping of cases. A model's or a person's first guess at a grouping is a
     candidate until someone verifies it.
 */
@@ -39,7 +42,16 @@ export const SOURCES = {
   content: "Content report",
 } as const;
 export type SourceKind = keyof typeof SOURCES;
-export const EVENT_KINDS = { initial: "Initial report", update: "Follow-up", change: "Material change", close: "Closed", reopen: "Reopened" } as const;
+export const EVENT_KINDS = {
+  initial: "Initial report",
+  update: "Follow-up",
+  change: "Material change",
+  repeat: "Repeat contact",
+  close: "Closed",
+  reopen: "Reopened",
+} as const;
+/** The kinds that are someone raising something. A closure or a reopening is a change of state, not a contact. */
+export const CONTACT_KINDS: readonly EventKind[] = ["initial", "update", "change", "repeat"];
 export type EventKind = keyof typeof EVENT_KINDS;
 export const CONFIDENCE = { known: "Known", suspected: "Suspected", unknown: "Unknown" } as const;
 export type Confidence = keyof typeof CONFIDENCE;
@@ -69,7 +81,14 @@ export const LEARNING_DECISIONS = {
   none: "No learning item",
 } as const;
 export type LearningDecision = keyof typeof LEARNING_DECISIONS;
-export const REVIEW_DECISIONS = { keep: "Keep", revise: "Revise", target: "Target differently", withdraw: "Withdraw", close: "Close with evidence" } as const;
+export const REVIEW_DECISIONS = {
+  keep: "Keep",
+  revise: "Revise",
+  target: "Target differently",
+  withdraw: "Withdraw",
+  process: "Process fix",
+  close: "Close with evidence",
+} as const;
 export type ReviewDecision = keyof typeof REVIEW_DECISIONS;
 
 /** What's weighed when ordering the queue. Shown as considerations, never added up into a score. */
@@ -92,6 +111,8 @@ export type Case = {
   link: string;
   falseMatch: boolean;
   events: CaseEvent[];
+  /** A stable, de-identified label for who the case concerns ("Partner business A"). Never a name. */
+  party?: string;
 };
 
 export type DiagnosisBarrier = { id: string; barrier: Barrier; text: string; evidence: string; confidence: Confidence; validator: string };
@@ -212,6 +233,13 @@ export type CaseCounts = {
   cases: number;
   contactEvents: number;
   followUps: number;
+  /** New information on the same case: follow-ups and material changes. */
+  updates: number;
+  /** The same person or business back about an unresolved or recurring issue. A subset of follow-ups. */
+  repeatContacts: number;
+  /** Distinct de-identified parties among the cases, and how many cases name none. */
+  parties: number;
+  casesWithoutParty: number;
   reopened: number;
   open: number;
   /** Cases with at least one follow-up or change after the first report. */
@@ -228,11 +256,19 @@ export function countCases(cases: Case[], asAt: string): CaseCounts {
   let follow = 0;
   let reopened = 0;
   let repeat = 0;
+  let updates = 0;
+  let repeatContacts = 0;
+  const parties = new Set<string>();
+  let noParty = 0;
   for (const c of real) {
     const ev = sorted(c).filter((e) => e.on <= asAt);
-    // Contacts are what someone raised: the report, follow-ups and changes. A closure or reopening is a state change.
-    const contacts = ev.filter((e) => e.kind === "initial" || e.kind === "update" || e.kind === "change");
+    // Contacts are what someone raised: the report, follow-ups, changes and repeat contacts. A closure or reopening is a state change.
+    const contacts = ev.filter((e) => CONTACT_KINDS.includes(e.kind));
     contact += contacts.length;
+    updates += contacts.filter((e) => e.kind === "update" || e.kind === "change").length;
+    repeatContacts += contacts.filter((e) => e.kind === "repeat").length;
+    if (c.party?.trim()) parties.add(c.party.trim().toLowerCase());
+    else noParty += 1;
     const after = contacts.length - 1;
     follow += Math.max(0, after);
     if (after > 0) repeat += 1;
@@ -254,6 +290,10 @@ export function countCases(cases: Case[], asAt: string): CaseCounts {
     cases: real.length,
     contactEvents: contact,
     followUps: follow,
+    updates,
+    repeatContacts,
+    parties: parties.size,
+    casesWithoutParty: noParty,
     reopened,
     open: real.filter((c) => caseOpen(c, asAt)).length,
     repeatCases: repeat,
@@ -266,7 +306,7 @@ export function countCases(cases: Case[], asAt: string): CaseCounts {
   };
 }
 
-export type TrendPoint = { bucket: string; newCases: number; followUps: number; reopened: number };
+export type TrendPoint = { bucket: string; newCases: number; followUps: number; reopened: number; repeats: number; contacts: number };
 /** Month buckets (YYYY-MM) from one month to another, inclusive. */
 export function months(from: string, to: string) {
   const out: string[] = [];
@@ -290,12 +330,14 @@ export function trend(cases: Case[], from: string, to: string): TrendPoint[] {
     let newCases = 0;
     let followUps = 0;
     let reopened = 0;
+    let repeats = 0;
     for (const c of real) {
       let closed = false;
       for (const e of sorted(c)) {
         const inBucket = e.on.slice(0, 7) === bucket;
         if (e.kind === "initial" && inBucket) newCases += 1;
-        if ((e.kind === "update" || e.kind === "change") && inBucket) followUps += 1;
+        if ((e.kind === "update" || e.kind === "change" || e.kind === "repeat") && inBucket) followUps += 1;
+        if (e.kind === "repeat" && inBucket) repeats += 1;
         if (e.kind === "close") closed = true;
         if (e.kind === "reopen") {
           if (closed && inBucket) reopened += 1;
@@ -303,7 +345,7 @@ export function trend(cases: Case[], from: string, to: string): TrendPoint[] {
         }
       }
     }
-    return { bucket, newCases, followUps, reopened };
+    return { bucket, newCases, followUps, reopened, repeats, contacts: newCases + followUps };
   });
 }
 

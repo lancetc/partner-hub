@@ -4,6 +4,8 @@ Built from the PRD *AI-Assisted Learning Designer* (November 2026). This note re
 
 In Administration: **Content → Problem desk** (`/admin/problems`). Learning authors only.
 
+> **Since this was written** ([living-cases.md](living-cases.md), 21 November 2026): a contact can be a **repeat contact** as well as a follow-up or a material change; a case can carry a de-identified **party** label; a review records an interpretation, what else could explain it and a next action, and can be a **Process fix**; a decision can be reopened after a review without rewriting it; and the Excel register has five more sheets after the original five. A verified theme can also be read over time in the **Signal Room**.
+
 ## What it is
 
 A place to start from what's going wrong at work, not from a course. The trail is:

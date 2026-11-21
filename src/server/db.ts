@@ -1314,10 +1314,24 @@ CREATE TABLE IF NOT EXISTS pd_reviews (
 );
 `;
 const problemReady = new WeakSet<object>();
+type Migrating = { exec: (sql: string) => void; prepare?: (sql: string) => { all: (...a: never[]) => unknown[] } };
+/** Columns added to the Problem desk after it shipped (docs/living-cases.md). Safe to run on every start. */
+function problemColumns(db: Migrating) {
+  if (!db.prepare) return;
+  const cols = (t: string) => (db.prepare!(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
+  // A stable, de-identified label for who a case concerns ("Partner business A"), so affected parties can be counted.
+  if (!cols("pd_cases").includes("party")) db.exec("ALTER TABLE pd_cases ADD COLUMN party TEXT NOT NULL DEFAULT ''");
+  const review = cols("pd_reviews");
+  // What the owner read the evidence as, what else could explain it, and what happens next.
+  if (!review.includes("interpretation")) db.exec("ALTER TABLE pd_reviews ADD COLUMN interpretation TEXT NOT NULL DEFAULT ''");
+  if (!review.includes("competing")) db.exec("ALTER TABLE pd_reviews ADD COLUMN competing TEXT NOT NULL DEFAULT ''");
+  if (!review.includes("next_action")) db.exec("ALTER TABLE pd_reviews ADD COLUMN next_action TEXT NOT NULL DEFAULT ''");
+}
 /** Makes sure the Problem desk tables are there, for a server already running when they were added. */
-export function ensureProblemTables(db: { exec: (sql: string) => void }) {
+export function ensureProblemTables(db: Migrating) {
   if (problemReady.has(db)) return;
   db.exec(PROBLEM_SCHEMA);
+  problemColumns(db);
   problemReady.add(db);
 }
 
@@ -1409,6 +1423,47 @@ CREATE TABLE IF NOT EXISTS relay_events (
 );
 CREATE INDEX IF NOT EXISTS relay_events_guide ON relay_events (guide_id, revision_id, event);
 `;
+/*
+  Living cases (lib/living, server/living; docs/living-cases.md). A return link ties a later episode to an earlier
+  appearance and says what the two share and how they differ; its approved copy pins the versions learners get. A
+  Field Note is a quiet invitation back, with one delivery row per person so it can only ever arrive once. Events
+  carry ids and times, never a learner's answer or words.
+*/
+export const LIVING_SCHEMA = `
+CREATE TABLE IF NOT EXISTS story_returns (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, character_id TEXT NOT NULL DEFAULT '', theme_id TEXT NOT NULL DEFAULT '',
+  from_episode TEXT NOT NULL DEFAULT '', from_guide TEXT NOT NULL DEFAULT '', from_page TEXT NOT NULL DEFAULT '', from_block TEXT NOT NULL DEFAULT '',
+  to_episode TEXT NOT NULL DEFAULT '', to_guide TEXT NOT NULL DEFAULT '', to_page TEXT NOT NULL DEFAULT '', to_block TEXT NOT NULL DEFAULT '',
+  data TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft', approved TEXT NOT NULL DEFAULT '{}', approved_by TEXT, approved_at TEXT,
+  owner TEXT NOT NULL DEFAULT '', review_on TEXT NOT NULL DEFAULT '', sample INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS story_returns_to ON story_returns (to_guide, to_page);
+CREATE TABLE IF NOT EXISTS field_notes (
+  id TEXT PRIMARY KEY, return_id TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft',
+  live TEXT NOT NULL DEFAULT '{}', released_by TEXT, released_at TEXT, withdrawn_at TEXT, withdrawn_reason TEXT NOT NULL DEFAULT '',
+  sample INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS field_note_deliveries (
+  note_id TEXT NOT NULL REFERENCES field_notes(id), user_id TEXT NOT NULL, eligible_at TEXT NOT NULL, due_at TEXT NOT NULL, delivered_at TEXT,
+  opened_at TEXT, dismissed_at TEXT, snoozed_until TEXT, target_revision TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (note_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS living_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, received_at TEXT NOT NULL, user_id TEXT NOT NULL, audience TEXT NOT NULL DEFAULT '',
+  org_id TEXT NOT NULL DEFAULT '', event TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', return_id TEXT NOT NULL DEFAULT '',
+  guide_id TEXT NOT NULL DEFAULT '', revision_id TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '', idem TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS living_events_return ON living_events (return_id, event);
+`;
+const livingReady = new WeakSet<object>();
+/** Makes sure the living-case tables are there, for a server already running when they were added. */
+export function ensureLivingTables(db: { exec: (sql: string) => void }) {
+  if (livingReady.has(db)) return;
+  db.exec(LIVING_SCHEMA);
+  livingReady.add(db);
+}
+
 const relayReady = new WeakSet<object>();
 /** Makes sure the relay tables are there, for a server already running when they were added. */
 export function ensureRelayTables(db: { exec: (sql: string) => void }) {
@@ -1709,8 +1764,10 @@ export function migrate(db: Db) {
   db.exec(CHARACTERS_SCHEMA);
   db.exec(SANDBOX_SCHEMA);
   db.exec(PROBLEM_SCHEMA);
+  problemColumns(db as unknown as Migrating);
   db.exec(STORY_SCHEMA);
   db.exec(RELAY_SCHEMA);
+  db.exec(LIVING_SCHEMA);
   // Columns added after a table first shipped.
   const cols = (db.prepare("PRAGMA table_info(learning_paths)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("audience")) db.exec("ALTER TABLE learning_paths ADD COLUMN audience TEXT NOT NULL DEFAULT ''");

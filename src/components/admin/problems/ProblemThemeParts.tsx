@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { BARRIERS, PLAN_STEPS } from "@/lib/blockRegistry";
+import { INTERPRETATIONS, type Interpretation } from "@/lib/living";
 import {
   ACTION_KINDS,
   ACTION_STATUS,
@@ -1063,7 +1064,15 @@ export function MeasuresTab({ d, act, busy }: TabProps) {
 
 export function ReviewTab({ d, act, busy }: TabProps) {
   const r = d.response.data;
-  const [form, setForm] = useState({ decision: "keep" as ReviewDecision, decidedOn: d.asAt, evidence: "", uncertainties: "" });
+  const [form, setForm] = useState({
+    decision: "keep" as ReviewDecision,
+    decidedOn: d.asAt,
+    evidence: "",
+    uncertainties: "",
+    interpretation: "" as Interpretation | "",
+    competing: "",
+    nextAction: "",
+  });
   const approved = d.response.status === "approved";
 
   return (
@@ -1079,7 +1088,8 @@ export function ReviewTab({ d, act, busy }: TabProps) {
             className={cx(box, "grid gap-3 sm:grid-cols-2")}
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await act({ action: "review", id: d.theme.id, ...form })) setForm({ ...form, evidence: "", uncertainties: "" });
+              if (await act({ action: "review", id: d.theme.id, ...form }))
+                setForm({ ...form, evidence: "", uncertainties: "", competing: "", nextAction: "" });
             }}
           >
             <Field label="Decision">
@@ -1096,6 +1106,26 @@ export function ReviewTab({ d, act, busy }: TabProps) {
             </Field>
             <Field label="What the evidence shows, and what it doesn’t" className="sm:col-span-2">
               <textarea className={area} value={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.value })} required minLength={20} />
+            </Field>
+            <Field label="How you read the evidence" hint="Your judgement, recorded as one. A chart never supplies it.">
+              <select
+                className={input}
+                value={form.interpretation}
+                onChange={(e) => setForm({ ...form, interpretation: e.target.value as Interpretation | "" })}
+              >
+                <option value="">Not recorded</option>
+                {Object.entries(INTERPRETATIONS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Next action">
+              <input className={input} value={form.nextAction} onChange={(e) => setForm({ ...form, nextAction: e.target.value })} />
+            </Field>
+            <Field label="What else could explain it" className="sm:col-span-2">
+              <textarea className={area} value={form.competing} onChange={(e) => setForm({ ...form, competing: e.target.value })} />
             </Field>
             <Field label="What’s still uncertain" className="sm:col-span-2">
               <textarea className={area} value={form.uncertainties} onChange={(e) => setForm({ ...form, uncertainties: e.target.value })} />
@@ -1119,9 +1149,12 @@ export function ReviewTab({ d, act, busy }: TabProps) {
             <li key={v.id} className={box}>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="info">{REVIEW_DECISIONS[v.decision]}</Badge>
+                {v.interpretation && <Badge>{INTERPRETATIONS[v.interpretation]}</Badge>}
                 <span className="text-sm text-ink-muted">{dateText(v.decidedOn)}</span>
               </div>
               <p className="mt-1.5">{v.evidence}</p>
+              {v.competing && <p className="mt-1 text-sm text-ink-muted">What else could explain it: {v.competing}</p>}
+              {v.nextAction && <p className="mt-1 text-sm text-ink-muted">Next: {v.nextAction}</p>}
               {v.uncertainties && <p className="mt-1 text-sm text-ink-muted">Still uncertain: {v.uncertainties}</p>}
             </li>
           ))}

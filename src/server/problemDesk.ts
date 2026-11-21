@@ -25,6 +25,7 @@ import {
   LEARNING_DECISIONS,
   learnerHours,
   caseOpen,
+  CONTACT_KINDS,
   ratePer100,
   reportLink,
   responseProblems,
@@ -51,8 +52,12 @@ import {
   type ThemeStatus,
 } from "@/lib/problemDesk";
 import { PILOT_THEMES, PILOT_UNGROUPED } from "@/content/problemPilot";
+import { SIGNAL_THEMES } from "@/content/livingPilot";
+import { COHORTS, INTERPRETATIONS, THIN, type Cohort, type Interpretation } from "@/lib/living";
 import { audit, ensureProblemTables, tx, type Db } from "./db";
-import { HttpError, requireAuthor, type User } from "./auth";
+import { HttpError, isSuperadmin, requireAuthor, type User } from "./auth";
+import { returnsForTheme } from "./living";
+import { decisionEvidence, monthWindow, transferEvidence } from "./livingEvidence";
 import { createGuide } from "./magazine";
 import { aidReport } from "./favourites";
 import { searchCatalogue } from "./discovery";
@@ -98,6 +103,7 @@ type CaseRow = {
   link: string;
   false_match: number;
   created_at: string;
+  party?: string;
 };
 type EventRow = { id: string; case_id: string; kind: EventKind; on_date: string; note: string; recorded_at: string };
 type ActionRow = {
@@ -260,6 +266,100 @@ export function ensureProblems(db: Db, now = new Date()) {
   });
 }
 
+/**
+  The Signal Room's two synthetic themes (content/livingPilot; docs/living-cases.md), added once per Hub the first
+  time the Signal Room or the Dot return pilot is used. Marked as sample data. Every reference, party and figure is
+  made up, and no figure is a Trilogy Care result.
+*/
+export function ensureSignalSamples(db: Db, now = new Date()) {
+  ensureProblems(db, now);
+  if (db.prepare("SELECT 1 FROM settings WHERE key = 'signal_room_seed'").get()) return;
+  const at = now.toISOString();
+  tx(db, () => {
+    for (const t of SIGNAL_THEMES) {
+      const made = db
+        .prepare(
+          `INSERT OR IGNORE INTO pd_themes (id, title, description, status, risk, roles, segment, denominator, denominator_note, verified_by, verified_at, owner, priority_note, status_note, diagnosis, sample, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'seed', ?, ?)`,
+        )
+        .run(
+          t.id,
+          t.title,
+          t.description,
+          t.status,
+          t.risk,
+          t.roles,
+          t.segment,
+          t.denominator,
+          t.denominatorNote,
+          t.verified ? "seed" : null,
+          t.verified ? at : null,
+          t.owner,
+          t.priorityNote,
+          t.statusNote,
+          JSON.stringify(t.diagnosis ?? emptyDiagnosis()),
+          at,
+          at,
+        );
+      if (!made.changes) continue;
+      for (const c of t.cases) {
+        const caseId = id("case");
+        const added = db
+          .prepare(
+            "INSERT OR IGNORE INTO pd_cases (id, theme_id, source, source_ref, summary, link, false_match, party, created_at) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)",
+          )
+          .run(caseId, t.id, c.source, c.ref, c.summary, c.falseMatch ? 1 : 0, c.party ?? "", at);
+        if (!added.changes) continue;
+        for (const [kind, on, note] of c.events)
+          db.prepare("INSERT INTO pd_case_events (id, case_id, kind, on_date, note, recorded_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+            id("ev"),
+            caseId,
+            kind,
+            on,
+            note,
+            at,
+          );
+      }
+      if (t.response)
+        db.prepare(
+          "INSERT OR IGNORE INTO pd_responses (theme_id, data, status, approved_by, approved_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'seed', ?, ?)",
+        ).run(t.id, JSON.stringify(t.response), t.approved ? "approved" : "draft", t.approved ? "seed" : null, t.approved ? at : null, at, at);
+      for (const k of t.checks ?? [])
+        db.prepare(
+          "INSERT OR IGNORE INTO pd_content_checks (id, theme_id, kind, ref, title, shared, missing, decision, by_user, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seed', ?)",
+        ).run(id("chk"), t.id, k.kind, k.ref, k.title, k.shared, k.missing, k.decision, at);
+      for (const a of t.actions ?? [])
+        db.prepare(
+          `INSERT INTO pd_actions (id, theme_id, prior, kind, title, owner, audience, intended, on_date, due_date, status, result, interpretation, snapshot, snapshot_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          id("act"),
+          t.id,
+          a.prior ? 1 : 0,
+          a.kind,
+          a.title,
+          a.owner,
+          a.audience,
+          a.intended,
+          a.on,
+          a.due,
+          a.status,
+          a.result,
+          a.interpretation,
+          a.snapshot,
+          a.snapshotAt,
+          at,
+        );
+      for (const m of t.metrics ?? [])
+        db.prepare(
+          "INSERT OR IGNORE INTO pd_metric_points (id, theme_id, metric, bucket, numerator, denominator, note, as_at, link, by_user) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', 'seed')",
+        ).run(id("mp"), t.id, m.metric, m.bucket, m.numerator, m.denominator, m.note, at);
+      if (t.approved) hist(db, t.id, { id: "seed" } as User, "response-approved", "Sample data", now);
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('signal_room_seed', '1') ON CONFLICT (key) DO UPDATE SET value = '1'").run();
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------------------------
@@ -277,7 +377,18 @@ function casesOf(db: Db, where: string, ...args: (string | null)[]): Case[] {
     link: r.link,
     falseMatch: Boolean(r.false_match),
     events: (events(r.id) as EventRow[]).map((e) => ({ id: e.id, kind: e.kind, on: e.on_date, note: e.note })),
+    party: r.party ?? "",
   }));
+}
+/**
+  A label for who a case concerns, to count affected parties by. It has to be de-identified ("Partner business A"):
+  anything that looks like a contact detail or a record number is refused, and the real name stays in its own system.
+*/
+function partyLabel(v: unknown) {
+  const s = str(v, 60);
+  if (/@|\d{4,}|https?:/i.test(s))
+    throw new HttpError(400, "Use a de-identified label such as “Partner business A”, not a name, a number or a contact detail.");
+  return s;
 }
 const themeRow = (db: Db, themeId: unknown) =>
   typeof themeId === "string" ? (db.prepare("SELECT * FROM pd_themes WHERE id = ?").get(themeId) as ThemeRow | undefined) : undefined;
@@ -553,13 +664,18 @@ export function themeDetail(db: Db, actor: User, themeId: unknown, input: { from
     },
     metrics: metricsOf(db, row.id).map((m) => ({ ...m, rate: ratePer100(m) })),
     reviews: db
-      .prepare("SELECT id, decided_on AS decidedOn, decision, evidence, uncertainties FROM pd_reviews WHERE theme_id = ? ORDER BY decided_on DESC")
+      .prepare(
+        "SELECT id, decided_on AS decidedOn, decision, evidence, uncertainties, interpretation, competing, next_action AS nextAction FROM pd_reviews WHERE theme_id = ? ORDER BY decided_on DESC, at DESC",
+      )
       .all(row.id) as {
       id: string;
       decidedOn: string;
       decision: ReviewDecision;
       evidence: string;
       uncertainties: string;
+      interpretation: Interpretation | "";
+      competing: string;
+      nextAction: string;
     }[],
     otherThemes: db.prepare("SELECT id, title FROM pd_themes WHERE id != ? AND merged_into IS NULL ORDER BY title").all(row.id) as {
       id: string;
@@ -769,13 +885,14 @@ export function problemAction(db: Db, actor: User, input: Record<string, unknown
             `${SOURCES[source]} ${ref} is already linked${had.title ? ` to “${had.title}”` : " (not yet grouped)"}. Add a follow-up to that case instead.`,
           );
         const caseId = id("case");
-        db.prepare("INSERT INTO pd_cases (id, theme_id, source, source_ref, summary, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        db.prepare("INSERT INTO pd_cases (id, theme_id, source, source_ref, summary, link, party, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
           caseId,
           themeId,
           source,
           ref,
           str(input.summary, 600),
           link(input.link),
+          partyLabel(input.party),
           at,
         );
         db.prepare("INSERT INTO pd_case_events (id, case_id, kind, on_date, note, recorded_at) VALUES (?, ?, 'initial', ?, ?, ?)").run(
@@ -812,6 +929,26 @@ export function problemAction(db: Db, actor: User, input: Record<string, unknown
         );
         if (c.theme_id) touch(c.theme_id);
         return { caseId: c.id };
+      }
+      case "case-party": {
+        const c = caseRow(input.caseId);
+        db.prepare("UPDATE pd_cases SET party = ? WHERE id = ?").run(partyLabel(input.party), c.id);
+        if (c.theme_id) touch(c.theme_id);
+        return { caseId: c.id };
+      }
+      case "reopen-decision": {
+        // A new update or a repeat contact after a review: the decision is looked at again. The review itself is history and stays.
+        const row = need();
+        const reason = str(input.reason, 400);
+        if (reason.length < 10) throw new HttpError(400, "Say what has come in since the last review.");
+        const last = db.prepare("SELECT decided_on FROM pd_reviews WHERE theme_id = ? ORDER BY decided_on DESC, at DESC LIMIT 1").get(row.id) as
+          { decided_on: string } | undefined;
+        if (!last) throw new HttpError(400, "There’s no review to reopen yet.");
+        db.prepare("UPDATE pd_themes SET status = 'investigate', status_note = ?, updated_at = ? WHERE id = ?").run(reason, at, row.id);
+        db.prepare("UPDATE pd_responses SET status = 'draft', approved_by = NULL, approved_at = NULL, updated_at = ? WHERE theme_id = ?").run(at, row.id);
+        hist(db, row.id, actor, "decision-reopened", reason, now);
+        audit(db, { actor: actor.id, event: "problem.decision_reopened", entity: `theme:${row.id}`, reason, at: now });
+        return { id: row.id };
       }
       case "move-case": {
         const c = caseRow(input.caseId);
@@ -1067,20 +1204,28 @@ export function problemAction(db: Db, actor: User, input: Record<string, unknown
         const decision = pick(input.decision, REVIEW_DECISIONS, "keep");
         const evidence = str(input.evidence, 1200);
         if (evidence.length < 20) throw new HttpError(400, "Say what the evidence shows, and what it doesn’t.");
-        db.prepare("INSERT INTO pd_reviews (id, theme_id, decided_on, decision, evidence, uncertainties, by_user, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+        // How the owner reads the evidence. A person's judgement, recorded as one: a chart never supplies it.
+        const interpretation =
+          typeof input.interpretation === "string" && input.interpretation in INTERPRETATIONS ? (input.interpretation as Interpretation) : "";
+        db.prepare(
+          "INSERT INTO pd_reviews (id, theme_id, decided_on, decision, evidence, uncertainties, interpretation, competing, next_action, by_user, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ).run(
           id("rev"),
           row.id,
           day(input.decidedOn) || today(now),
           decision,
           evidence,
           str(input.uncertainties, 800),
+          interpretation,
+          str(input.competing, 800),
+          str(input.nextAction, 400),
           actor.id,
           at,
         );
-        hist(db, row.id, actor, "reviewed", REVIEW_DECISIONS[decision], now);
+        hist(db, row.id, actor, "reviewed", `${REVIEW_DECISIONS[decision]}${interpretation ? ` (${INTERPRETATIONS[interpretation]})` : ""}`, now);
         if (decision === "close")
           db.prepare("UPDATE pd_themes SET status = 'closed', status_note = ?, updated_at = ? WHERE id = ?").run(evidence.slice(0, 600), at, row.id);
-        audit(db, { actor: actor.id, event: "problem.reviewed", entity: `theme:${row.id}`, next: { decision }, at: now });
+        audit(db, { actor: actor.id, event: "problem.reviewed", entity: `theme:${row.id}`, next: { decision, interpretation }, at: now });
         return { id: row.id };
       }
       default:
@@ -1136,6 +1281,17 @@ export function exportRegister(db: Db, actor: User, input: { status?: unknown; r
   const previous: unknown[][] = [];
   const design: unknown[][] = [];
   const trendRows: unknown[][] = [];
+  const signalRows: unknown[][] = [];
+  const returnRows: unknown[][] = [];
+  const reasonRows: unknown[][] = [];
+  const evidenceRows: unknown[][] = [];
+  const reviewRows: unknown[][] = [];
+  // Source-system references are for superadmins. Everyone else gets the counts, which is what the register is for.
+  const refs = isSuperadmin(actor);
+  const window = monthWindow(desk.range.from, desk.range.to);
+  /** A split of first answers, or a note that there are too few people to show one without pointing at someone. */
+  const split = (n: number, v: { best: number; acceptable: number; risky: number }) =>
+    n < THIN ? [n, ...Array(3).fill(`Fewer than ${THIN}: not shown`)] : [n, v.best, v.acceptable, v.risky];
   for (const t of desk.themes) {
     const d = themeDetail(db, actor, t.id, input, now);
     const r = d.response.data;
@@ -1170,7 +1326,124 @@ export function exportRegister(db: Db, actor: User, input: { status?: unknown; r
       d.response.status === "approved" ? "Approved" : d.response.status === "draft" ? "Draft" : "No decision yet",
       d.theme.sample ? "Sample data" : "",
       url(`/admin/problems/${t.id}`),
+      d.counts.updates,
+      d.counts.repeatContacts,
+      d.counts.parties || (d.counts.cases ? "Not recorded" : 0),
+      d.reviews[0] ? `${REVIEW_DECISIONS[d.reviews[0].decision]} (${d.reviews[0].decidedOn})` : "Not reviewed yet",
+      d.reviews[0]?.interpretation ? INTERPRETATIONS[d.reviews[0].interpretation] : "",
+      d.reviews[0]?.nextAction ?? "",
+      url(`/admin/signal-room/${t.id}`),
     ]);
+    for (const c of d.cases) {
+      const contacts = c.events.filter((e) => CONTACT_KINDS.includes(e.kind));
+      signalRows.push([
+        t.id,
+        SOURCES[c.source],
+        refs ? c.sourceRef : "Withheld",
+        c.party || "Not recorded",
+        c.events[0]?.on ?? "",
+        contacts.at(-1)?.on ?? "",
+        c.falseMatch ? 0 : 1,
+        contacts.length,
+        contacts.filter((e) => e.kind === "update" || e.kind === "change").length,
+        contacts.filter((e) => e.kind === "repeat").length,
+        c.falseMatch ? "False match: not counted" : c.open ? "Open" : "Closed",
+      ]);
+    }
+    for (const v of d.reviews)
+      reviewRows.push([
+        t.id,
+        v.decidedOn,
+        REVIEW_DECISIONS[v.decision],
+        v.interpretation ? INTERPRETATIONS[v.interpretation] : "Not recorded",
+        v.evidence,
+        v.competing,
+        v.uncertainties,
+        v.nextAction,
+      ]);
+    for (const ret of returnsForTheme(db, t.id)) {
+      returnRows.push([
+        t.id,
+        ret.id,
+        ret.title,
+        ret.status === "approved" ? `Approved ${ret.approvedAt.slice(0, 10)}` : ret.status === "withdrawn" ? "Withdrawn" : "Draft",
+        ret.character,
+        ret.principle,
+        ret.cues,
+        ret.mistake,
+        ret.transfer,
+        ret.earlier?.title ?? "No earlier activity linked",
+        ret.course
+          ? `${ret.course.title}${ret.course.version ? ` (version ${ret.course.version}, ${ret.course.publishedAt.slice(0, 10)})` : " (not published)"}`
+          : "No page chosen",
+        ret.note
+          ? ret.note.status === "live"
+            ? `Released ${ret.note.releasedAt.slice(0, 10)}`
+            : ret.note.status === "withdrawn"
+              ? "Withdrawn"
+              : "Draft"
+          : "None",
+        ret.note?.eligible ?? 0,
+        ret.note?.delivered ?? 0,
+        ret.note?.opened ?? 0,
+        ret.note?.dismissed ?? 0,
+        ret.owner,
+        ret.reviewOn || "Not set",
+        url(`/admin/characters/returns/${ret.id}`),
+      ]);
+      for (const p of ret.placements) reasonRows.push([t.id, ret.id, p.blockId, p.beat, p.does, p.why, p.alternative, p.source, p.reviewer, p.missing]);
+      const link = ret.link;
+      for (const [which, guide, page, block] of [
+        ["First decision", link.from_guide, link.from_page, link.from_block],
+        ["Return decision", link.to_guide, link.to_page, link.to_block],
+      ] as const) {
+        const ev = guide && block ? decisionEvidence(db, guide, page, block, window) : null;
+        for (const v of ev?.versions ?? [])
+          evidenceRows.push([
+            t.id,
+            ret.id,
+            which,
+            ev!.guide.title,
+            block,
+            v.revision,
+            v.publishedAt.slice(0, 10),
+            v.rubric,
+            "Everyone who answered",
+            v.starts,
+            ...split(v.answered, v.first),
+            v.retried,
+            "",
+            "Unscored practice",
+            asAt,
+          ]);
+      }
+      if (link.to_guide && link.to_block) {
+        const tr = transferEvidence(
+          db,
+          { fromGuide: link.from_guide, fromBlock: link.from_block, toGuide: link.to_guide, toPage: link.to_page, toBlock: link.to_block },
+          window,
+        );
+        for (const v of tr.versions)
+          for (const k of Object.keys(COHORTS) as Cohort[])
+            evidenceRows.push([
+              t.id,
+              ret.id,
+              "Return decision, by route",
+              ret.course?.title ?? "",
+              link.to_block,
+              v.revision,
+              "",
+              v.rubric,
+              COHORTS[k],
+              "",
+              ...split(v.cohorts[k].n, v.cohorts[k].first),
+              "",
+              v.cohorts[k].medianDays ?? "",
+              "Unscored practice",
+              asAt,
+            ]);
+      }
+    }
     for (const a of d.actions)
       previous.push([
         t.id,
@@ -1255,9 +1528,16 @@ export function exportRegister(db: Db, actor: User, input: { status?: unknown; r
         "Decision status",
         "Note",
         "Theme link",
+        "Updates to a case",
+        "Repeat contacts",
+        "Affected parties",
+        "Latest review",
+        "Interpretation",
+        "Next action",
+        "Signal Room link",
       ],
       rows: register,
-      widths: [22, 44, 22, 16, 20, 12, 14, 14, 18, 30, 44, 44, 50, 22, 18, 18, 26, 14, 36, 36, 30, 16, 14, 44],
+      widths: [22, 44, 22, 16, 20, 12, 14, 14, 18, 30, 44, 44, 50, 22, 18, 18, 26, 14, 36, 36, 30, 16, 14, 44, 14, 14, 16, 30, 26, 40, 44],
     },
     {
       name: "Previous responses",
@@ -1349,10 +1629,129 @@ export function exportRegister(db: Db, actor: User, input: { status?: unknown; r
           "Named learners and their scores, complaint or incident narratives beyond the de-identified summary, private reflections, and answer keys.",
         ],
         ["Sample data", "Themes marked “Sample data” are fictional pilot records."],
+        ["Updates to a case", "Follow-ups and material changes: new information on the same source case. Never another unique case."],
+        [
+          "Repeat contacts",
+          "The same person or business back about an unresolved or recurring issue on a case already counted. One business raising one case three times is one case, three contacts and two repeat contacts.",
+        ],
+        ["Affected parties", "Distinct de-identified party labels among a theme’s cases. “Not recorded” means nobody has labelled them, which is not zero."],
+        ["Source reference", refs ? "Shown because you are a superadmin." : "Withheld in this export. The live record shows it to people allowed to see it."],
+        [
+          "Learning evidence",
+          "Read from the Hub’s own records, by published version. A question fingerprint identifies the question and its marking as they were: rows with different fingerprints asked different things and must not be read as one series.",
+        ],
+        [
+          "Groups on the return decision",
+          "People who had answered the first decision before they answered the return, and people who hadn’t. They arrived by different routes, so they are listed side by side and not ranked.",
+        ],
+        ["Small numbers", `Where fewer than ${THIN} people answered, the count is given and the split of answers is not.`],
+        [
+          "Interpretation",
+          "The response owner’s recorded reading of the evidence at a review. A person’s judgement, kept with the review; never worked out from a chart.",
+        ],
+        [
+          "Eligible, delivered, opened",
+          "For a Field Note: people who met its trigger, people it has reached in the Hub, and people who opened it. An invitation, not an assignment.",
+        ],
       ],
       widths: [34, 120],
     },
   ];
+  // Living cases (docs/living-cases.md): added after the original five sheets, so anything that reads those by position still does.
+  sheets.push(
+    {
+      name: "Signals",
+      header: [
+        "Theme ID",
+        "Source channel",
+        "Source reference",
+        "Party (de-identified)",
+        "First reported",
+        "Latest contact",
+        "Unique cases",
+        "Contacts",
+        "Updates",
+        "Repeat contacts",
+        "State",
+      ],
+      rows: signalRows,
+      widths: [22, 20, 24, 24, 14, 14, 12, 10, 10, 14, 26],
+    },
+    {
+      name: "Returns and notes",
+      header: [
+        "Theme ID",
+        "Return ID",
+        "Return",
+        "Status",
+        "Character",
+        "Shared principle",
+        "New work cues",
+        "Different plausible mistake",
+        "What counts as transfer",
+        "Earlier asset",
+        "Return asset and version",
+        "Field Note",
+        "Eligible",
+        "Delivered",
+        "Opened",
+        "Dismissed",
+        "Owner",
+        "Review date",
+        "Link",
+      ],
+      rows: returnRows,
+      widths: [22, 20, 30, 20, 14, 44, 44, 44, 44, 30, 40, 22, 10, 10, 10, 10, 24, 14, 44],
+    },
+    {
+      name: "Block reasons",
+      header: [
+        "Theme ID",
+        "Return ID",
+        "Block ID",
+        "Story beat",
+        "What the learner does",
+        "Why this block here",
+        "Alternative considered",
+        "Source or canon",
+        "Reviewer",
+        "Missing inputs",
+      ],
+      rows: reasonRows,
+      widths: [22, 20, 22, 14, 44, 60, 44, 40, 24, 40],
+    },
+    {
+      name: "Learning evidence",
+      header: [
+        "Theme ID",
+        "Return ID",
+        "Which decision",
+        "Asset",
+        "Block ID",
+        "Published version",
+        "Published",
+        "Question fingerprint",
+        "Group",
+        "Opened the page",
+        "People who answered",
+        "First answer: best",
+        "First answer: works with care",
+        "First answer: not the best",
+        "Answered again",
+        "Median days since first story",
+        "Evidence type",
+        "Data as at",
+      ],
+      rows: evidenceRows,
+      widths: [22, 20, 24, 30, 22, 12, 12, 16, 34, 14, 14, 16, 18, 18, 12, 16, 18, 24],
+    },
+    {
+      name: "Reviews",
+      header: ["Theme ID", "Decided on", "Decision", "Interpretation", "What the evidence shows", "Competing explanations", "Uncertainties", "Next action"],
+      rows: reviewRows,
+      widths: [22, 12, 22, 26, 60, 50, 50, 40],
+    },
+  );
   audit(db, {
     actor: actor.id,
     event: "problem.exported",

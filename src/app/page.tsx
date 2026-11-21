@@ -9,6 +9,7 @@ import { currentUser } from "@/server/auth";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
 import { HomeFavourites } from "@/components/favourites/FavouritesList";
+import { HomeFieldNotes } from "@/components/living/FieldNotes";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -29,6 +30,7 @@ export default function Home() {
       </Suspense>
 
       {/* Your Favourites (docs/job-aids.md): the last few saved Job Aids and passages, and the way to Work Tools. */}
+      <HomeFieldNotes />
       <HomeFavourites />
 
       <section aria-labelledby="discover" className="mt-12 border-t border-line pt-8">

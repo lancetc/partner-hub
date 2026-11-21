@@ -90,7 +90,7 @@ A page with Ava on it can't be published until its test answers have been marked
 
 - **The switch.** Off takes effect at once in every course, without republishing. Hub administrators only.
 - **Retention**, in days.
-- **The pilot.** "Dot and the rose garden": two fictional pages that follow the Story Plan pilot. Added as a draft, with nothing marked reviewed.
+- **The pilot.** "Dot and the rose garden": one fictional page that follows the Story Plan pilot. Added as a draft, with nothing marked reviewed. It was two pages when this was built and checked. The second, at the markets, is now its own short course, "Dot at the markets": a return episode learners are invited back to ([living-cases.md](living-cases.md)). The relay's tests still run across both pages.
 - **The report**, for one course, one published version and one date range, in three sections that are kept apart:
   - *Engagement:* eligible learners (opened a page with Ava on it), who dialled, who asked, who came back another day, questions by mode, how answers were grounded, source links opened, failures, and a table by page.
   - *Learning:* what learners did in the course's own decisions on those pages, as the course scored them. Every learner who answered, whether or not they opened Ava.
