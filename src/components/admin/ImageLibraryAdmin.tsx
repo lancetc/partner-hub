@@ -18,7 +18,19 @@ import { Icon } from "../Icon";
   bring a deleted one back; and tidy away duplicate copies.
 */
 
-type Item = { src: string; width: number; height: number; name?: string; uploadedAt?: string; credit?: { name: string; source: string } };
+type Item = {
+  src: string;
+  width: number;
+  height: number;
+  /** The file's own name, as it arrived. */
+  name?: string;
+  /** Its title in the library; empty when nobody has named it and its file name says nothing. */
+  title?: string;
+  /** Its description for screen readers, offered as alt text wherever it's placed. */
+  alt?: string;
+  uploadedAt?: string;
+  credit?: { name: string; source: string };
+};
 type Library = { uploads: Item[]; deleted: Item[]; hiddenBuiltIns: string[] };
 type Usage = { lessons: { slug: string; title: string }[]; magazines?: { id: string; title: string }[] };
 
@@ -26,7 +38,10 @@ const fileOf = (src: string) => src.split("/").pop() ?? "";
 const isUpload = (src: string) => src.startsWith("/api/uploads/");
 const usageUrl = (src: string) =>
   isUpload(src) ? `/api/admin/uploads/${encodeURIComponent(fileOf(src))}` : `/api/admin/uploads/built-in?src=${encodeURIComponent(src)}`;
-const nameOf = (p: Item) => p.name || fileOf(p.src);
+/** What to call it: its title, else (for an upload nobody has named) "Untitled picture", else the built-in file's name. */
+const nameOf = (p: Item) => p.title || (isUpload(p.src) ? "Untitled picture" : p.name || fileOf(p.src));
+/** An upload without a description, which the library asks for. Built-in pictures are described where they're used. */
+const needsWords = (p: Item) => isUpload(p.src) && !p.alt;
 
 export function ImageLibraryAdmin() {
   const { data, error, reload } = useApi<Library>("/api/admin/uploads");
@@ -38,6 +53,9 @@ export function ImageLibraryAdmin() {
   const [adding, setAdding] = useState<"ai" | "pexels" | null>(null);
   const [cropping, setCropping] = useState<Item | null>(null);
   const [usage, setUsage] = useState<Record<string, Usage | "loading">>({});
+  // The picture whose title and description are open for editing, and whether only undescribed ones are shown.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [needsOnly, setNeedsOnly] = useState(false);
   const uploadInput = useRef<HTMLInputElement>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
   const replaceFor = useRef<Item | null>(null);
@@ -45,7 +63,12 @@ export function ImageLibraryAdmin() {
   const hidden = useMemo(() => data?.hiddenBuiltIns ?? [], [data]);
   const library: Item[] = useMemo(() => [...(data?.uploads ?? []), ...LIBRARY.filter((p) => !hidden.includes(p.src))], [data, hidden]);
   const deleted: Item[] = useMemo(() => [...(data?.deleted ?? []), ...LIBRARY.filter((p) => hidden.includes(p.src))], [data, hidden]);
-  const list = (tab === "library" ? library : deleted).filter((p) => !query.trim() || nameOf(p).toLowerCase().includes(query.trim().toLowerCase()));
+  const q = query.trim().toLowerCase();
+  // Search looks through each picture's title, description and file name.
+  const list = (tab === "library" ? library : deleted).filter(
+    (p) => (!q || [nameOf(p), p.alt ?? "", p.name ?? ""].some((t) => t.toLowerCase().includes(q))) && (!needsOnly || needsWords(p)),
+  );
+  const needCount = library.filter(needsWords).length;
 
   const run = async (fn: () => Promise<string | void>) => {
     setProblem(null);
@@ -81,9 +104,17 @@ export function ImageLibraryAdmin() {
   const upload = (files: FileList | null) =>
     run(async () => {
       const all = Array.from(files ?? []);
-      for (const f of all) await uploadImage(f);
+      const added: string[] = [];
+      for (const f of all) added.push((await uploadImage(f)).src);
       if (uploadInput.current) uploadInput.current.value = "";
-      return all.length ? `Added ${all.length} ${all.length === 1 ? "picture" : "pictures"}.` : undefined;
+      // Straight into naming and describing the first new one, while what it shows is fresh in mind.
+      if (added[0]) {
+        setTab("library");
+        setEditing(added[0]);
+      }
+      return all.length
+        ? `Added ${all.length} ${all.length === 1 ? "picture" : "pictures"}. Give ${all.length === 1 ? "it" : "each"} a title and a description so authors and screen readers know what it shows.`
+        : undefined;
     });
   const remove = (p: Item) =>
     run(async () => {
@@ -170,14 +201,27 @@ export function ImageLibraryAdmin() {
               </button>
             ))}
           </div>
+          {tab === "library" && (
+            <button
+              type="button"
+              aria-pressed={needsOnly}
+              onClick={() => setNeedsOnly((v) => !v)}
+              className={cx(
+                "min-h-9 rounded-full border px-4 text-sm font-semibold",
+                needsOnly ? "border-action bg-action text-on-action" : "border-line-strong bg-surface hover:bg-muted",
+              )}
+            >
+              Needs a description ({needCount})
+            </button>
+          )}
           <label className="relative min-w-60 flex-1">
-            <span className="sr-only">Search by name</span>
+            <span className="sr-only">Search by title or description</span>
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name…"
+              placeholder="Search by title or description…"
               className="min-h-11 w-full rounded-full border border-line-strong bg-surface pl-9 pr-3"
             />
           </label>
@@ -207,9 +251,28 @@ export function ImageLibraryAdmin() {
                   <img src={p.src} alt="" loading="lazy" className={cx("aspect-[4/3] w-full object-cover", tab === "deleted" && "opacity-60")} />
                 </a>
                 <div className="flex flex-1 flex-col gap-1 p-3 text-sm">
-                  <p className="truncate font-semibold" title={nameOf(p)}>
+                  <p className={cx("truncate font-semibold", !p.title && isUpload(p.src) && "italic text-ink-muted")} title={nameOf(p)}>
                     {nameOf(p)}
                   </p>
+                  {editing === p.src ? (
+                    <PictureDetails
+                      p={p}
+                      onCancel={() => setEditing(null)}
+                      onSaved={(title) => {
+                        setEditing(null);
+                        setNote(`Saved the details for “${title || "Untitled picture"}”.`);
+                        reload();
+                      }}
+                    />
+                  ) : p.alt ? (
+                    <p className="line-clamp-2 text-xs text-ink-muted" title={p.alt}>
+                      {p.alt}
+                    </p>
+                  ) : needsWords(p) ? (
+                    <p className="inline-flex w-fit items-center gap-1 rounded-full bg-[#fff4d6] px-2 py-0.5 text-xs font-semibold text-[#7a4b00]">
+                      <Icon name="alert" className="size-3.5" /> No description yet
+                    </p>
+                  ) : null}
                   <p className="text-xs text-ink-muted">
                     {p.width && p.height ? `${p.width} × ${p.height}` : ""}
                     {p.uploadedAt ? ` · ${formatDate(p.uploadedAt)}` : isUpload(p.src) ? "" : " · Built in"}
@@ -242,6 +305,11 @@ export function ImageLibraryAdmin() {
                   <div className="mt-auto flex flex-wrap gap-1 pt-2">
                     {tab === "library" ? (
                       <>
+                        {isUpload(p.src) && editing !== p.src && (
+                          <button type="button" className={cx(btn.quiet, "min-h-8 px-2 text-xs")} onClick={() => setEditing(p.src)}>
+                            Details
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={cx(btn.quiet, "min-h-8 px-2 text-xs")}
@@ -338,5 +406,68 @@ export function ImageLibraryAdmin() {
         </div>
       )}
     </AdminShell>
+  );
+}
+
+/**
+  A picture's title and description, edited in place. The title is how authors find it; the description is offered as
+  its alt text wherever it's placed, so it says what the picture shows for someone who can't see it.
+*/
+function PictureDetails({ p, onCancel, onSaved }: { p: Item; onCancel: () => void; onSaved: (title: string) => void }) {
+  const [title, setTitle] = useState(p.title ?? "");
+  const [alt, setAlt] = useState(p.alt ?? "");
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = async () => {
+    setSaving(true);
+    setProblem(null);
+    try {
+      await api(usageUrl(p.src), { body: { action: "describe", title, alt } });
+      onSaved(title.trim());
+    } catch (e) {
+      setProblem((e as Error).message);
+      setSaving(false);
+    }
+  };
+  return (
+    <form
+      className="mt-1 flex flex-col gap-2 rounded-xl bg-muted p-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <label className="flex flex-col gap-1 text-xs font-semibold">
+        Title
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={120}
+          placeholder="Maya at her kitchen table"
+          className="min-h-9 rounded-lg border border-line-strong bg-surface px-2 text-sm font-normal"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-semibold">
+        Description (alt text)
+        <textarea
+          value={alt}
+          onChange={(e) => setAlt(e.target.value)}
+          maxLength={300}
+          rows={3}
+          placeholder="What the picture shows, for someone who can’t see it."
+          className="rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-sm font-normal"
+        />
+      </label>
+      {p.name && <p className="truncate text-[0.7rem] text-ink-muted">File: {p.name}</p>}
+      {problem && <p className="text-xs font-semibold text-danger">{problem}</p>}
+      <div className="flex gap-1">
+        <button type="submit" className={cx(btn.primary, "min-h-8 px-3 text-xs")} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className={cx(btn.quiet, "min-h-8 px-3 text-xs")} onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

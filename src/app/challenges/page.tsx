@@ -15,13 +15,11 @@ export const metadata: Metadata = { title: "Challenges", robots: { index: false 
 export default function ChallengesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
-      {/* Challenges live under Resources (there's no menu item of their own), so the way back is here. */}
-      <Link href="/resources" className="mb-2 inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent hover:underline">
-        <Icon name="arrow-left" className="size-4" /> Resources
-      </Link>
       <PageHero
         eyebrow="Trilogy Challenge"
         title="Challenges"
+        // Two colleagues, each at a laptop working through the same scenario, split across the right, with a sunlit wall behind the words.
+        image={{ src: "/images/hero-challenge-split.webp", width: 1816, height: 866, position: "85% 51%", minHeight: 491 }}
         aside={
           <Suspense>
             <ChallengeStats />

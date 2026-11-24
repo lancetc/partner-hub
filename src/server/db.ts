@@ -375,6 +375,16 @@ CREATE TABLE IF NOT EXISTS avatar_videos (
   portrait TEXT NOT NULL, captions TEXT, status TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL,
   finished_at TEXT, video_src TEXT, error TEXT
 );
+-- Ava’s talking videos (server/ava.ts): one per line she speaks, keyed like the narration (path:<id>, magazine:<id>:intro,
+-- lesson:<slug>:<card>), made from her portrait and her voice. Played only while the script, voice and portrait still match.
+CREATE TABLE IF NOT EXISTS ava_videos (
+  key TEXT PRIMARY KEY, script_hash TEXT NOT NULL, voice TEXT NOT NULL, portrait TEXT NOT NULL, generation_id TEXT,
+  status TEXT NOT NULL, video_src TEXT, seconds REAL, error TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, finished_at TEXT,
+  -- An uploaded video's own words (an interrupted transmission, say), shown as its script.
+  transcript TEXT,
+  -- When each word of the video is said (JSON word timings), and how they were found: "aligned" by ElevenLabs, or "estimated".
+  words TEXT, timing TEXT
+);
 -- AI pictures made through ElevenLabs: the prompt and settings, and the upload it became.
 CREATE TABLE IF NOT EXISTS image_generations (
   id TEXT PRIMARY KEY, lesson_slug TEXT, model TEXT NOT NULL, prompt TEXT NOT NULL, settings TEXT NOT NULL,
@@ -1138,15 +1148,17 @@ export const PLAYBOOK_SCHEMA = `
 -- person's private pointer to a whole aid or to a passage they highlighted: never a copy of guidance to rely on.
 -- "seen" is the aid release, or the course edition, the person last looked at, so a change can be shown once.
 CREATE TABLE IF NOT EXISTS favourites (
-  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL CHECK (kind IN ('job_aid', 'passage')), target_id TEXT NOT NULL,
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL CHECK (kind IN ('job_aid', 'passage', 'tool')), target_id TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '', pinned INTEGER NOT NULL DEFAULT 0, seen TEXT NOT NULL DEFAULT '', saved_at TEXT NOT NULL, last_opened_at TEXT,
   UNIQUE (user_id, kind, target_id)
 );
 CREATE INDEX IF NOT EXISTS favourites_user ON favourites (user_id, kind);
 -- A highlighted passage: the words as published when it was saved, where they were, and a hash so the same
 -- selection saved twice is one row. The words are published text only: the server checks they're in the source.
+-- Sources: a guide, a Job Aid, a Topic card, a news story or a Resources entry (server/favourites ensurePassageKinds
+-- widens a table made when only the first two could be highlighted).
 CREATE TABLE IF NOT EXISTS saved_passages (
-  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), source_kind TEXT NOT NULL CHECK (source_kind IN ('guide', 'aid')), source_id TEXT NOT NULL,
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), source_kind TEXT NOT NULL CHECK (source_kind IN ('guide', 'aid', 'topic', 'news', 'resource')), source_id TEXT NOT NULL,
   version TEXT NOT NULL, page_id TEXT NOT NULL DEFAULT '', section_id TEXT NOT NULL DEFAULT '', block_id TEXT NOT NULL DEFAULT '', source_title TEXT NOT NULL DEFAULT '',
   quote TEXT NOT NULL, hash TEXT NOT NULL, whole_section INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, UNIQUE (user_id, source_kind, source_id, hash)
 );
@@ -1254,6 +1266,318 @@ export function ensureSandbox(db: { exec: (sql: string) => void }) {
   if (sandboxReady.has(db)) return;
   db.exec(SANDBOX_SCHEMA);
   sandboxReady.add(db);
+}
+
+/*
+  Hiring Runway Decision Lab (lib/hiringRunway, server/hiringRunway): a learner's attempt at a fictional hiring
+  decision: what they opened and compared, their first and revised plans, and the rubric it finished with, pinned to
+  the course revision, a hash of the case, and the story, model and rubric versions. Fictional choices only, never a
+  real business figure. Theirs alone; authors see totals.
+*/
+export const HIRING_SCHEMA = `
+CREATE TABLE IF NOT EXISTS hiring_lab_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, assessment TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS hiring_lab_attempts_user ON hiring_lab_attempts (user_id, guide_id, block_id);
+`;
+const hiringReady = new WeakSet<object>();
+/** Makes sure the Hiring Runway table is there, for a server already running when it was added. */
+export function ensureHiring(db: { exec: (sql: string) => void }) {
+  if (hiringReady.has(db)) return;
+  db.exec(HIRING_SCHEMA);
+  hiringReady.add(db);
+}
+
+/*
+  Caseload-to-Margin & Hiring Capacity Calculator (lib/caseloadPlanner, server/caseloadPlanner,
+  docs/caseload-margin-calculator.md). A partner business's private plans, scoped to the business on the server:
+  - who may plan: the business's owner, and the members the owner has authorised. Nobody else, Trilogy staff included;
+  - a plan and its numbered versions. A save is a new version; nothing is overwritten. Each keeps the inputs as
+    entered (aggregate counts and figures only, never a participant), their provenance, the model and calculator
+    versions, and the headline results it showed;
+  - use events, with no figures in them.
+*/
+export const CASELOAD_SCHEMA = `
+CREATE TABLE IF NOT EXISTS business_planner_access (
+  org_id TEXT NOT NULL REFERENCES orgs(id), user_id TEXT NOT NULL REFERENCES users(id),
+  grant_role TEXT NOT NULL CHECK (grant_role IN ('owner', 'member')), granted_by TEXT NOT NULL, granted_at TEXT NOT NULL,
+  PRIMARY KEY (org_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS business_plans (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  from_plan TEXT, from_version INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS business_plans_org ON business_plans (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS business_plan_versions (
+  plan_id TEXT NOT NULL REFERENCES business_plans(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, model_version TEXT NOT NULL,
+  planner_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (plan_id, number)
+);
+CREATE TABLE IF NOT EXISTS planner_events (
+  id TEXT PRIMARY KEY, event TEXT NOT NULL, mode TEXT NOT NULL, access TEXT NOT NULL, model_version TEXT NOT NULL,
+  user_id TEXT NOT NULL, org_id TEXT, at TEXT NOT NULL
+);
+`;
+const caseloadReady = new WeakSet<object>();
+/** Makes sure the planner's tables are there, and that Favourites can hold a tool, for a database made before they were added. */
+export function ensureCaseload(db: Db) {
+  if (caseloadReady.has(db)) return;
+  db.exec(CASELOAD_SCHEMA);
+  db.exec(PLAYBOOK_SCHEMA);
+  const fav = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'favourites'").get() as { sql: string } | undefined;
+  if (fav && !fav.sql.includes("'tool'")) {
+    // SQLite can't change a CHECK in place: copy the rows into a table that allows a whole tool, then swap it in.
+    const cols = "id, user_id, kind, target_id, title, pinned, seen, saved_at, last_opened_at";
+    db.exec(`BEGIN;
+CREATE TABLE favourites_with_tools (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL CHECK (kind IN ('job_aid', 'passage', 'tool')), target_id TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '', pinned INTEGER NOT NULL DEFAULT 0, seen TEXT NOT NULL DEFAULT '', saved_at TEXT NOT NULL, last_opened_at TEXT,
+  UNIQUE (user_id, kind, target_id)
+);
+INSERT INTO favourites_with_tools (${cols}) SELECT ${cols} FROM favourites;
+DROP TABLE favourites;
+ALTER TABLE favourites_with_tools RENAME TO favourites;
+CREATE INDEX IF NOT EXISTS favourites_user ON favourites (user_id, kind);
+COMMIT;`);
+  }
+  caseloadReady.add(db);
+}
+
+/*
+  One Day, Five Perspectives (lib/oneDay, server/oneDay): a learner's attempt at a fictional working day: the options
+  chosen at each event, the role lenses opened, lens replies, knowledge gaps hit and the end-of-day statuses, pinned to
+  the course revision, a hash of the case and its version. Fictional choices only. Theirs alone; authors see totals.
+*/
+export const ONE_DAY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS one_day_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT '{}', result TEXT, status TEXT NOT NULL CHECK (status IN ('active', 'finished')),
+  started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS one_day_attempts_user ON one_day_attempts (user_id, guide_id, block_id);
+`;
+/*
+  Growth readiness (lib/growthReadiness, lib/growthLab, server/growthReadiness, docs/growth-readiness.md):
+  - intake_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - growth_scenarios and their numbered versions: a partner business's private plan for its next starts, scoped to the
+    business (the owner and the members they've authorised, as for Plan my business). A save is a new version; nothing
+    is overwritten. Aggregate figures and anonymous start labels only, never a participant.
+*/
+export const GROWTH_SCHEMA = `
+CREATE TABLE IF NOT EXISTS intake_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS intake_attempts_user ON intake_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS growth_scenarios (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS growth_scenarios_org ON growth_scenarios (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS growth_scenario_versions (
+  scenario_id TEXT NOT NULL REFERENCES growth_scenarios(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, sheet TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (scenario_id, number)
+);
+`;
+const growthReady = new WeakSet<object>();
+/** Makes sure the growth readiness tables are there, for a server already running when they were added. */
+export function ensureGrowth(db: { exec: (sql: string) => void }) {
+  if (growthReady.has(db)) return;
+  db.exec(GROWTH_SCHEMA);
+  growthReady.add(db);
+}
+/*
+  The Workload Lens (lib/workloadLens, lib/workloadLab, server/workloadLens, docs/workload-lens.md):
+  - workload_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - workload_scenarios and their numbered versions: a partner business's private map of its team's weeks and its Week
+    Review, scoped to the business (the owner and the members they've authorised, as for Plan my business). A save is a
+    new version; nothing is overwritten. Aggregate hours by category only: never a named employee or participant.
+*/
+export const WORKLOAD_SCHEMA = `
+CREATE TABLE IF NOT EXISTS workload_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS workload_attempts_user ON workload_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS workload_scenarios (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workload_scenarios_org ON workload_scenarios (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS workload_scenario_versions (
+  scenario_id TEXT NOT NULL REFERENCES workload_scenarios(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, review TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (scenario_id, number)
+);
+`;
+const workloadReady = new WeakSet<object>();
+/** Makes sure the Workload Lens tables are there, for a server already running when they were added. */
+export function ensureWorkload(db: { exec: (sql: string) => void }) {
+  if (workloadReady.has(db)) return;
+  db.exec(WORKLOAD_SCHEMA);
+  workloadReady.add(db);
+}
+/*
+  Local Coverage Comparison (lib/suburbCoverage, lib/coverageLab, server/suburbCoverage, docs/suburb-growth.md):
+  - coverage_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - coverage_plans and their numbered versions: a partner business's private "Plan my local area" and its Local Coverage
+    Brief, scoped to the business (the owner and the members they've authorised, as for Plan my business). A save is a
+    new version; nothing is overwritten. Aggregate, anonymous demand and supply rows only: never a participant's or
+    contractor's name, address or contact details.
+*/
+export const COVERAGE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS coverage_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS coverage_attempts_user ON coverage_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS coverage_plans (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS coverage_plans_org ON coverage_plans (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS coverage_plan_versions (
+  plan_id TEXT NOT NULL REFERENCES coverage_plans(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, brief TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (plan_id, number)
+);
+`;
+const coverageReady = new WeakSet<object>();
+/** Makes sure the Local Coverage tables are there, for a server already running when they were added. */
+export function ensureCoverage(db: { exec: (sql: string) => void }) {
+  if (coverageReady.has(db)) return;
+  db.exec(COVERAGE_SCHEMA);
+  coverageReady.add(db);
+}
+/*
+  Referral Journey Calculator (lib/referralJourney, lib/referralLab, server/referralJourney, docs/referral-journey.md):
+  - referral_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - referral_reviews and their numbered versions: a partner business's private "Review my relationships" and its
+    Relationship Review, scoped to the business (the owner and the members they've authorised, as for Plan my business).
+    A save is a new version; nothing is overwritten. Aggregate monthly cohorts by source only: never a person's name, a
+    practice's or hospital's name, or clinical information.
+*/
+export const REFERRAL_SCHEMA = `
+CREATE TABLE IF NOT EXISTS referral_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS referral_attempts_user ON referral_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS referral_reviews (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS referral_reviews_org ON referral_reviews (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS referral_review_versions (
+  review_id TEXT NOT NULL REFERENCES referral_reviews(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, review TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (review_id, number)
+);
+`;
+const referralReady = new WeakSet<object>();
+/** Makes sure the Referral Journey tables are there, for a server already running when they were added. */
+export function ensureReferral(db: { exec: (sql: string) => void }) {
+  if (referralReady.has(db)) return;
+  db.exec(REFERRAL_SCHEMA);
+  referralReady.add(db);
+}
+/*
+  Service Reliability Calculator (lib/serviceReliability, lib/reliabilityLab, server/serviceReliability, docs/service-reliability.md):
+  - reliability_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - reliability_sheets and their numbered versions: a partner business's private "Review my service reliability" and
+    its Reliability Decision Sheet, scoped to the business (the owner and the members they've authorised, as for Plan
+    my business). A save is a new version; nothing is overwritten. Aggregate counts by service and time window only:
+    never a participant's or worker's name, a complaint, an allegation or a private fee term.
+*/
+export const RELIABILITY_SCHEMA = `
+CREATE TABLE IF NOT EXISTS reliability_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS reliability_attempts_user ON reliability_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS reliability_sheets (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reliability_sheets_org ON reliability_sheets (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS reliability_sheet_versions (
+  sheet_id TEXT NOT NULL REFERENCES reliability_sheets(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, sheet TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (sheet_id, number)
+);
+`;
+const reliabilityReady = new WeakSet<object>();
+/** Makes sure the Service Reliability tables are there, for a server already running when they were added. */
+export function ensureReliability(db: { exec: (sql: string) => void }) {
+  if (reliabilityReady.has(db)) return;
+  db.exec(RELIABILITY_SCHEMA);
+  reliabilityReady.add(db);
+}
+/*
+  90-Day Cash Bridge (lib/cashBridge, lib/cashBridgeLab, server/cashBridge, docs/cash-bridge.md):
+  - cashbridge_attempts: a learner's fictional attempt, pinned to the course revision, a hash of the case and its versions.
+    Fictional choices only. Theirs alone; authors see totals.
+  - cashbridge_plans and their numbered versions: a partner business's private 90-Day Cash Plans and Funding Decision
+    Sheets, scoped to the business (the owner and the members they've authorised, as for Plan my business). A save is a
+    new version; nothing is overwritten. Aggregate dated amounts only: never a client's or worker's name.
+  - cashbridge_plan_audit: who read, saved or exported a private plan, and when. Never the figures.
+*/
+export const CASH_BRIDGE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS cashbridge_attempts (
+  id TEXT PRIMARY KEY, guide_id TEXT NOT NULL REFERENCES magazine_guides(id), revision_id TEXT NOT NULL, block_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), attempt_no INTEGER NOT NULL, key_hash TEXT NOT NULL, story_version TEXT NOT NULL,
+  model_version TEXT NOT NULL, rubric_version TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', result TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'finished')), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS cashbridge_attempts_user ON cashbridge_attempts (user_id, guide_id, block_id);
+CREATE TABLE IF NOT EXISTS cashbridge_plans (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cashbridge_plans_org ON cashbridge_plans (org_id, updated_at);
+CREATE TABLE IF NOT EXISTS cashbridge_plan_versions (
+  plan_id TEXT NOT NULL REFERENCES cashbridge_plans(id), number INTEGER NOT NULL, inputs TEXT NOT NULL, sheet TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL, snapshot TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', saved_by TEXT NOT NULL REFERENCES users(id), saved_at TEXT NOT NULL,
+  PRIMARY KEY (plan_id, number)
+);
+CREATE TABLE IF NOT EXISTS cashbridge_plan_audit (
+  plan_id TEXT NOT NULL, org_id TEXT NOT NULL, user_id TEXT NOT NULL, action TEXT NOT NULL, version INTEGER, at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cashbridge_plan_audit_plan ON cashbridge_plan_audit (plan_id, at);
+`;
+const cashBridgeReady = new WeakSet<object>();
+/** Makes sure the 90-Day Cash Bridge tables are there, for a server already running when they were added. */
+export function ensureCashBridge(db: { exec: (sql: string) => void }) {
+  if (cashBridgeReady.has(db)) return;
+  db.exec(CASH_BRIDGE_SCHEMA);
+  cashBridgeReady.add(db);
+}
+const oneDayReady = new WeakSet<object>();
+/** Makes sure the One Day table is there, for a server already running when it was added. */
+export function ensureOneDay(db: { exec: (sql: string) => void }) {
+  if (oneDayReady.has(db)) return;
+  db.exec(ONE_DAY_SCHEMA);
+  oneDayReady.add(db);
 }
 
 /*
@@ -1763,6 +2087,14 @@ export function migrate(db: Db) {
   db.exec(AUDITOR_SCHEMA);
   db.exec(CHARACTERS_SCHEMA);
   db.exec(SANDBOX_SCHEMA);
+  db.exec(HIRING_SCHEMA);
+  db.exec(ONE_DAY_SCHEMA);
+  db.exec(GROWTH_SCHEMA);
+  db.exec(WORKLOAD_SCHEMA);
+  db.exec(COVERAGE_SCHEMA);
+  db.exec(REFERRAL_SCHEMA);
+  db.exec(RELIABILITY_SCHEMA);
+  db.exec(CASH_BRIDGE_SCHEMA);
   db.exec(PROBLEM_SCHEMA);
   problemColumns(db as unknown as Migrating);
   db.exec(STORY_SCHEMA);
@@ -1819,6 +2151,10 @@ export function migrate(db: Db) {
   if (!uploadCols.includes("deleted_by")) db.exec("ALTER TABLE uploads ADD COLUMN deleted_by TEXT");
   // A picture converted to WebP points at its new file, so old addresses keep showing it.
   if (!uploadCols.includes("replaced_by")) db.exec("ALTER TABLE uploads ADD COLUMN replaced_by TEXT");
+  // A picture's name in the library ("Maya, character portrait") and its description for screen readers (server/uploads).
+  // Null until someone (or the importer that made it) writes one; the library then shows a tidied file name.
+  if (!uploadCols.includes("title")) db.exec("ALTER TABLE uploads ADD COLUMN title TEXT");
+  if (!uploadCols.includes("alt")) db.exec("ALTER TABLE uploads ADD COLUMN alt TEXT");
   const campaignCols = (db.prepare("PRAGMA table_info(campaigns)").all() as { name: string }[]).map((c) => c.name);
   // The email topic a campaign goes out under (lib/emailTopics): only people subscribed to it get it.
   if (!campaignCols.includes("topic")) db.exec("ALTER TABLE campaigns ADD COLUMN topic TEXT NOT NULL DEFAULT 'newsletters'");

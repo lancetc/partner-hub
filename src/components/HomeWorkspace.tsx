@@ -158,7 +158,7 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
             >
               <span className="block text-sm font-semibold text-ink-muted">My learning</span>
               <span className="mt-1 block font-serif text-4xl font-semibold text-[#008282] dark:text-[#3cb8b9]">{percent === null ? "–" : `${percent}%`}</span>
-              <span className="block truncate text-sm text-ink-muted">{path ? path.name : "Start a learning path"}</span>
+              <span className="block truncate text-sm text-ink-muted">{path ? path.name : "Start a Discovery Path"}</span>
             </Link>
           </div>
 

@@ -47,8 +47,11 @@ export type CardVisual =
       photo?: { src: string; width: number; height: number };
       /** Presenter video; played only when the learner presses play. */
       video?: {
-        /** Synthesia (share link id), YouTube (video id) or an ElevenLabs AI presenter made in the editor (generation id). */
-        provider: "synthesia" | "youtube" | "elevenlabs";
+        /**
+          Synthesia (share link id), YouTube (video id), an ElevenLabs AI presenter made in the editor (generation id), or
+          "upload": a video file in the Hub, such as one recorded in the editor's studio (id unused; `src` is the file).
+        */
+        provider: "synthesia" | "youtube" | "elevenlabs" | "upload";
         id: string;
         title: string;
         /** Vertical (9:16) videos fill the whole card, with no text. */
@@ -61,6 +64,14 @@ export type CardVisual =
         scriptHash?: string;
         /** AI presenter: the words spoken and when, for captions that follow the voice. */
         captions?: { spoken: string; words: { from: number; to: number; start: number; end: number }[] };
+        /** An uploaded or recorded video's captions file (WebVTT). */
+        captionsVtt?: string;
+        /** A vertical crop of a wider recording: the window's horizontal centre, in % of the width (50 is the middle). */
+        cropX?: number;
+        /** The part of a recording to play, in seconds (set when it was trimmed in the studio). */
+        trim?: { start: number; end: number };
+        /** Made in the recording studio: camera or screen, when, how long, and that everyone shown may be shared. */
+        recording?: { mode: "camera" | "screen"; at: string; seconds: number; consent: boolean };
       };
     }
   /** Client, coordinator and Trilogy relationship triangle; `labels` appear one by one. */
@@ -135,6 +146,22 @@ type Base = {
   requireComplete?: boolean;
   /** One or two talking-head clips (often recorded on a webcam), shown as circles at the top of the card. */
   bubbles?: { src: string; poster?: string; label?: string }[];
+  /**
+    A Quarterly Budget Decision Lab placed on this card by reference (docs/budget-decision-lab.md): the published
+    Magazine block itself (by course slug and block id), with its rule set and the learner's own attempt. Never a copy,
+    so the Topic and the article can't drift. Shown to people who can read that course.
+  */
+  labRef?: { guide: string; block: string; why?: string };
+  /**
+    A Spot the Hazard scene placed on this card by reference (docs/spot-the-hazard.md): the published Magazine block,
+    its approved variants and the learner's own attempt, as for `labRef`. Shown to people who can read that course.
+  */
+  sceneRef?: { guide: string; block: string; why?: string };
+  /**
+    A 72-Hour Discharge Pivot placed on this card by reference (docs/discharge-pivot.md): the published Magazine block
+    and the learner's own attempt, as for `labRef`. Shown to people who can read that course.
+  */
+  pivotRef?: { guide: string; block: string; why?: string };
 };
 
 export type Option = {

@@ -160,3 +160,12 @@ export function lessonIn(db: Db, lesson: Lesson, lang: string, now: Date, transl
   );
   return { state: "pending" };
 }
+
+/**
+  The lesson as someone reading in `lang` sees it, when its translation is ready; otherwise null. Only reads:
+  it never starts a translation. Used to check a highlight against the words a reader actually had in front of them.
+*/
+export function translationIfReady(db: Db, lesson: Lesson, lang: string): Lesson | null {
+  const row = rowFor(db, lesson.slug, lang);
+  return row?.source_hash === hashOf(extractText(lesson)) && row.status === "ready" && row.content ? applyText(lesson, JSON.parse(row.content)) : null;
+}

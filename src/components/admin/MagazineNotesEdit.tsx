@@ -6,6 +6,7 @@ import { cx } from "@/lib/format";
 import type { NotesDeckBlock } from "@/lib/magazine";
 import { DEALABLE, NOTE_AUDIENCES, NOTE_MODES, SELECTION, STATES, TOPICS, type NoteAudience, type NoteMode, type Selection, type Topic } from "@/lib/notes";
 import type { noteLibrary } from "@/server/notes";
+import type { businessLibrary } from "@/server/businessNotes";
 import { Badge, btn, Field, input } from "./ui";
 import type { Update } from "./MagazineEditParts";
 import { Icon } from "../Icon";
@@ -25,13 +26,39 @@ export function NotesDeckEdit({ block: b, update }: { block: NotesDeckBlock; upd
   const notes = lib.data?.notes ?? [];
   const onTopic = notes.filter((n) => n.latest.data.topics.some((t) => b.topics.includes(t)));
   const reviewed = onTopic.filter((n) => n.published && DEALABLE.includes(n.published.state));
+  // A business edition deals published Business Field Notes, only to verified principals, and only where the contributor allowed Magazine placement.
+  const business = b.edition === "business";
+  const biz = useApi<ReturnType<typeof businessLibrary>>(business ? "/api/admin/business-notes" : null).data;
+  const bizReady = (biz?.notes ?? []).filter(
+    (n) => n.published && DEALABLE.includes(n.published.state) && n.published.data.business?.consents.crossFormat,
+  ).length;
   const toggle = <T extends string>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
   return (
     <div className="w-full rounded-3xl border border-line-strong bg-surface p-5 shadow-sm sm:p-7">
       <p className="mb-2 flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
         <Icon name="mail" className="size-5" /> Notes to a Younger Me deck
       </p>
-      {lib.data && (
+      <Field label="Edition">
+        <select
+          className={input}
+          value={business ? "business" : "general"}
+          onChange={(e) => set((x) => void (x.edition = e.target.value === "business" ? "business" : "general"))}
+        >
+          <option value="general">Notes to a Younger Me (by topic and audience)</option>
+          <option value="business">Business Field Notes (verified principals only)</option>
+        </select>
+      </Field>
+      {business && (
+        <p role="status" className="mt-3 rounded-2xl bg-[#fff1cc] px-4 py-3 text-sm font-semibold text-[#4a3400]">
+          {biz ? `${bizReady} published Business Field Notes can go in a course; the deck shows ${b.count}.` : "Counting Business Field Notes…"} Readers who
+          aren’t verified principals see a short “for business owners” message and no cards. Review cards in the{" "}
+          <Link href="/admin/business-notes" className="underline">
+            Business Field Notes library
+          </Link>
+          .
+        </p>
+      )}
+      {lib.data && !business && (
         <p
           role="status"
           className={cx(
@@ -52,7 +79,7 @@ export function NotesDeckEdit({ block: b, update }: { block: NotesDeckBlock; upd
         <Field label="Introduction">
           <input className={input} value={b.intro} maxLength={600} onChange={(e) => set((x) => void (x.intro = e.target.value), "intro")} />
         </Field>
-        <fieldset className="flex flex-wrap gap-3 sm:col-span-2">
+        <fieldset className={cx("flex flex-wrap gap-3 sm:col-span-2", business && "hidden")}>
           <legend className="text-sm font-semibold">Topics</legend>
           {(Object.keys(TOPICS) as Topic[]).map((t) => (
             <label key={t} className="flex min-h-11 items-center gap-2 text-sm">
@@ -61,7 +88,7 @@ export function NotesDeckEdit({ block: b, update }: { block: NotesDeckBlock; upd
             </label>
           ))}
         </fieldset>
-        <fieldset className="flex flex-wrap gap-3 sm:col-span-2">
+        <fieldset className={cx("flex flex-wrap gap-3 sm:col-span-2", business && "hidden")}>
           <legend className="text-sm font-semibold">Audience (empty: whoever can read the course)</legend>
           {(Object.keys(NOTE_AUDIENCES) as NoteAudience[]).map((a) => (
             <label key={a} className="flex min-h-11 items-center gap-2 text-sm">
@@ -124,7 +151,7 @@ export function NotesDeckEdit({ block: b, update }: { block: NotesDeckBlock; upd
             </Link>
           </div>
           <ul className="mt-2 flex flex-col gap-1">
-            {onTopic.map((n) => {
+            {(business ? (biz?.notes ?? []) : onTopic).map((n) => {
               const pinned = b.noteIds.includes(n.latest.id);
               const ok = Boolean(n.published && DEALABLE.includes(n.published.state));
               return (
@@ -143,7 +170,7 @@ export function NotesDeckEdit({ block: b, update }: { block: NotesDeckBlock; upd
                 </li>
               );
             })}
-            {!onTopic.length && <li className="text-sm text-ink-muted">No notes on these topics yet.</li>}
+            {!(business ? (biz?.notes ?? []) : onTopic).length && <li className="text-sm text-ink-muted">No notes on these topics yet.</li>}
           </ul>
           <p className="mt-1 text-xs text-ink-muted">
             Only reviewed notes can be pinned. A pinned card that’s later flagged or withdrawn stops the course being republished until it’s replaced.

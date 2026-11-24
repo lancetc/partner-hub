@@ -17,7 +17,10 @@ import {
   PULSE_DEFAULTS,
   reflectChecks,
   BLOCK_LABELS,
+  HUB_VISUALS,
+  type HubVisualKind,
 } from "@/lib/magazine";
+import { HubVisual } from "../magazine/HubVisual";
 import { btn, Field, input } from "./ui";
 import { DescribeButton, ImageDropZone, PictureButtons } from "./ImagePicker";
 import { RichEditable } from "./RichEditable";
@@ -40,6 +43,18 @@ import { NotesDeckEdit } from "./MagazineNotesEdit";
 import { PlaybookEdit } from "./MagazinePlaybookEdit";
 import { PhoneCallEdit } from "./MagazinePhoneCallEdit";
 import { SandboxEdit } from "./MagazineSandboxEdit";
+import { HiringLabEdit } from "./MagazineHiringEdit";
+import { OneDayEdit } from "./MagazineOneDayEdit";
+import { IntakeEdit } from "./MagazineIntakeEdit";
+import { WorkloadEdit } from "./MagazineWorkloadEdit";
+import { CoverageEdit } from "./MagazineCoverageEdit";
+import { ReferralEdit } from "./MagazineReferralEdit";
+import { ReliabilityEdit } from "./MagazineReliabilityEdit";
+import { BudgetLabEdit } from "./MagazineBudgetLabEdit";
+import { HazardScanEdit } from "./MagazineHazardScanEdit";
+import { DischargeEdit } from "./MagazineDischargeEdit";
+import { CashBridgeEdit } from "./MagazineCashBridgeEdit";
+import { CaseThreadEdit } from "./MagazineCaseThreadEdit";
 import { AuditorEdit } from "./MagazineAuditorEdit";
 import { Icon, type IconName } from "../Icon";
 
@@ -255,6 +270,32 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <PhoneCallEdit block={b} update={update} />;
     case "sandbox":
       return <SandboxEdit block={b} update={update} />;
+    case "hiring":
+      return <HiringLabEdit block={b} update={update} />;
+    case "onedaymap":
+      return <OneDayEdit block={b} update={update} />;
+    case "intake":
+      return <IntakeEdit block={b} update={update} />;
+    case "workload":
+      return <WorkloadEdit block={b} update={update} />;
+    case "coverage":
+      return <CoverageEdit block={b} update={update} />;
+    case "referral":
+      return <ReferralEdit block={b} update={update} />;
+    case "reliability":
+      return <ReliabilityEdit block={b} update={update} />;
+    case "budgetlab":
+      return <BudgetLabEdit block={b} update={update} />;
+    case "hazardscan":
+      return <HazardScanEdit block={b} update={update} />;
+    case "discharge":
+      return <DischargeEdit block={b} update={update} />;
+    case "cashbridge":
+      return <CashBridgeEdit block={b} update={update} />;
+    case "casethread":
+      return <CaseThreadEdit block={b} update={update} />;
+    case "hubvisual":
+      return <HubVisualEdit block={b} update={update} />;
     case "wall":
       return <WallEdit block={b} update={update} />;
     case "poll":
@@ -1496,6 +1537,113 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
           every page it’s on. The course can’t be published until the snippet has an approved release.
         </p>
       );
+    case "hubvisual":
+      return (
+        <p className="text-sm text-ink-muted">
+          The diagram comes from the Hub’s own page for it, so every article showing it stays current when that page is updated. Explain it with the blocks
+          around it: what to look for, and what it means for the reader.
+        </p>
+      );
+    case "intake":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional month: nothing a learner does accepts, refuses or moves a real client, and the story never asks for a learner’s real figures. A business
+          owner can use their own aggregate figures privately in the block’s Use my business tab. It can’t be published until the case check passes and every
+          reviewer’s sign-off is recorded. Use Preview to work through it as a learner.
+        </p>
+      );
+    case "workload":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional week: Maya, Sam and every figure are invented, and the story never asks for a learner’s real figures or anyone’s calendar. A business
+          owner can map their own team’s weeks privately, in aggregate, in the block’s Map my team’s week tab. It can’t be published until the case check passes
+          and every reviewer’s sign-off is recorded. Use Preview to work through it as a learner.
+        </p>
+      );
+    case "coverage":
+      return (
+        <p className="text-sm text-ink-muted">
+          Fictional suburbs: Maya, the contractors and every figure are invented, and nothing a learner does approves a contractor, books a visit or sets a
+          clinical priority. A business owner can plan their own local area privately, in aggregate, in the block’s Plan my local area tab. It can’t be
+          published until the case check passes and every reviewer’s sign-off is recorded. Use Preview to work through it as a learner.
+        </p>
+      );
+    case "referral":
+      return (
+        <p className="text-sm text-ink-muted">
+          Fictional relationships: Maya, the GP practice, the hospital discharge team, the community organisation, every enquiry and every figure are invented,
+          and nothing a learner does contacts a referrer or records a real referral. A business owner can review their own relationships privately, as monthly
+          counts, in the block’s Review my relationships tab. It can’t be published until the case check passes and every reviewer’s sign-off is recorded. Use
+          Preview to work through every stage.
+        </p>
+      );
+    case "reliability":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional month: Maya, Mrs Patel, the other clients, the supplier and every figure are invented, and nothing a learner does books a visit, approves
+          a supplier, records a complaint or decides a claim. A business owner can review their own reliability privately, as aggregate counts, in the block’s
+          Review my service reliability tab. It can’t be published until the case check passes and every reviewer’s sign-off is recorded. Use Preview to work
+          through every beat.
+        </p>
+      );
+    case "budgetlab":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional quarter: Dot, Fiona, the suppliers and every figure are invented, and nothing a learner does books, claims, invoices or changes a care
+          plan. The same approved block can be placed on a Topic card by reference. It can’t be published until the case check passes, the rule set is current
+          and every reviewer’s sign-off is recorded. Use Preview (desktop and phone) to work through every step.
+        </p>
+      );
+    case "hazardscan":
+      return (
+        <p className="text-sm text-ink-muted">
+          A drawn, fictional room: no real home, photo or client. The server picks an approved variant for each attempt and scores it against the answer key,
+          which learners never receive before they submit. The same approved block can be placed on a Topic card by reference. It can’t be published until each
+          variant’s named reviewer has checked it and the release is signed off. Use Preview (desktop and phone, picture and list) to play every variant.
+        </p>
+      );
+    case "discharge":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional return home from hospital: Dot, Fiona and every alert, record and supplier answer are invented, and nothing a learner does books,
+          messages, orders, claims or changes a record. The server replays each attempt through the same deterministic engine, and learners never receive the
+          scenario’s feedback before they submit. The same approved block can be placed on a Topic card by reference. It can’t be published until the scenario
+          check passes, its placeholder sources are replaced and every reviewer’s sign-off is recorded. Use Preview (desktop and phone) to play it, with and
+          without the clock.
+        </p>
+      );
+    case "cashbridge":
+      return (
+        <p className="text-sm text-ink-muted">
+          Fictional dates and amounts: Maya, her agreement and every figure are invented, and nothing a learner does is a funding, credit, hiring or accounting
+          decision. A business owner can plan their own next 90 days privately, as dated aggregate amounts, in the block’s Plan my next 90 days tab. It can’t be
+          published until the case check passes and every reviewer’s sign-off is recorded. Use Preview to work through every beat.
+        </p>
+      );
+    case "casethread":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional case: nothing a learner writes reaches a client record or an incident system. The discussion is one canonical thread, shown here and on
+          the Community page, and everything shared is premoderated in Admin → Case threads. It can’t be published until the case note’s approval, the policy
+          version and a review date are recorded. Use Preview to see the locked, unlocked, empty, unavailable and archived states.
+        </p>
+      );
+    case "onedaymap":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional day: nothing a learner does books a service, approves a worker, changes a care plan or reports an incident. What a learner sees in a
+          perspective visit isn’t known to the coordinator until it’s communicated. It can’t be published until the branch test passes and every reviewer’s
+          sign-off is recorded. Use Preview to play the day, including a perspective visit and a retry.
+        </p>
+      );
+    case "hiring":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional case: Maya, her agreement and every figure are invented, and the block never asks for a learner’s real business figures. It can’t be
+          published until the case reconciles and Finance, Operations/Quality, Partnerships and privacy sign-off is recorded. Use Preview to work through it as
+          a learner, before and after the new information.
+        </p>
+      );
     case "sandbox":
       return (
         <p className="text-sm text-ink-muted">
@@ -1514,9 +1662,10 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
     case "auditor":
       return (
         <p className="text-sm text-ink-muted">
-          A practice case: nothing a learner decides in it approves a supplier or pays an invoice. It can’t be published until Supply Chain or Compliance
-          (vetting) or Finance (invoices), Care Operations and Quality sign-off and the ruleset version are recorded, every rule is within its review date, and
-          nothing looks like a real identifier. Use Preview to test every marker and decision.
+          A practice case: nothing a learner decides in it approves a supplier, agrees a price or pays an invoice. It can’t be published until Supply Chain or
+          Compliance (vetting) or Finance (invoices; a Contractor Vetting Card needs both), Care Operations and Quality sign-off and the ruleset version are
+          recorded, every rule is within its review date, and nothing looks like a real identifier. A vetting card’s own case check is never waived. Use Preview
+          to test every marker, outcome, the corrected pack and the renewal.
         </p>
       );
     case "mentor":
@@ -2364,5 +2513,36 @@ function ReflectSettings({ block: b, update, doc }: { block: Of<"journal"> | Of<
       <p className="text-sm text-ink-muted">Curated viewpoints only for now: learners don’t post here. Moderated peer sharing comes with the later pilot.</p>
       {notes}
     </>
+  );
+}
+
+/** A Hub diagram: which one, and a caption. The diagram itself shows below, exactly as readers see it. */
+function HubVisualEdit({ block: b, update }: { block: Of<"hubvisual">; update: Update }) {
+  return (
+    <div className={cx("w-full", card)}>
+      <p className={kicker}>Hub diagram</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Diagram">
+          <select className={input} value={b.visual} onChange={(e) => update<typeof b>(b.id, (x) => void (x.visual = e.target.value as HubVisualKind))}>
+            {(Object.keys(HUB_VISUALS) as HubVisualKind[]).map((k) => (
+              <option key={k} value={k}>
+                {HUB_VISUALS[k]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Caption" hint="Optional. Says what to look for; the diagram’s own name shows otherwise.">
+          <input
+            className={input}
+            value={b.caption ?? ""}
+            maxLength={300}
+            onChange={(e) => update<typeof b>(b.id, (x) => void (x.caption = e.target.value || undefined), `${b.id}:caption`)}
+          />
+        </Field>
+      </div>
+      <div className="mt-4">
+        <HubVisual block={b} />
+      </div>
+    </div>
   );
 }

@@ -44,7 +44,17 @@ type Stored = GuideIdentity & {
   updatedBy?: string;
   updatedAt?: string;
 };
-const BLANK: Stored = { name: "", intro: DEFAULT_GUIDE_INTRO, portrait: null, avatarRef: "", voiceRef: "", rights: "", styleVersion: "Warm Signal 1" };
+// Ava 2.0: the Hub’s guide is Ava, presented by the ElevenLabs Laura avatar and spoken in OpenAI’s Alloy voice, the same voice as the
+// Topics’ narrator, until an administrator sets something else (an ElevenLabs voice id or name, or "openai:<voice>"; server/ava.ts).
+const BLANK: Stored = {
+  name: "Ava",
+  intro: DEFAULT_GUIDE_INTRO,
+  portrait: null,
+  avatarRef: "ElevenLabs Avatars · Laura (rcbCmFkg00466hCegzsZ)",
+  voiceRef: "openai:alloy",
+  rights: "",
+  styleVersion: "Ava Transmission 2",
+};
 
 function stored(db: Db): Stored {
   const raw = setting(db, KEY);
@@ -54,6 +64,11 @@ function stored(db: Db): Stored {
   } catch {
     return BLANK;
   }
+}
+
+/** The voice the guide speaks in: an ElevenLabs voice id, "openai:<voice>", or a voice’s name to look up (server/ava.ts). */
+export function guideVoiceRef(db: Db) {
+  return stored(db).voiceRef;
 }
 
 /** What learners are shown of the guide: its name, its introduction (with the name filled in) and its portrait. */

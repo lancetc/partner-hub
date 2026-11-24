@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -15,6 +15,10 @@ import { connection } from "next/server";
 import { getDb } from "@/server/db";
 import { currentUser } from "@/server/auth";
 import { storyPreview } from "@/server/stories";
+import { HighlightArea } from "@/components/favourites/HighlightArea";
+import { SaveSection } from "@/components/favourites/Highlighter";
+import { SavedMarkChips } from "@/components/favourites/SavedMarks";
+import { FavouriteBanner } from "@/components/favourites/FavouriteBanner";
 
 export function generateStaticParams() {
   return stories.map((s) => ({ slug: s.slug }));
@@ -148,6 +152,10 @@ async function StoryArticle({
   const related = resources.filter((r) => story.relatedResources?.includes(r.id));
   const more = stories.filter((s) => s.slug !== story.slug && s.category === story.category).slice(0, 2);
   const p = story.policy;
+  // Highlights (docs/job-aids.md): anchored to the story, the paragraph and this edition. Not in an author's preview.
+  const edition = story.updated ?? story.date;
+  const firstHeading = story.body.findIndex((b) => b.type === "h2");
+  const hasOpening = (firstHeading < 0 ? story.body : story.body.slice(0, firstHeading)).some((b) => b.type === "p" || b.type === "list" || b.type === "quote");
 
   return (
     <article className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
@@ -163,6 +171,8 @@ async function StoryArticle({
       </Link>
 
       <div className="mx-auto mt-4 max-w-3xl">
+        {/* Opened from Favourites: the saved passage, where it stands against this edition, and the way back. */}
+        {!draft && <FavouriteBanner className="mb-6" />}
         <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{categoryLabel(story.category)}</p>
         <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">{story.title}</h1>
         <p className="mt-4 text-xl text-ink-muted">{story.dek}</p>
@@ -170,7 +180,15 @@ async function StoryArticle({
           <p className="font-mulish text-sm text-ink-muted">
             {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
           </p>
-          <SaveButton id={`story:${story.slug}`} title={story.title} withLabel />
+          <div className="flex items-center gap-2">
+            {/* Save the opening without selecting anything; each subheading has its own. */}
+            {!draft && hasOpening && (
+              <span className="print:hidden">
+                <SaveSection source="news" id={story.slug} revisionId={edition} sectionId="s0" label="Save the opening" />
+              </span>
+            )}
+            <SaveButton id={`story:${story.slug}`} title={story.title} withLabel />
+          </div>
         </div>
       </div>
 
@@ -178,7 +196,13 @@ async function StoryArticle({
 
       <div className="mx-auto mt-10 grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
         {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
-        <div className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5">
+        <HighlightArea
+          source="news"
+          id={story.slug}
+          revisionId={edition}
+          off={Boolean(draft)}
+          className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
+        >
           {p && (
             <div className="rounded-2xl border border-line bg-muted p-5 text-base">
               <p className="flex items-center gap-2 font-semibold">
@@ -188,10 +212,25 @@ async function StoryArticle({
               <p className="mt-2 text-ink-muted">Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.</p>
             </div>
           )}
+          {/* Each part of the story is a place a passage can be highlighted, and found again (#hl-p3 from Favourites). */}
           {story.body.map((b, i) => (
-            <Block key={i} block={b} />
+            <Fragment key={i}>
+              <div data-hl={`p${i}`} id={`hl-p${i}`} className="scroll-mt-24">
+                {b.type === "h2" && !draft ? (
+                  <div className="flex items-end justify-between gap-3">
+                    <Block block={b} />
+                    <span className="print:hidden">
+                      <SaveSection source="news" id={story.slug} revisionId={edition} sectionId={`s${i}`} />
+                    </span>
+                  </div>
+                ) : (
+                  <Block block={b} />
+                )}
+              </div>
+              <SavedMarkChips blockId={`p${i}`} />
+            </Fragment>
           ))}
-        </div>
+        </HighlightArea>
 
         <aside className="flex flex-col gap-5">
           {lesson && (

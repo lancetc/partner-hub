@@ -55,7 +55,7 @@ export const narratorName = (voiceId = ttsConfig().voiceId) =>
 export function scriptFor(db: Db, key: string, drafts = false): string {
   const [kind, a, b] = key.split(":");
   if (kind === "lesson") {
-    const lesson = getLesson(db, a) ?? (drafts ? editorLesson(db, a)?.lesson : undefined);
+    const lesson = lessonWith(db, a, b, drafts);
     // With shared facts filled in, exactly as learners see the text.
     const node = lesson && applyFacts(lesson, factValues(db)).nodes[b];
     const text = node && (node.type === "presenter" ? node.transcript : node.type === "audio" || node.type === "listen" ? node.script : node.narration);
@@ -73,7 +73,48 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const text = followUp(db, a, Number(b))?.explain?.script;
     if (text) return text;
   }
+  // A Magazine course's introduction (`magazine:<guideId>:intro`, on the cover) or a page's (`magazine:<guideId>:page:<pageId>`), as Ava
+  // says it: the approved Audio Guide script, from the published edition, or the saved draft for an author previewing it.
+  if (kind === "magazine" && (b === "intro" || b === "page")) {
+    const pageId = key.split(":")[3] ?? "";
+    const row = db.prepare("SELECT g.draft, r.doc FROM magazine_guides g LEFT JOIN magazine_revisions r ON r.id = g.revision_id WHERE g.id = ?").get(a) as
+      { draft: string | null; doc: string | null } | undefined;
+    type Said = { status?: string; script?: string };
+    const approved = (raw: string | null) => {
+      try {
+        const doc = raw ? (JSON.parse(raw) as { audio?: { intro?: Said }; pages?: { id: string; narration?: Said }[] }) : undefined;
+        const n = b === "intro" ? doc?.audio?.intro : doc?.pages?.find((p) => p.id === pageId)?.narration;
+        return n?.status === "approved" && n.script?.trim() ? n.script.trim() : null;
+      } catch {
+        return null;
+      }
+    };
+    const text = approved(row?.doc ?? null) ?? (drafts ? approved(row?.draft ?? null) : null);
+    if (text) return text;
+  }
+  // A Discovery Path's introduction, as Ava says it: the path's own description (`path:<id>`).
+  if (kind === "path") {
+    const row = db.prepare("SELECT description FROM learning_paths WHERE id = ? AND archived = 0").get(a) as { description: string | null } | undefined;
+    if (row?.description?.trim()) return row.description.trim();
+  }
   throw new HttpError(404, "No narration for this card.");
+}
+
+/** Lines Ava speaks, in her own voice (server/ava.ts): a path's introduction, a Magazine course's introduction, and a Topic's presenter card. */
+export function avaSpeaks(db: Db, key: string, drafts = false) {
+  const [kind, a, b] = key.split(":");
+  if (kind === "path" || kind === "magazine") return true;
+  if (kind !== "lesson") return false;
+  return lessonWith(db, a, b, drafts)?.nodes[b]?.type === "presenter";
+}
+
+/**
+  The Topic that has this card: for an author (drafts), the saved draft when the card is in it (a card added since the
+  Topic was published is only there), otherwise the published Topic.
+*/
+function lessonWith(db: Db, slug: string, card: string, drafts: boolean) {
+  const draft = drafts ? editorLesson(db, slug)?.lesson : undefined;
+  return draft?.nodes[card] ? draft : (getLesson(db, slug) ?? draft);
 }
 
 const cacheDir = () => path.join(process.cwd(), "data", "tts");

@@ -1,20 +1,89 @@
 "use client";
 
 import { useState } from "react";
-import { categories, type CategoryId, type Story } from "@/content/stories";
-import { StoryTile } from "./StoryTile";
-import { cx } from "@/lib/format";
+import Link from "next/link";
+import { categories, categoryLabel, policyStatusLabel, type CategoryId, type Story } from "@/content/stories";
+import { StoryVisual } from "./StoryVisual";
+import { SaveButton } from "./SaveButton";
+import { Icon } from "./Icon";
+import { cx, formatDate } from "@/lib/format";
+
+/*
+  The homepage's "In this issue", laid out like a broadsheet: a mosaic of stories on a grid of ruled columns, with
+  thick rules between the bands and hairlines between the columns, square-cornered pictures, serif headlines in a
+  clear hierarchy, a drop cap on the lead, and the section index as a strip of tabs rather than pills.
+*/
+
+const href = (s: Story) => `/news/${s.slug}`;
+const saveId = (s: Story) => `story:${s.slug}`;
+
+/** A story's section, as a newspaper kicker. */
+function Kicker({ story, className }: { story: Story; className?: string }) {
+  return (
+    <p
+      className={cx(
+        "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.16em]",
+        story.category === "policy" || story.category === "case-study" ? "text-warm" : "text-accent",
+        className,
+      )}
+    >
+      {categoryLabel(story.category)}
+    </p>
+  );
+}
+
+/** The byline and dateline, set small: "By Trilogy Care team · 22 Oct 2026 · 4 min read". */
+function Byline({ story, withAuthor = true }: { story: Story; withAuthor?: boolean }) {
+  return (
+    <p className="font-mulish text-xs text-ink-muted">
+      {withAuthor && (
+        <>
+          <span className="font-serif italic">By {story.byline}</span>
+          <span aria-hidden> · </span>
+        </>
+      )}
+      <time dateTime={story.date}>{formatDate(story.date)}</time>
+      <span aria-hidden> · </span>
+      {story.readMinutes} min read
+    </p>
+  );
+}
+
+/** The headline's link covers its whole story, so anywhere on it opens the story. */
+function Headline({ story, className }: { story: Story; className: string }) {
+  return (
+    <h3 className={cx("font-serif font-bold text-ink", className)}>
+      <Link
+        href={href(story)}
+        className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4"
+      >
+        {story.title}
+      </Link>
+    </h3>
+  );
+}
+
+/** A band's label: small capitals with a hairline running to the edge. */
+function BandLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <h3 className={cx("flex items-center gap-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.2em] text-ink", className)}>
+      {children}
+      <span aria-hidden className="h-px flex-1 bg-line-strong" />
+    </h3>
+  );
+}
 
 export function NewsGrid({ stories }: { stories: Story[] }) {
   const [filter, setFilter] = useState<CategoryId | "all">("all");
   const filtered = filter === "all" ? stories : stories.filter((s) => s.category === filter);
+  const sections = [{ id: "all" as const, label: "All stories" }, ...categories.filter((c) => c.id !== "policy")];
 
   return (
     <>
-      <div className="-mx-4 mt-[5px] sm:-mx-6">
-        <div role="group" aria-label="Filter stories by category" className="scrollbar-none flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6">
-          {/* No Policy updates filter: those stories still show under All stories. */}
-          {[{ id: "all" as const, label: "All stories" }, ...categories.filter((c) => c.id !== "policy")].map((c) => {
+      {/* The section index, as a newspaper's strip of sections under the nameplate. No Policy updates tab: those stories show under All stories. */}
+      <div className="-mx-4 border-b border-line-strong sm:mx-0">
+        <div role="group" aria-label="Filter stories by section" className="scrollbar-none flex overflow-x-auto px-4 sm:px-0">
+          {sections.map((c, i) => {
             const active = filter === c.id;
             return (
               <button
@@ -23,15 +92,21 @@ export function NewsGrid({ stories }: { stories: Story[] }) {
                 aria-pressed={active}
                 onClick={() => setFilter(c.id)}
                 className={cx(
-                  "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
-                  active ? "border-action bg-action text-on-action" : "border-line-strong text-ink hover:bg-muted",
+                  "relative inline-flex min-h-11 shrink-0 items-center px-4 font-mulish text-[0.72rem] font-extrabold uppercase tracking-[0.14em] transition-colors",
+                  i > 0 && "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-px before:-translate-y-1/2 before:bg-line-strong",
+                  i === 0 && "pl-0",
+                  active
+                    ? "text-ink after:absolute after:inset-x-4 after:-bottom-px after:h-[3px] after:bg-ink first:after:left-0"
+                    : "text-ink-muted hover:text-ink",
                 )}
               >
-                {active && <span aria-hidden>✓</span>}
                 {c.label}
               </button>
             );
           })}
+          <span className="ml-auto hidden shrink-0 items-center pl-6 font-serif text-sm italic text-ink-muted lg:inline-flex">
+            {filtered.length} {filtered.length === 1 ? "story" : "stories"}
+          </span>
         </div>
       </div>
 
@@ -39,73 +114,235 @@ export function NewsGrid({ stories }: { stories: Story[] }) {
         {filter === "all" ? `Showing all ${stories.length} stories` : `Showing ${filtered.length} ${categories.find((c) => c.id === filter)?.label}`}
       </p>
 
-      {filter === "all" ? <EditorialLayout stories={stories} /> : <FilteredLayout stories={filtered} />}
+      {filter === "all" ? <Broadsheet stories={stories} /> : <SectionPage stories={filtered} />}
     </>
   );
 }
 
-function EditorialLayout({ stories }: { stories: Story[] }) {
+/**
+  The front page. Three bands, each closed by a thick rule:
+  - the lead in the middle, the latest headlines to its left and the policy notice to its right;
+  - "This week": four stories across, hairlines between them;
+  - a wide feature beside a numbered list of more updates.
+  On a phone it's one column, with a rule between each story.
+*/
+function Broadsheet({ stories }: { stories: Story[] }) {
   const lead = stories[0];
-  const policy = stories.find((s) => s.policy && s !== lead)!;
+  const policy = stories.find((s) => s.policy && s !== lead);
   const rest = stories.filter((s) => s !== lead && s !== policy);
   const side = rest.slice(0, 3);
-  const row = rest.slice(3, 7);
+  const week = rest.slice(3, 7);
   const wide = rest[7];
   const more = rest.slice(8);
 
   return (
-    <div data-build-tiles className="mt-6 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-12">
-      <StoryTile story={lead} size="lead" className="order-1 sm:col-span-2 lg:order-2 lg:col-span-6" />
-      <StoryTile story={policy} size="policy" className="order-2 sm:col-span-2 lg:order-3 lg:col-span-3" />
-      <div className="order-3 flex flex-col gap-4 sm:col-span-2 lg:order-1 lg:col-span-3 lg:border-r lg:border-line lg:pr-8">
-        <SectionHeading>Latest</SectionHeading>
-        {side.map((s) => (
-          <StoryTile key={s.slug} story={s} size="text" className="first-of-type:border-t-0 first-of-type:pt-0" />
-        ))}
-      </div>
-
-      <div className="order-4 sm:col-span-2 lg:col-span-12">
-        <SectionHeading>This week</SectionHeading>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-          {row.map((s) => (
-            <StoryTile key={s.slug} story={s} />
-          ))}
-        </div>
-      </div>
-
-      {wide && <StoryTile story={wide} size="wide" className="order-5 sm:col-span-2 lg:col-span-8" />}
-      {more.length > 0 && (
-        <div className="order-6 sm:col-span-2 lg:col-span-4">
-          <SectionHeading>More updates</SectionHeading>
-          <div className="flex flex-col gap-4">
-            {more.map((s) => (
-              <StoryTile key={s.slug} story={s} size="compact" />
+    <div data-build-tiles>
+      {/* Band one: the front of the issue. */}
+      <div className="grid grid-cols-1 border-b-[3px] border-ink lg:grid-cols-12">
+        <Lead story={lead} className="py-6 lg:order-2 lg:col-span-6 lg:px-7" />
+        <div className="border-t border-line-strong py-6 lg:order-1 lg:col-span-3 lg:border-r lg:border-t-0 lg:pr-6">
+          <BandLabel>Latest</BandLabel>
+          <div className="mt-3 divide-y divide-line-strong">
+            {side.map((s) => (
+              <TextStory key={s.slug} story={s} />
             ))}
           </div>
+        </div>
+        {policy && <PolicyNotice story={policy} className="border-t border-line-strong py-6 lg:order-3 lg:col-span-3 lg:border-l lg:border-t-0 lg:pl-6" />}
+      </div>
+
+      {/* Band two: this week, four across. */}
+      {week.length > 0 && (
+        <div className="border-b-[3px] border-ink py-6">
+          <BandLabel>This week</BandLabel>
+          <div className="mt-4 grid grid-cols-1 divide-y divide-line-strong sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
+            {week.map((s, i) => (
+              <ColumnStory
+                key={s.slug}
+                story={s}
+                className={cx(
+                  "py-5 sm:py-0",
+                  // Hairlines between the columns: every column but the first in its row.
+                  i % 2 === 1 && "sm:border-l sm:border-line-strong sm:pl-5",
+                  i % 2 === 0 && i > 0 && "lg:border-l lg:border-line-strong lg:pl-5",
+                  "sm:pr-5 lg:last:pr-0",
+                  i >= 2 && "sm:mt-6 sm:border-t sm:border-line-strong sm:pt-6 lg:mt-0 lg:border-t-0 lg:pt-0",
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Band three: a wide feature, and the briefs. */}
+      {(wide || more.length > 0) && (
+        <div className="grid grid-cols-1 border-b-[3px] border-ink lg:grid-cols-12">
+          {wide && <WideStory story={wide} className="py-6 lg:col-span-8 lg:border-r lg:border-line-strong lg:pr-7" />}
+          {more.length > 0 && (
+            <div className={cx("border-t border-line-strong py-6 lg:col-span-4 lg:border-t-0 lg:pl-6", !wide && "lg:col-span-12 lg:pl-0")}>
+              {/* A single story left over is a column of its own; two or more make the news-in-brief list. */}
+              {more.length === 1 ? (
+                <ColumnStory story={more[0]} className="h-full" />
+              ) : (
+                <>
+                  <BandLabel>In brief</BandLabel>
+                  <ol className="mt-3 divide-y divide-line-strong">
+                    {more.map((s, i) => (
+                      <Brief key={s.slug} story={s} n={i + 1} />
+                    ))}
+                  </ol>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function FilteredLayout({ stories }: { stories: Story[] }) {
-  if (!stories.length) {
-    return <p className="mt-10 rounded-2xl bg-muted p-6 text-ink-muted">No stories in this category yet.</p>;
-  }
+function Lead({ story, className }: { story: Story; className?: string }) {
   return (
-    <div data-build-tiles className="mt-8 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-      {stories.map((s) => (
-        <StoryTile key={s.slug} story={s} size={s.policy ? "policy" : "standard"} />
-      ))}
+    <article className={cx("group relative flex flex-col", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <Kicker story={story} />
+        <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
+      </div>
+      <Headline story={story} className="mt-1 text-[2.1rem] leading-[1.02] tracking-tight sm:text-[2.6rem] lg:text-[2.85rem]" />
+      <StoryVisual {...story.visual} className="mt-5 aspect-[16/9]" iconSize="size-12" priority />
+      {/* The standfirst, opened with a drop cap. */}
+      <p className="mt-4 font-serif text-[1.08rem] leading-relaxed text-ink first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-serif first-letter:text-[3.6rem] first-letter:font-bold first-letter:leading-[0.78] first-letter:text-ink">
+        {story.dek}
+      </p>
+      <div className="mt-4">
+        <Byline story={story} />
+      </div>
+    </article>
+  );
+}
+
+function TextStory({ story }: { story: Story }) {
+  return (
+    <article className="group relative py-4 first:pt-1">
+      <Kicker story={story} />
+      <Headline story={story} className="mt-1 text-[1.2rem] leading-snug" />
+      <p className="mt-1.5 text-[0.92rem] leading-snug text-ink-muted">{story.dek}</p>
+      <div className="mt-2">
+        <Byline story={story} withAuthor={false} />
+      </div>
+    </article>
+  );
+}
+
+/** The policy notice: boxed in a heavy rule, like a public notice in the paper. */
+function PolicyNotice({ story, className }: { story: Story; className?: string }) {
+  const p = story.policy!;
+  return (
+    <div className={className}>
+      <article className="group relative border-2 border-ink bg-surface">
+        <p className="flex items-center justify-between gap-2 bg-ink px-4 py-1.5 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-bg">
+          Policy notice
+          <Icon name="info" className="size-3.5" />
+        </p>
+        <StoryVisual {...story.visual} className="aspect-[16/9] border-b-2 border-ink" iconSize="size-8" />
+        <div className="flex flex-col gap-2.5 p-4">
+          <p className="w-fit border border-ink px-2 py-0.5 font-mulish text-[0.68rem] font-bold uppercase tracking-[0.1em] text-ink">
+            {policyStatusLabel[p.status]}
+          </p>
+          <Headline story={story} className="text-[1.35rem] leading-tight" />
+          <p className="text-[0.92rem] leading-snug text-ink-muted">{story.dek}</p>
+          {p.effective && <p className="font-mulish text-xs font-bold text-ink">Effective {formatDate(p.effective)}</p>}
+          {story.relatedLesson && (
+            <Link
+              href={`/topics/${story.relatedLesson}`}
+              className="relative z-10 inline-flex min-h-10 w-fit items-center gap-1.5 font-semibold text-accent underline decoration-1 underline-offset-4 hover:decoration-2"
+            >
+              See what changed <Icon name="arrow-right" className="size-4" />
+            </Link>
+          )}
+          <div className="border-t border-line-strong pt-2">
+            <Byline story={story} />
+          </div>
+        </div>
+      </article>
     </div>
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function ColumnStory({ story, className }: { story: Story; className?: string }) {
   return (
-    <h2 className="mb-5 flex items-center gap-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em] text-ink">
-      {children}
-      <span aria-hidden className="h-px flex-1 bg-line-strong" />
-    </h2>
+    <article className={cx("group relative flex flex-col", className)}>
+      <StoryVisual {...story.visual} className="aspect-[3/2]" iconSize="size-8" />
+      <div className="mt-3 flex items-start justify-between gap-2">
+        <Kicker story={story} />
+        <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
+      </div>
+      <Headline story={story} className="text-[1.15rem] leading-snug" />
+      <p className="mt-1.5 line-clamp-3 text-[0.9rem] leading-snug text-ink-muted">{story.dek}</p>
+      <div className="mt-auto pt-3">
+        <Byline story={story} withAuthor={false} />
+      </div>
+    </article>
+  );
+}
+
+function WideStory({ story, className }: { story: Story; className?: string }) {
+  return (
+    <article className={cx("group relative grid gap-5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]", className)}>
+      <StoryVisual {...story.visual} className="aspect-[16/10] sm:aspect-auto sm:min-h-60" />
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-2">
+          <Kicker story={story} />
+          <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
+        </div>
+        <Headline story={story} className="mt-1 text-[1.7rem] leading-[1.08] tracking-tight" />
+        <p className="mt-3 font-serif text-[1rem] leading-relaxed text-ink">{story.dek}</p>
+        <div className="mt-auto pt-4">
+          <Byline story={story} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** A brief: a big serif numeral beside the headline, as in a paper's news-in-brief column. */
+function Brief({ story, n }: { story: Story; n: number }) {
+  return (
+    <li className="group relative flex gap-4 py-3.5 first:pt-1">
+      <span aria-hidden className="w-7 shrink-0 font-serif text-3xl font-bold leading-none text-line-strong">
+        {n}
+      </span>
+      <div className="min-w-0">
+        <Kicker story={story} />
+        <Headline story={story} className="mt-0.5 text-[1.05rem] leading-snug" />
+        <div className="mt-1">
+          <Byline story={story} withAuthor={false} />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** One section's stories: a ruled grid, three across. */
+function SectionPage({ stories }: { stories: Story[] }) {
+  if (!stories.length) {
+    return <p className="mt-6 border-y border-line-strong py-8 text-center font-serif italic text-ink-muted">No stories in this section yet.</p>;
+  }
+  return (
+    <div data-build-tiles className="grid grid-cols-1 border-b-[3px] border-ink sm:grid-cols-2 lg:grid-cols-3">
+      {stories.map((s, i) => (
+        <ColumnStory
+          key={s.slug}
+          story={s}
+          className={cx(
+            "border-t border-line-strong py-6 first:border-t-0 sm:px-5",
+            // Hairlines down the columns, none before the first in each row; the top row has no rule above it.
+            "sm:[&:nth-child(2n+1)]:pl-0 sm:[&:nth-child(2n)]:border-l sm:[&:nth-child(-n+2)]:border-t-0",
+            "lg:[&:nth-child(2n)]:border-l-0 lg:[&:nth-child(2n+1)]:pl-5 lg:[&:nth-child(3n+1)]:pl-0 lg:[&:nth-child(3n+2)]:border-l lg:[&:nth-child(3n)]:border-l lg:[&:nth-child(-n+3)]:border-t-0",
+            i === stories.length - 1 && "lg:pr-0",
+          )}
+        />
+      ))}
+    </div>
   );
 }

@@ -439,9 +439,10 @@ input[type="range"].brand-range::-moz-range-thumb {
 }
 
 /*
-  The homepage building itself from the top down after signing in (see buildScript in app/layout).
-  The site header drops in, then each part of the page rises into place in order (--step), and the news
-  tiles one after another. Each plays when its part arrives, since some stream in a moment later.
+  The homepage building itself from the top down after signing in (see buildScript in app/layout), the
+  other half of the sign-in page falling away (.signin-fall). The site header drops in, then each part of the
+  page falls from above into place in order (--step), landing with a small settle, and the news tiles one
+  after another. Each plays when its part arrives, since some stream in a moment later.
 */
 @media (prefers-reduced-motion: no-preference) {
   html[data-build] [data-site-header] { animation: build-down 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
@@ -458,7 +459,13 @@ input[type="range"].brand-range::-moz-range-thumb {
   html[data-build] [data-build-tiles] > :nth-child(6) { animation-delay: 3000ms; }
   html[data-build] [data-build-tiles] > :nth-child(n + 7) { animation-delay: 3180ms; }
 }
-@keyframes build-in { from { opacity: 0; transform: translateY(22px); } }
+@keyframes build-in {
+  0% { opacity: 0; transform: translateY(-70vh); animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5); }
+  12% { opacity: 1; }
+  70% { transform: translateY(0); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); }
+  84% { transform: translateY(-7px); animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.5); }
+  100% { opacity: 1; transform: none; }
+}
 @keyframes build-down { from { opacity: 0; transform: translateY(-100%); } }
 
 /*
@@ -739,6 +746,57 @@ input[type="range"].brand-range::-moz-range-thumb {
 [id^="block-"]:target, [data-fav-target] { outline: 3px solid var(--focus); outline-offset: 10px; border-radius: 12px; }
 
 /*
+  A passage this reader saved before (favourites/SavedMarks): a soft gold tint and a dotted underline, drawn over the
+  text with the CSS Custom Highlight API, so the published words are never changed. The underline means it isn't
+  colour alone; "tc-saved-active" is the one whose "Your highlight" button has focus. Gone when printed.
+*/
+::highlight(tc-saved) { background-color: rgb(255 199 44 / 0.3); text-decoration: underline dotted 2px #8a6100; text-underline-offset: 4px; }
+::highlight(tc-saved-active) { background-color: rgb(255 199 44 / 0.6); text-decoration: underline solid 2px #8a6100; }
+:root[data-theme="dark"] ::highlight(tc-saved) { background-color: rgb(255 199 44 / 0.24); text-decoration-color: #ffd97a; }
+:root[data-theme="dark"] ::highlight(tc-saved-active) { background-color: rgb(255 199 44 / 0.45); text-decoration-color: #ffd97a; }
+@media (forced-colors: active) {
+  ::highlight(tc-saved), ::highlight(tc-saved-active) { background-color: Mark; color: MarkText; text-decoration-color: MarkText; }
+}
+@media print {
+  ::highlight(tc-saved), ::highlight(tc-saved-active) { background-color: transparent; text-decoration: none; }
+}
+
+/*
+  Emphasised text (docs/emphasise-text.md, components/EditorialMark): an author's light teal marker behind a short
+  phrase. It is a different colour and shape from a learner's saved highlight (gold, dotted underline) and both can sit
+  on the same words. Only the colour behind the words moves: it sweeps in left to right, once, when the phrase scrolls
+  into view (data-sweep). Without the sweep (server render, no script, reduced motion, print) it is simply there.
+  The padding is taken back by the margin, so marked words sit exactly where unmarked ones would. Each wrapped line
+  gets its own marker (box-decoration-break). Body text on it keeps over 10:1 in light mode and about 6:1 in dark.
+*/
+:root { --emph-marker: #b8e7ea; }
+:root[data-theme="dark"] { --emph-marker: #1f6873; }
+mark.tc-emph {
+  color: inherit;
+  background-color: transparent;
+  background-image: linear-gradient(var(--emph-marker), var(--emph-marker));
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 100% 100%;
+  padding: 0.05em 0.14em;
+  margin: 0 -0.14em;
+  border-radius: 0.3em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+mark.tc-emph[data-sweep="pending"] { background-size: 0% 100%; }
+mark.tc-emph[data-sweep="run"] { transition: background-size 0.55s cubic-bezier(0.25, 0.6, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  mark.tc-emph[data-sweep] { background-size: 100% 100%; transition: none; }
+}
+@media (forced-colors: active) {
+  mark.tc-emph { forced-color-adjust: none; background: Mark; color: MarkText; }
+}
+@media print {
+  mark.tc-emph { background-size: 100% 100% !important; transition: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/*
   Ava Relay (components/relay/AvaRelay): a terminal-style dial bar and modal, dark teal in both themes. The bar's
   sweep runs while it dials, and each part of the modal gets one short, dim pulse as it resolves. With reduced
   motion there is neither, and the modal opens complete. The scanline texture never moves.
@@ -941,45 +999,29 @@ body:has([data-signin-page]) > footer {
 .signin-fade {
   transition: opacity 0.5s ease;
 }
-[data-entering] .signin-scene {
-  transform: scale(1.12);
+/*
+  Signing in: the page falls away. One after another (--fall: the button first, then the words, the scene and
+  the logo), each part drops off the bottom of the screen, picking up speed with a slight tilt. The homepage
+  then falls into place from the top (html[data-build], further up).
+*/
+@keyframes signin-fall {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateY(110vh) rotate(var(--tilt, 2deg));
+    opacity: 1;
+  }
 }
-[data-entering] .signin-door {
-  animation: none;
-  opacity: 1;
-  scale: 2.2;
-}
-[data-entering] .signin-fade {
-  opacity: 0.25;
+[data-entering] [data-fall] {
+  animation: signin-fall 0.75s cubic-bezier(0.5, 0, 0.9, 0.45) calc(var(--fall, 0) * 120ms) both;
 }
 
 /*
-  The sign-in button is soft to the touch. Every few seconds, once the page has arrived, it gives a small jelly
-  wobble and a teal ripple, so the eye finds it. Hovering lifts it; pressing squashes it, and it springs back.
-  Once pressed it bounces once and the arrow slides towards the door.
+  The sign-in button is soft to the touch. Hovering lifts it and it pulses; pressing squashes it, and it springs
+  back. Once pressed it bounces once, the arrow slides on, and the page falls away.
 */
-@keyframes signin-nudge {
-  0%,
-  16%,
-  100% {
-    transform: none;
-    box-shadow: 0 0 0 0 rgb(14 124 123 / 0);
-  }
-  3% {
-    transform: scale(1.07, 0.93);
-    box-shadow: 0 0 0 6px rgb(14 124 123 / 0.22);
-  }
-  6% {
-    transform: scale(0.95, 1.06);
-  }
-  9% {
-    transform: scale(1.03, 0.97);
-    box-shadow: 0 0 0 14px rgb(14 124 123 / 0);
-  }
-  12% {
-    transform: scale(0.99, 1.01);
-  }
-}
 @keyframes signin-press {
   0% {
     transform: scale(0.9, 0.84);
@@ -1005,15 +1047,78 @@ body:has([data-signin-page]) > footer {
 }
 .signin-cta {
   transition:
-    transform 0.45s cubic-bezier(0.34, 1.7, 0.64, 1),
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
     background-color 0.2s ease;
-  animation: signin-nudge 6s ease-in-out 2.6s infinite;
 }
-.signin-cta:is(:hover, :focus-visible, :active) {
-  animation: none;
+/*
+  A very slow shimmer, always: a soft band of light drifts across the button over about two and a half seconds,
+  then rests, every nine seconds, starting once the page has arrived.
+*/
+.signin-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.3) 50%, transparent 70%);
+  transform: translateX(-130%);
+  animation: signin-shimmer 9s ease-in-out 1.8s infinite;
 }
+@keyframes signin-shimmer {
+  0% {
+    transform: translateX(-130%);
+  }
+  28%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+/*
+  Hovering lifts it on a soft teal shadow and it starts to pulse: rings of teal spread out from it, and a glow
+  breathes out from its centre, over and over until the pointer leaves.
+*/
 .signin-cta:hover {
-  transform: translateY(-2px) scale(1.04);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px -10px rgb(14 124 123 / 0.55);
+  animation: signin-pulse 1.6s ease-out infinite;
+}
+@keyframes signin-pulse {
+  0% {
+    box-shadow:
+      0 12px 26px -10px rgb(14 124 123 / 0.55),
+      0 0 0 0 rgb(14 124 123 / 0.45),
+      0 0 0 0 rgb(14 124 123 / 0.25);
+  }
+  100% {
+    box-shadow:
+      0 12px 26px -10px rgb(14 124 123 / 0.55),
+      0 0 0 14px rgb(14 124 123 / 0),
+      0 0 0 28px rgb(14 124 123 / 0);
+  }
+}
+.signin-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.28), transparent 60%);
+  opacity: 0;
+}
+@keyframes signin-glow {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+.signin-cta:hover::before {
+  animation: signin-glow 1.6s ease-out infinite;
 }
 .signin-cta:active {
   transform: scale(0.92, 0.86);
@@ -1028,6 +1133,109 @@ body:has([data-signin-page]) > footer {
 [data-entering] .signin-cta-arrow {
   transform: translateX(6px);
   transition: transform 0.4s ease;
+}
+
+/*
+  Hidden hotspots over the scene (components/SignIn.tsx). Each is an unseen circle; when a pointer finds one, a
+  small white dot fades in with a pulsing teal ring, and a note opens above it. A tap does the same on a phone.
+  They step aside while the walk-in plays.
+*/
+.signin-hotspot {
+  position: absolute;
+  width: 8%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 9999px;
+  cursor: help;
+  z-index: 2;
+}
+.signin-hotspot-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  translate: -50% -50%;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 3px rgb(14 124 123 / 0.9),
+    0 2px 8px rgb(0 0 0 / 0.25);
+  opacity: 0;
+  scale: 0.6;
+  transition:
+    opacity 0.25s ease,
+    scale 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.signin-hotspot-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgb(14 124 123 / 0.7);
+  opacity: 0;
+}
+@keyframes signin-hotspot-pulse {
+  0% {
+    opacity: 0.8;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
+  }
+}
+.signin-hotspot-tip {
+  position: absolute;
+  bottom: calc(50% + 16px);
+  left: 50%;
+  width: max-content;
+  max-width: min(16rem, 70vw);
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 10px 30px -8px rgb(16 42 67 / 0.35);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: left;
+  opacity: 0;
+  translate: -50% 6px;
+  transition:
+    opacity 0.2s ease,
+    translate 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+  pointer-events: none;
+}
+.signin-hotspot[data-tip="start"] .signin-hotspot-tip {
+  left: -10%;
+  translate: 0 6px;
+}
+.signin-hotspot[data-tip="end"] .signin-hotspot-tip {
+  left: auto;
+  right: -10%;
+  translate: 0 6px;
+}
+.signin-hotspot:hover .signin-hotspot-dot {
+  opacity: 1;
+  scale: 1;
+}
+.signin-hotspot:hover .signin-hotspot-dot::after {
+  animation: signin-hotspot-pulse 1.6s ease-out infinite;
+}
+.signin-hotspot:hover .signin-hotspot-tip {
+  opacity: 1;
+  translate: -50% 0;
+}
+.signin-hotspot[data-tip]:not([data-tip="center"]):hover .signin-hotspot-tip {
+  translate: 0 0;
+}
+[data-entering] .signin-hotspot {
+  visibility: hidden;
+}
+/* On touch screens a tap shows a hotspot's note; phones only do that for things that look tappable. */
+@media (hover: none) {
+  .signin-hotspot {
+    cursor: pointer;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1054,8 +1262,28 @@ body:has([data-signin-page]) > footer {
   .signin-fade {
     transition: none;
   }
-  [data-entering] .signin-scene {
-    transform: none;
+  /* No shimmer, pulse or fall: the hotspots' dots and notes simply appear, and signing in goes straight in. */
+  .signin-cta::after,
+  .signin-cta:hover::before,
+  .signin-hotspot:hover .signin-hotspot-dot::after,
+  [data-entering] [data-fall] {
+    animation: none;
+  }
+  .signin-hotspot-dot,
+  .signin-hotspot-tip {
+    transition: none;
+  }
+}
+
+
+
+/* The Learn sheet on phones (components/LearnMenu.tsx) slides up from the bottom bar. */
+.learn-sheet[open] {
+  animation: learn-sheet-up 0.32s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes learn-sheet-up {
+  from {
+    translate: 0 100%;
   }
 }
 
@@ -1067,15 +1295,207 @@ body:has([data-signin-page]) > footer {
 
 
 
+/* The homepage's Digital Member card (components/home/HomePersona.tsx): it waits 3 seconds after it appears, then
+   rises slowly into place over 3 seconds as it fades in. With reduced motion it only fades. */
+@keyframes hub-persona-in {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hub-persona-in {
+  animation: hub-persona-in 3s cubic-bezier(0.4, 0, 0.2, 1) 3s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-persona-in {
+    animation: hub-persona-fade 1.2s ease-out 3s both;
+  }
+  @keyframes hub-persona-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
 
+/* The Learn menu (components/LearnMenu.tsx): when it opens, the panel drops in and each way to learn rises into
+   place one after another (--i is its place in the list). Opening again replays it: the panel goes from display:none
+   to shown. With reduced motion, nothing moves. */
+@keyframes learn-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.985);
+  }
+}
+@keyframes learn-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+.learn-panel-in {
+  transform-origin: top left;
+  animation: learn-panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.learn-item-in {
+  animation: learn-item-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(60ms + var(--i, 0) * 45ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .learn-panel-in,
+  .learn-item-in {
+    animation: none;
+  }
+}
 
+/* The homepage cover's picture for the time of day (lib/homeScenes, components/home/HomeHero.tsx). <html> carries
+   data-daypart (showing), data-daypart-next (laid out unseen, so the browser loads it early) and, for the moment of a
+   change, data-daypart-prev (kept underneath while the new one fades in over it). The rest stay display:none, so
+   their lazy pictures aren't fetched. Without the attribute (no script), the day picture shows. */
+.hub-hero-scene {
+  display: none;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 2.4s ease-in-out;
+}
+:root:not([data-daypart]) .hub-hero-scene[data-scene="day"],
+:root[data-daypart="day"] .hub-hero-scene[data-scene="day"],
+:root[data-daypart="evening"] .hub-hero-scene[data-scene="evening"],
+:root[data-daypart="night"] .hub-hero-scene[data-scene="night"] {
+  display: block;
+  opacity: 1;
+  z-index: 2;
+}
+:root[data-daypart-next="day"] .hub-hero-scene[data-scene="day"],
+:root[data-daypart-next="evening"] .hub-hero-scene[data-scene="evening"],
+:root[data-daypart-next="night"] .hub-hero-scene[data-scene="night"] {
+  display: block;
+}
+:root[data-daypart-prev="day"] .hub-hero-scene[data-scene="day"],
+:root[data-daypart-prev="evening"] .hub-hero-scene[data-scene="evening"],
+:root[data-daypart-prev="night"] .hub-hero-scene[data-scene="night"] {
+  display: block;
+  opacity: 1;
+  z-index: 1;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-hero-scene {
+    transition: none;
+  }
+}
 
+/*
+  Ask Trilogy, alive and ready (components/AskTrilogy.tsx):
+  - a glint: a soft diagonal band of light sweeps across the teal card, then rests, every eight seconds;
+  - the ring: a gold and teal light runs slowly round the question box, brighter while it has focus;
+  - the spark beside the title twinkles now and then.
+  Nothing moves for anyone who has asked for less motion; the ring then sits still as a soft gold edge.
+*/
+@property --ask-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.ask-alive::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% 0;
+  width: 45%;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgb(255 255 255 / 0) 25%, rgb(255 255 255 / 0.28) 50%, rgb(255 255 255 / 0) 75%, transparent 100%);
+  mix-blend-mode: soft-light;
+  transform: translateX(-120%) skewX(-12deg);
+  animation: ask-glint 8s ease-in-out 1.5s infinite;
+}
+@keyframes ask-glint {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+  }
+  30%,
+  100% {
+    transform: translateX(340%) skewX(-12deg);
+  }
+}
+.ask-ring {
+  background: conic-gradient(
+    from var(--ask-angle),
+    rgb(255 255 255 / 0.25) 0deg,
+    rgb(255 255 255 / 0.25) 200deg,
+    #fab53d 260deg,
+    #fff6d8 290deg,
+    #3cb8b9 320deg,
+    rgb(255 255 255 / 0.25) 360deg
+  );
+  box-shadow: 0 0 0 0 rgb(250 181 61 / 0);
+  animation:
+    ask-ring-turn 5s linear infinite,
+    ask-ring-breathe 3.2s ease-in-out infinite;
+}
+.ask-ring:focus-within {
+  animation-duration: 2.4s, 3.2s;
+  box-shadow: 0 0 18px 2px rgb(250 181 61 / 0.45);
+}
+@keyframes ask-ring-turn {
+  to {
+    --ask-angle: 360deg;
+  }
+}
+@keyframes ask-ring-breathe {
+  50% {
+    box-shadow: 0 0 16px 1px rgb(250 181 61 / 0.35);
+  }
+}
+.ask-spark {
+  transform-origin: center;
+  animation: ask-twinkle 4.5s ease-in-out infinite;
+}
+@keyframes ask-twinkle {
+  0%,
+  70%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 0 rgb(250 181 61 / 0));
+  }
+  80% {
+    transform: scale(1.25) rotate(20deg);
+    filter: drop-shadow(0 0 6px rgb(250 181 61 / 0.9));
+  }
+  90% {
+    transform: scale(0.95) rotate(-6deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-alive::after {
+    display: none;
+  }
+  .ask-ring,
+  .ask-spark {
+    animation: none;
+  }
+  .ask-ring {
+    background: linear-gradient(90deg, #fab53d, #3cb8b9);
+  }
+}
 
-
-
-
-
-
-
-
-
+/* Growth readiness: "Print or save the sheet" prints the Decision Sheet alone (components/magazine/GrowthReadinessLab). */
+@media print {
+  body.printing-growth-sheet * {
+    visibility: hidden;
+  }
+  body.printing-growth-sheet .growth-sheet,
+  body.printing-growth-sheet .growth-sheet * {
+    visibility: visible;
+  }
+  body.printing-growth-sheet .growth-sheet {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+  }
+}

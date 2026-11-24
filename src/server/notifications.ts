@@ -1,6 +1,7 @@
 import "server-only";
 import { audit, type Db } from "./db";
 import { HttpError, type User } from "./auth";
+import { businessNotificationVisible } from "./businessAccess";
 
 /*
   The in-app Inbox: a notification centre and an action centre in one, in three tabs.
@@ -95,7 +96,10 @@ const RANK: Record<Priority, number> = { critical: 0, high: 1, normal: 2 };
 /** Everything in someone's Inbox, by tab: outstanding actions first (most urgent, then soonest due), then newest. */
 export function inbox(db: Db, user: User, now: Date) {
   seedDemo(db, user, now);
-  const rows = (db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 200").all(user.id) as Row[]).map(view);
+  const rows = (db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 200").all(user.id) as Row[])
+    // A Business Field Note's notice is shown only to a principal, and only while the card is published (server/businessAccess).
+    .filter((r) => !r.source.startsWith("business-note") || businessNotificationVisible(db, user, r.source))
+    .map(view);
   const sort = (a: InboxItem, b: InboxItem) =>
     Number(a.done) - Number(b.done) || RANK[a.priority] - RANK[b.priority] || (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9") || b.at.localeCompare(a.at);
   const action = rows.filter((r) => r.kind === "action").sort(sort);
@@ -150,7 +154,11 @@ export function acknowledge(db: Db, user: User, id: number, now: Date) {
 export function markDone(db: Db, user: User, id: number, now: Date) {
   const r = own(db, user, id);
   if (r.ack_required) throw new HttpError(400, "Confirm you’ve read it instead.");
-  db.prepare("UPDATE notifications SET done_at = COALESCE(done_at, ?), read_at = COALESCE(read_at, ?) WHERE id = ?").run(now.toISOString(), now.toISOString(), id);
+  db.prepare("UPDATE notifications SET done_at = COALESCE(done_at, ?), read_at = COALESCE(read_at, ?) WHERE id = ?").run(
+    now.toISOString(),
+    now.toISOString(),
+    id,
+  );
 }
 
 /** For admins: who has confirmed a notice (by its source), when, and which version. */

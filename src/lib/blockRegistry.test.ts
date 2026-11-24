@@ -43,6 +43,15 @@ describe("the registry", () => {
         .map((b) => b.type);
     expect(top("practise a difficult phone conversation")).toContain("phonecall");
     expect(top("check an invoice for errors")).toContain("auditor");
+    expect(top("a coordinator's day of handoffs and prioritisation")).toContain("onedaymap");
+    expect(top("which suburb to build our supplier network in")).toContain("coverage");
+    expect(top("lots of referrals but few starts")).toContain("referral");
+    expect(top("repeat supplier no-shows and missed services")).toContain("reliability");
+    expect(top("cash timing: payroll before the remittance")).toContain("cashbridge");
+    expect(top("what would you do? compare peer responses from experienced coordinators")).toContain("casethread");
+    expect(top("unspent funds and the projected balance at quarter end")).toContain("budgetlab");
+    expect(top("trip hazards and falls risk in a client’s home")).toContain("hazardscan");
+    expect(top("hospital discharge: the first nursing visit isn’t confirmed")).toContain("discharge");
     expect(searchBlocks("", BLOCK_LABELS)).toHaveLength(BLOCK_REGISTRY.length);
     expect(searchBlocks("zzzz", BLOCK_LABELS)).toHaveLength(0);
   });

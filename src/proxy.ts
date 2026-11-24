@@ -5,12 +5,12 @@ import { NextResponse, type NextRequest } from "next/server";
   they asked for afterwards (?next=). Prototype only: it checks that someone has signed in, not who; the
   API still checks every permission itself (server/auth). Real sign-in will come from each organisation.
 
-  Left open: the sign-in page, links shared with people outside the hub (topic and path reviews,
-  public learning paths, unsubscribe), the offline page, the API, and files.
+  Left open: the sign-in page, unsubscribe links in emails, the offline page, the API, and files. There are no
+  public learning or review links: everything else needs signing in.
 */
 
 const SESSION_COOKIE = "tc-demo-user";
-const OPEN = [/^\/login$/, /^\/review\//, /^\/open\//, /^\/unsubscribe/, /^\/offline$/];
+const OPEN = [/^\/login$/, /^\/unsubscribe/, /^\/offline$/];
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

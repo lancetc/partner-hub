@@ -93,6 +93,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/member-chat",
+        label: "Digital Member chat",
+        icon: "chat",
+        description: "Chatting with the fictional people on Community → Digital Members: the switch, limits, who takes chats and extra instructions.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/relay",
         label: "Ava Relay",
         icon: "chat",
@@ -117,10 +124,34 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/pocket-playbook",
+        label: "Pocket Playbook",
+        icon: "gauge",
+        description:
+          "The live call tools in the Companion Drawer: source health, what each owner still has to approve, use counts, withdrawal and the review decision.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/mentor-notes",
         label: "Mentor notes",
         icon: "mail",
         description: "Notes to a Younger Me: review contributed notes, approve edits, flag or withdraw cards.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/business-notes",
+        label: "Business Field Notes",
+        icon: "briefcase",
+        description:
+          "The principals-only business edition: story queue, privacy and commercial review, check-ins, moderation, playbook proposals and insights.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/case-threads",
+        label: "Case threads",
+        icon: "chat",
+        description:
+          "What Would You Do? case threads: one premoderation queue for the Magazine and Community, reports, endorsements, threads, verified coordinators and insights.",
         authorOnly: true,
       },
       {

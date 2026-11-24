@@ -3,7 +3,7 @@ import { HttpError } from "@/server/auth";
 import { qrPng, qrSvg, qrTarget, type QrTarget } from "@/server/qr";
 
 /**
-  GET /api/qr?path=<id> or ?lesson=<slug>: a QR code that opens that path or lesson; ?open=<path id> for its public link.
+  GET /api/qr?path=<id> or ?lesson=<slug>: a QR code that opens that path or lesson, for someone signed in.
   &format=svg for print quality, &size= for the PNG width, &download=1 to save it as a file.
   Public, so the image shows in emails; it can only encode this hub's own addresses.
 */
@@ -13,22 +13,17 @@ export async function GET(req: Request) {
     ? { kind: "path", id: q.get("path")! }
     : q.get("lesson")
       ? { kind: "lesson", id: q.get("lesson")! }
-      : q.get("open")
-        ? { kind: "open", id: q.get("open")! }
-        : q.get("openTopic")
-          ? { kind: "openTopic", id: q.get("openTopic")! }
-          : null;
+      : null;
   try {
     if (!target) throw new HttpError(400, "Which path or topic?");
-    const { url, title } = qrTarget(getDb(), target, req.headers.get("host"));
+    const { url, title } = qrTarget(getDb(), target);
     const name = `qr-${
       title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "") || target.id
     }`;
-    // A public link changes when it's switched off and on again, so its code is never kept.
-    const cache = target.kind === "open" || target.kind === "openTopic" ? "no-store" : "public, max-age=3600";
+    const cache = "public, max-age=3600";
     const disposition: Record<string, string> = q.has("download")
       ? { "content-disposition": `attachment; filename="${name}.${q.get("format") === "svg" ? "svg" : "png"}"` }
       : {};

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -7,6 +8,7 @@ import { BADGES, cleanNote, STATES, TOPICS, type Badge, type MentorNoteData, typ
 import type { myNotes, pocketDeck } from "@/server/notes";
 import { GoneNote, MentorCard, type CardView, type GoneCard } from "./MentorCard";
 import { NoteFields } from "./NoteFields";
+import { BusinessNotesLink } from "../business/BusinessNotesLink";
 import { Icon } from "../Icon";
 
 /*
@@ -114,6 +116,23 @@ export function PocketDeck() {
                       Saved {showDate(n.savedAt)}
                     </span>
                   </div>
+                  {"business" in n && n.business && (
+                    // A saved Business Field Note: its thread, its dated check-ins and one related tool (docs/business-field-notes.md).
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span className="rounded-full bg-[#e0a63a] px-2 py-0.5 text-xs font-bold text-[#2b1d00]">Business Field Note</span>
+                      <span>
+                        Discussion {n.business.threadState} · {n.business.chapters} check-in{n.business.chapters === 1 ? "" : "s"}
+                      </span>
+                      <Link href={n.business.href} className="inline-flex min-h-11 items-center font-semibold text-accent underline">
+                        Open with its discussion
+                      </Link>
+                      {n.business.tool?.available && (
+                        <Link href={n.business.tool.href} className="inline-flex min-h-11 items-center font-semibold text-accent underline">
+                          {n.business.tool.title}
+                        </Link>
+                      )}
+                    </p>
+                  )}
                   {open === n.id && (
                     <div className="mt-3">
                       <MentorCard c={n as unknown as CardView} position="Saved note" flipped={flipped} onFlip={setFlipped} onChange={() => pocket.reload()} />
@@ -125,6 +144,7 @@ export function PocketDeck() {
           </ul>
         )}
       </section>
+      <BusinessNotesLink />
       <Contribute />
     </div>
   );

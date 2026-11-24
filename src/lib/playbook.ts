@@ -14,6 +14,7 @@
 */
 
 import { identifierWarnings } from "./redpen";
+import { POCKET_EVENTS } from "./pocketPlaybook";
 
 export const RISK = { operational: "Operational reference", sensitive: "Sensitive operational", safety_critical: "Safety-critical" } as const;
 export type Risk = keyof typeof RISK;
@@ -96,6 +97,8 @@ export const AID_EVENTS = [
   "current_source_opened",
   "job_aid_update_seen",
   "job_aid_issue_reported",
+  // The Live Call Pocket Playbook's tool events (lib/pocketPlaybook): the same table, the same rules.
+  ...POCKET_EVENTS,
 ] as const;
 export type AidEvent = (typeof AID_EVENTS)[number];
 /** The events a page may send. Saves, views and reports are recorded by the server as they happen. */

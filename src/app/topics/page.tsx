@@ -30,8 +30,8 @@ export default function LearningPage() {
       <PageHero
         eyebrow="Short and practical"
         title="Topics"
-        // A gardener at his potting-shed table trying something on his phone, on the right, with lawn behind the words.
-        image={{ src: "/images/hero-gardener-phone.webp", width: 1914, height: 822, position: "80% 36%" }}
+        // A gardener at his potting-shed table reading a Trilogy Care topic on his phone, on the right, with lawn behind the words.
+        image={{ src: "/images/hero-gardener-topic.webp", width: 1914, height: 822, position: "80% 36%", minHeight: 336 }}
         aside={
           <Suspense>
             <TopicStats />

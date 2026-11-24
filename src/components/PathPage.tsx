@@ -6,13 +6,14 @@ import { useApi } from "@/lib/api";
 import { cx, formatDuration } from "@/lib/format";
 import { PathCard, type MyPath } from "./MyLearningPaths";
 import { EnrolButton } from "./EnrolButton";
-import { PublicQr } from "./PublicQr";
 import { Icon, type IconName } from "./Icon";
 import { btn } from "./admin/ui";
 import { StoryVisual } from "./StoryVisual";
 import type { Thumbnail } from "@/lib/pathThumbnail";
 import type { QuizOffer } from "./PathQuiz";
 import { minutesLabel } from "@/lib/pathQuizSettings";
+import { AvaPlaceholder, AvaTransmission, avaLineMedia } from "./ava/AvaTransmission";
+import { useAva } from "./ava/useAva";
 
 type PathData = MyPath & { assigned: boolean; selfEnrolled: boolean; minutes: number; done: boolean; quiz: QuizOffer | null; thumbnail: Thumbnail | null };
 
@@ -28,7 +29,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
         <Icon name="arrow-left" className="size-4" /> {preview ? "Back to editing the path" : "All learning"}
       </Link>
       {error ? (
-        <p className="mt-4 rounded-2xl border border-line p-4 text-ink-muted">This learning path isn’t available. It may have been removed.</p>
+        <p className="mt-4 rounded-2xl border border-line p-4 text-ink-muted">This Discovery Path isn’t available. It may have been removed.</p>
       ) : !data ? (
         <p className="mt-4 text-ink-muted">Loading…</p>
       ) : (
@@ -46,15 +47,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
                   ? "You enrolled in this path, so it’s on your Learning page and your progress is tracked there."
                   : "This path isn’t assigned to you, but you’re welcome to work through it. Enrol to keep it on your Learning page and track your progress."}
               </p>
-              <EnrolButton
-                kind="path"
-                id={id}
-                enrolled={data.selfEnrolled}
-                onChange={(on) => setData({ ...data, selfEnrolled: on })}
-                className="mt-3"
-              />
-              {/* Beside Enrol: a QR code that opens this path on any phone without signing in. */}
-              <PublicQr kind="path" id={id} className="mt-4" />
+              <EnrolButton kind="path" id={id} enrolled={data.selfEnrolled} onChange={(on) => setData({ ...data, selfEnrolled: on })} className="mt-3" />
             </section>
           )}
           {data.quiz && <QuizPanel id={id} quiz={data.quiz} done={data.done} preview={preview} />}
@@ -64,6 +57,26 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
         </>
       )}
     </div>
+  );
+}
+
+/** Ava's transmission at the start of the path: its description, read in her voice (cached after the first play). */
+function PathIntro({ id, name, script }: { id: string; name: string; script: string }) {
+  const key = `path:${id}`;
+  const ava = useAva(key);
+  if (!ava.loaded) return <AvaPlaceholder layout="intro" className="mt-4" />;
+  return (
+    <AvaTransmission
+      layout="intro"
+      className="mt-4"
+      media={avaLineMedia(key, ava.video)}
+      portrait={ava.portrait}
+      name={ava.name}
+      script={ava.video?.transcript || script}
+      title={`Introduction to ${name}`}
+      // She starts as the page opens (muted, words on screen, until the page has been used).
+      autoPlay
+    />
   );
 }
 
@@ -101,8 +114,8 @@ function Overview({ path: p }: { path: PathData }) {
       icon: "home",
       text:
         p.assigned || p.selfEnrolled
-        ? "Sign in on any device and you'll find this path on your Learning page, right where you left it."
-        : "Sign in on any device and come back to this page: your progress comes with you.",
+          ? "Sign in on any device and you'll find this path on your Learning page, right where you left it."
+          : "Sign in on any device and come back to this page: your progress comes with you.",
     },
     ...(p.inOrder ? [{ icon: "list" as const, text: "Topics open one at a time, each after the one before it." }] : []),
     ...(soon
@@ -117,8 +130,10 @@ function Overview({ path: p }: { path: PathData }) {
 
   return (
     <header className="mt-2">
-      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Learning path</p>
+      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Discovery Path</p>
       <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight sm:text-4xl">{p.name}</h1>
+      {/* Ava introduces the path, reading its description (Ava 2.0, docs/ai-learning-guide.md). */}
+      {p.description && <PathIntro id={p.id} name={p.name} script={p.description} />}
       {p.description && <p className="mt-3 text-lg text-ink-muted">{p.description}</p>}
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-3">

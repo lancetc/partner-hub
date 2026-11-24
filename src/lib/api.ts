@@ -17,7 +17,12 @@ export async function api<T>(url: string, init?: { method?: string; body?: unkno
     throw new Error("You’re offline. This needs an internet connection, so try again when you’re back online.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error ?? `Request failed (${res.status})`), { status: res.status });
+  if (!res.ok) {
+    const d = data as { error?: string; problems?: unknown };
+    // A refusal can carry the exact reasons (a publish check, say); keep them so the page can list them.
+    const problems = Array.isArray(d.problems) ? d.problems.filter((p): p is string => typeof p === "string") : undefined;
+    throw Object.assign(new Error(d.error ?? `Request failed (${res.status})`), { status: res.status, ...(problems?.length && { problems }) });
+  }
   return data as T;
 }
 
@@ -74,7 +79,15 @@ export type FollowUpListItem = {
 
 export type Me = {
   /** avatar: their profile picture address, or null for initials. */
-  user: { id: string; name: string; role: "learner" | "org_admin" | "author"; audience: string; serviceRole: string | null; language: string; avatar: string | null };
+  user: {
+    id: string;
+    name: string;
+    role: "learner" | "org_admin" | "author";
+    audience: string;
+    serviceRole: string | null;
+    language: string;
+    avatar: string | null;
+  };
   org: { name: string };
   canAuthor: boolean;
   canReport: boolean;

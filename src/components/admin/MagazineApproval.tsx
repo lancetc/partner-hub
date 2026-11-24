@@ -113,8 +113,13 @@ function steps(a: CourseApproval) {
   ];
 }
 
+/** A demo Hub's stand-in for reviewers' sign-offs (server/demoSignOff). */
+export type DemoSignOffState = { enabled: boolean; signed: { by: string; byName: string; at: string } | null };
+
 export function MagazineApproval({
   guideId,
+  demo,
+  onDemo,
   dirty,
   save,
   onPublished,
@@ -122,6 +127,9 @@ export function MagazineApproval({
   onShowBlock,
 }: {
   guideId: string;
+  demo?: DemoSignOffState;
+  /** The guide after its demo sign-off changed. */
+  onDemo?: (guide: unknown) => void;
   dirty: boolean;
   /** Saves the editor's latest changes first, so what's submitted is what's on screen. */
   save: () => Promise<boolean>;
@@ -166,7 +174,9 @@ export function MagazineApproval({
       setNote("");
       if (body.action === "submit" && r.stage === "review" && r.you?.canRunAiReview) void runAi();
     } catch (e) {
-      setProblem((e as Error).message);
+      // The headline, then each reason the server gave (which sign-off is missing, which check failed), one per line.
+      const err = e as Error & { problems?: string[] };
+      setProblem([err.message, ...(err.problems ?? []).map((p) => `• ${p}`)].join("\n"));
     } finally {
       setBusy(false);
     }
@@ -345,6 +355,7 @@ export function MagazineApproval({
           Publishing anyway puts them in front of learners as they are, and the course’s history records which ones.
         </p>
       )}
+      {demo?.enabled && <DemoSignOffBox guideId={guideId} demo={demo} onChange={(g) => onDemo?.(g)} />}
       <Field label="What changed (optional)" hint="Shown in the course’s edition history.">
         <input
           className={input}
@@ -706,5 +717,53 @@ export function MagazineApproval({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+  Demo sign-off, in a demo Hub only: lets a superadmin publish a course whose labs, scenes, case threads or other
+  blocks are waiting on named reviewers. It's recorded as a demo sign-off, never as a review: in the audit log, and
+  on each edition published under it (server/demoSignOff).
+*/
+function DemoSignOffBox({ guideId, demo, onChange }: { guideId: string; demo: DemoSignOffState; onChange: (guide: unknown) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const set = async (on: boolean) => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const r = await api<{ guide: unknown }>(`/api/admin/magazine/${guideId}`, { body: { action: "demo-signoff", on } });
+      onChange(r.guide);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That didn’t work. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const s = demo.signed;
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-line-strong p-3 text-sm">
+      <p className="flex items-center gap-2 font-semibold">
+        <Icon name="flag" className="size-4 shrink-0" /> Demo sign-off
+      </p>
+      {s ? (
+        <p className="mt-1">
+          Recorded by <strong>{s.byName}</strong> on {formatDateTime(s.at)}. Blocks waiting on reviewers’ sign-offs can be published. It isn’t a review.
+        </p>
+      ) : (
+        <p className="mt-1 text-ink-muted">
+          This is a demo Hub. If blocks here are waiting on reviewers’ sign-offs (a lab, a Spot the Hazard scene, a case thread), a superadmin can record a demo
+          sign-off to publish the course for a demonstration. It’s off on Trilogy Care’s servers.
+        </p>
+      )}
+      <button type="button" className={cx(btn.secondary, "mt-2 min-h-10")} disabled={busy} onClick={() => set(!s)}>
+        {busy ? "Saving…" : s ? "Remove the demo sign-off" : "Record a demo sign-off"}
+      </button>
+      {problem && (
+        <p role="alert" className="mt-2 text-danger">
+          {problem}
+        </p>
+      )}
+    </div>
   );
 }

@@ -161,6 +161,8 @@ export function quizOffer(db: Db, user: User, pathId: string) {
     inProgress: tries.some((a) => !a.submitted_at),
     latest: latest ? { ...resultOf(latest), focus: focusOf(latest) } : null,
     passed,
+    // They finished the path the usual way (its topics, and the topics' own checks).
+    done,
     // Open until they pass, run out of tries, or finish the path the usual way.
     available: !passed && !done && left > 0,
     held: heldTopics(db, pathId),

@@ -3,14 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isActive, navItems } from "./nav";
+import { headerItems, isActiveInBar } from "./nav";
 import { NavPending } from "./NavPending";
 import { ThemeToggle } from "./ThemeToggle";
 import { SearchButton } from "./SearchDialog";
 import { AccountMenu } from "./AccountMenu";
 import { InboxButton } from "./InboxButton";
 import { FavouritesHeaderLink } from "./favourites/FavouritesNav";
+import { CompanionDrawer } from "./pocket/CompanionDrawer";
 import { Icon } from "./Icon";
+import { LearnMenu } from "./LearnMenu";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 
@@ -23,25 +25,19 @@ export function Logo({ className = "h-8 w-auto" }: { className?: string }) {
   );
 }
 
+/** A main menu item: the current section and hover are solid white over the glass header; dark mode keeps its own shades, so the light text stays readable. */
+const navItemClass = (active: boolean) =>
+  cx(
+    "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors lg:max-xl:px-2 xl:px-4",
+    active ? "bg-white text-ink dark:bg-tealtint" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
+  );
+
 export function Header() {
   const pathname = usePathname();
   const me = useApi<Me>("/api/me").data;
   const inAdmin = pathname.startsWith("/admin");
   // The sign-in page has its own logo and nothing to navigate to yet.
   if (pathname === "/login") return null;
-  // Someone outside the hub (reviewing a lesson, or opening a public learning path) sees the brand only, not the hub's menus.
-  if (pathname.startsWith("/review/") || pathname.startsWith("/open/"))
-    return (
-      <header className="border-b border-line bg-bg">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
-          <Logo className="h-8 w-auto shrink-0 sm:h-10" />
-          <span aria-hidden className="h-6 w-px bg-line-strong" />
-          <span className="font-mulish text-xs font-bold tracking-wide text-ink-muted sm:text-sm">
-            {pathname.startsWith("/open/") ? "Learning" : pathname.startsWith("/review/path/") ? "Learning path review" : "Topic review"}
-          </span>
-        </div>
-      </header>
-    );
   return (
     <header data-site-header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
@@ -59,21 +55,14 @@ export function Header() {
 
         <nav aria-label="Primary" className="ml-2 hidden lg:block xl:ml-6">
           <ul className="flex items-center gap-1">
+            {/* Learn opens the ways to learn (LearnMenu); then the Community and Resources (Work Tools pages light up Resources). */}
+            <LearnMenu itemClassName={navItemClass} />
             {/* No News item up here: the logo goes to the homepage, which is the news. */}
-            {navItems.filter((item) => item.href !== "/").map((item) => {
-              const active = isActive(pathname, item.href);
+            {headerItems.map((item) => {
+              const active = isActiveInBar(pathname, item.href);
               return (
                 <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cx(
-                      "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors lg:max-xl:px-2 xl:px-4",
-                      // The current page and hover: solid white over the glass header. Dark mode keeps its own shades, so the
-                      // light text stays readable.
-                      active ? "bg-white text-ink dark:bg-tealtint" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
-                    )}
-                  >
+                  <Link href={item.href} aria-current={active ? "page" : undefined} className={navItemClass(active)}>
                     {item.short ? (
                       // The short label on smaller laptops, where the full row doesn't fit.
                       <>
@@ -119,6 +108,8 @@ export function Header() {
             </Link>
           )}
           {me && <FavouritesHeaderLink />}
+          {/* The Companion Drawer the Favourites control opens, here and from the phone bar (docs/pocket-playbook.md). */}
+          {me && <CompanionDrawer />}
           <SearchButton />
           {me && <InboxButton />}
           <ThemeToggle />

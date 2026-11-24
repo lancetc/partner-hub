@@ -1,8 +1,9 @@
 import { Fragment } from "react";
 import { cx } from "@/lib/format";
 import { parseInline, parseRich, type Inline } from "@/lib/richText";
+import { EditorialMark } from "./EditorialMark";
 
-/** Bold, italics, links, line breaks: built as elements, never as HTML. */
+/** Bold, italics, emphasis, links, line breaks: built as elements, never as HTML. */
 function Inlines({ c }: { c: Inline[] }) {
   return (
     <>
@@ -19,6 +20,11 @@ function Inlines({ c }: { c: Inline[] }) {
           <em key={i}>
             <Inlines c={x.c} />
           </em>
+        ) : x.t === "m" ? (
+          // An author's emphasised phrase: a marker that sweeps in once as it scrolls into view (docs/emphasise-text.md).
+          <EditorialMark key={i}>
+            <Inlines c={x.c} />
+          </EditorialMark>
         ) : (
           // Same window, like documents: the lesson remembers the card for when they come back.
           <a key={i} href={x.href} className="font-semibold underline decoration-2 underline-offset-2 hover:decoration-[3px]">

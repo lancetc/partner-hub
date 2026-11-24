@@ -10,7 +10,12 @@ export const metadata: Metadata = { title: "My Discovery", robots: { index: fals
 export default function MyDiscoveryPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6 lg:pt-8">
-      <PageHero eyebrow="My training" title="My Discovery">
+      <PageHero
+        eyebrow="Your own path"
+        title="My Discovery"
+        // A colleague at his table by the louvres, thinking something through at his laptop, on the right, with a sunlit wall behind the words.
+        image={{ src: "/images/hero-thinking-laptop.webp", width: 1914, height: 822, position: "80% 25%", minHeight: 420 }}
+      >
         Your own routes through Hub learning, built around what you want to get better at. Only you can see them.
       </PageHero>
       <p className="mt-4 text-ink-muted">

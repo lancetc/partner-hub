@@ -22,6 +22,8 @@ import { VideoBubbles } from "../player/VideoBubbles";
 import { WrittenFeedback, type WrittenResult } from "../player/WrittenAnswer";
 import { fileSize, RESOURCE_KINDS, ResourceTileBody, resourceTile } from "../player/Resources";
 import { VideoRecorder } from "./VideoRecorder";
+import { RecordingStudio } from "./RecordingStudio";
+import { createPortal } from "react-dom";
 import { panelledOnColour, toneClasses, useTextTone } from "@/lib/imageTone";
 import { parseVideoLink, videoLinkFor } from "@/lib/videoLinks";
 import { GRADIENTS, gradientIds } from "@/content/gradients";
@@ -34,10 +36,14 @@ import { ImageGenerator } from "./ImageGenerator";
 import { BuildProgress, readEvents, type BuildPhase } from "./BuildProgress";
 import { BUILD_STAGES, cardsByStage } from "@/lib/buildSequence";
 import { AvatarField, MakePresenterCard } from "./AvatarField";
+import { AvaVideoSlot } from "./AvaVideoSlot";
 import { WidgetBuilder, WidgetFields } from "./WidgetBuilder";
 import { RichEditable } from "./RichEditable";
 import { IconPick } from "./IconPick";
 import { AUDIENCES } from "@/lib/audiences";
+import { LessonLabField } from "./LessonLabField";
+import { LessonSceneField } from "./LessonSceneField";
+import { LessonDischargeField } from "./LessonDischargeField";
 import { spacedLearningOn } from "@/lib/features";
 
 /*
@@ -171,6 +177,40 @@ export async function uploadPdf(file: File): Promise<{ src: string; name: string
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
   return { src: data.src, name: data.name, bytes: data.bytes };
+}
+
+/** Cards added from the palette's Webcam: their settings open with the recording studio already showing. */
+const openStudioFor = new Set<string>();
+
+/** A Video card's video before anything is recorded: a Hub file, filled in when the studio saves. */
+const blankRecording = () => ({ provider: "upload" as const, id: "", title: "A message from your trainer", orientation: "landscape" as const });
+
+/** The recording studio's uploads (the clip, its thumbnail and its captions file), the same way the Magazine sends them. */
+async function uploadStudioFile(file: File, kind: "video" | "captions" | "image") {
+  if (kind === "image") return (await uploadImage(file)).src;
+  let size = { width: 0, height: 0 };
+  if (kind === "video") {
+    const url = URL.createObjectURL(file);
+    try {
+      size = await new Promise((resolve, reject) => {
+        const v = document.createElement("video");
+        v.preload = "metadata";
+        v.onloadedmetadata = () => resolve({ width: v.videoWidth || 1280, height: v.videoHeight || 720 });
+        v.onerror = () => reject(new Error("This browser can’t read that video. Try an MP4."));
+        v.src = url;
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  const form = new FormData();
+  form.append("file", file);
+  form.append("width", String(size.width));
+  form.append("height", String(size.height));
+  const res = await fetch("/api/admin/uploads", { method: "POST", body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
+  return data.src as string;
 }
 
 /** Uploads a recorded or chosen video, with a poster frame so the circle isn't blank before play. */
@@ -1261,51 +1301,74 @@ function Brief({ lesson: l, update, isNew }: { lesson: Lesson; update: Update; i
   Anything more advanced (feedback, branching, scripts, widget code) lives in the card settings drawer.
 */
 
-const PALETTE: { type: Card["type"]; label: string; icon: IconName; hint: string }[] = [
-  {
-    type: "written",
-    label: "Answer",
-    icon: "pen",
-    hint: "Learners write an answer in their own words, and AI checks it against criteria you set. Good for practising what to say.",
-  },
-  { type: "listen", label: "Audio", icon: "volume", hint: "A card just for listening, with its own play button and a transcript to read along." },
-  {
-    type: "widget",
-    label: "Widget",
-    icon: "widget",
-    hint: "Describe what you want, such as an animated diagram, a calculator or a sorting game, and Claude builds it. Try it on the card and ask for changes.",
-  },
-  {
-    type: "checklist",
-    label: "Checklist",
-    icon: "checklist",
-    hint: "A list learners tick off. Add a note under any item, and choose whether every item must be ticked to continue.",
-  },
-  { type: "poll", label: "Poll", icon: "list", hint: "A question with no right answer. After voting, learners see how everyone else answered." },
-  { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with one right answer and feedback for each choice. Use it to check understanding." },
-  { type: "rating", label: "Rating", icon: "star", hint: "A 1 to 5 star confidence check. Learners see the group’s average after they rate." },
-  { type: "response", label: "Reflect", icon: "chat", hint: "Learners write a short response, then see an example answer and can ask AI for feedback." },
-  {
-    type: "resources",
-    label: "Resources",
-    icon: "folder",
-    hint: "A tidy drawer of PDFs, websites and toolkits for further reading. Never holds up the topic.",
-  },
-  {
-    type: "decision",
-    label: "Role Play",
-    icon: "route",
-    hint: "A scenario with choices. Each choice can lead to its own consequence, so learners see what happens.",
-  },
-  { type: "summary", label: "Summary", icon: "spark", hint: "The closing card: key points to remember, one action to take to work, and official sources." },
-  {
-    type: "image",
-    label: "Text",
-    icon: "doc",
-    hint: "A heading and short text, with an optional picture, animation or video bubbles. The everyday teaching card.",
-  },
-  { type: "presenter", label: "Video", icon: "play", hint: "A video from YouTube or Synthesia, or an upload. Vertical videos fill the whole card." },
-  { type: "wall", label: "Wall", icon: "people", hint: "An insight wall: learners share an idea, then see what others posted once they’ve posted their own." },
+/** `key` names the palette entry; Webcam adds a Video card (`type`) and opens the recording studio (`studio`). */
+type PaletteEntry = { key: string; type: Card["type"]; label: string; icon: IconName; hint: string; studio?: boolean };
+const PALETTE: PaletteEntry[] = (
+  [
+    {
+      type: "written",
+      label: "Answer",
+      icon: "pen",
+      hint: "Learners write an answer in their own words, and AI checks it against criteria you set. Good for practising what to say.",
+    },
+    { type: "listen", label: "Audio", icon: "volume", hint: "A card just for listening, with its own play button and a transcript to read along." },
+    {
+      type: "widget",
+      label: "Widget",
+      icon: "widget",
+      hint: "Describe what you want, such as an animated diagram, a calculator or a sorting game, and Claude builds it. Try it on the card and ask for changes.",
+    },
+    {
+      type: "checklist",
+      label: "Checklist",
+      icon: "checklist",
+      hint: "A list learners tick off. Add a note under any item, and choose whether every item must be ticked to continue.",
+    },
+    { type: "poll", label: "Poll", icon: "list", hint: "A question with no right answer. After voting, learners see how everyone else answered." },
+    { type: "quiz", label: "Quiz", icon: "check", hint: "Questions with one right answer and feedback for each choice. Use it to check understanding." },
+    { type: "rating", label: "Rating", icon: "star", hint: "A 1 to 5 star confidence check. Learners see the group’s average after they rate." },
+    { type: "response", label: "Reflect", icon: "chat", hint: "Learners write a short response, then see an example answer and can ask AI for feedback." },
+    {
+      type: "resources",
+      label: "Resources",
+      icon: "folder",
+      hint: "A tidy drawer of PDFs, websites and toolkits for further reading. Never holds up the topic.",
+    },
+    {
+      type: "decision",
+      label: "Role Play",
+      icon: "route",
+      hint: "A scenario with choices. Each choice can lead to its own consequence, so learners see what happens.",
+    },
+    { type: "summary", label: "Summary", icon: "spark", hint: "The closing card: key points to remember, one action to take to work, and official sources." },
+    {
+      type: "image",
+      label: "Text",
+      icon: "doc",
+      hint: "A heading and short text, with an optional picture, animation or video bubbles. The everyday teaching card.",
+    },
+    { type: "presenter", label: "Video", icon: "play", hint: "A video from YouTube or Synthesia, or one you record. Vertical videos fill the whole card." },
+    {
+      type: "presenter",
+      label: "Webcam",
+      icon: "camera",
+      hint: "Record yourself, or your screen with you in the corner, reading from a teleprompter. It becomes a Video card.",
+      studio: true,
+    },
+    {
+      type: "wall",
+      label: "Wall",
+      icon: "people",
+      hint: "An insight wall: learners share an idea, then see what others posted once they’ve posted their own.",
+    },
+  ] as Omit<PaletteEntry, "key">[]
+).map((p) => ({ ...p, key: p.studio ? "webcam" : p.type }));
+
+/** The palette, in two columns, grouped by what the card does: explain, check understanding, practise. */
+const PALETTE_GROUPS: { title: string; keys: string[] }[] = [
+  { title: "Explain", keys: ["image", "presenter", "webcam", "listen", "resources", "summary"] },
+  { title: "Check", keys: ["quiz", "poll", "rating", "checklist"] },
+  { title: "Practise", keys: ["decision", "written", "response", "widget", "wall"] },
 ];
 
 /** Card types learners interact with, shown in teal; text and media cards are navy and the summary gold. */
@@ -1542,11 +1605,18 @@ function Cards({
     return `${type}-${n}`;
   };
 
-  function add(type: Card["type"]) {
+  function add(type: Card["type"], studio = false) {
     const id = newId(type);
-    update((d) => insertAfterCard(d, freshCard(type, id, card?.beat ?? 0), card?.id));
+    const fresh = freshCard(type, id, card?.beat ?? 0);
+    // Webcam: a Video card waiting for its recording, with the studio open in its settings.
+    if (studio && fresh.visual.kind === "presenter") {
+      fresh.visual = { ...fresh.visual, name: "Trainer", synthetic: false, alt: "A trainer talking to camera", video: blankRecording() };
+      openStudioFor.add(id);
+    }
+    update((d) => insertAfterCard(d, fresh, card?.id));
     setSelected(id);
     focus(id);
+    if (studio) setInspecting(true);
   }
 
   function duplicate() {
@@ -1622,12 +1692,13 @@ function Cards({
     Card type descriptions on hover or keyboard focus: to the left of the menu when it's a column at
     the side of the page, otherwise below the button.
   */
-  const [tip, setTip] = useState<{ type: Card["type"]; side: "left" | "below"; x: number; y: number } | null>(null);
-  function showTip(type: Card["type"], el: HTMLElement) {
+  const [tip, setTip] = useState<{ key: string; side: "left" | "below"; x: number; y: number } | null>(null);
+  function showTip(key: string, el: HTMLElement) {
     const r = el.getBoundingClientRect();
-    if (r.left > 300) setTip({ type, side: "left", x: window.innerWidth - r.left + 10, y: r.top + r.height / 2 });
-    else setTip({ type, side: "below", x: Math.max(8, Math.min(r.left, window.innerWidth - 264)), y: r.bottom + 8 });
+    if (r.left > 300) setTip({ key, side: "left", x: window.innerWidth - r.left + 10, y: r.top + r.height / 2 });
+    else setTip({ key, side: "below", x: Math.max(8, Math.min(r.left, window.innerWidth - 264)), y: r.bottom + 8 });
   }
+  const tipEntry = tip ? PALETTE.find((p) => p.key === tip.key) : undefined;
 
   // Try each move on a copy to know whether the buttons work, and why not.
   const why = (dir: -1 | 1) => (card ? moveBlock(structuredClone(l), card.id, dir) : "No card selected.");
@@ -1896,24 +1967,34 @@ function Cards({
       {commentsPanel && <div className="lg:sticky lg:top-24 lg:w-80 lg:shrink-0 lg:self-start">{commentsPanel}</div>}
 
       <aside aria-label="Add a card" className="order-first lg:order-none">
-        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-surface p-2 shadow-sm ring-1 ring-line lg:sticky lg:top-24 lg:w-28 lg:flex-col">
-          {PALETTE.map((p) => (
-            <button
-              key={p.type}
-              type="button"
-              onClick={() => add(p.type)}
-              aria-describedby={tip?.type === p.type ? "card-type-tip" : undefined}
-              onMouseEnter={(e) => showTip(p.type, e.currentTarget)}
-              onFocus={(e) => showTip(p.type, e.currentTarget)}
-              onMouseLeave={() => setTip(null)}
-              onBlur={() => setTip(null)}
-              className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-muted lg:w-full"
-            >
-              <Icon name={p.icon} className="size-4 shrink-0 text-ink-muted" /> {p.label}
-            </button>
+        {/* A row to scroll on a phone; two columns in groups beside the cards on a wide screen. */}
+        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-surface p-2 shadow-sm ring-1 ring-line lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
+          {PALETTE_GROUPS.map((g) => (
+            <div key={g.title} role="group" aria-label={g.title} className="flex shrink-0 gap-1.5 lg:flex-col lg:gap-1">
+              <p className="hidden px-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted lg:block">{g.title}</p>
+              <div className="flex gap-1.5 lg:grid lg:grid-cols-2 lg:gap-1">
+                {g.keys
+                  .flatMap((k) => PALETTE.filter((p) => p.key === k))
+                  .map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => add(p.type, p.studio)}
+                      aria-describedby={tip?.key === p.key ? "card-type-tip" : undefined}
+                      onMouseEnter={(e) => showTip(p.key, e.currentTarget)}
+                      onFocus={(e) => showTip(p.key, e.currentTarget)}
+                      onMouseLeave={() => setTip(null)}
+                      onBlur={() => setTip(null)}
+                      className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-muted lg:min-h-10 lg:w-full lg:px-2"
+                    >
+                      <Icon name={p.icon} className="size-4 shrink-0 text-ink-muted" /> <span className="truncate">{p.label}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
           ))}
         </div>
-        {tip && (
+        {tip && tipEntry && (
           // Floats above the page, so the menu's scrolling doesn't cut it off.
           <div
             id="card-type-tip"
@@ -1921,8 +2002,8 @@ function Cards({
             className="pointer-events-none fixed z-50 w-64 rounded-2xl bg-[#102a43] px-3.5 py-2.5 text-sm text-white shadow-xl"
             style={tip.side === "left" ? { top: tip.y, right: tip.x, transform: "translateY(-50%)" } : { top: tip.y, left: tip.x }}
           >
-            <p className="font-semibold">{PALETTE.find((p) => p.type === tip.type)?.label}</p>
-            <p className="mt-0.5 text-white/85">{PALETTE.find((p) => p.type === tip.type)?.hint}</p>
+            <p className="font-semibold">{tipEntry.label}</p>
+            <p className="mt-0.5 text-white/85">{tipEntry.hint}</p>
           </div>
         )}
       </aside>
@@ -2172,6 +2253,8 @@ function CanvasCard({
       {fullVideo ? (
         <>
           <CardVisual visual={v} className="size-full" />
+          {/* An embedded player keeps clicks to itself: until the card is selected, a click anywhere on it selects the card. */}
+          {!selected && <SelectCover label={c.heading || typeInfo(c.type).label} onSelect={onSelect} />}
           <MediaPill label="Change video" onClick={onPick} className="bottom-4" />
         </>
       ) : (
@@ -2182,6 +2265,7 @@ function CanvasCard({
             <div className="relative h-[42%] shrink-0">
               {/* The picture or animation runs to the card's edges; the card's corners round it. */}
               <CardVisual visual={v} className="size-full rounded-none!" />
+              {v.kind === "presenter" && !selected && <SelectCover label={c.heading || typeInfo(c.type).label} onSelect={onSelect} />}
               <MediaPill label={pill} onClick={onPick} className="bottom-4" />
             </div>
           ) : (
@@ -3759,6 +3843,9 @@ function CardForm({ lesson: l, card: c, update, isNew }: { lesson: Lesson; card:
         </div>
         {(c.type === "image" || c.type === "audio") && <FigureField card={c} set={set} />}
         {(c.type === "image" || c.type === "audio") && <DocumentField card={c} set={set} />}
+        {c.type === "image" && <LessonLabField card={c} set={set} />}
+        {c.type === "image" && <LessonSceneField card={c} set={set} />}
+        {c.type === "image" && <LessonDischargeField card={c} set={set} />}
         <KeyPointsField card={c} set={set} />
         <Field label="Official source" hint="Shown as a link under the card text." className="sm:col-span-2">
           <div className="grid gap-2 sm:grid-cols-2">
@@ -5015,9 +5102,102 @@ function KeyPointsField({ card: c, set }: { card: Card; set: (fn: (c: Card) => v
   );
 }
 
+/**
+  Record the card's video in the studio the Magazine uses: you, or your screen with you in the corner, reading from a
+  teleprompter that starts with the card's own words. The recording is a Hub file with its captions, thumbnail and trim.
+*/
+function WebcamRecording({ card: c, set }: { card: Card; set: (fn: (c: Card) => void) => void }) {
+  // Added from the palette's Webcam: the studio opens straight away.
+  const [studio, setStudio] = useState(() => openStudioFor.has(c.id));
+  useEffect(() => {
+    openStudioFor.delete(c.id);
+  }, [c.id]);
+  if (c.visual.kind !== "presenter") return null;
+  const rec = c.visual.video?.provider === "upload" ? c.visual.video : null;
+  // The teleprompter starts with what the card says: a Video card's transcript, or its heading and text.
+  const script = (c.type === "presenter" && c.transcript.trim() ? c.transcript : [c.heading, plainText(c.body)].filter(Boolean).join("\n\n")).trim();
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-3">
+      {rec?.src ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Icon name="camera" className="size-4 text-accent" />
+          <span>
+            {rec.recording ? (rec.recording.mode === "screen" ? "Screen recording" : "Webcam recording") : "Uploaded video"}
+            {rec.recording && `, ${Math.round(rec.trim ? rec.trim.end - rec.trim.start : rec.recording.seconds)} seconds`}
+            {rec.captionsVtt ? " · captions" : " · no captions"}
+          </span>
+          <button type="button" className={cx(btn.quiet, "ml-auto")} onClick={() => setStudio(true)}>
+            <Icon name="refresh" className="size-4" /> Record again
+          </button>
+        </div>
+      ) : (
+        <button type="button" className={cx(btn.secondary, "self-start")} onClick={() => setStudio(true)}>
+          <Icon name="camera" className="size-4" /> Record with webcam
+        </button>
+      )}
+      <p className="text-xs text-ink-muted">
+        You, or your screen with you in the corner, reading from a teleprompter. Choose Vertical 9:16 in the studio to fill the card. Nothing is shared until
+        you save the topic.
+      </p>
+      {rec?.src && rec.orientation === "portrait" && (
+        // The vertical window over a wider recording: move it to keep the speaker in view. Nothing is re-encoded.
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold">Crop position</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={rec.cropX ?? 50}
+            onChange={(e) =>
+              set((x) => x.visual.kind === "presenter" && x.visual.video?.provider === "upload" && void (x.visual.video.cropX = Number(e.target.value)))
+            }
+            aria-valuetext={(rec.cropX ?? 50) < 40 ? "Left" : (rec.cropX ?? 50) > 60 ? "Right" : "Centre"}
+            className="accent-[var(--color-action)]"
+          />
+          <span className="text-xs text-ink-muted">Shape is Vertical: learners see a 9:16 window of the recording. Move it left or right.</span>
+        </label>
+      )}
+      {studio &&
+        createPortal(
+          <RecordingStudio
+            initialScript={script}
+            vertical
+            upload={uploadStudioFile}
+            onClose={() => setStudio(false)}
+            onSaved={(r) => {
+              set((x) => {
+                if (x.visual.kind !== "presenter") return;
+                x.visual.synthetic = false;
+                x.visual.video = {
+                  ...blankRecording(),
+                  title: r.recording.mode === "screen" ? "Screen recording" : "A message from your trainer",
+                  src: r.src,
+                  ...(r.poster ? { poster: r.poster } : {}),
+                  ...(r.captions ? { captionsVtt: r.captions } : {}),
+                  ...(r.trim ? { trim: r.trim } : {}),
+                  recording: r.recording,
+                  // Vertical: the card fills with a 9:16 window of the recording, where it was placed in review.
+                  ...(r.crop ? { orientation: "portrait" as const, cropX: r.crop.x } : {}),
+                };
+                if (x.type === "presenter") {
+                  if (r.transcript) x.transcript = r.transcript;
+                  x.durationSec = Math.max(1, Math.round(r.trim ? r.trim.end - r.trim.start : r.recording.seconds));
+                }
+              });
+              setStudio(false);
+            }}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 /** Paste a YouTube or Synthesia link. Says whether it was recognised, so a link never silently fails. */
 function VideoLinkField({ video, set }: { video: Extract<Visual, { kind: "presenter" }>["video"]; set: (fn: (c: Card) => void) => void }) {
-  const [text, setText] = useState(video && video.provider !== "elevenlabs" ? videoLinkFor({ ...video, provider: video.provider }) : "");
+  const [text, setText] = useState(
+    video && (video.provider === "youtube" || video.provider === "synthesia") ? videoLinkFor({ ...video, provider: video.provider }) : "",
+  );
   const parsed = parseVideoLink(text);
   const status = !text.trim()
     ? null
@@ -5399,8 +5579,33 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
         </Field>
       )}
       {v.kind === "presenter" && v.video?.provider === "elevenlabs" && <AvatarField key={c.id} card={c} lesson={lesson} photos={library.photos} set={set} />}
+      {/*
+        Ava's own video for this Video card (made in ElevenLabs with the Laura avatar, portrait or landscape), with its script.
+        Uploading it sets the card to Ava's window, in the video's shape: tall for a portrait video.
+      */}
+      {v.kind === "presenter" && c.type === "presenter" && v.video?.provider !== "upload" && (
+        <AvaVideoSlot
+          key={`ava-${c.id}`}
+          lineKey={`lesson:${lesson}:${c.id}`}
+          script={c.transcript}
+          where="topic"
+          onUploaded={({ width, height }) =>
+            set((x) => {
+              if (x.visual.kind !== "presenter") return;
+              x.visual.synthetic = true;
+              x.visual.video = {
+                provider: "elevenlabs",
+                id: "",
+                title: x.visual.video?.title || "Ava’s video",
+                orientation: height > width ? "portrait" : "landscape",
+              };
+            })
+          }
+        />
+      )}
       {v.kind === "presenter" && v.video?.provider !== "elevenlabs" && (
         <>
+          <WebcamRecording key={`rec-${c.id}`} card={c} set={set} />
           {/* Synthesia is being replaced: a video card can switch to an AI presenter. */}
           {(c.type === "presenter" || c.narration?.trim()) && (
             <button
@@ -6418,4 +6623,9 @@ function SubjectField({ slug }: { slug: string }) {
       </select>
     </Field>
   );
+}
+
+/** Over an embedded video in the card strip: the first click selects the card (the player would otherwise keep it). */
+function SelectCover({ label, onSelect }: { label: string; onSelect: () => void }) {
+  return <button type="button" aria-label={`Select “${label}”`} onClick={onSelect} className="absolute inset-0 z-[5] cursor-pointer" />;
 }

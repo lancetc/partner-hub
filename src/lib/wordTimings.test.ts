@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateWords, wordAround, wordAt, wordsFromAlignment, type Alignment } from "./wordTimings";
+import { estimateWords, retimeWords, wordAround, wordAt, wordsFromAlignment, wordsFromSpeech, type Alignment } from "./wordTimings";
 
 /* Following the narration word by word. */
 
@@ -57,5 +57,31 @@ describe("estimated timings, for a voice that does not report them", () => {
   it("gives nothing without words or a length", () => {
     expect(estimateWords("", 3)).toBeNull();
     expect(estimateWords("Hi", 0)).toBeNull();
+  });
+});
+
+describe("words heard by speech-to-text", () => {
+  it("are written out in order, one space apart, sounds left out, each with its time and place", () => {
+    const heard = wordsFromSpeech([
+      { text: "Ava", start: 0, end: 0.3, type: "word" },
+      { text: "  ", start: 0.3, end: 0.5, type: "spacing" },
+      { text: "[laughs]", start: 0.5, end: 1, type: "audio_event" },
+      { text: "here,", start: 1, end: 1.3, type: "word" },
+      { text: "mate", start: 1.3, end: 1.6, type: "word" },
+    ])!;
+    expect(heard.text).toBe("Ava here, mate");
+    expect(heard.words.map((w) => heard.text.slice(w.from, w.to))).toEqual(["Ava", "here,", "mate"]);
+    expect(heard.words[1]).toMatchObject({ start: 1, end: 1.3 });
+    expect(wordsFromSpeech([])).toBeNull();
+    expect(wordsFromSpeech([{ text: "(music)", type: "audio_event" }])).toBeNull();
+  });
+
+  it("keep their times through an edit that keeps every word, and not otherwise", () => {
+    const words = estimateWords("Signals patchy out here", 2)!;
+    const kept = retimeWords(words, "Signal’s patchy out here.")!;
+    expect(kept.map((w) => w.start)).toEqual(words.map((w) => w.start));
+    expect("Signal’s patchy out here.".slice(kept[3].from, kept[3].to)).toBe("here.");
+    expect(retimeWords(words, "Signal’s patchy")).toBeNull();
+    expect(retimeWords(null, "x")).toBeNull();
   });
 });

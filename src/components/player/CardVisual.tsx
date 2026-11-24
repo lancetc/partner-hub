@@ -7,22 +7,27 @@ import { Icon, type IconName } from "../Icon";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
+import { AvaPlaceholder, AvaTransmission, avaLineMedia, type AvaMedia } from "../ava/AvaTransmission";
+import { useAva } from "../ava/useAva";
 
 /**
   `onComplete` fires when a video has played to the end (or can't report it, so nobody gets stuck).
   It's how "Required completion" knows a video card is done.
 */
 /** `autoPlay`: a presenter video starts by itself once the card settles, when the learner's audio is on (the card on screen only). */
+/** `ava`: the card's script and narration key, so an AI presenter is shown as Ava's transmission (Ava 2.0). */
 export function CardVisual({
   visual,
   className,
   onComplete,
   autoPlay = false,
+  ava,
 }: {
   visual: Visual;
   className?: string;
   onComplete?: () => void;
   autoPlay?: boolean;
+  ava?: { ttsKey: string; script: string; title: string; fill?: boolean };
 }) {
   if (visual.kind === "none") return null;
 
@@ -44,6 +49,44 @@ export function CardVisual({
   const t = toneColours[visual.tone];
 
   if (visual.kind === "words") return <Words visual={visual} tone={t} className={className} />;
+
+  if (ava && visual.kind === "presenter" && isAvaPresenter(visual))
+    return <AvaCard visual={visual} ava={ava} className={className} onComplete={onComplete} autoPlay={autoPlay} />;
+
+  if (visual.video?.provider === "upload") {
+    const v = visual.video;
+    const portrait = v.orientation === "portrait";
+    if (!v.src)
+      return (
+        <div className={cx("grid place-items-center rounded-3xl bg-muted text-sm text-ink-muted", className ?? "aspect-video")}>No video recorded yet</div>
+      );
+    // A video in the Hub (recorded in the studio, or uploaded): the browser's own player, with its captions and trim.
+    return (
+      <div
+        className={cx(
+          "relative overflow-hidden rounded-3xl bg-black",
+          className ?? (portrait ? "mx-auto aspect-[9/16] w-full max-w-[min(18rem,33.75svh)]" : "aspect-video"),
+        )}
+      >
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          poster={v.poster}
+          src={v.trim ? `${v.src}#t=${v.trim.start},${v.trim.end}` : v.src}
+          onEnded={() => onComplete?.()}
+          // A trimmed recording stops at its end point, which the browser reports as a pause, not an end.
+          onPause={(e) => v.trim && e.currentTarget.currentTime >= v.trim.end - 0.25 && onComplete?.()}
+          aria-label={v.title}
+          // Vertical: a 9:16 window of the recording, where the author placed it; wide: the whole frame.
+          className={cx("absolute inset-0 size-full", portrait ? "object-cover" : "object-contain")}
+          style={portrait ? { objectPosition: `${v.cropX ?? 50}% 50%` } : undefined}
+        >
+          {v.captionsVtt && <track kind="captions" src={v.captionsVtt} srcLang="en" label="English" default />}
+        </video>
+      </div>
+    );
+  }
 
   if (visual.video?.provider === "youtube") {
     // YouTube's privacy-enhanced player: no tracking cookies until the learner presses play.
@@ -146,6 +189,58 @@ export function CardVisual({
         <span className="relative m-3 rounded-full bg-black/45 px-3 py-1 font-mulish text-xs font-bold text-white">Synthetic presenter · {visual.name}</span>
       )}
     </div>
+  );
+}
+
+type PresenterVisual = Extract<Visual, { kind: "presenter" }>;
+
+/**
+  An AI presenter Ava's transmission window can show: her recorded video (when the file plays in the page), or her
+  portrait with the card's script read in her voice. A Synthesia or YouTube player in its own frame keeps its own
+  player, since its picture can't be treated.
+*/
+export const isAvaPresenter = (v: PresenterVisual) => v.synthetic && (!v.video || Boolean(v.video.src) || v.video.provider === "elevenlabs");
+
+/** Ava presenting a Topic card, inside the card: the 16:9 transmission window, with the card's words below it. */
+function AvaCard({
+  visual,
+  ava,
+  className,
+  onComplete,
+  autoPlay,
+}: {
+  visual: PresenterVisual;
+  /** fill: her window takes the whole card (a portrait video). */
+  ava: { ttsKey: string; script: string; title: string; fill?: boolean };
+  className?: string;
+  onComplete?: () => void;
+  autoPlay?: boolean;
+}) {
+  const who = useAva(ava.ttsKey);
+  const video = visual.video?.src ? visual.video : null;
+  // A portrait video (Ava's uploaded transmission, say) gets a tall window.
+  const shape = visual.video?.orientation === "portrait" ? (ava.fill ? "fill" : "tall") : "wide";
+  if (!video && !who.loaded) return <AvaPlaceholder className={className} shape={shape} />;
+  // The card's own recorded video first; then Ava's talking video for the card, when one is ready; else her voice over her portrait.
+  const media: AvaMedia = video
+    ? // A presenter video made in the Hub keeps its word timings: the words appear on screen as she says them.
+      { kind: "video", src: video.src!, poster: video.poster ?? null, words: video.captions?.spoken === ava.script ? video.captions.words : null }
+    : avaLineMedia(ava.ttsKey, who.video);
+  return (
+    <AvaTransmission
+      layout="card"
+      shape={shape}
+      className={className}
+      media={media}
+      portrait={visual.video?.poster ?? visual.photo?.src ?? who.portrait}
+      // Always Ava by name (a new card's presenter is called "Presenter" until it's changed).
+      name={who.name}
+      script={(!video && who.video?.transcript) || ava.script}
+      title={ava.title}
+      // Card audio rules: on, and the page already used.
+      autoPlay={autoPlay ? autoplayEnabled : false}
+      onComplete={onComplete}
+    />
   );
 }
 

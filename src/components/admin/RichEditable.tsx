@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
-import { domToText, safeHref, toHtml, toInlineHtml } from "@/lib/richText";
+import { domToText, safeHref, toHtml, toInlineHtml, withoutEmphasis } from "@/lib/richText";
+import { EMPHASIS, wordsIn } from "@/lib/emphasis";
 import { Icon } from "../Icon";
 
 /*
@@ -32,6 +33,30 @@ function selectionLink(root: HTMLElement | null) {
   return a && root?.contains(a) ? a : null;
 }
 
+const closestIn = (n: Node | null | undefined, sel: string) => (n ? (n.nodeType === 1 ? (n as Element) : n.parentElement)?.closest(sel) : null) ?? null;
+const EMPH = "mark[data-emph]";
+
+/** The emphasised phrase the selection starts or ends in. */
+function selectionMark(root: HTMLElement | null) {
+  const sel = document.getSelection();
+  const m = closestIn(sel?.anchorNode, EMPH) ?? closestIn(sel?.focusNode, EMPH);
+  return m && root?.contains(m) ? (m as HTMLElement) : null;
+}
+
+/** Why a selection can't be emphasised, or "" when it can (docs/emphasise-text.md). */
+function emphasisProblem(range: Range) {
+  const words = range.toString().replace(/\s+/g, " ").trim();
+  if (range.collapsed || !words) return "Select the words to emphasise first.";
+  const PARA = "p,li,td,th,h1,h2,h3,h4,h5,h6,blockquote";
+  const inside = range.cloneContents();
+  if (closestIn(range.startContainer, PARA) !== closestIn(range.endContainer, PARA) || inside.querySelector(`${PARA},ul,ol,table,br`))
+    return "Emphasis goes on a phrase within one paragraph. Select fewer words.";
+  if (inside.querySelector(EMPH)) return "Part of this is already emphasised. Remove that emphasis first.";
+  if (closestIn(range.startContainer, "a") !== closestIn(range.endContainer, "a")) return "Include the whole link, or none of it.";
+  if (wordsIn(words) > EMPHASIS.maxWords) return `Emphasis is for a short phrase. Select ${EMPHASIS.maxWords} words or fewer.`;
+  return "";
+}
+
 export function RichEditable({
   value,
   onChange,
@@ -39,6 +64,7 @@ export function RichEditable({
   className,
   placeholderClass = "text-ink-muted/60",
   inline = false,
+  emphasis = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -47,6 +73,8 @@ export function RichEditable({
   placeholderClass?: string;
   /** One line with bold, italics and links only (key points): no lists or tables, and Enter finishes. */
   inline?: boolean;
+  /** Magazine story text: offers Emphasise text, a marker behind a short phrase (docs/emphasise-text.md). */
+  emphasis?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -56,13 +84,21 @@ export function RichEditable({
   const [initial] = useState(() => (inline ? toInlineHtml(value) : toHtml(value)));
   const [focused, setFocused] = useState(false);
   const [inTable, setInTable] = useState(false);
-  const [active, setActive] = useState({ bold: false, italic: false, link: false });
+  const [active, setActive] = useState({ bold: false, italic: false, link: false, emph: false });
   const [linking, setLinking] = useState<string | null>(null);
+  // Why Emphasise text didn't apply, or a word about how much is emphasised. Fades after a few seconds.
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(""), 7000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
 
   const emit = () => {
     const el = ref.current;
     if (!el) return;
-    const text = inline ? domToText(el).replace(/\s*\n+\s*/g, " ") : domToText(el);
+    const read = emphasis ? domToText(el) : withoutEmphasis(domToText(el));
+    const text = inline ? read.replace(/\s*\n+\s*/g, " ") : read;
     if (text !== last.current) {
       last.current = text;
       onChange(text);
@@ -82,7 +118,12 @@ export function RichEditable({
     if (!focused) return;
     const update = () => {
       setInTable(Boolean(selectionCell(ref.current)));
-      setActive({ bold: document.queryCommandState("bold"), italic: document.queryCommandState("italic"), link: Boolean(selectionLink(ref.current)) });
+      setActive({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        link: Boolean(selectionLink(ref.current)),
+        emph: Boolean(selectionMark(ref.current)),
+      });
     };
     document.addEventListener("selectionchange", update);
     return () => document.removeEventListener("selectionchange", update);
@@ -114,6 +155,44 @@ export function RichEditable({
       else if (range.collapsed) exec("insertHTML", `<a href="${href.replace(/"/g, "&quot;")}">${href.replace(/</g, "&lt;")}</a>`);
       else exec("createLink", href);
     });
+  }
+
+  /** Emphasise text, or take the emphasis off the phrase the selection is in. The words are never changed. */
+  function toggleEmphasis() {
+    const root = ref.current;
+    const sel = document.getSelection();
+    const mark = selectionMark(root);
+    if (mark) {
+      // Unwrapped in place: the browser's own editing would carry the mark's look over to the words it put back.
+      run(() => {
+        const parent = mark.parentNode;
+        const kids = Array.from(mark.childNodes);
+        mark.replaceWith(...kids);
+        parent?.normalize();
+        const r = document.createRange();
+        if (kids[0]?.isConnected && kids[kids.length - 1]?.isConnected) {
+          r.setStartBefore(kids[0]);
+          r.setEndAfter(kids[kids.length - 1]);
+          sel?.removeAllRanges();
+          sel?.addRange(r);
+        }
+      });
+      setNotice("");
+      return;
+    }
+    const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+    if (!root || !range || !root.contains(range.commonAncestorContainer)) return setNotice("Select the words to emphasise first.");
+    const problem = emphasisProblem(range);
+    if (problem) return setNotice(problem);
+    const box = document.createElement("div");
+    box.appendChild(range.cloneContents());
+    run(() => exec("insertHTML", `<mark class="tc-emph" data-emph="">${box.innerHTML}</mark>`));
+    const count = root.querySelectorAll(EMPH).length;
+    setNotice(
+      count > EMPHASIS.perSection
+        ? `${count} phrases are emphasised here. One or two keeps each of them meaningful.`
+        : "Emphasised. Readers see the marker sweep in once as the phrase scrolls into view.",
+    );
   }
 
   function table(op: "row" | "col" | "delRow" | "delCol" | "delTable") {
@@ -211,6 +290,11 @@ export function RichEditable({
                   <span className="text-xs line-through">link</span>
                 </Tool>
               )}
+              {emphasis && !inline && (
+                <Tool label={active.emph ? "Remove emphasis" : "Emphasise text"} onPress={toggleEmphasis} pressed={active.emph}>
+                  <MarkerIcon />
+                </Tool>
+              )}
               {!inline && (
                 <>
                   <span aria-hidden className="mx-0.5 h-5 w-px bg-line" />
@@ -244,6 +328,11 @@ export function RichEditable({
                     </>
                   )}
                 </>
+              )}
+              {notice && (
+                <p role="status" className="basis-full px-1.5 pb-0.5 text-xs font-semibold text-ink-muted">
+                  {notice}
+                </p>
               )}
             </>
           )}
@@ -283,7 +372,8 @@ export function RichEditable({
             if (inline) exec("insertText", plain.replace(/\s*\n+\s*/g, " "));
             else if (html) {
               const doc = new DOMParser().parseFromString(html, "text/html");
-              exec("insertHTML", toHtml(domToText(doc.body)));
+              const pasted = domToText(doc.body);
+              exec("insertHTML", toHtml(emphasis ? pasted : withoutEmphasis(pasted)));
             } else if (/\t.*\n.*\t/.test(plain)) exec("insertHTML", toHtml(plain));
             else exec("insertText", plain);
             emit();
@@ -300,6 +390,17 @@ export function RichEditable({
         />
       </div>
     </div>
+  );
+}
+
+/** A marker pen over a line, for Emphasise text. */
+function MarkerIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round">
+      <path d="M14.5 4.5l5 5-7.5 7.5h-5v-5z" />
+      <path d="M9.5 12l2.5 2.5" />
+      <path d="M3.5 20.5h17" strokeLinecap="round" />
+    </svg>
   );
 }
 

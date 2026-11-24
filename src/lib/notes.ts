@@ -14,6 +14,7 @@
 */
 
 import { identifierWarnings } from "./redpen";
+import { businessProblems, cleanBusiness, PRINCIPAL, type BusinessContext } from "./businessNotes";
 
 export const BADGES = { CP: "Care Partner", CC: "Care Coordinator", CLIN: "Clinical", FIN: "Finance" } as const;
 export type Badge = keyof typeof BADGES;
@@ -74,6 +75,11 @@ export type MentorNoteData = {
   /** A fictional seed or illustrative card, labelled as such. */
   illustrative: boolean;
   consent: { audience: boolean; attribution: boolean };
+  /**
+    A Care Partner Business Field Note (lib/businessNotes, docs/business-field-notes.md): the business context, or
+    null for an ordinary note. A business card is for verified principals only, whatever `audiences` says.
+  */
+  business?: BusinessContext | null;
 };
 
 export type MentorNote = {
@@ -103,6 +109,16 @@ export function cleanNote(raw: unknown): MentorNoteData {
   const o = obj(raw);
   const s = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
   const c = obj(o.consent);
+  const business = o.business && typeof o.business === "object" ? cleanBusiness(o.business) : null;
+  return {
+    ...cleanCore(o, s, c),
+    // A business card's audience is the principals, never a general role list, so it can't leak into a general deck.
+    ...(business && { topics: [], audiences: [] }),
+    business,
+  };
+}
+
+function cleanCore(o: Record<string, unknown>, s: (v: unknown, max: number) => string, c: Record<string, unknown>): Omit<MentorNoteData, "business"> {
   return {
     badge: (Object.keys(BADGES) as Badge[]).includes(o.badge as Badge) ? (o.badge as Badge) : "CP",
     rank: (Object.keys(RANKS) as Rank[]).includes(o.rank as Rank) ? (o.rank as Rank) : "10",
@@ -132,12 +148,16 @@ export function noteProblems(d: MentorNoteData): string[] {
   if (d.hook.trim().length < 10) out.push("Write the moment, in your own words.");
   if (d.scenario.trim().length < 20) out.push("Describe the situation in a sentence or two (fictionalised).");
   if (d.note.trim().length < 40) out.push("Write your note to your younger self.");
-  if (!d.topics.length) out.push("Choose a topic.");
-  if (!d.audiences.length) out.push("Choose who may see it.");
+  if (d.business) out.push(...businessProblems(d.business));
+  if (!d.business && !d.topics.length) out.push("Choose a topic.");
+  if (!d.business && !d.audiences.length) out.push("Choose who may see it.");
   if (!d.authorName.trim()) out.push("Choose how your name appears.");
   if (!d.consent.audience) out.push("Agree to the audience you’ve chosen.");
   if (!d.consent.attribution) out.push("Agree to how it’s attributed.");
-  const ids = identifierWarnings([d.hook, d.scenario, d.note, d.phrase].join("\n"));
+  const b = d.business;
+  const ids = identifierWarnings(
+    [d.hook, d.scenario, d.note, d.phrase, ...(b ? [b.decision, b.choice, b.believed, b.tried, b.failed, b.tradeoff] : [])].join("\n"),
+  );
   if (ids.length) out.push(`It looks like it contains ${ids.join(" and ")}. Take those out.`);
   return out;
 }
@@ -145,8 +165,16 @@ export function noteProblems(d: MentorNoteData): string[] {
 export const isPublished = (n: Pick<MentorNote, "state">) => PUBLISHED.includes(n.state);
 /** Copying the phrase is off while a note is being re-reviewed, and of course once it's withdrawn. */
 export const canCopyPhrase = (n: Pick<MentorNote, "state" | "data">) => DEALABLE.includes(n.state) && Boolean(n.data.phrase.trim());
-export const reviewLabel = (n: Pick<MentorNote, "state">) =>
-  n.state === "endorsed" ? "Policy-owner endorsed" : n.state === "reviewed" ? "Editor-reviewed for learning" : "Peer note";
+export const reviewLabel = (n: Pick<MentorNote, "state"> & { data?: Pick<MentorNoteData, "business"> }) =>
+  // A business card is a personal story: never badged as approved as a whole, whoever reviewed it.
+  n.data?.business
+    ? "Peer experience · reviewed for the deck"
+    : n.state === "endorsed"
+      ? "Policy-owner endorsed"
+      : n.state === "reviewed"
+        ? "Editor-reviewed for learning"
+        : "Peer note";
+export const isBusinessNote = (n: { data: Pick<MentorNoteData, "business"> }) => Boolean(n.data.business);
 
 // ---------------------------------------------------------------------------------------------
 // The Magazine block
@@ -171,6 +199,8 @@ export type NotesDeckData = {
   mode: NoteMode;
   /** Optional: asked once, after the cards. */
   reflection: string;
+  /** "business": a deck of Business Field Notes, dealt only to verified Care Partner principals (lib/businessNotes). */
+  edition?: "general" | "business";
 };
 
 type Raw = Record<string, unknown>;
@@ -185,9 +215,11 @@ export function parseNotesDeck(o: Raw, where: string, h: ParseHelpers): NotesDec
     ...new Set((Array.isArray(o.noteIds) ? o.noteIds : []).filter((x): x is string => typeof x === "string" && /^[a-z0-9-]{1,80}$/.test(x))),
   ].slice(0, 5);
   const topics = many(o.topics, Object.keys(TOPICS) as Topic[]);
+  const edition = o.edition === "business" ? "business" : "general";
   if (selection === "curated" && !noteIds.length) h.unfinished(`${where} needs the cards to show.`);
-  if (selection !== "curated" && !topics.length) h.unfinished(`${where} needs a topic to draw cards from.`);
+  if (edition === "general" && selection !== "curated" && !topics.length) h.unfinished(`${where} needs a topic to draw cards from.`);
   return {
+    edition,
     title: h.str(o.title, `${where} title`, { required: true, max: 160 }) ?? "",
     intro: h.str(o.intro, `${where} introduction`, { max: 600 }) ?? "",
     topics,
@@ -202,8 +234,12 @@ export function parseNotesDeck(o: Raw, where: string, h: ParseHelpers): NotesDec
   };
 }
 
-/** Can this reader see this note? Its audience must include their role, and it must be published. */
-export const visibleTo = (n: Pick<MentorNote, "state" | "data">, audience: string) => isPublished(n) && n.data.audiences.includes(audience as NoteAudience);
+/**
+  Can this reader see this note? It must be published, and its audience must include their role. A business card's
+  audience is only ever the principals: the server passes PRINCIPAL after checking business-owner access itself.
+*/
+export const visibleTo = (n: Pick<MentorNote, "state" | "data">, audience: string) =>
+  isPublished(n) && (n.data.business ? audience === PRINCIPAL : n.data.audiences.includes(audience as NoteAudience));
 
 export type Candidate = { note: MentorNote; helpful: number };
 
@@ -219,18 +255,29 @@ const hash = (s: string) => {
   votes don't dominate), freshness and a stable per-learner shuffle; then spread so no author or badge repeats
   while another is available.
 */
-export function rankPool(cands: Candidate[], b: Pick<NotesDeckData, "topics" | "audiences">, audience: string, seed: string, today: string): MentorNote[] {
-  const eligible = cands.filter(
-    (c) =>
-      DEALABLE.includes(c.note.state) &&
-      c.note.data.audiences.includes(audience as NoteAudience) &&
-      (!b.audiences.length || b.audiences.includes(audience as NoteAudience)) &&
-      c.note.data.topics.some((t) => b.topics.includes(t)) &&
-      c.note.data.consent.audience,
+export function rankPool(
+  cands: Candidate[],
+  b: Pick<NotesDeckData, "topics" | "audiences"> & Pick<Partial<NotesDeckData>, "edition">,
+  audience: string,
+  seed: string,
+  today: string,
+): MentorNote[] {
+  const business = b.edition === "business";
+  const eligible = cands.filter((c) =>
+    business
+      ? // A business deck: business cards only, for principals only, and only where the contributor agreed to Magazine placement.
+        DEALABLE.includes(c.note.state) && audience === PRINCIPAL && Boolean(c.note.data.business?.consents.crossFormat) && c.note.data.consent.audience
+      : DEALABLE.includes(c.note.state) &&
+        !c.note.data.business &&
+        c.note.data.audiences.includes(audience as NoteAudience) &&
+        (!b.audiences.length || b.audiences.includes(audience as NoteAudience)) &&
+        c.note.data.topics.some((t) => b.topics.includes(t)) &&
+        c.note.data.consent.audience,
   );
   const score = (c: Candidate) => {
     const days = c.note.reviewedAt && today ? Math.max(0, (Date.parse(today) - Date.parse(c.note.reviewedAt.slice(0, 10))) / 86_400_000) : 365;
-    return Math.log2(1 + c.helpful) * 0.5 + Math.max(0, 1 - days / 365) * 0.3 + hash(`${seed}:${c.note.id}`) * 0.6;
+    // Business cards are never ranked by helpful votes: freshness and the per-learner shuffle only.
+    return (business ? 0 : Math.log2(1 + c.helpful) * 0.5) + Math.max(0, 1 - days / 365) * 0.3 + hash(`${seed}:${c.note.id}`) * 0.6;
   };
   const sorted = eligible.sort((x, y) => score(y) - score(x)).map((c) => c.note);
   const out: MentorNote[] = [];
@@ -250,7 +297,13 @@ export function dealDeck(cands: Candidate[], b: NotesDeckData, audience: string,
   const byId = new Map(cands.map((c) => [c.note.id, c.note]));
   const pinned = b.noteIds.filter((id) => {
     const n = byId.get(id);
-    return n && DEALABLE.includes(n.state) && visibleTo(n, audience);
+    return (
+      n &&
+      DEALABLE.includes(n.state) &&
+      visibleTo(n, audience) &&
+      Boolean(n.data.business) === (b.edition === "business") &&
+      (!n.data.business || n.data.business.consents.crossFormat)
+    );
   });
   if (b.selection === "curated") return pinned.slice(0, b.count);
   const pool = rankPool(cands, b, audience, seed, today).filter((n) => !pinned.includes(n.id));

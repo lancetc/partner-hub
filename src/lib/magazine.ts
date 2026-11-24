@@ -3,6 +3,7 @@ import { parseVideoLink } from "./videoLinks";
 import { narrationState, pageSnapshot } from "./magazineNarration";
 import { reviewChecks } from "./magazineReview";
 import { guideChecks, type GuideMode, type GuidePurpose } from "./magazineGuide";
+import { emphasisChecks } from "./emphasis";
 import { blankRoleplay, DEFAULT_METER, DIMENSIONS, TURN_RANGE, type Dimension, type Roleplay } from "./roleplay";
 import { parseSignal, type SignalBlockData } from "./signal";
 import { parseMission, type MissionBlockData } from "./mission";
@@ -22,6 +23,18 @@ import { cleanRelayCourse, cleanRelayPage, relayChecks, type RelayCourse, type R
 import { parseAuditor, type AuditorBlockData } from "./auditor";
 import { parsePhoneCase, type PhoneCallData } from "./phonecall";
 import { parseSandbox, type SandboxBlockData } from "./sandbox";
+import { parseHiringLab, type HiringLabData } from "./hiringRunway";
+import { parseOneDay, type OneDayData } from "./oneDay";
+import { parseIntakeLab, type IntakeLabData } from "./growthLab";
+import { parseWorkloadLab, type WorkloadLabData } from "./workloadLab";
+import { parseCoverageLab, type CoverageLabData } from "./coverageLab";
+import { parseReferralLab, type ReferralLabData } from "./referralLab";
+import { parseReliabilityLab, type ReliabilityLabData } from "./reliabilityLab";
+import { parseCashBridgeLab, type CashBridgeLabData } from "./cashBridgeLab";
+import { parseCaseThread, type CaseThreadData } from "./caseThread";
+import { parseBudgetLab, type BudgetLabData } from "./budgetLab";
+import { parseHazardScan, type HazardScanData } from "./hazardScan";
+import { parseDischarge, type DischargeData } from "./dischargePivot";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -98,6 +111,118 @@ export type PageTemplate = keyof typeof PAGE_TEMPLATES;
 
 /** How a Magazine shows to learners: one page is a Guide; more is a Course. */
 export const formatLabel = (doc: { pages: unknown[] }) => (doc.pages.length > 1 ? "Course" : "Guide");
+
+/**
+  The simulation and decision-lab blocks: a reader plays a case through rather than reading about it. The editor's
+  "Simulate" palette and the Magazine's "Simulations" format both read this list.
+*/
+export const SIMULATION_BLOCKS = [
+  "branching",
+  "conversation",
+  "phonecall",
+  "signal",
+  "mission",
+  "balance",
+  "xray",
+  "auditor",
+  "bridge",
+  "baton",
+  "budget",
+  "sandbox",
+  "hiring",
+  "onedaymap",
+  "intake",
+  "workload",
+  "coverage",
+  "referral",
+  "reliability",
+  "cashbridge",
+  "budgetlab",
+  "discharge",
+] as const satisfies readonly BlockType[];
+
+/**
+  What a reader is opening, for browsing the Magazine: a course (several pages), a simulation (one page built around a
+  simulation or decision lab), or a guide (one page to read: a field guide, expert guidance or an explainer).
+*/
+/**
+  Browsing tags: who a guide is for by role, and what it helps them do. They only shape browsing and search: who may
+  read a guide is still its audience (above). The Hub serves partner businesses (their owners and managers as well
+  as the people delivering services) and Trilogy Care's own teams, and the aim running through it is growing the
+  business, ours and the partners'.
+*/
+export const GUIDE_ROLES = [
+  { value: "partner", label: "Care Partners and their workers" },
+  { value: "coordinator", label: "Care coordinators" },
+  { value: "owner", label: "Business owners and managers" },
+  { value: "staff", label: "Trilogy Care teams" },
+] as const;
+export type GuideRole = (typeof GUIDE_ROLES)[number]["value"];
+export const GUIDE_GOALS = [
+  { value: "grow", label: "Grow the business" },
+  { value: "money", label: "Money and getting paid" },
+  { value: "quality", label: "Quality and safety" },
+  { value: "clients", label: "Client experience" },
+  { value: "start", label: "Getting started" },
+  { value: "compliance", label: "Rules and compliance" },
+] as const;
+export type GuideGoal = (typeof GUIDE_GOALS)[number]["value"];
+export type GuideTags = { roles: GuideRole[]; goals: GuideGoal[] };
+
+/** The words that suggest each goal, for a guide (or eLearning course) its author hasn't tagged yet. */
+const GOAL_WORDS: Record<GuideGoal, RegExp> = {
+  grow: /\b(grow|growth|growing|hir(e|ing)|business|margin|capacity|referr\w*|marketing|scal(e|ing)|new clients?)\b/i,
+  money: /\b(invoic|paid|pay(ment)?s?|pricing|price|rates?|budget|money|cash|fees?|funding)/i,
+  quality: /\b(safe|safety|incident|risk|sirs|quality|scope|harm|falls?|hurt)/i,
+  clients: /\b(client|journey|family|families|conversation|person|people we support|choice)/i,
+  start: /\b(first (shift|steps?|week|visit|days?|month)|onboard|induction|getting started|new partner|welcome)/i,
+  compliance: /\b(complian|agreement|policy|rules?|standards?|legislation|act\b|audit)/i,
+};
+const OWNER_BLOCKS = new Set<string>(["hiring", "sandbox", "budget"]);
+
+/**
+  A guide's browsing tags: the author's when they've set any, else worked out from who it's for, its blocks and its
+  words, so content written before tags existed still browses sensibly.
+*/
+export function guideTags(doc: GuideDoc | null, audience: readonly string[], title: string): GuideTags {
+  const set = doc?.tags;
+  // Its title and standfirst, and the titles of its pages and sections: what it says it's about.
+  const words = [title, ...(doc?.pages ?? []).flatMap((p) => [p.title, ...p.sections.map((s) => s.title ?? "")])].join(" ");
+  const blocks = doc ? allBlocks(doc).map((b) => b.type as string) : [];
+  const roles: GuideRole[] = set?.roles.length
+    ? set.roles
+    : [
+        ...(audience.includes("partner") ? (["partner"] as const) : []),
+        ...(audience.includes("coordinator") ? (["coordinator"] as const) : []),
+        ...(blocks.some((t) => OWNER_BLOCKS.has(t)) || /\b(business owner|hir(e|ing)|margin)\b/i.test(words) ? (["owner"] as const) : []),
+        ...(audience.includes("staff") ? (["staff"] as const) : []),
+      ];
+  const goals: GuideGoal[] = set?.goals.length
+    ? set.goals
+    : [
+        ...new Set<GuideGoal>([
+          ...(blocks.some((t) => OWNER_BLOCKS.has(t)) ? (["grow", "money"] as const) : []),
+          ...(Object.keys(GOAL_WORDS) as GuideGoal[]).filter((g) => GOAL_WORDS[g].test(words)),
+        ]),
+      ];
+  return { roles, goals };
+}
+const cleanTags = (v: unknown): GuideTags | undefined => {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  if (!o) return undefined;
+  const pick = <T extends string>(x: unknown, all: readonly { value: T }[]) =>
+    Array.isArray(x) ? [...new Set(x.filter((s): s is T => all.some((a) => a.value === s)))] : [];
+  const roles = pick(o.roles, GUIDE_ROLES);
+  const goals = pick(o.goals, GUIDE_GOALS);
+  return roles.length || goals.length ? { roles, goals } : undefined;
+};
+
+export type GuideFormat = "course" | "simulation" | "guide";
+export function guideFormat(doc: GuideDoc): GuideFormat {
+  if (doc.pages.length > 1) return "course";
+  const sims = new Set<string>(SIMULATION_BLOCKS);
+  return allBlocks(doc).some((b) => sims.has(b.type)) ? "simulation" : "guide";
+}
 
 /**
   How a course counts as done. Opening pages, moving between them or reaching the bottom never does.
@@ -488,7 +613,20 @@ export type Block =
   | PlaybookBlock
   | AuditorBlock
   | PhoneCallBlock
-  | SandboxBlock;
+  | SandboxBlock
+  | HiringBlock
+  | OneDayBlock
+  | IntakeBlock
+  | WorkloadBlock
+  | CoverageBlock
+  | ReferralBlock
+  | ReliabilityBlock
+  | CashBridgeBlock
+  | CaseThreadBlock
+  | BudgetLabBlock
+  | HazardScanBlock
+  | DischargeBlock
+  | HubVisualBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
 /** First 30 Days Mission Board (lib/mission): a fictional participant's first month, as a board of tasks, dated events and a close-the-loop step. */
@@ -517,14 +655,57 @@ export type RedPenBlock = Base & { type: "redpen" } & RedPenBlockData;
 export type NotesDeckBlock = Base & { type: "mentor" } & NotesDeckData;
 /** Live SOP-to-Playbook (lib/playbook): a procedure resolved from the playbook library to its current approved release. */
 export type PlaybookBlock = Base & { type: "playbook" } & PlaybookBlockData;
-/** Document Auditor (lib/auditor): a fictional contractor pack or invoice, inspected and marked, then Approve, Query or Reject current submission. */
+/**
+  Document Auditor and Contractor Vetting Card (lib/auditor, lib/auditorVetting): a fictional contractor pack or invoice,
+  inspected and marked, then one of four proportionate outcomes (ready for engagement review, request evidence,
+  escalate, cannot engage as proposed). Older blocks' Approve, Query and Reject are read as the new codes.
+*/
 export type AuditorBlock = Base & { type: "auditor" } & AuditorBlockData;
 /** Tough Phone Call (lib/phonecall): a telephone preset of the conversational roleplay, with case tools, a privacy gate and a 0 to 3 debrief. */
 export type PhoneCallBlock = Base & { type: "phonecall" } & PhoneCallData;
 /** Budget Sandbox (lib/sandbox): a Support at Home care plan built with a fictional participant, its quarterly ledger, and an explanation to them. */
 export type SandboxBlock = Base & { type: "sandbox" } & SandboxBlockData;
+/** Hiring Runway Decision Lab (lib/hiringRunway): a fictional Care Partner business's hiring decision, compared across capacity, operating result and cash, then revised after new information. */
+export type HiringBlock = Base & { type: "hiring" } & HiringLabData;
+/** One Day, Five Perspectives (lib/oneDay): a fictional coordinator's working day in five lanes, with role lenses kept apart from what the coordinator knows, commitments and a deterministic debrief. */
+export type OneDayBlock = Base & { type: "onedaymap" } & OneDayData;
+/** Growth readiness: can a Care Partner take on the next starts (docs/growth-readiness.md). */
+export type IntakeBlock = Base & { type: "intake" } & IntakeLabData;
+/** The Workload Lens: where a coordinator's week goes, before deciding what to change (docs/workload-lens.md). */
+export type WorkloadBlock = Base & { type: "workload" } & WorkloadLabData;
+/** Local Coverage Comparison: is a suburb ready for growth, by service, place and time window (docs/suburb-growth.md). */
+export type CoverageBlock = Base & { type: "coverage" } & CoverageLabData;
+/** Referral Journey Calculator: which referrals become active clients, by arrival cohort and stage (docs/referral-journey.md). */
+export type ReferralBlock = Base & { type: "referral" } & ReferralLabData;
+/** Service Reliability Calculator: what a missed service costs in care, workload and money, and whether reliability comes before more leads (docs/service-reliability.md). */
+export type ReliabilityBlock = Base & { type: "reliability" } & ReliabilityLabData;
+/** 90-Day Cash Bridge: can a partner business fund the next 90 days, read date by date (docs/cash-bridge.md). */
+export type CashBridgeBlock = Base & { type: "cashbridge" } & CashBridgeLabData;
+/** "What Would You Do?" Community Case Thread: a private first take, then one canonical moderated discussion shared with the Community page (docs/case-threads.md). */
+export type CaseThreadBlock = Base & { type: "casethread" } & CaseThreadData;
+/** Quarterly Budget Decision Lab: a fictional participant late in a Support at Home quarter, current versus projected, and a plan she agrees with (docs/budget-decision-lab.md). */
+export type BudgetLabBlock = Base & { type: "budgetlab" } & BudgetLabData;
+/** Spot the Hazard: a drawn room to scan, with approved variants chosen per attempt on the server (docs/spot-the-hazard.md). */
+export type HazardScanBlock = Base & { type: "hazardscan" } & HazardScanData;
+/** The 72-Hour Discharge Pivot: a time-aware triage simulation of a participant's return home from hospital, replayed on the server (docs/discharge-pivot.md). */
+export type DischargeBlock = Base & { type: "discharge" } & DischargeData;
+/**
+  One of the Hub's own reviewed diagrams, placed in an article so it can be explained around: the client journey map
+  (its feeling curve and road), or a partner model's who-does-what onboarding diagram. The diagram's content lives
+  with the diagram (content/journey.ts, content/partnerOnboarding.ts), so every article showing it stays current.
+*/
+export const HUB_VISUALS = {
+  "client-journey": "The client journey map, from enquiry to exit",
+  "onboarding-p1": "Partner onboarding: referring partner (P1)",
+  "onboarding-brokered": "Partner onboarding: brokered partner",
+  "onboarding-coordinator": "Partner onboarding: coordinator managed",
+} as const;
+export type HubVisualKind = keyof typeof HUB_VISUALS;
+export type HubVisualBlock = Base & { type: "hubvisual"; visual: HubVisualKind; caption?: string };
 export type BlockType = Block["type"];
 export type Section = { id: string; title: string; blocks: Block[] };
+/** A chapter marker on the page that starts it: its title, and an optional short introduction. */
+export type PageChapter = { title: string; intro?: string };
 /**
   A page of the course: an article with a purpose and a teaching pattern, or an assessment page that
   holds the Hub's quiz. Required pages count towards completion; optional ones don't.
@@ -546,6 +727,11 @@ export type Page = {
     Discovery Path and it can be suggested for a goal. Off, only the whole course is offered.
   */
   standalone?: true;
+  /**
+    This page starts a chapter (lib/magazineChapters): the chapter runs to the page before the next one that starts a
+    chapter. A course with no chapter markers has no chapters, and reads as before.
+  */
+  chapter?: PageChapter;
   hero?: Media;
   /** The page's spoken introduction (Audio Guide). */
   narration?: Narration;
@@ -624,7 +810,15 @@ export type PracticeItem = {
   source?: string;
 };
 export type SelfReview = { enabled: boolean; items: PracticeItem[] };
-export type GuideDoc = { schema: typeof GUIDE_SCHEMA; pages: Page[]; audio?: GuideAudio; review?: SelfReview; relay?: RelayCourse };
+export type GuideDoc = {
+  schema: typeof GUIDE_SCHEMA;
+  pages: Page[];
+  audio?: GuideAudio;
+  review?: SelfReview;
+  relay?: RelayCourse;
+  /** Browsing tags set by the author (roles and goals); see guideTags. */
+  tags?: GuideTags;
+};
 
 /**
   Whether the reader has worked through a block: null for blocks that are only read (text, pictures,
@@ -736,10 +930,23 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   baton: "Pass the Baton relay",
   redpen: "Red Pen critique",
   mentor: "Notes to a Younger Me deck",
-  playbook: "Live SOP playbook",
-  auditor: "Document Auditor",
+  playbook: "Job Aid",
+  auditor: "Contractor Vetting Card / Document Auditor",
   phonecall: "Tough Phone Call",
   sandbox: "Budget Sandbox",
+  hiring: "Hiring Runway Decision Lab",
+  onedaymap: "One Day, Five Perspectives",
+  intake: "Growth readiness",
+  workload: "Workload Lens",
+  coverage: "Local Coverage Comparison",
+  referral: "Referral Journey Calculator",
+  reliability: "Service Reliability Calculator",
+  cashbridge: "90-Day Cash Bridge",
+  casethread: "What Would You Do? case thread",
+  budgetlab: "Quarterly Budget Decision Lab",
+  hazardscan: "Spot the Hazard",
+  discharge: "72-Hour Discharge Pivot",
+  hubvisual: "Hub diagram",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
 
@@ -1649,6 +1856,35 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "auditor", ...parseAuditor(o, where, { str, idOf, list, unfinished }) };
       case "sandbox":
         return { ...base, type: "sandbox", ...parseSandbox(o, where, { str, idOf, list, unfinished }) };
+      case "hiring":
+        return { ...base, type: "hiring", ...parseHiringLab(o, where, { str, idOf, list, unfinished }) };
+      case "onedaymap":
+        return { ...base, type: "onedaymap", ...parseOneDay(o, where, { str, idOf, list, unfinished }) };
+      case "intake":
+        return { ...base, type: "intake", ...parseIntakeLab(o, where, { str, unfinished }) };
+      case "workload":
+        return { ...base, type: "workload", ...parseWorkloadLab(o, where, { str, unfinished }) };
+      case "coverage":
+        return { ...base, type: "coverage", ...parseCoverageLab(o, where, { str, unfinished }) };
+      case "referral":
+        return { ...base, type: "referral", ...parseReferralLab(o, where, { str, unfinished }) };
+      case "reliability":
+        return { ...base, type: "reliability", ...parseReliabilityLab(o, where, { str, unfinished }) };
+      case "cashbridge":
+        return { ...base, type: "cashbridge", ...parseCashBridgeLab(o, where, { str, unfinished }) };
+      case "casethread":
+        return { ...base, type: "casethread", ...parseCaseThread(o, where, { str, list, unfinished }) };
+      case "budgetlab":
+        return { ...base, type: "budgetlab", ...parseBudgetLab(o, where, { str, unfinished }) };
+      case "hazardscan":
+        return { ...base, type: "hazardscan", ...parseHazardScan(o, where, { str, unfinished }) };
+      case "discharge":
+        return { ...base, type: "discharge", ...parseDischarge(o, where, { str, unfinished }) };
+      case "hubvisual": {
+        const visual = typeof o.visual === "string" && o.visual in HUB_VISUALS ? (o.visual as HubVisualKind) : "client-journey";
+        const caption = str(o.caption, `${where} caption`, { max: 300 });
+        return { ...base, type: "hubvisual", visual, ...(caption ? { caption } : {}) };
+      }
       case "phonecall": {
         const roleplay = readRoleplay(o.roleplay, `${where} call`);
         if (!roleplay) unfinished(`${where} needs its call: the caller, the scene and what’s worth doing.`);
@@ -1766,8 +2002,19 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     if (!sections.length) unfinished(`${where} needs at least one section.`);
     const hero = p?.hero ? media(p.hero, `${where} hero`) : undefined;
     const template = typeof p?.template === "string" && p.template in PAGE_TEMPLATES ? (p.template as PageTemplate) : "blank";
+    // A chapter marker: kept when it's there, with a title (needed to publish) and an optional introduction.
+    let chapter: PageChapter | undefined;
+    if (p?.chapter != null) {
+      if (typeof p.chapter !== "object" || Array.isArray(p.chapter)) problems.push(`${where} chapter should be a title and an optional introduction.`);
+      else {
+        const c = p.chapter as Record<string, unknown>;
+        const intro = str(c.intro, `${where} chapter introduction`, { max: 600 });
+        chapter = { title: str(c.title, `${where} chapter title`, { required: true, max: 120 }) ?? "", ...(intro && { intro }) };
+      }
+    }
     return {
       id,
+      ...(chapter && { chapter }),
       title: str(p?.title, `${where} title`, { max: 120 }) ?? "",
       purpose: str(p?.purpose, `${where} purpose`, { max: 400 }) ?? "",
       template,
@@ -1834,7 +2081,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     return { enabled: o.enabled === true, items };
   };
 
-  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown; review?: unknown; relay?: unknown };
+  let doc = (value ?? {}) as { schema?: unknown; sections?: unknown; pages?: unknown; audio?: unknown; review?: unknown; relay?: unknown; tags?: unknown };
   // Schema 1: one list of sections. It becomes a one-page course.
   if (doc.schema === 1 && Array.isArray(doc.sections))
     doc = {
@@ -1849,6 +2096,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
   const audio = audioSettings(doc.audio);
   const review = selfReview(doc.review);
   const relay = cleanRelayCourse(doc.relay);
+  const tags = cleanTags(doc.tags);
   if (problems.length) throw new GuideDocError(problems);
   return {
     schema: GUIDE_SCHEMA,
@@ -1856,6 +2104,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     ...(audio && { audio }),
     ...(review && (review.enabled || review.items.length) && { review }),
     ...(relay && { relay }),
+    ...(tags && { tags }),
   };
 }
 
@@ -2031,6 +2280,8 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
   const relay = relayChecks(doc.relay, doc.pages);
   blocking.push(...relay.blocking);
   suggestions.push(...relay.suggestions);
+  // Emphasised text: short phrases, a few to a page, in story text, never pointing at an answer (lib/emphasis).
+  suggestions.push(...emphasisChecks(doc, (b) => BLOCK_LABELS[b.type].toLowerCase()));
   if (doc.audio?.intro) {
     const n = doc.audio.intro;
     if (n.status === "approved" && n.audio && narrationState({ ...n, basis: undefined }, { hash: "", key: "", sig: [] }, doc.audio) === "rerecord")
@@ -2108,6 +2359,19 @@ export function pageMinutes(page: Page) {
     if (b.type === "auditor") extra += 10;
     if (b.type === "phonecall") extra += 6;
     if (b.type === "sandbox") extra += 12;
+    if (b.type === "hiring") extra += 15;
+    if (b.type === "onedaymap") extra += 20;
+    if (b.type === "intake") extra += 20;
+    if (b.type === "workload") extra += 20;
+    if (b.type === "coverage") extra += 20;
+    if (b.type === "referral") extra += 20;
+    if (b.type === "reliability") extra += 20;
+    if (b.type === "cashbridge") extra += 25;
+    if (b.type === "casethread") extra += 12;
+    if (b.type === "budgetlab") extra += 15;
+    if (b.type === "hazardscan") extra += 5;
+    if (b.type === "discharge") extra += 20;
+    if (b.type === "hubvisual") extra += b.visual === "client-journey" ? 5 : 2;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;
   }

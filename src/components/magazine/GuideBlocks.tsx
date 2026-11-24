@@ -651,7 +651,7 @@ function Quiz({ intro, quiz }: { intro?: string; quiz: QuizState }) {
               href={`/paths/${quiz.pathId}`}
               className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
             >
-              {quiz.available ? "Take the quiz" : "Open the learning path"} <Icon name="arrow-right" className="size-4" />
+              {quiz.available ? "Take the quiz" : "Open the Discovery Path"} <Icon name="arrow-right" className="size-4" />
             </Link>
           )}
           {quiz.passMark != null && !quiz.passed && <p className="mt-2 text-sm text-ink-muted">Pass mark: {quiz.passMark}%.</p>}

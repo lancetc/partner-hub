@@ -46,3 +46,19 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Images and media stay on this computer, not on GitHub: the repository holds code only.
+# (The app's own icons in src/app are kept.)
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.avif
+*.mp4
+*.mp3
+*.webm
+*.wav
+*.m4a
+*.mov
+!/src/app/*.png

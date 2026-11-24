@@ -13,19 +13,23 @@ import { Icon } from "./Icon";
   The page stands alone on white: the logo, the scene, one line and one button. It stays white in the dark
   theme too, because the scene is painted onto white (globals.css hides the footer here).
 
-  Three small touches, all in globals.css under "The sign-in page":
+  A few small touches, all in globals.css under "The sign-in page":
   - the page arrives: the scene rises into place, then the heading, then the button;
   - the lights come on at dusk, one after another, and keep a slow glow;
-  - signing in walks you in: the office doorway brightens, the scene eases towards it, and the Hub's own
-    homepage build-up takes over.
+  - the button shimmers very slowly, and pulses when the pointer is on it;
+  - signing in, the page falls away part by part (data-fall: the button first, the logo last), then the Hub's
+    homepage falls into place from the top;
+  - hidden hotspots in the scene show a pulsing dot and a note about the Hub when a pointer finds them.
   Anyone who has asked their device for less motion gets the page still, with the lights simply on.
 */
 
 const DEMO_ACCOUNT = "jordan";
 const INK = "text-[#102a43]";
 const MUTED = "text-[#3d5068]";
-/** How long the walk-in takes before the Hub opens, when the device allows motion. */
-const WALK_IN_MS = 900;
+/** How long the page takes to fall away before the Hub opens (the last part's delay plus its fall). */
+const FALL_MS = 1250;
+/** Each part's place in the fall, and its tilt as it drops. */
+const fall = (n: number, tilt: number) => ({ "--fall": n, "--tilt": `${tilt}deg` }) as React.CSSProperties;
 
 /**
   Where each light is in the scene, as a percentage of its width and height, how big its glow is (percent of the
@@ -42,6 +46,43 @@ const LAMPS = [
   { x: 89, y: 71, size: 6, on: 1.6 }, // the up-light by the office garden
 ];
 
+/**
+  Hidden hotspots over the scene (globals.css, .signin-hotspot). Nothing shows until a pointer finds one; then a
+  soft pulsing dot appears with a short note on what the Hub does. Places are percentages of the scene, read off
+  the picture; `tip` says which way the note opens so it stays on screen at the edges. They're for pointers only:
+  screen readers get the same notes as a list below the scene, and keyboard users go straight to the button.
+*/
+const HOTSPOTS = [
+  {
+    x: 28.5,
+    y: 49,
+    tip: "start",
+    title: "Learn from real visits",
+    text: "Short topics built around the clients you see, to finish between visits.",
+  }, // the older woman and her carer on the verandah
+  {
+    x: 53,
+    y: 58,
+    tip: "center",
+    title: "A path for every role",
+    text: "Discovery Paths take Care Partners, gardeners and cleaners step by step to a certificate.",
+  }, // the team lined up on the path
+  {
+    x: 74,
+    y: 61,
+    tip: "end",
+    title: "Learn from each other",
+    text: "The Community connects Care Partners and coordinators across Australia.",
+  }, // the coordinator welcoming them at the door
+  {
+    x: 84,
+    y: 30,
+    tip: "end",
+    title: "Answers when you need them",
+    text: "Ask Trilogy finds guides, templates and contacts in seconds.",
+  }, // the lit office
+] as const;
+
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function SignIn() {
@@ -54,12 +95,9 @@ export function SignIn() {
     try {
       // Nothing kept for offline use stays from whoever used this device before.
       await clearOfflineData().catch(() => {});
-      // The walk-in plays while the sign-in happens; whichever takes longer sets when the Hub opens.
-      await Promise.all([
-        api("/api/demo/session", { body: { userId: DEMO_ACCOUNT } }),
-        new Promise((done) => setTimeout(done, reducedMotion() ? 0 : WALK_IN_MS)),
-      ]);
-      // The homepage builds itself from the top down once (see buildScript in app/layout).
+      // The page falls away while the sign-in happens; whichever takes longer sets when the Hub opens.
+      await Promise.all([api("/api/demo/session", { body: { userId: DEMO_ACCOUNT } }), new Promise((done) => setTimeout(done, reducedMotion() ? 0 : FALL_MS))]);
+      // The homepage falls into place from the top once (see buildScript in app/layout).
       try {
         sessionStorage.setItem("tc-build", "1");
       } catch {}
@@ -85,8 +123,9 @@ export function SignIn() {
         width={1789}
         height={576}
         priority
+        data-fall
         className="signin-rise signin-fade h-10 w-auto sm:h-12"
-        style={{ "--delay": "0.05s" } as React.CSSProperties}
+        style={{ "--delay": "0.05s", ...fall(4, 3) } as React.CSSProperties}
       />
 
       <div className="my-auto flex w-full max-w-5xl flex-col items-center py-6">
@@ -94,7 +133,11 @@ export function SignIn() {
           Edge to edge on a phone, where the page's side margin would otherwise shrink the scene further. Hovering it
           with a mouse zooms it in very slowly (globals.css, .signin-stage).
         */}
-        <div className="signin-rise signin-stage -mx-4 w-[calc(100%+2rem)] sm:mx-0 sm:w-full" style={{ "--delay": "0.15s" } as React.CSSProperties}>
+        <div
+          data-fall
+          className="signin-rise signin-stage -mx-4 w-[calc(100%+2rem)] sm:mx-0 sm:w-full"
+          style={{ "--delay": "0.15s", ...fall(3, -1.5) } as React.CSSProperties}
+        >
           <div className="signin-scene relative isolate">
             <Image
               src="/brand/login-scene.webp"
@@ -113,27 +156,48 @@ export function SignIn() {
                 style={{ left: `${l.x}%`, top: `${l.y}%`, width: `${l.size}%`, "--on": `${l.on}s` } as React.CSSProperties}
               />
             ))}
-            {/* The open office door: a soft glow at rest, and where the walk-in heads when you sign in. */}
+            {/* The open office door: a soft glow at rest. */}
             <span aria-hidden className="signin-door" style={{ left: "79.6%", top: "55%", width: "9%", height: "42%" }} />
+            {HOTSPOTS.map((h) => (
+              <span key={h.title} aria-hidden data-tip={h.tip} className="signin-hotspot" style={{ left: `${h.x}%`, top: `${h.y}%` } as React.CSSProperties}>
+                <span className="signin-hotspot-dot" />
+                <span className="signin-hotspot-tip">
+                  <strong className="block font-semibold text-[#102a43]">{h.title}</strong>
+                  <span className="mt-0.5 block text-[#3d5068]">{h.text}</span>
+                </span>
+              </span>
+            ))}
           </div>
         </div>
+        <ul className="sr-only">
+          {HOTSPOTS.map((h) => (
+            <li key={h.title}>
+              {h.title}: {h.text}
+            </li>
+          ))}
+        </ul>
         <h1
+          data-fall
           className="signin-rise signin-fade mt-4 text-center font-serif text-4xl font-semibold tracking-tight sm:text-5xl"
-          style={{ "--delay": "0.45s" } as React.CSSProperties}
+          style={{ "--delay": "0.45s", ...fall(2, 2) } as React.CSSProperties}
         >
           Partner Hub
         </h1>
-        <p className={`signin-rise signin-fade mt-2 text-center text-lg ${MUTED}`} style={{ "--delay": "0.55s" } as React.CSSProperties}>
+        <p
+          data-fall
+          className={`signin-rise signin-fade mt-2 text-center text-lg ${MUTED}`}
+          style={{ "--delay": "0.55s", ...fall(1, -2.5) } as React.CSSProperties}
+        >
           Learn, share and stay up to date.
         </p>
 
-        {/* The rise is on the wrapper so the button's own squish and nudge (globals.css, .signin-cta) don't fight it. */}
-        <div className="signin-rise mt-8" style={{ "--delay": "0.7s" } as React.CSSProperties}>
+        {/* The rise and the fall are on the wrapper so the button's own squish and pulse (globals.css, .signin-cta) don't fight them. */}
+        <div data-fall className="signin-rise mt-8" style={{ "--delay": "0.7s", ...fall(0, 4) } as React.CSSProperties}>
           <button
             type="button"
             onClick={signIn}
             disabled={busy}
-            className="signin-cta inline-flex min-h-14 items-center gap-3 rounded-full bg-[#0e7c7b] px-8 text-lg font-semibold text-white shadow-sm hover:bg-[#0a6463] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0e7c7b] disabled:opacity-90"
+            className="signin-cta relative isolate inline-flex min-h-14 items-center gap-3 overflow-hidden rounded-full bg-[#0e7c7b] px-8 text-lg font-semibold text-white shadow-sm hover:bg-[#0a6463] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0e7c7b] disabled:opacity-90"
           >
             {busy ? "Signing you in…" : "Sign in with Trilogy Care"}
             <Icon name="arrow-right" className="signin-cta-arrow size-5" />

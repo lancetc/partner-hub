@@ -10,6 +10,7 @@ import { PressSounds } from "@/components/PressSounds";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { ConfirmHost } from "@/components/ConfirmHost";
 import { BackdropLayer } from "@/components/BackdropLayer";
+import { daypartScript } from "@/lib/homeScenes";
 import "./globals.css";
 
 const robotoFlex = Roboto_Flex({ variable: "--font-roboto-flex", subsets: ["latin"], display: "swap" });
@@ -49,6 +50,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: buildScript }} />
+        {/* The homepage cover's picture for the visitor's time of day, chosen before the page draws (lib/homeScenes). */}
+        <script dangerouslySetInnerHTML={{ __html: daypartScript }} />
       </head>
       <body className="min-h-dvh bg-bg pb-20 text-ink lg:pb-0">
         <a href="#main" className="sr-only z-50 rounded-lg bg-action px-4 py-2 text-on-action focus:not-sr-only focus:fixed focus:left-4 focus:top-4">

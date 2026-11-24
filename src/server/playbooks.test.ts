@@ -73,10 +73,18 @@ beforeEach(() => {
 });
 
 describe("releasing", () => {
-  it("starts unreleased: readers get the fallback, and a course can't publish it, even with Publish anyway", () => {
-    expect(resolveSnippet(db, riley, SIRS, now)).toMatchObject({ readiness: "fallback", release: null, fallback: { text: expect.stringMatching(/call 000/) } });
+  it("starts unreleased: hidden from readers, and a course can still publish it", () => {
+    expect(resolveSnippet(db, riley, SIRS, now)).toMatchObject({
+      readiness: "fallback",
+      unreleased: true,
+      release: null,
+      fallback: { text: expect.stringMatching(/call 000/) },
+    });
     const c = createGuide(db, jordan, { title: "Incidents", completion: "confirm", doc: { schema: 2, pages: pages(SIRS) } }, now);
-    expect(() => publishGuide(db, jordan, c.id, "", now, { allowUnverified: true })).toThrow(/playbook block needs an approved release/);
+    expect(() => publishGuide(db, jordan, c.id, "", now, { allowUnverified: true })).not.toThrow();
+    // A Job Aid that isn't in the library still stops it.
+    const bad = createGuide(db, jordan, { title: "Broken", completion: "confirm", doc: { schema: 2, pages: pages("no-such-aid") } }, now);
+    expect(() => publishGuide(db, jordan, bad.id, "", now, { allowUnverified: true })).toThrow(/isn’t in the library/);
   });
 
   it("won't approve without configured contacts, the right sign-offs, or with a typed-in phone number", () => {

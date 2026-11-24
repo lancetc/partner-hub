@@ -194,7 +194,7 @@ const SORTS = {
   za: "Title Z–A",
   // Sorts by track; the id stays "audience" so a sort people already chose is remembered.
   audience: "Track",
-  path: "Learning path",
+  path: "Discovery Path",
   shortest: "Shortest first",
   longest: "Longest first",
 } as const;

@@ -16,7 +16,10 @@ import { PexelsPicker, uploadImage } from "./LessonEditor";
 */
 
 export type Picture = { src: string; width: number; height: number };
-type Upload = Picture & { name: string; uploadedAt?: string };
+/** A library picture: its file name, and the title and description (alt text) written for it in the image library. */
+type Upload = Picture & { name: string; title?: string; alt?: string; uploadedAt?: string };
+/** A picked picture, with its library description when it has one, offered as its alt text where it’s placed. */
+export type PickedPicture = Picture & { alt?: string };
 
 /** Uploads the first image file in a drop or file picker, reporting progress and problems. */
 function useUpload(onDone: (p: Picture) => void) {
@@ -39,12 +42,22 @@ function useUpload(onDone: (p: Picture) => void) {
 }
 
 /** The image library, big enough to see what each picture is, with search and an upload tile. */
-export function ImageLibraryDialog({ open, onClose, onPick, current }: { open: boolean; onClose: () => void; onPick: (p: Picture) => void; current?: string }) {
+export function ImageLibraryDialog({
+  open,
+  onClose,
+  onPick,
+  current,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (p: PickedPicture) => void;
+  current?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const [q, setQ] = useState("");
   const [over, setOver] = useState(false);
   const { data, error: loadError } = useApi<{ uploads: Upload[] }>(open ? "/api/admin/uploads" : null);
-  const pick = (p: Picture) => {
+  const pick = (p: PickedPicture) => {
     onPick(p);
     onClose();
   };
@@ -55,7 +68,11 @@ export function ImageLibraryDialog({ open, onClose, onPick, current }: { open: b
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
   }, [open]);
-  const shown = useMemo(() => (data?.uploads ?? []).filter((u) => !q.trim() || u.name.toLowerCase().includes(q.trim().toLowerCase())), [data, q]);
+  // Search looks through each picture’s title, description and file name.
+  const shown = useMemo(() => {
+    const words = q.trim().toLowerCase();
+    return (data?.uploads ?? []).filter((u) => !words || [u.title ?? "", u.alt ?? "", u.name].some((t) => t.toLowerCase().includes(words)));
+  }, [data, q]);
 
   return (
     <dialog
@@ -114,7 +131,8 @@ export function ImageLibraryDialog({ open, onClose, onPick, current }: { open: b
               <li key={u.src}>
                 <button
                   type="button"
-                  onClick={() => pick(u)}
+                  onClick={() => pick({ src: u.src, width: u.width, height: u.height, ...(u.alt ? { alt: u.alt } : {}) })}
+                  title={u.alt || u.title || u.name}
                   className={cx(
                     "group block w-full overflow-hidden rounded-2xl bg-surface text-left ring-2 transition-shadow",
                     current === u.src ? "ring-action" : "ring-line hover:ring-line-strong",
@@ -128,7 +146,7 @@ export function ImageLibraryDialog({ open, onClose, onPick, current }: { open: b
                     )}
                   </span>
                   <span className="block truncate px-2.5 py-2 text-xs">
-                    <span className="font-semibold">{u.name}</span>
+                    <span className="font-semibold">{u.title || u.name}</span>
                     <span className="text-ink-muted">
                       {" "}
                       · {u.width}×{u.height}
@@ -269,7 +287,13 @@ export function PictureActions({
           </button>
         )}
       </div>
-      <ImageLibraryDialog open={library} onClose={() => setLibrary(false)} onPick={onChange} current={picture?.src} />
+      {/* A library picture brings its description with it, as the alt text to start from. */}
+      <ImageLibraryDialog
+        open={library}
+        onClose={() => setLibrary(false)}
+        onPick={(p) => onChange({ src: p.src, width: p.width, height: p.height }, undefined, p.alt)}
+        current={picture?.src}
+      />
       {pexels && (
         <Overlay>
           <div

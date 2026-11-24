@@ -233,6 +233,8 @@ export function resolveSnippet(db: Db, user: User, id: unknown, now: Date) {
     links: sn.links,
     tag: sn.tag,
     readiness: ready,
+    /** Never approved (not withdrawn): a course can carry it, but learners don't see it until its first release. */
+    unreleased: !current && !row.withdrawn,
     withdrawnReason: row.withdrawn ? row.withdrawn_reason : "",
     release:
       ready === "fallback" || !current
@@ -775,12 +777,11 @@ export function placeableSnippets(db: Db, actor: User, now: Date) {
 }
 
 /** Checked at publish: a playbook block must point at a snippet with an approved release, not withdrawn. */
-export function playbookBlockProblems(db: Db, snippetId: string, now: Date): string[] {
+/**
+  What stops a course carrying a Job Aid: only one that isn't in the library. One not yet approved is hidden from
+  learners until its first release (and a withdrawn one shows its fallback), so neither holds the course back.
+*/
+export function playbookBlockMissing(db: Db, snippetId: string, now: Date): string[] {
   ensurePlaybooks(db, now);
-  const row = snippetRow(db, snippetId);
-  if (!row) return [`The playbook “${snippetId}” isn’t in the library.`];
-  const sn = cleanSnippet(JSON.parse(row.data));
-  if (!approved(db, snippetId)) return [`“${sn.title}” has no approved release yet.`];
-  if (row.withdrawn) return [`“${sn.title}” is withdrawn.`];
-  return [];
+  return snippetRow(db, snippetId) ? [] : [`The Job Aid “${snippetId}” isn’t in the library.`];
 }

@@ -28,7 +28,7 @@ export function OfflineLessons() {
       ) : (
         <>
           <p className="mt-1 text-ink-muted">
-            Topics saved on this device open without a connection. Use <strong>Download for offline</strong> on a topic or learning path. Anything you do
+            Topics saved on this device open without a connection. Use <strong>Download for offline</strong> on a topic or Discovery Path. Anything you do
             offline is saved here and syncs when you’re back online.
           </p>
           {downloads.length ? (

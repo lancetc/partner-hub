@@ -27,8 +27,16 @@ export type StudioSaved = {
   transcript: string;
   trim?: { start: number; end: number };
   recording: VideoRecording;
+  /**
+    Vertical (9:16): the part of the frame to show, as the horizontal centre in % of the width. Not re-encoded:
+    the recording is kept whole and the player shows this window of it, so the crop can be moved later.
+  */
+  crop?: { aspect: "9:16"; x: number };
 };
 type Mode = VideoRecording["mode"];
+type Shape = "wide" | "vertical";
+/** A 9:16 window's width as a share of a 16:9 frame: (9/16) / (16/9). */
+const VERTICAL_SHARE = 81 / 256;
 type Stage = "setup" | "countdown" | "recording" | "paused" | "review" | "saving";
 type Clip = { blob: Blob; url: string; seconds: number };
 type Device = { id: string; label: string };
@@ -93,12 +101,19 @@ const deviceError = (e: unknown) => {
 export function RecordingStudio({
   guideId,
   blockId,
+  initialScript = "",
+  vertical = false,
   upload,
   onSaved,
   onClose,
 }: {
-  guideId: string;
-  blockId: string;
+  /** Offer a vertical (9:16) shape for camera recordings, cropped from the frame (Topic cards fill the screen with one). */
+  vertical?: boolean;
+  /** A Magazine course and block: Claude can draft the script from its page. Without them (a Topic card) the script is typed or pasted. */
+  guideId?: string;
+  blockId?: string;
+  /** What the teleprompter starts with, such as a Topic card's own words. */
+  initialScript?: string;
   upload: (file: File, kind: "video" | "captions" | "image") => Promise<string>;
   onSaved: (saved: StudioSaved) => void;
   onClose: () => void;
@@ -126,12 +141,16 @@ export function RecordingStudio({
 
   // Review.
   const [trim, setTrim] = useState({ start: 0, end: 0 });
+  // Vertical: framed with a guide while recording, then the window moved left or right in review.
+  const [shape, setShape] = useState<Shape>("wide");
+  const [cropX, setCropX] = useState(50);
+  const isVertical = vertical && shape === "vertical" && mode === "camera";
   const [poster, setPoster] = useState<{ blob: Blob; url: string } | null>(null);
   const [consent, setConsent] = useState(false);
   const [saveStep, setSaveStep] = useState("");
 
   // Teleprompter.
-  const [script, setScript] = useState("");
+  const [script, setScript] = useState(initialScript);
   const [length, setLength] = useState(60);
   const [notes, setNotes] = useState("");
   const [writing, setWriting] = useState(false);
@@ -557,6 +576,7 @@ export function RecordingStudio({
         transcript: transcript.trim(),
         ...(trimmed && { trim: { start: Math.round(trim.start * 10) / 10, end: Math.round(trim.end * 10) / 10 } }),
         recording: { mode, at: new Date().toISOString(), seconds: clip.seconds, consent: true },
+        ...(isVertical && { crop: { aspect: "9:16" as const, x: Math.round(cropX) } }),
       });
     } catch (e) {
       setProblem((e as Error).message);
@@ -565,6 +585,7 @@ export function RecordingStudio({
   }
 
   async function writeScript() {
+    if (!guideId) return;
     setWriting(true);
     setProblem(null);
     try {
@@ -651,6 +672,35 @@ export function RecordingStudio({
               ))}
             </div>
 
+            {vertical && mode === "camera" && (
+              <div role="radiogroup" aria-label="Shape" className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold">Shape</span>
+                {(
+                  [
+                    ["wide", "Wide 16:9", "Sits above the card’s text"],
+                    ["vertical", "Vertical 9:16", "Fills the whole card, like a phone video"],
+                  ] as const
+                ).map(([s, label, hint]) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="radio"
+                    aria-checked={shape === s}
+                    title={hint}
+                    disabled={recordingNow || stage === "countdown"}
+                    onClick={() => setShape(s)}
+                    className={cx(
+                      "min-h-9 rounded-full border-2 px-3.5 font-semibold disabled:opacity-60",
+                      shape === s ? "border-action bg-tealtint" : "border-line-strong hover:bg-muted",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {isVertical && <span className="text-ink-muted">Keep yourself inside the frame. You can move the crop afterwards.</span>}
+              </div>
+            )}
+
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
               <div className="flex flex-col gap-3">
                 <div className="relative overflow-hidden rounded-2xl bg-black">
@@ -661,6 +711,14 @@ export function RecordingStudio({
                     className={cx("aspect-video w-full object-contain", mode === "camera" && "-scale-x-100")}
                     aria-label="Camera preview"
                   />
+                  {isVertical && (
+                    // The 9:16 window learners will see, centred; outside it is dimmed.
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-md border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
+                      style={{ width: `${VERTICAL_SHARE * 100}%` }}
+                    />
+                  )}
                   {mode === "screen" && !sharing && ready && (
                     <div className="absolute inset-0 grid place-items-center bg-black/60 p-4 text-center text-white">
                       <div>
@@ -820,7 +878,9 @@ export function RecordingStudio({
                   {script ? (
                     <p className="whitespace-pre-line pb-[60%]">{script}</p>
                   ) : (
-                    <p className="text-base">Write or paste what you’ll say, or let Claude draft it from this page.</p>
+                    <p className="text-base">
+                      {guideId ? "Write or paste what you’ll say, or let Claude draft it from this page." : "Write or paste what you’ll say."}
+                    </p>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
@@ -857,33 +917,39 @@ export function RecordingStudio({
                       placeholder="What you’ll say"
                       aria-label="Teleprompter script"
                     />
-                    <div className="mt-2 flex flex-wrap items-end gap-2">
-                      <label className="flex flex-col gap-1 text-xs font-semibold">
-                        Length
-                        <select
-                          className="min-h-9 rounded-lg border border-line-strong bg-surface px-2 font-normal"
-                          value={length}
-                          onChange={(e) => setLength(Number(e.target.value))}
-                        >
-                          {SCRIPT_LENGTHS.map((l) => (
-                            <option key={l.s} value={l.s}>
-                              {l.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <input
-                        className="min-h-9 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2 text-sm"
-                        placeholder="Anything to cover (optional)"
-                        aria-label="Notes for the script"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                      />
-                      <button type="button" className={btn.secondary} onClick={() => void writeScript()} disabled={writing}>
-                        <Icon name="spark" className="size-4" /> {writing ? "Writing…" : script ? "Draft again" : "Draft with Claude"}
-                      </button>
-                    </div>
-                    <p className="mt-1 text-xs text-ink-muted">Claude drafts from what this page says. Read it through and make it sound like you.</p>
+                    {guideId && (
+                      <div className="mt-2 flex flex-wrap items-end gap-2">
+                        <label className="flex flex-col gap-1 text-xs font-semibold">
+                          Length
+                          <select
+                            className="min-h-9 rounded-lg border border-line-strong bg-surface px-2 font-normal"
+                            value={length}
+                            onChange={(e) => setLength(Number(e.target.value))}
+                          >
+                            {SCRIPT_LENGTHS.map((l) => (
+                              <option key={l.s} value={l.s}>
+                                {l.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <input
+                          className="min-h-9 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+                          placeholder="Anything to cover (optional)"
+                          aria-label="Notes for the script"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                        />
+                        <button type="button" className={btn.secondary} onClick={() => void writeScript()} disabled={writing}>
+                          <Icon name="spark" className="size-4" /> {writing ? "Writing…" : script ? "Draft again" : "Draft with Claude"}
+                        </button>
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {guideId
+                        ? "Claude drafts from what this page says. Read it through and make it sound like you."
+                        : "It starts with the card’s own words. Change it to sound like you, or paste your own."}
+                    </p>
                   </details>
                 )}
               </section>
@@ -899,11 +965,27 @@ export function RecordingStudio({
                 src={clip.url}
                 controls
                 playsInline
-                className="aspect-video w-full rounded-2xl bg-black"
+                className={cx("rounded-2xl bg-black", isVertical ? "mx-auto aspect-[9/16] max-h-[60vh] w-auto max-w-full object-cover" : "aspect-video w-full")}
+                style={isVertical ? { objectPosition: `${cropX}% 50%` } : undefined}
                 onTimeUpdate={(e) => {
                   if (e.currentTarget.currentTime > trim.end + 0.05) e.currentTarget.pause();
                 }}
               />
+              {isVertical && (
+                <label className="flex flex-col gap-1 rounded-2xl border border-line p-3 text-sm">
+                  <span className="font-semibold">Crop position</span>
+                  <span className="text-xs text-ink-muted">Move the 9:16 window left or right to keep you in view. The full recording is kept.</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={cropX}
+                    onChange={(e) => setCropX(Number(e.target.value))}
+                    aria-valuetext={cropX < 40 ? "Left" : cropX > 60 ? "Right" : "Centre"}
+                    className="accent-[var(--color-action)]"
+                  />
+                </label>
+              )}
               <p className="text-sm text-ink-muted">
                 {clock(clip.seconds)} recorded{trim.start > 0.05 || trim.end < clip.seconds - 0.05 ? `; ${clock(trim.end - trim.start)} after trimming` : ""}.
               </p>

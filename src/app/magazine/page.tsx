@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getDb } from "@/server/db";
 import { canAuthor, currentUser } from "@/server/auth";
 import { learnerGuides } from "@/server/magazine";
+import { guideTags } from "@/lib/magazine";
 import { coursePopularity, learnerCourses } from "@/server/elearning/service";
 import { now } from "@/server/clock";
 import { catalogueTopics } from "@/server/catalogue";
@@ -25,7 +26,7 @@ export default function MagazinePage() {
         eyebrow="Take your time"
         title="Magazine"
         // A colleague settled in at her kitchen table with a laptop and a cup of tea, on the right, with a sunlit wall behind the words.
-        image={{ src: "/images/magazine-reading.webp", width: 1915, height: 821, position: "80% 23%" }}
+        image={{ src: "/images/magazine-reading.webp", width: 1915, height: 821, position: "80% 23%", minHeight: 336 }}
         aside={
           <Suspense>
             <GuideStats />
@@ -52,6 +53,10 @@ async function guides(): Promise<BrowseGuide[]> {
   const magazine: BrowseGuide[] = learnerGuides(db, user, at).map((g) => ({
     id: g.id,
     kind: "magazine",
+    format: g.kind,
+    audience: g.audience,
+    roles: g.tags.roles,
+    goals: g.tags.goals,
     href: `/magazine/${g.slug}`,
     editHref: `/admin/magazine/${g.id}`,
     title: g.title,
@@ -69,6 +74,9 @@ async function guides(): Promise<BrowseGuide[]> {
     return {
       id: c.id,
       kind: "elearning",
+      format: "elearning",
+      audience: [],
+      ...((t) => ({ roles: t.roles, goals: t.goals }))(guideTags(null, [], `${c.title} ${c.description}`)),
       href: `/elearning/${c.id}`,
       editHref: "/admin/elearning",
       title: c.title,

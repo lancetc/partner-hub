@@ -7,6 +7,7 @@ import {
   findCharacter,
   lookFromName,
   normaliseName,
+  portraitAbout,
   portraitPrompt,
   type Character,
   type CharacterRole,
@@ -234,7 +235,13 @@ export async function makePortrait(db: Db, actor: User, id: string) {
   if (!c) return;
   const now = new Date();
   try {
-    const out = await startGeneration(db, actor, { model: "openai", prompt: portraitPrompt(c), aspect: "1:1", quality: "medium", houseStyle: false }, now);
+    // Named and described for the library from the start: "Maya, character portrait", with alt text from her look.
+    const out = await startGeneration(
+      db,
+      actor,
+      { model: "openai", prompt: portraitPrompt(c), aspect: "1:1", quality: "medium", houseStyle: false, about: portraitAbout(c) },
+      now,
+    );
     const src = "photo" in out ? out.photo.src : "";
     if (!src) throw new Error("No picture came back.");
     const at = new Date().toISOString();

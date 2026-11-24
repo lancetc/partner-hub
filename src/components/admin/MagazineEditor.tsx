@@ -9,6 +9,11 @@ import { cx, formatDate, formatDateTime } from "@/lib/format";
 import {
   PULSE_DEFAULTS,
   BLOCK_LABELS,
+  SIMULATION_BLOCKS,
+  GUIDE_GOALS,
+  GUIDE_ROLES,
+  guideTags,
+  type GuideTags,
   videoOf,
   type TextMediaBlock,
   type VideoBlock,
@@ -44,11 +49,12 @@ import { RichEditable } from "./RichEditable";
 import { statusBadge } from "./MagazineAdmin";
 import { TemplatePicker, type TemplateChoice } from "./MagazineTemplates";
 import { MagazineAi } from "./MagazineAi";
-import { AudioGuidePanel, NarrationReview, PageNarrationStrip } from "./MagazineNarration";
+import { AudioGuidePanel, CourseIntroStrip, NarrationReview, PageNarrationStrip } from "./MagazineNarration";
 import { canConvert, convertBlock, convertLoses, CONVERTIBLE, type ConvertibleType } from "@/lib/magazineConvert";
 import { DEFAULT_AUDIO } from "@/lib/magazineNarration";
 import { MagazineRevise, type RevisionChange } from "./MagazineRevise";
 import { SelfReviewManager, SelfReviewPanel } from "./MagazineSelfReview";
+import { ChapterMarker } from "./MagazineChapterMarker";
 import { RelayManager, RelayPanel } from "./MagazineRelay";
 import { GuideEdit, LearningGuideSettings } from "./MagazineGuideEdit";
 import { EmbedPlayer, column } from "../magazine/GuideBlocks";
@@ -67,6 +73,20 @@ import { PHONE_CALLS } from "@/content/phoneCalls";
 import { freshPhoneCall } from "@/lib/phonecall";
 import { freshSandbox } from "@/lib/sandbox";
 import { SANDBOX_CASES } from "@/content/sandboxCases";
+import { freshHiringLab } from "@/lib/hiringRunway";
+import { HIRING_CASES } from "@/content/hiringCases";
+import { ONE_DAY_CASES } from "@/content/oneDayCases";
+import { GROWTH_CASES } from "@/content/growthCases";
+import { WORKLOAD_CASES } from "@/content/workloadCases";
+import { COVERAGE_CASES } from "@/content/coverageCases";
+import { REFERRAL_CASES } from "@/content/referralCases";
+import { RELIABILITY_CASES } from "@/content/reliabilityCases";
+import { BUDGET_LAB_CASES } from "@/content/budgetLabCases";
+import { HAZARD_SCENES } from "@/content/hazardScenes";
+import { DISCHARGE_CASES } from "@/content/dischargeCases";
+import { CASH_BRIDGE_CASES } from "@/content/cashBridgeCases";
+import { CASE_THREAD_CASES } from "@/content/caseThreadCases";
+import { freshCaseThread } from "@/lib/caseThread";
 import { freshReset } from "@/lib/reset";
 import { RESET_CASES } from "@/content/resetCases";
 import { freshLine } from "@/lib/line";
@@ -85,7 +105,7 @@ import { SIGNAL_CASES } from "@/content/signalCases";
 import { InlineText, MediaSlot, RepositionPicture, rid, VERDICT_TONE, type Update } from "./MagazineEditParts";
 import { InteractiveEdit, InteractiveSettings } from "./MagazineInteractiveEdit";
 import { RecordingStudio } from "./RecordingStudio";
-import { MagazineApproval } from "./MagazineApproval";
+import { MagazineApproval, type DemoSignOffState } from "./MagazineApproval";
 
 /*
   The Magazine editor, like the Topics editor: each page drawn as learners see it and edited in place.
@@ -111,6 +131,8 @@ type AuthorGuide = Draft & {
   revisions: { id: string; number: number; summary: string; published_by: string; published_at: string }[];
   finishes: Record<string, number>;
   started: number;
+  /** A demo Hub's stand-in for reviewers' sign-offs (server/demoSignOff). */
+  demoSignOff: DemoSignOffState;
 };
 type PathOption = { id: string; name: string };
 type Selection = { kind: "guide" } | { kind: "section"; id: string } | { kind: "block"; id: string };
@@ -158,6 +180,19 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   auditor: "shield",
   phonecall: "phone",
   sandbox: "money",
+  hiring: "people",
+  onedaymap: "timeline",
+  intake: "gauge",
+  workload: "clock",
+  coverage: "pin",
+  referral: "route",
+  reliability: "calendar",
+  budgetlab: "money",
+  hazardscan: "eye",
+  discharge: "clipboard",
+  cashbridge: "money",
+  casethread: "chat",
+  hubvisual: "route",
   wall: "people",
   poll: "sliders",
   hotspots: "pin",
@@ -204,10 +239,37 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   myths: "Client questions from the tile library: a 30-second answer, the exception, the source, and an approved reply to copy.",
   baton: "A role-handoff relay: pass the right facts to the right person, name an owner, confirm receipt, escalate what’s urgent.",
   redpen: "Mark up a flawed care plan goal or progress note from a fictional case, rewrite it, then compare with a reviewed rewrite.",
-  playbook: "A procedure from the playbook library, always showing its current approved release, with Ask a Lead.",
-  auditor: "A fictional contractor pack or invoice to inspect and mark, then Approve, Query or Reject current submission.",
+  playbook: "A Job Aid from the Work Tools library, always showing its current approved release, with Ask a Lead.",
+  auditor:
+    "A Contractor Vetting Card (Dot’s gardener) or a fictional pack or invoice to inspect and mark: check the business and the worker apart, the price, and recommend ready, request evidence, escalate or cannot engage as proposed.",
   phonecall: "A difficult call from a fictional client or family member, typed or spoken, with case tools and a debrief in the learner’s own words.",
   sandbox: "Build a Support at Home care plan with a fictional participant: the quarterly ledger, who pays which part, and an explanation to them.",
+  hubvisual:
+    "One of the Hub’s own diagrams, kept current: the client journey map, or a partner model’s who-does-what onboarding diagram. Explain it with the blocks around it.",
+  hiring:
+    "A fictional Care Partner business’s hiring decision: compare capacity, operating result and cash across options, commit a plan, then revise it when new information arrives.",
+  intake:
+    "Can a fictional Care Partner take on the next starts? Predict, map the month week by week, check service coverage, try a change, then decide what to tell people.",
+  workload:
+    "Where does a coordinator’s week go? Tag a fictional week’s events, read the week map from both sides, test a change on the rework it touches, then choose a proportionate next step.",
+  referral:
+    "Which referrals become active clients? Follow the same fictional enquiries by referral source from first contact to a first service and past it, with stages, timing, effort and continuity, then choose one relationship action and one operational fix.",
+  hazardscan:
+    "A drawn room in someone’s home to scan: flag what needs attention, say what comes first, then choose what to do within the role. Approved variants are chosen per attempt, with a list route by area.",
+  discharge:
+    "A participant is due home from hospital tomorrow: alerts arrive, the handover has gaps, and the first nursing visit isn’t confirmed. Verify, arrange, escalate and follow up, then record an honest handover. Choose it when recommendations get treated as arrangements, or gaps surface late.",
+  budgetlab:
+    "A participant has a sizeable balance late in her Support at Home quarter. Tell current from projected, check with her, build a deliverable plan from real dates, route AT–HM separately, and explain what may carry over. Choose it when coordinators treat a balance as money to spend.",
+  reliability:
+    "What does a missed service cost? Classify a fictional month of missed visits by cause, count the repair work once, measure time to the restored service, then compare a reliability action with a referral push on care, workload and money.",
+  casethread:
+    "What would you do? A fictional dilemma: learners write a private first take, then read a pinned Quality-reviewed case note and verified coordinators’ responses in one moderated thread shared with the Community, and reflect.",
+  cashbridge:
+    "Can we fund the next 90 days? Place income stages on a timeline, read a fictional business’s dated cash bridge to find the real low point and the opening cash needed, test a late receipt and a moved hire, then choose a funded, service-safe action.",
+  coverage:
+    "Is this suburb ready for growth? Compare what clients need, by service and time window, with approved, confirmed contractor capacity across fictional areas, then choose an immediate action and a network priority.",
+  onedaymap:
+    "A fictional coordinator’s working day in five lanes: make her decisions, step into other people’s shoes, keep what they know apart from what she knows, and close the day with honest statuses.",
   mentor: "Oversized mentor cards: a moment on the front, a candid note to a younger self on the back. Dealt from the reviewed note library.",
   wall: "A question everyone answers; the shared answers open once they post.",
   poll: "A quick vote, with everyone’s answers shown after.",
@@ -241,14 +303,15 @@ const openStudioFor = new Set<string>();
 /** The palette's categories, so the longer list stays easy to scan. Each block is in one. */
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
   { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
-  { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "reset", "process", "hotspots", "myths"] },
-  { title: "Practise", types: ["flashcards", "sorting", "matching", "sequencing", "spot", "fillblank", "decision", "line", "redpen", "checklist", "quiz"] },
+  { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "hubvisual", "reset", "process", "hotspots", "myths"] },
   {
-    title: "Simulate",
-    types: ["branching", "conversation", "phonecall", "signal", "mission", "balance", "xray", "auditor", "bridge", "baton", "budget", "sandbox"],
+    title: "Practise",
+    types: ["flashcards", "sorting", "matching", "sequencing", "spot", "hazardscan", "fillblank", "decision", "line", "redpen", "checklist", "quiz"],
   },
+  // Shared with the Magazine's "Simulations" format (lib/magazine), so a new simulation block shows up in both.
+  { title: "Simulate", types: [...SIMULATION_BLOCKS] },
   { title: "Reflect and apply", types: ["journal", "perspectives", "pulse", "action"] },
-  { title: "Reflect & share", types: ["reflection", "wall", "poll", "benchmark", "mentor", "confidence"] },
+  { title: "Reflect & share", types: ["reflection", "wall", "casethread", "poll", "benchmark", "mentor", "confidence"] },
 ];
 
 /** A new, empty block of each kind. Ids are unique across the guide (choices included). */
@@ -488,6 +551,44 @@ function newBlock(item: PaletteItem): Block {
     case "sandbox":
       // Starts from the starter scenario, as a draft: it can't be published until its sign-off is recorded.
       return { id, type, ...freshSandbox(SANDBOX_CASES[0].data) };
+    case "hubvisual":
+      return { id, type, visual: "client-journey" };
+    case "hiring":
+      // Starts from Maya's case, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...freshHiringLab(HIRING_CASES[0].data) };
+    case "onedaymap":
+      // Starts from Leila's Monday, as a draft: it can't be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(ONE_DAY_CASES[0].data) };
+    case "intake":
+      // Starts from Priya’s February, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(GROWTH_CASES[0].data) };
+    case "workload":
+      // Starts from Sam’s week, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(WORKLOAD_CASES[0].data) };
+    case "coverage":
+      // Starts from Maya’s three suburbs, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(COVERAGE_CASES[0].data) };
+    case "referral":
+      // Starts from Maya’s three relationships, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(REFERRAL_CASES[0].data) };
+    case "reliability":
+      // Starts from Mrs Patel’s Tuesdays, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(RELIABILITY_CASES[0].data) };
+    case "budgetlab":
+      // Starts from Dot at quarter end, as a draft: it can’t be published until its rule set is current and its sign-off is recorded.
+      return { id, type, ...structuredClone(BUDGET_LAB_CASES[0].data) };
+    case "discharge":
+      // Starts from Dot comes home, unsigned: it can’t be published until its placeholder sources are replaced and every reviewer signs off.
+      return { id, type, ...structuredClone(DISCHARGE_CASES[0].data) };
+    case "hazardscan":
+      // Starts from Mrs Pearce's bedroom, its variants in review: it can't be published until a named reviewer approves each and the release is signed off.
+      return { id, type, ...structuredClone(HAZARD_SCENES[0].data) };
+    case "cashbridge":
+      // Starts from Maya’s next 90 days, as a draft: it can’t be published until its sign-off is recorded.
+      return { id, type, ...structuredClone(CASH_BRIDGE_CASES[0].data) };
+    case "casethread":
+      // Starts from Case A, as a draft: it can’t be published until the case note’s approval and sign-off are recorded.
+      return { id, type, ...freshCaseThread(CASE_THREAD_CASES[0].data) };
     case "mentor":
       // Deals from the reviewed note library: pinned cards first, then the pool on its topics.
       return {
@@ -560,6 +661,7 @@ function copyBlock(b: Block): Block {
   if (c.type === "auditor") Object.assign(c, freshAuditor(c));
   if (c.type === "phonecall") Object.assign(c, freshPhoneCall(c));
   if (c.type === "sandbox") Object.assign(c, freshSandbox(c));
+  if (c.type === "hiring") Object.assign(c, freshHiringLab(c));
   if (c.type === "reset") Object.assign(c, freshReset(c));
   if (c.type === "line") Object.assign(c, freshLine(c));
   if (c.type === "journey") Object.assign(c, freshJourney(c));
@@ -717,6 +819,32 @@ function isBlank(b: Block): boolean {
       return !b.phone.approval.owner && !b.phone.approval.operations;
     case "sandbox":
       return !b.approval.owner && !b.approval.finance;
+    case "hiring":
+      return !b.governance.owner && !b.governance.finance;
+    case "onedaymap":
+      return !b.approval.owner && !b.approval.operations;
+    case "intake":
+      return !b.approval.owner && !b.approval.operations;
+    case "workload":
+      return !b.approval.owner && !b.approval.operations;
+    case "coverage":
+      return !b.approval.owner && !b.approval.operations;
+    case "referral":
+      return !b.approval.owner && !b.approval.pathway;
+    case "reliability":
+      return !b.approval.owner && !b.approval.operations;
+    case "cashbridge":
+      return !b.approval.owner && !b.approval.finance;
+    case "budgetlab":
+      return !b.approval.owner && !b.approval.operations;
+    case "hazardscan":
+      return !b.approval.quality && b.variants.every((v) => !v.review.reviewer);
+    case "discharge":
+      return !b.approval.owner && !b.approval.clinical;
+    case "casethread":
+      return !b.approval.owner && !b.approval.clinical;
+    case "hubvisual":
+      return false;
   }
 }
 
@@ -1050,11 +1178,17 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
     const i = pages.findIndex((p) => p.id === pid);
     if (i < 0) return;
     const c = copyPage(pages[i]);
+    // A copy sits inside the original's chapter rather than starting another one.
+    delete c.chapter;
     change((d) => void d.doc.pages.splice(i + 1, 0, c));
   };
   const removePage = (pid: string) => {
     if (pages.length <= 1) return;
     change((d) => {
+      // A chapter starting on the deleted page starts on the next page instead.
+      const at = d.doc.pages.findIndex((p) => p.id === pid);
+      const next = d.doc.pages[at + 1];
+      if (d.doc.pages[at]?.chapter && next && !next.chapter) next.chapter = d.doc.pages[at].chapter;
       d.doc.pages = d.doc.pages.filter((p) => p.id !== pid);
     });
     if (view.kind === "page" && view.id === pid) open({ kind: "outline" });
@@ -1301,6 +1435,8 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
       {publishing && (
         <MagazineApproval
           guideId={id}
+          demo={server.demoSignOff}
+          onDemo={(g) => setServer(g as AuthorGuide)}
           dirty={dirty}
           save={() => flush()}
           onPublished={(g) => setServer(g as AuthorGuide)}
@@ -1376,6 +1512,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
             onMove={movePage}
             onDuplicate={duplicatePage}
             onRemove={removePage}
+            intro={draft.doc.pages.length > 1 ? <CourseIntroStrip guideId={id} draft={draft} change={change} /> : undefined}
             ai={
               <>
                 <MagazineAi guideId={id} onAddPage={addDraftedPage} startOpen={startAi || isStarter(initial.doc)} />
@@ -1625,6 +1762,7 @@ function Outline({
   onDuplicate,
   onRemove,
   ai,
+  intro,
 }: {
   draft: Draft;
   server: AuthorGuide;
@@ -1637,12 +1775,15 @@ function Outline({
   onRemove: (pid: string) => void;
   /** Draft with AI. */
   ai: React.ReactNode;
+  /** The course introduction's Audio guide and Ava's video, under the cover. */
+  intro?: React.ReactNode;
 }) {
   const [template, setTemplate] = useState<TemplateChoice>("do");
   const pages = draft.doc.pages;
   return (
     <div className="flex min-w-0 flex-col gap-8 rounded-3xl bg-bg p-4 ring-1 ring-line sm:p-8">
       <CourseHeader draft={draft} change={change} />
+      {intro}
       {ai}
       <section aria-labelledby="outline-h">
         <h2 id="outline-h" className="font-serif text-2xl font-semibold">
@@ -1659,6 +1800,7 @@ function Outline({
                 {i + 1}
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <ChapterMarker page={p} pages={pages} updatePage={updatePage} />
                 <InlineText
                   value={p.title}
                   onChange={(v) => updatePage(p.id, (x) => void (x.title = v), `${p.id}:title`)}
@@ -2179,6 +2321,7 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
             onChange={(v) => update<typeof b>(b.id, (x) => void (x.body = v), `${b.id}:body`)}
             placeholder="Write here…"
             className={textStyle}
+            emphasis
           />
         </div>
       );
@@ -2233,6 +2376,7 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
               onChange={(v) => update<typeof b>(b.id, (x) => void (x.body = v), `${b.id}:body`)}
               placeholder="Write here…"
               className={textStyle}
+              emphasis
             />
           </div>
         );
@@ -2250,6 +2394,7 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
               onChange={(v) => update<typeof b>(b.id, (x) => void (x.body = v), `${b.id}:body`)}
               placeholder="Write here…"
               className={textStyle}
+              emphasis
             />
           </div>
           <TextMediaSide block={b} update={update} className={cx("relative z-10", b.layout === "media-left" && "md:order-first")} />
@@ -3672,6 +3817,54 @@ function VideoSettings({ block: b, update }: { block: Extract<Block, { type: "vi
   );
 }
 
+/**
+  How the guide browses in the Magazine: the roles it's for and the goals it serves (lib/magazine GUIDE_ROLES,
+  GUIDE_GOALS). Until any are ticked, they're worked out from who it's for, its blocks and its words, and shown here as
+  that. They don't change who may read it, and readers see them once it's published.
+*/
+function BrowseTags({ draft, change }: { draft: Draft; change: (fn: (d: Draft) => void, tag?: string) => void }) {
+  const tags = draft.doc.tags ?? { roles: [], goals: [] };
+  const worked = guideTags({ ...draft.doc, tags: undefined }, draft.audience, `${draft.title} ${draft.standfirst}`);
+  const toggle = <K extends "roles" | "goals">(key: K, value: GuideTags[K][number], on: boolean) =>
+    change((d) => {
+      const t = d.doc.tags ?? { roles: [], goals: [] };
+      const list = t[key] as string[];
+      const next = { ...t, [key]: on ? [...list, value] : list.filter((v) => v !== value) };
+      d.doc.tags = next.roles.length || next.goals.length ? next : undefined;
+    }, "tags");
+  const group = <K extends "roles" | "goals">(key: K, legend: string, all: readonly { value: GuideTags[K][number]; label: string }[]) => (
+    <fieldset>
+      <legend className="text-sm font-semibold">{legend}</legend>
+      <div className="mt-2 flex flex-col gap-2">
+        {all.map((a) => (
+          <label key={a.value} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-action)]"
+              checked={(tags[key] as string[]).includes(a.value)}
+              onChange={(e) => toggle(key, a.value, e.target.checked)}
+            />
+            {a.label}
+          </label>
+        ))}
+        {!tags[key].length && (
+          <span className="text-xs text-ink-muted">
+            None ticked, so worked out from the guide:{" "}
+            {(worked[key] as string[]).map((v) => all.find((a) => a.value === v)?.label).join(", ") || (key === "roles" ? "everyone" : "none")}.
+          </span>
+        )}
+      </div>
+    </fieldset>
+  );
+  return (
+    <div className="flex flex-col gap-4 border-t border-line pt-4">
+      <p className="text-xs text-ink-muted">How it browses in the Magazine. This doesn’t change who may read it; readers see it once published.</p>
+      {group("roles", "Roles it’s for", GUIDE_ROLES)}
+      {group("goals", "What it helps them do", GUIDE_GOALS)}
+    </div>
+  );
+}
+
 /** With nothing selected: who it's for, how it's completed, what stands in the way of publishing, and its editions. */
 function GuideSettings({
   guide,
@@ -3708,6 +3901,7 @@ function GuideSettings({
           <span className="text-xs text-ink-muted">None ticked: everyone signed in can read it. Changes apply straight away, without publishing.</span>
         </div>
       </fieldset>
+      <BrowseTags draft={draft} change={change} />
       <Field label="How it’s completed" hint="Opening or scrolling never completes a guide.">
         <select className={input} value={draft.completion} onChange={(e) => change((d) => void (d.completion = e.target.value as CompletionMode))}>
           {(Object.keys(COMPLETION_MODES) as CompletionMode[]).map((m) => (

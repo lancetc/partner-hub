@@ -9,6 +9,7 @@ import { lessons as contentLessons } from "@/content/lessons";
 import { toWebp } from "./imageCompress";
 import { refreshPublishedLessons } from "./lessonRegistry";
 import { snapshotFile } from "./snapshot";
+import { titleFromFileName } from "@/lib/imageNames";
 
 /* Card images, videos and PDFs uploaded by authors. Checked by content, renamed, and stored outside the public folder. */
 
@@ -49,14 +50,25 @@ type UploadRow = {
   deleted_at?: string | null;
   deleted_by?: string | null;
   replaced_by?: string | null;
+  title?: string | null;
+  alt?: string | null;
 };
 export type Credit = { name: string; url: string; source: "Pexels"; page?: string };
 const publicUrl = (filename: string) => `/api/uploads/${filename}`;
+const cleanTitle = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 120);
+const cleanAlt = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 300);
+
+/** Its title in the library: the one someone wrote, else one tidied from its file name, else empty (it needs one). */
+const titleOf = (r: UploadRow) => r.title?.trim() || titleFromFileName(r.original_name, r.credit ? (JSON.parse(r.credit) as Credit) : null);
 const toItem = (r: UploadRow) => ({
   src: publicUrl(r.filename),
   width: r.width,
   height: r.height,
+  /** The file's own name, as it arrived. */
   name: r.original_name,
+  title: titleOf(r),
+  /** Its description for screen readers, offered as the alt text wherever it's placed. Empty: it needs one. */
+  alt: r.alt?.trim() ?? "",
   uploadedAt: r.uploaded_at,
   ...(r.credit ? { credit: JSON.parse(r.credit) as Credit } : {}),
 });
@@ -80,7 +92,19 @@ function sameUpload(db: Db, buf: Buffer) {
   return libraryImages(db).find((r) => r.bytes === buf.length && fileHash(r.filename) === want);
 }
 
-export async function saveUpload(db: Db, actor: User, file: File, size: { width: number; height: number }, now: Date, credit?: Credit) {
+/**
+  Saves an upload. `about`: a title and description when whatever is saving it knows them (a character portrait, a Pexels
+  photo, an AI picture), so the library doesn’t have to guess from the file name.
+*/
+export async function saveUpload(
+  db: Db,
+  actor: User,
+  file: File,
+  size: { width: number; height: number },
+  now: Date,
+  credit?: Credit,
+  about?: { title?: string; alt?: string },
+) {
   requireAuthor(actor);
   if (!file || typeof file.arrayBuffer !== "function") throw new HttpError(400, "Choose an image to upload.");
   if (file.size > MAX_VIDEO_BYTES) throw new HttpError(413, "That file is over 80 MB. Try a shorter clip.");
@@ -116,6 +140,9 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
     const same = sameUpload(db, buf);
     if (same) {
       if (credit && !same.credit) db.prepare("UPDATE uploads SET credit = ? WHERE filename = ?").run(JSON.stringify(credit), same.filename);
+      // The copy already there keeps any title and description it has; it gains these where it had none.
+      if (about?.title && !same.title) db.prepare("UPDATE uploads SET title = ? WHERE filename = ?").run(cleanTitle(about.title), same.filename);
+      if (about?.alt && !same.alt) db.prepare("UPDATE uploads SET alt = ? WHERE filename = ?").run(cleanAlt(about.alt), same.filename);
       return { src: publicUrl(same.filename), width: same.width, height: same.height, name: same.original_name, bytes: same.bytes };
     }
   }
@@ -123,8 +150,20 @@ export async function saveUpload(db: Db, actor: User, file: File, size: { width:
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(/*turbopackIgnore: true*/ DIR, filename), buf, { flag: "wx" });
   db.prepare(
-    "INSERT INTO uploads (filename, original_name, mime, bytes, width, height, uploaded_by, uploaded_at, credit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run(filename, name, mime, buf.length, width, height, actor.id, now.toISOString(), credit ? JSON.stringify(credit) : null);
+    "INSERT INTO uploads (filename, original_name, mime, bytes, width, height, uploaded_by, uploaded_at, credit, title, alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(
+    filename,
+    name,
+    mime,
+    buf.length,
+    width,
+    height,
+    actor.id,
+    now.toISOString(),
+    credit ? JSON.stringify(credit) : null,
+    about?.title ? cleanTitle(about.title) : null,
+    about?.alt ? cleanAlt(about.alt) : null,
+  );
   audit(db, { actor: actor.id, event: "upload.created", entity: `upload:${filename}`, next: { name, bytes: buf.length, type: mime }, at: now });
   return { src: publicUrl(filename), width, height, name, bytes: buf.length };
 }
@@ -135,6 +174,27 @@ export function listUploads(db: Db, actor: User) {
   return (
     db.prepare("SELECT * FROM uploads WHERE mime LIKE 'image/%' AND deleted_at IS NULL AND replaced_by IS NULL ORDER BY uploaded_at DESC").all() as UploadRow[]
   ).map(toItem);
+}
+
+/**
+  Names and describes a picture in the library: its title for authors, and its alt text for screen readers, offered
+  wherever it's placed. Either can be cleared (a cleared title falls back to the tidied file name).
+*/
+export function describeUpload(db: Db, actor: User, filename: string, input: { title?: unknown; alt?: unknown }, now: Date) {
+  requireAuthor(actor);
+  const row = uploadRow(db, filename);
+  const title = typeof input.title === "string" ? cleanTitle(input.title) : (row.title ?? "");
+  const alt = typeof input.alt === "string" ? cleanAlt(input.alt) : (row.alt ?? "");
+  db.prepare("UPDATE uploads SET title = ?, alt = ? WHERE filename = ?").run(title || null, alt || null, row.filename);
+  audit(db, {
+    actor: actor.id,
+    event: "upload.described",
+    entity: `upload:${row.filename}`,
+    previous: { title: row.title, alt: row.alt },
+    next: { title, alt },
+    at: now,
+  });
+  return toItem({ ...row, title: title || null, alt: alt || null });
 }
 
 /** The stored file for a public upload URL, or null. Only names this server generated are ever read. */

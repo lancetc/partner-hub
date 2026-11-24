@@ -108,6 +108,11 @@ export async function importPexels(db: Db, actor: User, id: number, now: Date) {
   const scale = Math.min(1, MAX_SIDE / Math.max(p.width, p.height));
   const size = jpegSize(bytes) ?? { width: Math.round(p.width * scale), height: Math.round(p.height * scale) };
   const name = `Pexels ${p.id} – ${p.photographer}.jpg`;
-  const saved = await saveUpload(db, actor, new File([bytes], name, { type: "image/jpeg" }), size, now, credit(p));
+  // Pexels describes each photo: that’s its title and alt text in the library.
+  const described = (p.alt ?? "").trim();
+  const saved = await saveUpload(db, actor, new File([bytes], name, { type: "image/jpeg" }), size, now, credit(p), {
+    title: described,
+    alt: described ? `${described}.` : "",
+  });
   return { src: saved.src, width: saved.width, height: saved.height, alt: p.alt ?? "", credit: credit(p) };
 }

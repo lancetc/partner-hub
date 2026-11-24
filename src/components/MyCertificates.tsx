@@ -22,7 +22,7 @@ export function MyCertificates() {
         <p className="mt-2 text-ink-muted">Loading…</p>
       ) : !list.length ? (
         <p className="mt-2 text-ink-muted">
-          You’ll get a certificate for each learning path you finish. It appears here, ready to print or save as a PDF whenever you need it.
+          You’ll get a certificate for each Discovery Path you finish. It appears here, ready to print or save as a PDF whenever you need it.
         </p>
       ) : (
         <ul className="mt-3 flex flex-col divide-y divide-line">

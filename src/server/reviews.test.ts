@@ -2,21 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { editorLesson, saveDraft } from "./authoredLessons";
-import {
-  addReviewer,
-  allReviewComments,
-  deleteReviewComment,
-  joinReview,
-  linkLesson,
-  postReviewComment,
-  resolveReviewComment,
-  reviewComments,
-  reviewerById,
-  reviewSharing,
-  setReviewLink,
-} from "./reviews";
+import { addReviewer, allReviewComments, deleteReviewComment, postReviewComment, resolveReviewComment, reviewComments, reviewerById } from "./reviews";
 
-/* Review links and review comments: outside reviewers commenting on a lesson's cards. */
+/* Review comments: named reviewers, signed in to the hub, commenting on a topic's cards. There are no review links. */
 
 let db: Db;
 beforeEach(() => {
@@ -28,32 +16,15 @@ const later = (mins: number) => new Date(now.getTime() + mins * 60_000);
 const slug = "legislative-framework";
 
 function linkAndJoin(name = "Dr Pat Lee", email = "pat@example.org") {
-  const { link } = setReviewLink(db, u("jordan"), slug, true, now);
-  const { id } = joinReview(db, link!.token, { name, email }, now);
-  return { token: link!.token, who: reviewerById(db, id)! };
+  const { id } = addReviewer(db, { name, email }, now);
+  return { who: reviewerById(db, id)! };
 }
 
-describe("review links", () => {
-  it("only authors switch them on and off, and a switched-off link stops working", () => {
-    expect(() => setReviewLink(db, u("sam"), slug, true, now)).toThrow(/authors/);
-    const { link } = setReviewLink(db, u("jordan"), slug, true, now);
-    expect(link!.path).toBe(`/review/${link!.token}`);
-    expect(linkLesson(db, link!.token)).toBe(slug);
-    // Switching on again keeps the same link.
-    expect(setReviewLink(db, u("jordan"), slug, true, later(1)).link!.token).toBe(link!.token);
-    setReviewLink(db, u("jordan"), slug, false, later(2));
-    expect(linkLesson(db, link!.token)).toBeUndefined();
-    expect(() => joinReview(db, link!.token, { name: "Pat", email: "pat@example.org" }, now)).toThrow(/isn’t active/);
-    // A fresh link after switching off.
-    expect(setReviewLink(db, u("jordan"), slug, true, later(3)).link!.token).not.toBe(link!.token);
-    expect(linkLesson(db, "made-up-token-123456")).toBeUndefined();
-  });
-
+describe("reviewers", () => {
   it("asks reviewers for a name and a real-looking email", () => {
-    const { link } = setReviewLink(db, u("jordan"), slug, true, now);
-    expect(() => joinReview(db, link!.token, { name: "", email: "pat@example.org" }, now)).toThrow(/name/);
-    expect(() => joinReview(db, link!.token, { name: "Pat", email: "not an email" }, now)).toThrow(/email/);
-    expect(joinReview(db, link!.token, { name: "  Pat   Lee ", email: "PAT@Example.org" }, now).name).toBe("Pat Lee");
+    expect(() => addReviewer(db, { name: "", email: "pat@example.org" }, now)).toThrow(/name/);
+    expect(() => addReviewer(db, { name: "Pat", email: "not an email" }, now)).toThrow(/email/);
+    expect(addReviewer(db, { name: "  Pat   Lee ", email: "PAT@Example.org" }, now).name).toBe("Pat Lee");
   });
 
   it("needs only a name when commenting straight on a topic, but still checks an email that's given", () => {
@@ -123,16 +94,6 @@ describe("review comments", () => {
     const { who } = linkAndJoin();
     for (let i = 0; i < 40; i++) postReviewComment(db, who, slug, { card: "kit", text: `Comment ${i}` }, later(i));
     expect(() => postReviewComment(db, who, slug, { card: "kit", text: "One more" }, later(41))).toThrow(/a lot of comments/);
-  });
-
-  it("lists who has reviewed for the author", () => {
-    const { who } = linkAndJoin();
-    postReviewComment(db, who, slug, { card: "kit", text: "One." }, now);
-    postReviewComment(db, who, slug, { card: "kit", text: "Two." }, later(1));
-    expect(reviewSharing(db, u("jordan"), slug).reviewers).toEqual([
-      { name: "Dr Pat Lee", email: "pat@example.org", comments: 2, lastComment: later(1).toISOString() },
-    ]);
-    expect(() => reviewSharing(db, u("sam"), slug)).toThrow(/authors/);
   });
 });
 

@@ -10,6 +10,7 @@ import { currentUser } from "@/server/auth";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
 import { HomeFavourites } from "@/components/favourites/FavouritesList";
+import { HomePinnedTools } from "@/components/pocket/HomePinnedTools";
 import { HomeFieldNotes } from "@/components/living/FieldNotes";
 import { HomeHero } from "@/components/home/HomeHero";
 import { Icon } from "@/components/Icon";
@@ -38,8 +39,12 @@ export default function Home() {
       </div>
 
       {/* Field Notes (docs/living-cases.md) and Favourites (docs/job-aids.md): shown only when there's something in them. */}
-      <HomeFieldNotes />
-      <HomeFavourites />
+      <div data-build-step style={step(5)}>
+        <HomeFieldNotes />
+        {/* Pinned tools (docs/pocket-playbook.md): the person's own pins, only when there's one. */}
+        <HomePinnedTools />
+        <HomeFavourites />
+      </div>
 
       <section aria-labelledby="latest" data-build-step style={step(6)} className="mt-16">
         <Masthead id="latest" kicker="In this issue" title="The latest from Trilogy Care" />

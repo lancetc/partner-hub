@@ -6,19 +6,37 @@ import { useEffect, useRef, useState } from "react";
 import { cx, formatDate } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ShelfRow } from "../ShelfRow";
+import { GUIDE_GOALS, GUIDE_ROLES, type GuideGoal, type GuideRole } from "@/lib/magazine";
 
 /*
-  Magazine, laid out like Topics and Discovery Paths: "All magazines" with the same toolbar (search,
-  kind, progress, length, sort, tiles or a list), the rows to browse (Recently added, Popular with your
-  colleagues, Short stories under 30 minutes, eLearning courses), then "All stories". It holds the
-  Magazine guides and courses and the eLearning (Articulate SCORM) courses. The choices live in the page
-  address, so a filtered view can be bookmarked or shared.
+  Magazine, laid out like Topics and Discovery Paths: "Browse the Magazine" with a toolbar, the rows to browse, then
+  "All stories". It holds Magazine guides, simulations and courses, and the eLearning (Articulate SCORM) courses.
+
+  The toolbar follows what the Magazine holds, who reads it and what it's for. The aim running through it is growing
+  the business, Trilogy Care's and the partners':
+  - Goals, as a row of chips with counts, "Grow the business" first: what a story helps someone do (lib/magazine
+    GUIDE_GOALS). Only the goals there are show.
+  - Your role: Care Partners and their workers, care coordinators, business owners and managers, or Trilogy Care
+    teams (GUIDE_ROLES). A story tagged for no role is for everyone. Shown when there's more than one role to choose.
+  - Format: guides to read (field guides, expert guidance, explainers), simulations and decision labs (lib/magazine
+    SIMULATION_BLOCKS), courses of several pages, and eLearning.
+  - Your progress, length (a quick read, 10 to 30 minutes, longer) and sort.
+  Roles and goals are the author's tags, or worked out from the story until it has some (lib/magazine guideTags).
+  The choices live in the page address, so a filtered view can be bookmarked or shared.
 */
 
+export type BrowseFormat = "guide" | "simulation" | "course" | "elearning";
 export type BrowseGuide = {
   id: string;
   /** A Magazine guide or course, or an eLearning (SCORM) course. */
   kind: "magazine" | "elearning";
+  /** What the reader opens: a guide to read, a simulation, a course of several pages, or eLearning. */
+  format: BrowseFormat;
+  /** Who may read it (GUIDE_AUDIENCES values); empty: everyone. */
+  audience: string[];
+  /** Who it's for by role, and what it helps them do (lib/magazine GUIDE_ROLES, GUIDE_GOALS). No roles: everyone. */
+  roles: string[];
+  goals: string[];
   href: string;
   title: string;
   standfirst: string;
@@ -39,12 +57,15 @@ export type BrowseGuide = {
 
 type Sort = "newest" | "popular" | "az" | "shortest";
 type Status = "any" | "new" | "started" | "completed";
-type Kind = "any" | "guide" | "course" | "elearning";
-type Length = "any" | "short" | "long";
+type Format = "any" | BrowseFormat;
+type Role = "any" | GuideRole;
+type Goal = "any" | GuideGoal;
+type Length = "any" | "quick" | "medium" | "long";
 type View = "grid" | "list";
 
-/** A short story: read in one sitting. */
-const SHORT_MINUTES = 30;
+/** A quick read: under ten minutes, one sitting. Medium: up to half an hour. */
+const QUICK_MINUTES = 10;
+const MEDIUM_MINUTES = 30;
 const SHELF_SIZE = 10;
 /** One row to start (four on a computer); "Show more" adds three rows at a time, as on Topics and Discovery Paths. */
 const ROW = 4;
@@ -57,6 +78,34 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: "shortest", label: "Shortest first" },
 ];
 
+/** The formats, in the order a reader meets them: the lightest first. */
+const FORMATS: { value: BrowseFormat; label: string; chip: string; icon: "magazine" | "gauge" | "book" | "monitor" }[] = [
+  { value: "guide", label: "Guide", chip: "Guides and explainers", icon: "magazine" },
+  { value: "simulation", label: "Simulation", chip: "Simulations and decision labs", icon: "gauge" },
+  { value: "course", label: "Course", chip: "Courses", icon: "book" },
+  { value: "elearning", label: "eLearning", chip: "eLearning", icon: "monitor" },
+];
+const formatOf = (f: BrowseFormat) => FORMATS.find((x) => x.value === f)!;
+
+const roleLabel = (r: string) => GUIDE_ROLES.find((x) => x.value === r)?.label ?? "";
+const goalLabel = (g: string) => GUIDE_GOALS.find((x) => x.value === g)?.label ?? "";
+/** A small mark for each goal, on its chip. */
+const GOAL_ICONS: Record<GuideGoal, "target" | "money" | "shield" | "heart" | "route" | "clipboard"> = {
+  grow: "target",
+  money: "money",
+  quality: "shield",
+  clients: "heart",
+  start: "route",
+  compliance: "clipboard",
+};
+
+const LENGTHS: { value: Length; label: string }[] = [
+  { value: "any", label: "Any length" },
+  { value: "quick", label: `Quick read (under ${QUICK_MINUTES} min)` },
+  { value: "medium", label: `${QUICK_MINUTES}–${MEDIUM_MINUTES} minutes` },
+  { value: "long", label: `Longer than ${MEDIUM_MINUTES} minutes` },
+];
+
 /** The same fields as Topics and Discovery Paths. */
 const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
 
@@ -66,8 +115,16 @@ const STATE: Record<BrowseGuide["state"], { text: string; tone: string } | null>
   completed: { text: "Completed", tone: "bg-[#dff3ea] text-[#0f5b3a]" },
 };
 
-const kindOf = (g: BrowseGuide): Exclude<Kind, "any"> => (g.kind === "elearning" ? "elearning" : g.pages > 1 ? "course" : "guide");
-const isShort = (g: BrowseGuide) => g.minutes !== null && g.minutes < SHORT_MINUTES;
+/** A value from the address, if it's one of the allowed ones. "short" is the old under-30-minutes length. */
+function fromAddress<const T extends string>(v: string | null, allowed: readonly T[], fallback: NoInfer<T>): T {
+  if (v === "short") return (allowed.includes("quick" as T) ? "quick" : fallback) as T;
+  return allowed.includes(v as T) ? (v as T) : fallback;
+}
+
+const lengthOf = (g: BrowseGuide): Exclude<Length, "any"> | null =>
+  g.minutes === null ? null : g.minutes < QUICK_MINUTES ? "quick" : g.minutes <= MEDIUM_MINUTES ? "medium" : "long";
+/** For everyone (no roles tagged), or for this role among others. */
+const forRole = (g: BrowseGuide, r: Role) => r === "any" || !g.roles.length || g.roles.includes(r);
 const byName = (a: BrowseGuide, b: BrowseGuide) => a.title.localeCompare(b.title);
 const byNewest = (a: BrowseGuide, b: BrowseGuide) => b.publishedAt.localeCompare(a.publishedAt) || byName(a, b);
 const byPopular = (a: BrowseGuide, b: BrowseGuide) => b.popularity - a.popularity || byNewest(a, b);
@@ -76,17 +133,35 @@ const byShortest = (a: BrowseGuide, b: BrowseGuide) => (a.minutes ?? 1e9) - (b.m
 const meta = (g: BrowseGuide) =>
   g.kind === "elearning"
     ? `eLearning course${g.edition ? ` · SCORM ${g.edition}` : ""}`
-    : g.pages > 1
+    : g.format === "course"
       ? `Course · ${g.pages} pages · ${g.minutes} min`
-      : `Guide · ${g.minutes} min read`;
+      : g.format === "simulation"
+        ? `Simulation · ${g.minutes} min`
+        : `Guide · ${g.minutes} min read`;
+/** Everything a search looks through: the words, the format and who it's for. */
+const searchText = (g: BrowseGuide) =>
+  [g.title, g.standfirst, formatOf(g.format).chip, ...g.roles.map(roleLabel), ...g.goals.map(goalLabel)].join(" ").toLowerCase();
 
-type SeeAll = { sort?: Sort; length?: Length; kind?: Kind };
+type SeeAll = { sort?: Sort; length?: Length; format?: Format; goal?: Goal };
 
 /** The rows to browse. They leave out what's already finished, and only show when there's something in them. */
 function shelves(guides: BrowseGuide[]) {
   const pool = guides.filter((g) => g.state !== "completed");
   const rows: { id: string; title: string; blurb: string; guides: BrowseGuide[]; seeAll: SeeAll }[] = [
-    { id: "new", title: "Recently added", blurb: "The newest guides and courses, latest first.", guides: [...pool].sort(byNewest), seeAll: { sort: "newest" } },
+    {
+      id: "new",
+      title: "Recently added",
+      blurb: "The newest guides, simulations and courses, latest first.",
+      guides: [...pool].sort(byNewest),
+      seeAll: { sort: "newest" },
+    },
+    {
+      id: "grow",
+      title: "Grow the business",
+      blurb: "Plan capacity, win and keep clients, and build a business that lasts: Trilogy Care's and yours.",
+      guides: pool.filter((g) => g.goals.includes("grow")).sort(byNewest),
+      seeAll: { goal: "grow" },
+    },
     {
       id: "popular",
       title: "Popular with your colleagues",
@@ -95,18 +170,32 @@ function shelves(guides: BrowseGuide[]) {
       seeAll: { sort: "popular" },
     },
     {
-      id: "short",
-      title: "Short stories, under 30 minutes",
-      blurb: "Read one in a single sitting.",
-      guides: pool.filter(isShort).sort(byShortest),
-      seeAll: { length: "short", sort: "shortest" },
+      id: "simulations",
+      title: "Simulations and decision labs",
+      blurb: "Play a case through: make the calls, see what follows, and why.",
+      guides: pool.filter((g) => g.format === "simulation").sort(byNewest),
+      seeAll: { format: "simulation" },
+    },
+    {
+      id: "quick",
+      title: `Quick reads, under ${QUICK_MINUTES} minutes`,
+      blurb: "Field guides and explainers for a spare moment.",
+      guides: pool.filter((g) => lengthOf(g) === "quick").sort(byShortest),
+      seeAll: { length: "quick", sort: "shortest" },
+    },
+    {
+      id: "courses",
+      title: "Courses",
+      blurb: "Several pages to work through, at your own pace. Your place is saved.",
+      guides: pool.filter((g) => g.format === "course").sort(byNewest),
+      seeAll: { format: "course" },
     },
     {
       id: "elearning",
       title: "eLearning courses",
       blurb: "Interactive courses built in Articulate. Your place and scores are saved as you go.",
-      guides: guides.filter((g) => g.kind === "elearning").sort(byNewest),
-      seeAll: { kind: "elearning" },
+      guides: guides.filter((g) => g.format === "elearning").sort(byNewest),
+      seeAll: { format: "elearning" },
     },
   ];
   return rows.filter((r) => r.guides.length).map((r) => ({ ...r, guides: r.guides.slice(0, SHELF_SIZE) }));
@@ -116,11 +205,13 @@ function shelves(guides: BrowseGuide[]) {
 export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGuide[]; canEdit?: boolean }) {
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
-  const [kind, setKind] = useState<Kind>((params.get("kind") as Kind) || "any");
-  const [status, setStatus] = useState<Status>((params.get("status") as Status) || "any");
-  const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
-  const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "newest");
-  const [view, setView] = useState<View>((params.get("view") as View) || "grid");
+  const [format, setFormat] = useState<Format>(fromAddress(params.get("kind"), ["any", "guide", "simulation", "course", "elearning"], "any"));
+  const [goal, setGoal] = useState<Goal>(fromAddress(params.get("goal"), ["any", ...GUIDE_GOALS.map((x) => x.value)], "any"));
+  const [role, setRole] = useState<Role>(fromAddress(params.get("role"), ["any", ...GUIDE_ROLES.map((x) => x.value)], "any"));
+  const [status, setStatus] = useState<Status>(fromAddress(params.get("status"), ["any", "new", "started", "completed"], "any"));
+  const [length, setLength] = useState<Length>(fromAddress(params.get("length"), ["any", "quick", "medium", "long"], "any"));
+  const [sort, setSort] = useState<Sort>(fromAddress(params.get("sort"), ["newest", "popular", "az", "shortest"], "newest"));
+  const [view, setView] = useState<View>(fromAddress(params.get("view"), ["grid", "list"], "grid"));
   const [shown, setShown] = useState(ROW);
   const everyStory = useRef<HTMLHeadingElement>(null);
 
@@ -128,14 +219,16 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   useEffect(() => {
     const next = new URLSearchParams();
     if (q.trim()) next.set("q", q.trim());
-    if (kind !== "any") next.set("kind", kind);
+    if (format !== "any") next.set("kind", format);
+    if (goal !== "any") next.set("goal", goal);
+    if (role !== "any") next.set("role", role);
     if (status !== "any") next.set("status", status);
     if (length !== "any") next.set("length", length);
     if (sort !== "newest") next.set("sort", sort);
     if (view !== "grid") next.set("view", view);
     const qs = next.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [q, kind, status, length, sort, view]);
+  }, [q, goal, role, format, status, length, sort, view]);
 
   if (!guides.length)
     return (
@@ -145,21 +238,30 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
     );
 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = guides.filter(
+  // Everything but the goal, so each goal chip can say how many it would show.
+  const beforeGoal = guides.filter(
     (g) =>
-      words.every((w) => `${g.title} ${g.standfirst}`.toLowerCase().includes(w)) &&
-      (kind === "any" || kindOf(g) === kind) &&
+      words.every((w) => searchText(g).includes(w)) &&
+      forRole(g, role) &&
+      (format === "any" || g.format === format) &&
       (status === "any" || g.state === status) &&
-      (length === "any" || (length === "short" ? isShort(g) : !isShort(g))),
+      (length === "any" || lengthOf(g) === length),
   );
+  const filtered = beforeGoal.filter((g) => goal === "any" || g.goals.includes(goal));
   const sorted = [...filtered].sort(sort === "az" ? byName : sort === "popular" ? byPopular : sort === "shortest" ? byShortest : byNewest);
-  const filtering = Boolean(words.length) || kind !== "any" || status !== "any" || length !== "any";
+  const filtering = Boolean(words.length) || goal !== "any" || role !== "any" || format !== "any" || status !== "any" || length !== "any";
   // Search and filter results show in full: they're the point then.
   const visible = filtering ? sorted.length : shown;
+  // Only the goals, formats and roles the Magazine has.
+  const goals = GUIDE_GOALS.filter((x) => guides.some((g) => g.goals.includes(x.value)));
+  const formats = FORMATS.filter((f) => guides.some((g) => g.format === f.value));
+  const roles = GUIDE_ROLES.filter((x) => guides.some((g) => g.roles.includes(x.value)));
   const reset = () => {
     setShown(ROW);
     setQ("");
-    setKind("any");
+    setGoal("any");
+    setRole("any");
+    setFormat("any");
     setStatus("any");
     setLength("any");
   };
@@ -168,9 +270,15 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
     reset();
     if (s.sort) setSort(s.sort);
     if (s.length) setLength(s.length);
-    if (s.kind) setKind(s.kind);
+    if (s.format) setFormat(s.format);
+    if (s.goal) setGoal(s.goal);
     requestAnimationFrame(() => everyStory.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
+  const chip = (active: boolean) =>
+    cx(
+      "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors",
+      active ? "border-action bg-action text-on-action" : "border-line-strong bg-surface text-ink hover:bg-muted",
+    );
 
   return (
     <div className="mt-8 flex flex-col gap-12">
@@ -180,24 +288,59 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
           <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : guides.length})</span>
         </h2>
 
+        {/* Goals: what a story helps someone do, with how many match the rest of the choices. Growing the business first. */}
+        {goals.length > 0 && (
+          <div role="group" aria-label="Goal" className="scrollbar-none -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+            <button type="button" aria-pressed={goal === "any"} onClick={() => setGoal("any")} className={chip(goal === "any")}>
+              Everything <span className={cx("text-xs font-bold", goal === "any" ? "opacity-80" : "text-ink-muted")}>{beforeGoal.length}</span>
+            </button>
+            {goals.map((x) => {
+              const n = beforeGoal.filter((g) => g.goals.includes(x.value)).length;
+              return (
+                <button key={x.value} type="button" aria-pressed={goal === x.value} onClick={() => setGoal(x.value)} className={chip(goal === x.value)}>
+                  <Icon name={GOAL_ICONS[x.value]} className="size-4" />
+                  {x.label} <span className={cx("text-xs font-bold", goal === x.value ? "opacity-80" : "text-ink-muted")}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Search, filters and sort: the same toolbar as Topics and Discovery Paths. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
             Search
             <span className="relative">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
-              <input type="search" className={cx(field, "pl-9")} placeholder="A title or a word in it" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input type="search" className={cx(field, "pl-9")} placeholder="A topic, title or word" value={q} onChange={(e) => setQ(e.target.value)} />
             </span>
           </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Kind
-            <select className={cx(field, "w-auto")} value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-              <option value="any">Everything</option>
-              <option value="guide">Guides (one page)</option>
-              <option value="course">Courses (several pages)</option>
-              <option value="elearning">eLearning courses</option>
-            </select>
-          </label>
+          {roles.length > 1 && (
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Your role
+              <select className={cx(field, "w-auto")} value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                <option value="any">Any role</option>
+                {roles.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {formats.length > 1 && (
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Format
+              <select className={cx(field, "w-auto")} value={format} onChange={(e) => setFormat(e.target.value as Format)}>
+                <option value="any">Any format</option>
+                {formats.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.chip}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Your progress
             <select className={cx(field, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
@@ -210,9 +353,11 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
           <label className="flex flex-col gap-1 text-sm font-semibold">
             Length
             <select className={cx(field, "w-auto")} value={length} onChange={(e) => setLength(e.target.value as Length)}>
-              <option value="any">Any length</option>
-              <option value="short">Under 30 minutes</option>
-              <option value="long">Longer</option>
+              {LENGTHS.map((x) => (
+                <option key={x.value} value={x.value}>
+                  {x.label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold">
@@ -320,7 +465,7 @@ function Cover({ guide: g, className }: { guide: BrowseGuide; className?: string
     return <img src={g.cover} alt="" loading="lazy" className={cx("bg-muted object-cover", className)} />;
   return (
     <div className={cx("grid place-items-center bg-[#008282] text-white", className)} aria-hidden>
-      <Icon name={g.kind === "elearning" ? "monitor" : "magazine"} className="size-1/4 max-h-16 max-w-16" />
+      <Icon name={formatOf(g.format).icon} className="size-1/4 max-h-16 max-w-16" />
     </div>
   );
 }

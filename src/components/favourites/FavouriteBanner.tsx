@@ -7,6 +7,7 @@ import { cx } from "@/lib/format";
 import type { FavouriteItem } from "@/server/favourites";
 import { Icon } from "../Icon";
 import { eventKey } from "./favApi";
+import { favouritesChanged } from "./SavedMarks";
 
 /*
   Shown at the top of a guide or a Job Aid opened from Favourites (docs/job-aids.md): the passage the person
@@ -79,6 +80,8 @@ export function FavouriteBanner({ className }: { className?: string }) {
               onClick={async () => {
                 await api("/api/favourites", { body: { action: "checked", id: item.id } }).catch(() => undefined);
                 setChecked(true);
+                // Checked: the passage is marked on the page again (SavedMarks).
+                favouritesChanged();
               }}
             >
               I’ve checked the current passage

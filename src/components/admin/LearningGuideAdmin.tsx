@@ -8,6 +8,7 @@ import { DEFAULT_GUIDE_INTRO, GUIDE_MODES, GUIDE_STATES, type GuideState } from 
 import type { guideUses, identityForAuthors } from "@/server/learningGuide";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
+import { AvaVideosAdmin } from "./AvaVideosAdmin";
 
 /*
   The AI Learning Guide (docs/ai-learning-guide.md): who the Hub's one guide is, and every place it's used.
@@ -80,16 +81,22 @@ export function LearningGuideAdmin() {
             <Field label="Approved name" hint="Shown beside “AI Learning Guide”, never on its own as if a person. Leave empty for no name.">
               <input name="name" defaultValue={id.name} className={input} placeholder="Ava" />
             </Field>
-            <Field label="Portrait (an image in the library)" hint="Used as the poster before a recording plays, when it has none of its own.">
+            <Field
+              label="Portrait (an image in the library)"
+              hint="Ava in her transmission window: the poster before a recording plays, and the picture while a Topic or Discovery Path introduction is read."
+            >
               <input name="portrait" defaultValue={id.portrait ?? ""} className={input} placeholder="/api/uploads/….webp" />
             </Field>
             <Field label="First-encounter introduction" hint="{name} is replaced with the name. It has to say the guide is AI." className="sm:col-span-2">
               <input name="intro" defaultValue={id.intro || DEFAULT_GUIDE_INTRO} className={input} />
             </Field>
-            <Field label="Avatar (provider and reference)" hint="For example: ElevenLabs avatar, its name or id.">
+            <Field label="Avatar (provider and reference)" hint="Ava 2.0 is the ElevenLabs Laura avatar; each transmission can use a different Laura style.">
               <input name="avatarRef" defaultValue={id.avatarRef} className={input} />
             </Field>
-            <Field label="Voice (provider and reference)">
+            <Field
+              label="Voice"
+              hint="The voice Ava reads Topic and Discovery Path introductions in: its name as it appears in ElevenLabs (Addison 2.0), its voice id, or openai:<voice>. A voice has to be added to the ElevenLabs account first; until then the Hub narrator speaks."
+            >
               <input name="voiceRef" defaultValue={id.voiceRef} className={input} />
             </Field>
             <Field
@@ -122,6 +129,8 @@ export function LearningGuideAdmin() {
           </fieldset>
         </form>
       </section>
+
+      <AvaVideosAdmin />
 
       <section aria-labelledby="lg-uses" className="mt-5 rounded-3xl bg-surface p-5 ring-1 ring-line">
         <div className="flex flex-wrap items-end gap-3">

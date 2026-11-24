@@ -80,7 +80,16 @@ describe("the people a scenario names", () => {
   it("describes a new person from their title, age and role, for the prompt", () => {
     expect(lookFromName("Mrs Quill", 81, "Lives alone.", "participant")).toBe("81-year-old woman. Lives alone.");
     expect(lookFromName("Sam", null, "", "family")).toBe("middle-aged person, a family member");
-    expect(portraitPrompt({ look: "older man", role: "participant" })).toMatch(/fictional person.*older man.*No text/);
+    expect(portraitPrompt({ look: "older man", role: "participant" })).toMatch(/fictional person.*older man.*Australian home background.*No text/);
+  });
+  it("sets a portrait where the look says, out in the real world", () => {
+    const p = portraitPrompt({
+      look: "Care coordinator in her forties, pink striped shirt. Background: a leafy street with a Queenslander.",
+      role: "coordinator",
+    });
+    expect(p).toMatch(/pink striped shirt\. Natural/);
+    expect(p).toMatch(/softly blurred background of a leafy street with a Queenslander, Australia/);
+    expect(p).not.toMatch(/home background|Background:/);
   });
 });
 

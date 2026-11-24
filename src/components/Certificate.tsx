@@ -57,7 +57,7 @@ export function Certificate({
           <p className="certificate-kicker">Certificate of completion</p>
           <p className="certificate-lead">This is to certify that</p>
           <p className="certificate-name">{person}</p>
-          <p className="certificate-lead">has completed the learning path</p>
+          <p className="certificate-lead">has completed the Discovery Path</p>
           <p className="certificate-path">{pathName}</p>
           <p className="certificate-meta">
             {lessons} topics · {formatDuration(minutes).replace(/^About/, "about")} of learning · completed {formatDate(completedAt)}

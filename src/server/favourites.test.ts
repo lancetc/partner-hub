@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { SEED_SNIPPETS } from "@/content/playbooks";
-import { lessons } from "@/content/lessons";
+import { lessons, type Lesson } from "@/content/lessons";
+import { blankLesson } from "@/content/blankLesson";
+import { resources } from "@/content/resources";
+import { stories } from "@/content/stories";
 import { ordered } from "@/lib/lessonGraph";
 import { AID_TEMPLATES } from "@/lib/playbook";
 import { openDb, type Db } from "./db";
@@ -11,12 +14,16 @@ import {
   aidsForTopic,
   aidViewed,
   clientAidEvent,
+  ensurePassageKinds,
   favouriteAction,
   favouriteFor,
   favouritesList,
   normText,
+  pageMarks,
   savePassage,
 } from "./favourites";
+import { createLesson, deleteLesson, publishLesson, saveDraft } from "./authoredLessons";
+import { saveStory, setStoryStatus } from "./stories";
 import { archiveGuide, authorGuide, createGuide, publishGuide, readGuide, saveGuideDraft } from "./magazine";
 import { askLead, playbookAction, playbookLibrary, playbookList, resolveSnippet, toggleSaved } from "./playbooks";
 import { search } from "./search";
@@ -208,18 +215,16 @@ describe("saving a whole Job Aid", () => {
   it("adds the pilot's source section to a record that was seeded before it existed, without disturbing what's there", () => {
     const old = openDb(":memory:");
     // A database from before the Job Aids pilot: the invoices record has one section, at version 1.
-    old
-      .prepare("INSERT INTO playbook_sources (doc_id, version, data, at, by_user) VALUES ('supplier-invoices', 1, ?, '2026-11-01T00:00:00.000Z', 'seed')")
-      .run(
-        JSON.stringify({
-          id: "supplier-invoices",
-          title: "Supplier invoices",
-          system: "Hub policy record",
-          owner: "Finance",
-          audiences: ["coordinator", "staff"],
-          sections: [{ anchor: "rejected-invoice", heading: "Rejected", text: "An owner's edited text." }],
-        }),
-      );
+    old.prepare("INSERT INTO playbook_sources (doc_id, version, data, at, by_user) VALUES ('supplier-invoices', 1, ?, '2026-11-01T00:00:00.000Z', 'seed')").run(
+      JSON.stringify({
+        id: "supplier-invoices",
+        title: "Supplier invoices",
+        system: "Hub policy record",
+        owner: "Finance",
+        audiences: ["coordinator", "staff"],
+        sections: [{ anchor: "rejected-invoice", heading: "Rejected", text: "An owner's edited text." }],
+      }),
+    );
     const j = userById(old, "jordan")!;
     const lib = playbookLibrary(old, j, now);
     const record = lib.sources.find((x) => x.id === "supplier-invoices")!;
@@ -438,5 +443,240 @@ describe("use, and what it is evidence of", () => {
       views: 0,
       savedNow: 1,
     });
+  });
+});
+
+describe("the marker for an earlier highlight", () => {
+  const marks = (u: User, g: { slug: string }, input: Record<string, unknown> = {}, at = now) =>
+    pageMarks(db, u, { source: "guide", id: g.slug, page: "p1", ...input }, at).marks;
+
+  it("marks an exact match, for the person who saved it only, on the page it's on", () => {
+    const g = guide();
+    const saved = savePassage(db, riley, { source: "guide", id: g.slug, revisionId: g.revisionId, pageId: "p1", blockId: "b1", quote: SENTENCE }, now);
+    expect(marks(riley, g)).toEqual([{ id: saved.id, blockId: "b1", quote: SENTENCE }]);
+    // Someone else reading the same page sees no marks of riley's; nor does someone who can't read it.
+    expect(marks(jordan, g)).toEqual([]);
+    expect(marks(sam, g)).toEqual([]);
+    // Another page of the course has nothing marked.
+    expect(marks(riley, g, { page: "p2" })).toEqual([]);
+    expect(() => pageMarks(db, riley, { source: "scorm", id: g.slug }, now)).toThrow(/Unknown source/);
+  });
+
+  it("doesn't mark a changed or missing passage, and Favourites says why", () => {
+    const g = guide();
+    const saved = savePassage(db, riley, { source: "guide", id: g.slug, revisionId: g.revisionId, pageId: "p1", blockId: "b1", quote: SENTENCE }, now);
+    // Published again, the words untouched: not marked until the reader has checked it, as Favourites asks.
+    republish(g.id, `A new opening line. ${SENTENCE} If something differs, pause.`, later(1));
+    expect(marks(riley, g, {}, later(1))).toEqual([]);
+    expect(list(riley, {}, later(1)).items[0].state).toBe("changed");
+    favouriteAction(db, riley, { action: "checked", id: saved.id }, later(1));
+    expect(marks(riley, g, {}, later(1))).toEqual([{ id: saved.id, blockId: "b1", quote: SENTENCE }]);
+    // The wording changed: not marked, and superseded in Favourites.
+    republish(g.id, "Compare every line with the agreement that applied on the date of service.", later(2));
+    expect(marks(riley, g, {}, later(2))).toEqual([]);
+    expect(list(riley, {}, later(2)).items[0].state).toBe("superseded");
+    // The source is gone: nothing marked, and unavailable in Favourites.
+    archiveGuide(db, jordan, g.id, later(3));
+    expect(marks(riley, g, {}, later(3))).toEqual([]);
+    expect(list(riley, {}, later(3)).items[0].state).toBe("unavailable");
+    // Removed from Favourites: no longer marked anywhere.
+    const h = guide();
+    const again = savePassage(db, riley, { source: "guide", id: h.slug, revisionId: h.revisionId, pageId: "p1", blockId: "b1", quote: SENTENCE }, later(3));
+    favouriteAction(db, riley, { action: "remove", id: again.id }, later(3));
+    expect(marks(riley, h, {}, later(3))).toEqual([]);
+  });
+
+  it("marks a Job Aid's words in the aid", () => {
+    contacts();
+    release(RATE);
+    const quote = "For each line, compare the service, the date, the unit and the rate with the agreement.";
+    const saved = savePassage(db, riley, { source: "aid", id: RATE, quote }, now);
+    expect(pageMarks(db, riley, { source: "aid", id: RATE }, now).marks).toEqual([{ id: saved.id, blockId: "aid", quote }]);
+    act({ action: "withdraw", id: RATE, reason: "Under review." }, later(1));
+    expect(pageMarks(db, riley, { source: "aid", id: RATE }, later(1)).marks).toEqual([]);
+  });
+});
+
+const CARD = "A supplier invoice is checked line by line against the agreement that applied on the day.";
+/** A published Topic (a throwaway, as an author would make one) whose first card has a passage worth saving. */
+function topic(body = CARD) {
+  const input = { ...blankLesson(), title: "ZZ Test invoice topic" } as Lesson;
+  input.nodes = { ...input.nodes, intro: { ...input.nodes.intro, heading: "Check each line", body } as Lesson["nodes"][string] };
+  const { slug } = createLesson(db, jordan, input, now);
+  return { slug, version: publishLesson(db, jordan, slug, now).version };
+}
+function republishTopic(slug: string, body: string, at: Date) {
+  const live = structuredClone(lessons.find((l) => l.slug === slug)!);
+  live.nodes.intro = { ...live.nodes.intro, body } as Lesson["nodes"][string];
+  saveDraft(db, jordan, slug, live, at);
+  return publishLesson(db, jordan, slug, at).version;
+}
+
+describe("highlighting a Topic card", () => {
+  const PART = "checked line by line against the agreement";
+
+  it("anchors to the topic, the card and its version, and saves only words on that card", () => {
+    const tp = topic();
+    const saved = savePassage(db, riley, { source: "topic", id: tp.slug, revisionId: tp.version, blockId: "intro", quote: PART }, now);
+    expect(saved).toMatchObject({ saved: true, first: true, quote: PART, sourceTitle: "ZZ Test invoice topic" });
+    expect(db.prepare("SELECT source_kind, source_id, block_id, section_id, version FROM saved_passages").get()).toEqual({
+      source_kind: "topic",
+      source_id: tp.slug,
+      block_id: "intro",
+      section_id: "intro",
+      version: tp.version,
+    });
+    expect(list(riley).items[0]).toMatchObject({
+      kind: "passage",
+      state: "current",
+      quote: PART,
+      detail: "From ZZ Test invoice topic · Check each line",
+      href: `/topics/${tp.slug}?card=intro&fav=${saved.id}`,
+    });
+    expect(pageMarks(db, riley, { source: "topic", id: tp.slug, page: "intro" }, now).marks).toEqual([{ id: saved.id, blockId: "intro", quote: PART }]);
+    expect(pageMarks(db, riley, { source: "topic", id: tp.slug, page: "summary" }, now).marks).toEqual([]);
+    const bad = (input: Record<string, unknown>) => () =>
+      savePassage(db, riley, { source: "topic", id: tp.slug, blockId: "intro", quote: PART, ...input }, now);
+    // Not on that card, a card that isn't there, an older version, a topic that isn't there.
+    expect(bad({ quote: "Mrs Smith disputes the invoice from Tuesday." })).toThrow(/within one part of the page/);
+    expect(bad({ blockId: "no-such-card" })).toThrow(/within one part of the page/);
+    expect(bad({ revisionId: "0.9" })).toThrow(/updated since you opened it/);
+    expect(bad({ id: "no-such-topic" })).toThrow(/Topic not found/);
+    expect(bad({ source: "scorm" })).toThrow(/can’t be highlighted/);
+    // Save this card: the card's words, with nothing selected.
+    const whole = savePassage(db, riley, { source: "topic", id: tp.slug, revisionId: tp.version, sectionId: "intro" }, now);
+    expect(whole.quote).toBe(CARD);
+    // The use event names the source, never the words.
+    const ev = db.prepare("SELECT * FROM aid_events WHERE event = 'passage_selection_saved'").all();
+    expect(ev).toHaveLength(2);
+    expect(ev[0]).toMatchObject({ source_kind: "topic", source_id: tp.slug });
+    expect(JSON.stringify(ev)).not.toContain("line by line");
+  });
+
+  it("keeps the server's rules for version and withdrawal", () => {
+    const tp = topic();
+    const saved = savePassage(db, riley, { source: "topic", id: tp.slug, revisionId: tp.version, blockId: "intro", quote: PART }, now);
+    // A new version with the words untouched: flagged until checked, and not marked meanwhile.
+    const v2 = republishTopic(tp.slug, `New first line. ${CARD}`, later(1));
+    expect(v2).not.toBe(tp.version);
+    expect(list(riley, {}, later(1)).items[0]).toMatchObject({ state: "changed", quote: PART });
+    expect(pageMarks(db, riley, { source: "topic", id: tp.slug, page: "intro" }, later(1)).marks).toEqual([]);
+    favouriteAction(db, riley, { action: "checked", id: saved.id }, later(1));
+    expect(list(riley, {}, later(1)).items[0].state).toBe("current");
+    // Reworded: superseded, never shown as current.
+    republishTopic(tp.slug, "Each invoice line is compared with the agreement in force on the day.", later(2));
+    expect(list(riley, {}, later(2)).items[0]).toMatchObject({ state: "superseded", quote: PART });
+    // Deleted (withdrawn): unavailable, and the words go.
+    deleteLesson(db, jordan, tp.slug, later(3));
+    const gone = list(riley, {}, later(3)).items[0];
+    expect(gone).toMatchObject({ state: "unavailable", quote: "" });
+    expect(JSON.stringify(gone)).not.toContain("line by line");
+    expect(() => savePassage(db, riley, { source: "topic", id: tp.slug, blockId: "intro", quote: PART }, later(3))).toThrow(/Topic not found/);
+  });
+
+  it("is closed to learners while the topic is a challenge mission that hasn't opened", () => {
+    const tp = topic();
+    const saved = savePassage(db, riley, { source: "topic", id: tp.slug, revisionId: tp.version, blockId: "intro", quote: PART }, now);
+    db.prepare(
+      "INSERT INTO challenges (id, name, starts_on, points, status, created_by, created_at, updated_at) VALUES ('ch-zz', 'ZZ Test challenge', '2027-01-04', '{}', 'draft', 'jordan', ?, ?)",
+    ).run(now.toISOString(), now.toISOString());
+    db.prepare("INSERT INTO challenge_missions (challenge_id, day, lesson_slug) VALUES ('ch-zz', 1, ?)").run(tp.slug);
+    expect(() => savePassage(db, sam, { source: "topic", id: tp.slug, blockId: "intro", quote: PART }, now)).toThrow(/Topic not found/);
+    expect(favouriteFor(db, riley, saved.id, now)).toMatchObject({ state: "unavailable", quote: "" });
+    expect(pageMarks(db, riley, { source: "topic", id: tp.slug }, now).marks).toEqual([]);
+    // An author can still open it, so can still save from it.
+    expect(savePassage(db, jordan, { source: "topic", id: tp.slug, blockId: "intro", quote: PART }, now).saved).toBe(true);
+  });
+});
+
+const NEWS = "Coordinators now confirm a change to a visit with the client before the visit goes ahead.";
+/** A published story (a throwaway): an opening, a subheading, and a paragraph worth saving. */
+function story() {
+  const body = [
+    { type: "p" as const, text: "A short opening paragraph for this test story." },
+    { type: "h2" as const, text: "What changes" },
+    { type: "p" as const, text: NEWS },
+  ];
+  const { slug } = saveStory(db, jordan, null, { ...stories[0], title: "ZZ Test story", body }, now);
+  setStoryStatus(db, jordan, slug, "published", now);
+  return { slug, body };
+}
+
+describe("highlighting a news story", () => {
+  it("anchors to the story, the paragraph and the edition", () => {
+    const s = story();
+    const edition = now.toISOString();
+    const saved = savePassage(
+      db,
+      sam,
+      { source: "news", id: s.slug, revisionId: edition, blockId: "p2", quote: "confirm a change to a visit with the client" },
+      now,
+    );
+    expect(list(sam).items[0]).toMatchObject({ state: "current", detail: "From ZZ Test story", href: `/news/${s.slug}?fav=${saved.id}#hl-p2` });
+    expect(pageMarks(db, sam, { source: "news", id: s.slug }, now).marks).toEqual([
+      { id: saved.id, blockId: "p2", quote: "confirm a change to a visit with the client" },
+    ]);
+    // Someone else has nothing marked on the same story.
+    expect(pageMarks(db, riley, { source: "news", id: s.slug }, now).marks).toEqual([]);
+    // A section is from one subheading to the next; the opening is before the first.
+    expect(savePassage(db, sam, { source: "news", id: s.slug, sectionId: "s1" }, now).quote).toBe(NEWS);
+    expect(savePassage(db, sam, { source: "news", id: s.slug, sectionId: "s0" }, now).quote).toBe("A short opening paragraph for this test story.");
+    expect(() => savePassage(db, sam, { source: "news", id: s.slug, blockId: "p0", quote: NEWS }, now)).toThrow(/within one part of the page/);
+    expect(() => savePassage(db, sam, { source: "news", id: s.slug, revisionId: "2020-01-01", blockId: "p2", quote: NEWS }, now)).toThrow(/updated/);
+    expect(() => savePassage(db, sam, { source: "news", id: "no-such-story", blockId: "p2", quote: NEWS }, now)).toThrow(/Story not found/);
+  });
+
+  it("says when the story changed, and shows nothing once it's unpublished", () => {
+    const s = story();
+    const saved = savePassage(db, sam, { source: "news", id: s.slug, blockId: "p2", quote: NEWS }, now);
+    saveStory(db, jordan, s.slug, { ...stories.find((x) => x.slug === s.slug)!, body: [...s.body, { type: "p", text: "A line added later." }] }, later(1));
+    expect(list(sam, {}, later(1)).items[0]).toMatchObject({ state: "changed", quote: NEWS });
+    saveStory(
+      db,
+      jordan,
+      s.slug,
+      { ...stories.find((x) => x.slug === s.slug)!, body: [{ type: "p", text: "Visits change only once the coordinator agrees." }] },
+      later(2),
+    );
+    expect(list(sam, {}, later(2)).items[0]).toMatchObject({ state: "superseded", quote: NEWS });
+    setStoryStatus(db, jordan, s.slug, "draft", later(3));
+    expect(favouriteFor(db, sam, saved.id, later(3))).toMatchObject({ state: "unavailable", quote: "" });
+  });
+});
+
+describe("highlighting a Resources entry", () => {
+  it("anchors to the entry and its date, and every entry's marks come back for the Resources page", () => {
+    const r = resources.find((x) => x.id === "change-request-guide")!;
+    const quote = "Contact the coordinator before you agree";
+    const saved = savePassage(db, sam, { source: "resource", id: "library", blockId: r.id, quote }, now);
+    expect(db.prepare("SELECT source_id, block_id, version FROM saved_passages").get()).toEqual({ source_id: r.id, block_id: r.id, version: r.updated });
+    expect(list(sam).items[0]).toMatchObject({ state: "current", detail: `From ${r.title}`, href: `/resources?fav=${saved.id}#${r.id}` });
+    expect(pageMarks(db, sam, { source: "resource", id: "library" }, now).marks).toEqual([{ id: saved.id, blockId: r.id, quote }]);
+    expect(savePassage(db, sam, { source: "resource", id: "library", sectionId: r.id }, now).quote).toContain(r.points[0]);
+    expect(() => savePassage(db, sam, { source: "resource", id: "library", blockId: "no-such-entry", quote }, now)).toThrow(/Resource not found/);
+  });
+});
+
+describe("the saved passages table", () => {
+  it("is widened for the new kinds of source on a database made before them, keeping what was saved", () => {
+    const old = openDb(":memory:");
+    old.exec("DROP TABLE IF EXISTS saved_passages");
+    old.exec(`CREATE TABLE saved_passages (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), source_kind TEXT NOT NULL CHECK (source_kind IN ('guide', 'aid')), source_id TEXT NOT NULL,
+  version TEXT NOT NULL, page_id TEXT NOT NULL DEFAULT '', section_id TEXT NOT NULL DEFAULT '', block_id TEXT NOT NULL DEFAULT '', source_title TEXT NOT NULL DEFAULT '',
+  quote TEXT NOT NULL, hash TEXT NOT NULL, whole_section INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, UNIQUE (user_id, source_kind, source_id, hash)
+)`);
+    const insert = (id: string, kind: string) =>
+      old
+        .prepare(
+          "INSERT INTO saved_passages (id, user_id, source_kind, source_id, version, quote, hash, created_at) VALUES (?, 'riley', ?, 'x', '1', 'words', ?, ?)",
+        )
+        .run(id, kind, id, now.toISOString());
+    insert("sp-old", "guide");
+    expect(() => insert("sp-topic", "topic")).toThrow();
+    ensurePassageKinds(old);
+    insert("sp-topic", "topic");
+    expect((old.prepare("SELECT id FROM saved_passages ORDER BY id").all() as { id: string }[]).map((r) => r.id)).toEqual(["sp-old", "sp-topic"]);
+    expect((old.prepare("SELECT sql FROM sqlite_master WHERE name = 'saved_passages'").get() as { sql: string }).sql).toContain("'resource'");
   });
 });

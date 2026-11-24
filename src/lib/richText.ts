@@ -2,7 +2,7 @@
   Rich text for card bodies, kept as a short plain string with a few marks so lessons stay easy to
   translate, compare and store:
 
-    **bold**   *italic*   [words](https://example.com)
+    **bold**   *italic*   [words](https://example.com)   ==an emphasised phrase==
     - a bullet            1. a numbered item
     | Head | Head |       (a table: the first row is the heading row,
     | --- | --- |          the dashes row is optional)
@@ -12,9 +12,15 @@
   spreadsheet (tab-separated lines) is read as a table too. Nothing here is ever put on the page as
   HTML from the lesson: the player builds elements from the parsed blocks, and the editor's HTML
   comes from toHtml, which escapes everything.
+
+  ==Emphasised text== is an author's marker behind a short phrase in a Magazine story (docs/emphasise-text.md).
+  It is presentation only: the words inside are ordinary text, so plainText, word counts and a learner's saved
+  passages read exactly the same with or without it. The marks must hug the words ("== x ==" stays as typed),
+  and "a == b" or "x === y" stay text, so older content that happens to hold equals signs reads as it did.
 */
 
-export type Inline = { t: "text"; v: string } | { t: "b"; c: Inline[] } | { t: "i"; c: Inline[] } | { t: "a"; href: string; c: Inline[] } | { t: "br" };
+export type Inline =
+  { t: "text"; v: string } | { t: "b"; c: Inline[] } | { t: "i"; c: Inline[] } | { t: "m"; c: Inline[] } | { t: "a"; href: string; c: Inline[] } | { t: "br" };
 export type Block =
   { t: "p"; c: Inline[] } | { t: "ul"; items: Inline[][] } | { t: "ol"; items: Inline[][] } | { t: "table"; head: Inline[][] | null; rows: Inline[][][] };
 
@@ -34,7 +40,7 @@ export function parseInline(s: string): Inline[] {
   let i = 0;
   while (i < s.length) {
     const ch = s[i];
-    if (ch === "\\" && i + 1 < s.length && /[\\*[\]|.)•-]/.test(s[i + 1])) {
+    if (ch === "\\" && i + 1 < s.length && /[\\*[\]|.)•=-]/.test(s[i + 1])) {
       text += s[i + 1];
       i += 2;
       continue;
@@ -69,6 +75,15 @@ export function parseInline(s: string): Inline[] {
         flush();
         out.push({ t: "a", href, c: parseInline(s.slice(i + 1, mid)) });
         i = end + 1;
+        continue;
+      }
+    } else if (s.startsWith("==", i) && /[^\s=]/.test(s[i + 2] ?? "")) {
+      // Emphasis hugs its words at both ends, and "===" is never a mark.
+      const end = closing(s, "==", i + 2);
+      if (end > i + 2 && !/\s/.test(s[end - 1]) && s[end + 2] !== "=") {
+        flush();
+        out.push({ t: "m", c: parseInline(s.slice(i + 2, end)) });
+        i = end + 2;
         continue;
       }
     }
@@ -167,21 +182,38 @@ export const hasFormatting = (src: string) => parseRich(src).some((b) => b.t !==
 
 /* Back to text: the marks for each block. */
 
-const escapeText = (s: string, inTable: boolean) => s.replace(inTable ? /[\\*[\]|]/g : /[\\*[\]]/g, (m) => `\\${m}`);
+/** "==" that could open or close emphasis is escaped; "a == b" and "x === y", with spaces round them, are left as typed. */
+const escapeEquals = (s: string) => {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const loose = (ch: string | undefined) => ch !== undefined && /[\s=]/.test(ch);
+    out += s[i] === "=" && s[i + 1] === "=" && !(loose(s[i - 1]) && loose(s[i + 2])) ? "\\=" : s[i];
+  }
+  return out;
+};
+const escapeText = (s: string, inTable: boolean) => escapeEquals(s.replace(inTable ? /[\\*[\]|]/g : /[\\*[\]]/g, (m) => `\\${m}`));
 
 export function inlineToText(c: Inline[], inTable = false): string {
   return c
-    .map((x) =>
-      x.t === "text"
-        ? escapeText(x.v, inTable)
-        : x.t === "br"
-          ? inTable
-            ? " "
-            : "\n"
-          : x.t === "a"
-            ? `[${inlineToText(x.c, inTable)}](${x.href})`
-            : wrap(inlineToText(x.c, inTable), x.t === "b" ? "**" : "*"),
-    )
+    .map((x, n) => {
+      if (x.t === "text") {
+        let v = escapeText(x.v, inTable);
+        // An equals sign right beside emphasis would run into its marks.
+        if (c[n + 1]?.t === "m") v = v.replace(/(?<!\\)=$/, "\\=");
+        if (c[n - 1]?.t === "m") v = v.replace(/^=/, "\\=");
+        return v;
+      }
+      if (x.t === "br") return inTable ? " " : "\n";
+      if (x.t === "a") return `[${inlineToText(x.c, inTable)}](${x.href})`;
+      if (x.t === "m")
+        return wrap(
+          inlineToText(x.c, inTable)
+            .replace(/^(\s*)=/, "$1\\=")
+            .replace(/(?<!\\)=(\s*)$/, "\\=$1"),
+          "==",
+        );
+      return wrap(inlineToText(x.c, inTable), x.t === "b" ? "**" : "*");
+    })
     .join("");
 }
 
@@ -239,7 +271,9 @@ export function inlineHtml(c: Inline[]): string {
           ? "<br>"
           : x.t === "a"
             ? `<a href="${escapeHtml(x.href)}">${inlineHtml(x.c)}</a>`
-            : `<${x.t === "b" ? "strong" : "em"}>${inlineHtml(x.c)}</${x.t === "b" ? "strong" : "em"}>`,
+            : x.t === "m"
+              ? `<mark class="tc-emph" data-emph="">${inlineHtml(x.c)}</mark>`
+              : `<${x.t === "b" ? "strong" : "em"}>${inlineHtml(x.c)}</${x.t === "b" ? "strong" : "em"}>`,
     )
     .join("");
 }
@@ -288,6 +322,8 @@ function domInline(n: DomLike): Inline[] {
   const bold = weight ? weight === "bold" || Number(weight) >= 600 : name === "B" || name === "STRONG";
   const italic = /font-style:\s*italic/.test(style) || name === "I" || name === "EM";
   let out: Inline[] = inner;
+  // Emphasis is only the editor's own mark (data-emph): a <mark> pasted from another site keeps its words, not its colour.
+  if (name === "MARK" && n.getAttribute?.("data-emph") != null) out = [{ t: "m", c: out }];
   if (name === "A") {
     const href = safeHref(n.getAttribute?.("href") ?? "");
     if (href) out = [{ t: "a", href, c: out }];
@@ -301,8 +337,8 @@ function domInline(n: DomLike): Inline[] {
 function tidy(c: Inline[]): Inline[] {
   const out: Inline[] = [];
   for (const x of c) {
-    const y = x.t === "b" || x.t === "i" || x.t === "a" ? { ...x, c: tidy(x.c) } : x;
-    if ((y.t === "b" || y.t === "i") && !y.c.some((z) => z.t !== "text" || z.v.trim())) {
+    const y = x.t === "b" || x.t === "i" || x.t === "a" || x.t === "m" ? { ...x, c: tidy(x.c) } : x;
+    if ((y.t === "b" || y.t === "i" || y.t === "m") && !y.c.some((z) => z.t !== "text" || z.v.trim())) {
       out.push(...y.c);
       continue;
     }
@@ -312,7 +348,10 @@ function tidy(c: Inline[]): Inline[] {
       continue;
     }
     const last = out[out.length - 1];
-    if (y.t === "text" && last?.t === "text") last.v += y.v;
+    // Emphasis inside emphasis is one mark, and two marks side by side are one phrase.
+    if (y.t === "m") y.c = y.c.flatMap((z) => (z.t === "m" ? z.c : [z]));
+    if (y.t === "m" && last?.t === "m") last.c = tidy([...last.c, ...y.c]);
+    else if (y.t === "text" && last?.t === "text") last.v += y.v;
     else out.push(y);
   }
   return out;
@@ -381,3 +420,28 @@ export function domToBlocks(root: DomLike): Block[] {
 }
 
 export const domToText = (root: DomLike) => blocksToText(domToBlocks(root));
+
+/* Emphasis (docs/emphasise-text.md). */
+
+const inlinesOf = (b: Block): Inline[][] => (b.t === "p" ? [b.c] : b.t === "table" ? [...(b.head ?? []), ...b.rows.flat()] : b.items);
+const flatWords = (c: Inline[]): string => c.map((x) => (x.t === "text" ? x.v : x.t === "br" ? " " : flatWords(x.c))).join("");
+
+/** The emphasised phrases in some rich text, as plain words, paragraph by paragraph (a list item or table cell is a paragraph here). */
+export function emphasisIn(src: string): string[][] {
+  const found = (c: Inline[]): string[] => c.flatMap((x) => (x.t === "m" ? [flatWords(x.c).replace(/\s+/g, " ").trim()] : "c" in x ? found(x.c) : []));
+  return parseRich(src).flatMap(inlinesOf).map(found);
+}
+
+/** The same text with its emphasis taken off and every word left where it was. */
+export function withoutEmphasis(src: string) {
+  if (!src.includes("==")) return src;
+  const off = (c: Inline[]): Inline[] => c.flatMap((x) => (x.t === "m" ? off(x.c) : "c" in x ? [{ ...x, c: off(x.c) }] : [x]));
+  const blocks = parseRich(src).map((b): Block =>
+    b.t === "p"
+      ? { t: "p", c: off(b.c) }
+      : b.t === "table"
+        ? { t: "table", head: b.head?.map(off) ?? null, rows: b.rows.map((r) => r.map(off)) }
+        : { t: b.t, items: b.items.map(off) },
+  );
+  return blocksToText(blocks);
+}

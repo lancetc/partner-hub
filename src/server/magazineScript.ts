@@ -14,7 +14,7 @@ export const SCRIPT_LENGTHS = [30, 60, 120, 180] as const;
 
 /** Plain words from a block, for the prompt. */
 function wordsOf(b: Block): string {
-  const strip = (s: string) => s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_#>`]/g, "");
+  const strip = (s: string) => s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_#>`]|==/g, "");
   switch (b.type) {
     case "text":
       return [b.heading, strip(b.body)].filter(Boolean).join("\n");

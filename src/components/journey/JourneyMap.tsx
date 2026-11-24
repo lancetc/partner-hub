@@ -61,6 +61,22 @@ export function JourneyMap() {
   );
 }
 
+/**
+  The map inside a Magazine article (a Hub diagram block): the feeling curve in its own navy card, then the road,
+  without the page's hero. The road keeps its Full screen and Print buttons.
+*/
+export function JourneyEmbed() {
+  return (
+    <div className="print:hidden">
+      <style>{MOTION}</style>
+      <div className="rounded-3xl bg-[#102a43] px-2 pb-2 pt-1 text-white sm:px-3 sm:pb-3">
+        <FeelingCurve />
+      </div>
+      <Road />
+    </div>
+  );
+}
+
 /** Just the road, filling its own browser window (opened from the Full screen button). */
 export function JourneyFull() {
   return (
@@ -437,82 +453,85 @@ function Road({ standalone = false }: { standalone?: boolean }) {
 
       {/* Boxed to the page width: the road scrolls sideways inside the box, not across the whole page. */}
       <div className="mx-auto mt-3 max-w-6xl px-3 sm:px-6">
-      {/* overflow-clip rather than hidden: it rounds the corners without stopping the arrows from sticking. */}
-      <div
-        ref={box}
-        className={cx("relative overflow-clip border border-line bg-bg shadow-sm", !full && "rounded-3xl")}
-        // In its own tab the box covers the whole window, above the site's header and menus.
-        style={full ? { position: "fixed", inset: 0, zIndex: 100, overflowY: "auto", overscrollBehavior: "contain", border: 0 } : undefined}
-      >
-        {full && (
-          <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-bg/95 px-4 py-2 backdrop-blur sm:px-6">
-            <h1 className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</h1>
-            <span className="flex shrink-0 gap-2">
-              <PrintButton className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted" />
-              <button
-                type="button"
-                onClick={toggleBrowserFull}
-                className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted sm:inline-flex"
-              >
-                <Icon name={browserFull ? "collapse" : "expand"} className="size-4" /> {browserFull ? "Exit full screen" : "Full screen"}
-              </button>
-              <button
-                type="button"
-                onClick={close}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted"
-              >
-                <Icon name="close" className="size-4" /> Close
-              </button>
-            </span>
-          </div>
-        )}
-        {/* Fades at the edges hint there's more to either side. (Left out in full screen, where the box scrolls down.) */}
-        {!full && (
-          <>
-            <div
-              aria-hidden
-              className={cx("pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-r from-bg to-transparent transition-opacity", edge.start && "opacity-0")}
-            />
-            <div
-              aria-hidden
-              className={cx("pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-l from-bg to-transparent transition-opacity", edge.end && "opacity-0")}
-            />
-          </>
-        )}
-        {/*
+        {/* overflow-clip rather than hidden: it rounds the corners without stopping the arrows from sticking. */}
+        <div
+          ref={box}
+          className={cx("relative overflow-clip border border-line bg-bg shadow-sm", !full && "rounded-3xl")}
+          // In its own tab the box covers the whole window, above the site's header and menus.
+          style={full ? { position: "fixed", inset: 0, zIndex: 100, overflowY: "auto", overscrollBehavior: "contain", border: 0 } : undefined}
+        >
+          {full && (
+            <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-bg/95 px-4 py-2 backdrop-blur sm:px-6">
+              <h1 className="min-w-0 truncate font-serif text-lg font-semibold">The client journey</h1>
+              <span className="flex shrink-0 gap-2">
+                <PrintButton className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted" />
+                <button
+                  type="button"
+                  onClick={toggleBrowserFull}
+                  className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted sm:inline-flex"
+                >
+                  <Icon name={browserFull ? "collapse" : "expand"} className="size-4" /> {browserFull ? "Exit full screen" : "Full screen"}
+                </button>
+                <button
+                  type="button"
+                  onClick={close}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-muted"
+                >
+                  <Icon name="close" className="size-4" /> Close
+                </button>
+              </span>
+            </div>
+          )}
+          {/* Fades at the edges hint there's more to either side. (Left out in full screen, where the box scrolls down.) */}
+          {!full && (
+            <>
+              <div
+                aria-hidden
+                className={cx(
+                  "pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-r from-bg to-transparent transition-opacity",
+                  edge.start && "opacity-0",
+                )}
+              />
+              <div
+                aria-hidden
+                className={cx(
+                  "pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-l from-bg to-transparent transition-opacity",
+                  edge.end && "opacity-0",
+                )}
+              />
+            </>
+          )}
+          {/*
           Slideshow arrows on the box's left and right edges. The box is taller than most screens, so they ride at
           the middle of the screen while the box is in view (sticky), never leaving it; in full screen they're simply
           fixed at the middle. Each fades away at its end of the road. Phones swipe instead, so the buttons don't
           cover the cards there.
         */}
-        <div
-          className="pointer-events-none absolute inset-0 z-30 hidden sm:block"
-          style={full ? { position: "fixed", inset: 0, zIndex: 110 } : undefined}
-        >
+          <div className="pointer-events-none absolute inset-0 z-30 hidden sm:block" style={full ? { position: "fixed", inset: 0, zIndex: 110 } : undefined}>
+            <div
+              className={cx("flex justify-between px-3", !full && "sticky top-[calc(50vh-1.5rem)]")}
+              style={full ? { position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)" } : undefined}
+            >
+              <SlideArrow dir={-1} hidden={edge.start} onClick={() => move(-1)} />
+              <SlideArrow dir={1} hidden={edge.end} onClick={() => move(1)} />
+            </div>
+          </div>
           <div
-            className={cx("flex justify-between px-3", !full && "sticky top-[calc(50vh-1.5rem)]")}
-            style={full ? { position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)" } : undefined}
+            ref={scroller}
+            role="region"
+            aria-label="Client journey timeline, from left to right"
+            tabIndex={0}
+            className="snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-5 pt-4 [--jm-gutter:0.75rem] focus-visible:outline-2 sm:[--jm-gutter:1.25rem] focus-visible:outline-offset-[-2px] focus-visible:outline-focus motion-safe:scroll-smooth"
+            style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
           >
-            <SlideArrow dir={-1} hidden={edge.start} onClick={() => move(-1)} />
-            <SlideArrow dir={1} hidden={edge.end} onClick={() => move(1)} />
+            {/* Four rows per stop (phase, picture, road, card), and a fifth for side roads where the journey forks. */}
+            <ol ref={track} className="grid w-max auto-cols-max grid-flow-col grid-rows-[auto_auto_auto_auto_auto] gap-x-3">
+              {items}
+              <EndStop />
+              {sideRoads}
+            </ol>
           </div>
         </div>
-        <div
-          ref={scroller}
-          role="region"
-          aria-label="Client journey timeline, from left to right"
-          tabIndex={0}
-          className="snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-5 pt-4 [--jm-gutter:0.75rem] focus-visible:outline-2 sm:[--jm-gutter:1.25rem] focus-visible:outline-offset-[-2px] focus-visible:outline-focus motion-safe:scroll-smooth"
-          style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
-        >
-          {/* Four rows per stop (phase, picture, road, card), and a fifth for side roads where the journey forks. */}
-          <ol ref={track} className="grid w-max auto-cols-max grid-flow-col grid-rows-[auto_auto_auto_auto_auto] gap-x-3">
-            {items}
-            <EndStop />
-            {sideRoads}
-          </ol>
-        </div>
-      </div>
       </div>
     </section>
   );
@@ -649,11 +668,7 @@ function StageStop({ s }: { s: Stage }) {
       <PhaseBand n={s.n} named={phase.stages[0] === s.n && s.n !== 1} />
       {/* Smaller than the card below, centred over the stop. A photo, where the stage has one, fills the same frame. */}
       <div className="jm-art relative mx-auto aspect-[400/260] w-[78%] self-end overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
-        {s.photo ? (
-          <Image src={s.photo.src} alt={s.photo.alt} fill sizes="16rem" className="object-cover" />
-        ) : (
-          <StageArt n={s.n} className="block size-full" />
-        )}
+        {s.photo ? <Image src={s.photo.src} alt={s.photo.alt} fill sizes="16rem" className="object-cover" /> : <StageArt n={s.n} className="block size-full" />}
       </div>
       <div className="relative flex h-12 items-center justify-center">
         <RoadPiece />

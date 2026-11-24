@@ -146,7 +146,12 @@ async function openaiRefusal(res: Response) {
 }
 
 /** Makes the picture with OpenAI in one go, keeps it in the image library, and returns it ready to use. */
-async function generateWithOpenAI(db: Db, actor: User, input: { prompt: string; aspect: string; quality: string; lesson: string | null }, now: Date) {
+async function generateWithOpenAI(
+  db: Db,
+  actor: User,
+  input: { prompt: string; aspect: string; quality: string; lesson: string | null; about?: { title?: string; alt?: string } },
+  now: Date,
+) {
   let res: Response;
   try {
     res = await fetch("https://api.openai.com/v1/images/generations", {
@@ -177,7 +182,7 @@ async function generateWithOpenAI(db: Db, actor: User, input: { prompt: string; 
     .replace(/[^\w .,()-]/g, "")
     .slice(0, 60)
     .trim();
-  const saved = await saveUpload(db, actor, new File([bytes], `AI OpenAI – ${label}.${EXT[mime]}`, { type: mime }), size, now);
+  const saved = await saveUpload(db, actor, new File([bytes], `AI OpenAI – ${label}.${EXT[mime]}`, { type: mime }), size, now, undefined, input.about);
   const id = `oa-${randomUUID()}`;
   const at = now.toISOString();
   db.prepare(
@@ -207,7 +212,13 @@ async function generateWithOpenAI(db: Db, actor: User, input: { prompt: string; 
 }
 
 /** Starts a picture. Returns its id, to check on with checkGeneration. */
-export async function startGeneration(db: Db, actor: User, input: Parameters<typeof requestFor>[0] & { lesson?: unknown }, now: Date) {
+/** `about`: a title and description for the library when the caller knows what it asked for (a character portrait, say). */
+export async function startGeneration(
+  db: Db,
+  actor: User,
+  input: Parameters<typeof requestFor>[0] & { lesson?: unknown; about?: { title?: string; alt?: string } },
+  now: Date,
+) {
   requireAuthor(actor);
   const { model, prompt, body } = requestFor(input);
   const since = new Date(now.getTime() - 3600_000).toISOString();
@@ -216,7 +227,12 @@ export async function startGeneration(db: Db, actor: User, input: Parameters<typ
   if (model.id === OPENAI_DIRECT.id) {
     if (!openaiConfigured()) throw new HttpError(503, "OpenAI isn’t connected. Add OPENAI_API_KEY to .env.local and restart the server.");
     const lessonSlug = typeof input.lesson === "string" && /^[\w-]{1,120}$/.test(input.lesson) ? input.lesson : null;
-    return generateWithOpenAI(db, actor, { prompt: body.prompt, aspect: body.aspect_ratio, quality: body.quality ?? "medium", lesson: lessonSlug }, now);
+    return generateWithOpenAI(
+      db,
+      actor,
+      { prompt: body.prompt, aspect: body.aspect_ratio, quality: body.quality ?? "medium", lesson: lessonSlug, about: input.about },
+      now,
+    );
   }
   const d = await flowsCall(API, { method: "POST", body: JSON.stringify(body) });
   const id = String(d.id ?? "");

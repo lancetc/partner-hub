@@ -40,7 +40,7 @@ export function MyLearningPaths() {
   return (
     <section aria-labelledby="my-paths" className="mt-8">
       <h2 id="my-paths" className="mb-4 font-mulish text-sm font-extrabold uppercase tracking-[0.14em]">
-        Your learning paths
+        Your Discovery Paths
       </h2>
       <ul className="grid gap-4 lg:grid-cols-2">
         {data.paths.map((p) => (
@@ -164,7 +164,7 @@ export function PathCard({ path: p, preview = false, intro = true }: { path: MyP
           {intro && (
             <>
               <p className="font-mulish text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">
-                {p.selfEnrolled ? "Learning path · you enrolled" : "Your learning path"}
+                {p.selfEnrolled ? "Discovery Path · you enrolled" : "Your Discovery Path"}
               </p>
               <h3 className="mt-1 text-xl font-semibold leading-snug">{p.name}</h3>
               {p.description && <p className="mt-1 text-sm text-ink-muted">{p.description}</p>}

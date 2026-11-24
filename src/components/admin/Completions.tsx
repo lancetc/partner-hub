@@ -531,7 +531,7 @@ export function PathCompletions({ id }: { id: string }) {
   const rows = (data?.people ?? []).filter((r) => match(r, filter));
   const assigned = data?.people.length ?? 0;
   return (
-    <AdminShell title={data?.path.name ?? "Learning path"} back={{ href: "/admin/completions", label: "Completions" }}>
+    <AdminShell title={data?.path.name ?? "Discovery Path"} back={{ href: "/admin/completions", label: "Completions" }}>
       {error && <ErrorNote text={error} />}
       {!data ? (
         <p className="text-ink-muted">Loading…</p>

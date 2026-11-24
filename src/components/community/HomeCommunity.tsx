@@ -59,10 +59,15 @@ export function HomeCommunity() {
               {online.map((m) => (
                 <span
                   key={m.id}
-                  className="grid size-9 place-items-center rounded-full font-mulish text-xs font-extrabold text-white ring-2 ring-[#008282]"
+                  className="grid size-9 place-items-center overflow-hidden rounded-full font-mulish text-xs font-extrabold text-white ring-2 ring-[#008282]"
                   style={{ background: avatarColour(m.id) }}
                 >
-                  {initials(m.name)}
+                  {m.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a small fixed picture from /public
+                    <img src={m.photo} alt="" className="size-full object-cover" />
+                  ) : (
+                    initials(m.name)
+                  )}
                 </span>
               ))}
             </span>
@@ -102,11 +107,16 @@ export function HomeCommunity() {
                 <li key={p.id} className={i > 0 ? "border-t border-line" : undefined}>
                   <Link href="/community" className="group flex gap-3 rounded-xl py-3 sm:px-2 hover:bg-muted">
                     <span
-                      className="grid size-10 shrink-0 place-items-center rounded-full font-mulish text-xs font-extrabold text-white"
+                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full font-mulish text-xs font-extrabold text-white"
                       style={{ background: avatarColour(author.id) }}
                       aria-hidden
                     >
-                      {initials(author.name)}
+                      {author.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- a small fixed picture from /public
+                        <img src={author.photo} alt="" className="size-full object-cover" />
+                      ) : (
+                        initials(author.name)
+                      )}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold leading-snug group-hover:underline">{p.title}</span>

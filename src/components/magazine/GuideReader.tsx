@@ -10,16 +10,20 @@ import { Icon } from "../Icon";
 import { GuideBlock, column, type BlockContext } from "./GuideBlocks";
 import type { ReflectionSaved } from "./InteractiveBlocks";
 import { AudioGuideCard } from "./AudioGuide";
+import { CourseCover } from "./CourseCover";
 import { useSelfReview } from "./SelfReview";
 import { useMyNotes } from "./ReflectBlocks";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
+import { MemberCaption } from "../community/MemberCaption";
 import { playable } from "@/lib/magazineNarration";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AvaRelay } from "../relay/AvaRelay";
 import { FavouriteBanner } from "../favourites/FavouriteBanner";
 import { ReturnOpeningPanel, useReturnOpening } from "../living/ReturnOpening";
 import { Highlighter, SaveSection } from "../favourites/Highlighter";
+import { SavedMarkChips, SavedMarks } from "../favourites/SavedMarks";
 import { relayOn } from "@/lib/relayConfig";
+import { chapterLabel, chapterOf, hasChapters, pageGroups } from "@/lib/magazineChapters";
 
 /*
   Reading a Magazine. A one-page Guide opens straight on its article; a Course opens on an overview
@@ -120,7 +124,9 @@ function requirementText(guide: ReaderGuide) {
     case "decision":
       return "Answer the questions on each required page, then finish it, to complete the course.";
     case "assessed":
-      return "Finish the required pages and pass the quiz to complete the course.";
+      return Object.values(guide.quizzes).filter(Boolean).length > 1
+        ? "Finish the required pages and pass every quiz to complete the course."
+        : "Finish the required pages and pass the quiz to complete the course.";
   }
 }
 
@@ -149,6 +155,14 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
   const started = guide.progress.started && !preview;
   const doneHere = completed?.thisRevision ? completed : null;
   const audioGuide = useAudioGuide(guide, send);
+  // The course's approved introduction, which Ava gives on the cover in her own voice.
+  const intro = audioGuide.audio?.intro;
+  // Her video for the course's introduction comes with the course (loadGuide), so the cover knows from the start.
+  const introVideo = pages.length > 1 ? (guide.ava?.videos[`magazine:${guide.id}:intro`] ?? null) : null;
+  // Ava on the cover: her video (with its own words, when it has a script), or the approved Audio Guide introduction
+  // spoken in her voice. A video goes on even before its script is written; the words on screen come with the script.
+  const introScript = audioGuide.audio?.levels.course && intro?.status === "approved" && intro.script.trim() ? intro.script.trim() : null;
+  const avaIntro = introVideo ? introVideo.transcript || introScript || "" : introScript;
 
   const acknowledge = async () => {
     setProblem(null);
@@ -180,7 +194,8 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
               <AudioGuideCard
                 variant="inline"
                 toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
-                narration={audioGuide.audio.intro}
+                // With Ava giving the introduction on the cover, this keeps only the Audio guide switch.
+                narration={avaIntro !== null ? undefined : audioGuide.audio.intro}
                 audio={audioGuide.audio}
                 level="course"
                 autoplay={audioGuide.on && !doneHere}
@@ -205,9 +220,26 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             )}
           </div>
         </div>
-        {guide.cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={guide.cover} alt="" className="aspect-[16/9] w-full rounded-3xl bg-muted object-cover" />
+        {/* Ava gives the course's introduction first, then the cover picture takes her place (CourseCover). */}
+        {avaIntro !== null ? (
+          <CourseCover
+            line={`magazine:${guide.id}:intro`}
+            ava={guide.ava}
+            video={introVideo}
+            title={guide.title}
+            cover={guide.cover ?? null}
+            script={avaIntro}
+            startMuted={audioGuide.offered && !audioGuide.on}
+            onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
+          />
+        ) : (
+          guide.cover && (
+            <figure className="relative overflow-hidden rounded-3xl bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={guide.cover} alt="" className="aspect-[16/9] w-full object-cover" />
+              <MemberCaption src={guide.cover} />
+            </figure>
+          )
         )}
       </header>
       <Notices guide={guide} preview={preview} stale={stale} />
@@ -219,8 +251,10 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
           </h2>
           <p className="text-sm text-ink-muted">{requirementText(guide)}</p>
         </div>
-        <ol className="mt-5 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
-          {pages.map((p, i) => {
+        {(() => {
+          // A course in chapters lists its pages under chapter headings (h3), each page then an h4; otherwise one list as before.
+          const listClass = "flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface";
+          const item = (p: Page, i: number, Heading: "h3" | "h4") => {
             const state = finished.has(p.id) ? "Finished" : guide.progress.lastPage === p.id ? "In progress" : "Not started";
             return (
               <li key={p.id} className="group relative flex items-start gap-4 p-4 sm:p-5">
@@ -234,14 +268,14 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
                   {finished.has(p.id) ? <Icon name="check" className="size-5" /> : i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-serif text-xl font-semibold leading-snug">
+                  <Heading className="font-serif text-xl font-semibold leading-snug">
                     <Link
                       href={`${base}/${p.id}`}
                       className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
                     >
                       {pageTitle(guide.doc, p, guide.title)}
                     </Link>
-                  </h3>
+                  </Heading>
                   {p.purpose && <p className="mt-1 text-ink-muted">{p.purpose}</p>}
                   <p className="mt-2 flex flex-wrap gap-x-3 text-sm text-ink-muted">
                     <span>{guide.pageMinutes[p.id]} min</span>
@@ -253,8 +287,29 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
                 <Icon name="arrow-right" className="mt-3 size-4 shrink-0 text-accent" />
               </li>
             );
-          })}
-        </ol>
+          };
+          if (!hasChapters(pages)) return <ol className={cx("mt-5", listClass)}>{pages.map((p, i) => item(p, i, "h3"))}</ol>;
+          return (
+            <div className="mt-5 flex flex-col gap-8">
+              {pageGroups(pages).map((g) =>
+                g.chapter ? (
+                  <section key={g.chapter.startPageId} aria-labelledby={`chapter-${g.chapter.startPageId}`}>
+                    <h3 id={`chapter-${g.chapter.startPageId}`} className="font-serif text-xl font-semibold">
+                      <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Chapter {g.chapter.number}</span>
+                      {g.chapter.title}
+                    </h3>
+                    {g.chapter.intro && <p className="mt-1 text-ink-muted">{g.chapter.intro}</p>}
+                    <ol className={cx("mt-3", listClass)}>{g.pages.map((p) => item(p, pages.indexOf(p), "h4"))}</ol>
+                  </section>
+                ) : (
+                  <ol key="before" className={listClass} aria-label="Before the chapters">
+                    {g.pages.map((p) => item(p, pages.indexOf(p), "h3"))}
+                  </ol>
+                ),
+              )}
+            </div>
+          );
+        })()}
         {guide.completion === "reference" && !doneHere && (
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
@@ -302,6 +357,21 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     useCallback(() => setStale(true), []),
   );
   const audioGuide = useAudioGuide(guide, send);
+  // Ava introducing this page, when its introduction has a video (Admin → AI Learning Guide, Ava's talking videos): she
+  // plays first where the page's picture goes, and the picture takes over once she's finished.
+  // A one-page course has no cover, so Ava gives the course's introduction here instead, as she would on the cover:
+  // its approved script spoken in her voice, or her video for it.
+  const introLine = `magazine:${guide.id}:intro`;
+  const courseIntro = audioGuide.audio?.levels.course && audioGuide.audio.intro?.status === "approved" ? audioGuide.audio.intro.script.trim() : "";
+  const pageLine = course ? `magazine:${guide.id}:page:${page.id}` : introLine;
+  const pageVideo = guide.ava?.videos[pageLine] ?? null;
+  const pageIntro = course
+    ? pageVideo
+      ? pageVideo.transcript || (page.narration?.status === "approved" ? page.narration.script.trim() : "")
+      : null
+    : pageVideo
+      ? pageVideo.transcript || courseIntro
+      : courseIntro || null;
   // Story moments placed beside this course's pages and blocks (docs/story-plans.md): approved, optional, never counted.
   const story = useStory("guide", guide.id);
   // A return episode: what opens this page if it comes back to an earlier story, with a private line only its learner gets.
@@ -465,6 +535,10 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
             {course ? (
               <>
+                {(() => {
+                  const ch = chapterOf(pages, page.id);
+                  return ch && <span className="block pb-1">{chapterLabel(ch)}</span>;
+                })()}
                 Page {index + 1} of {pages.length}
                 {!page.required && " · Optional"}
               </>
@@ -492,7 +566,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 key={page.id}
                 variant="inline"
                 toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
-                narration={page.narration}
+                // With Ava's video introducing the page, this keeps only the Audio guide switch.
+                narration={pageIntro !== null ? undefined : page.narration}
                 audio={audioGuide.audio}
                 level={course ? "page" : "course"}
                 autoplay={audioGuide.on && !finished.includes(page.id)}
@@ -524,93 +599,115 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             </a>
           )}
         </div>
-        {hero?.src && (
-          // The picture at the top is decoration: the headline says what it's about.
-          <div className="overflow-hidden rounded-3xl bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={hero.src} alt="" className="mag-hero-picture aspect-[16/9] w-full object-cover" />
-          </div>
+        {pageIntro !== null ? (
+          <CourseCover
+            line={pageLine}
+            ava={guide.ava}
+            video={pageVideo}
+            title={title}
+            cover={hero?.src ?? null}
+            script={pageIntro}
+            startMuted={audioGuide.offered && !audioGuide.on}
+            onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
+          />
+        ) : (
+          hero?.src && (
+            // The picture at the top is decoration: the headline says what it's about.
+            // When it's one of the Digital Members, their name and approach caption it (community/MemberCaption).
+            <figure className="relative overflow-hidden rounded-3xl bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={hero.src} alt="" className="mag-hero-picture aspect-[16/9] w-full object-cover" />
+              <MemberCaption src={hero.src} />
+            </figure>
+          )
         )}
       </header>
       <Notices guide={guide} preview={preview} stale={stale} />
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
-        <Rail
-          guide={guide}
-          page={page}
-          base={base}
-          active={active}
-          finished={finished}
-          extra={
-            (selfReview.available || myNotes.available || !preview) && (
-              <div className="flex flex-col items-start gap-2">
-                {selfReview.button("rail")}
-                {myNotes.button}
-                {/* Save this page (or, when it isn't offered by itself, its course) to a personal Discovery Path. */}
-                {!preview && <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />}
-              </div>
-            )
-          }
-        />
-        <div ref={pageBody} className="flex min-w-0 flex-col gap-16">
-          {/* Opened from Favourites: the saved passage, where it stands against this version, and the way back. */}
-          <FavouriteBanner className={column} />
-          {/* A return episode (docs/living-cases.md): where we left the person, what's changed, what to decide. Before Ava's bar. */}
-          {returning.opening && <ReturnOpeningPanel key={returning.opening.id} opening={returning.opening} noteId={returning.noteId} className={column} />}
-          {/* Ava Relay (docs/ava-relay.md): one dial bar, after the page's introduction and before its first block. Part of the page, not of its content. */}
-          {relayOn(guide.doc.relay, page) && (
-            <AvaRelay
-              key={page.id}
-              className={column}
-              slug={guide.slug}
-              revisionId={guide.revisionId}
-              pageId={page.id}
-              preview={preview ? { guideId: guide.id, answers } : undefined}
-            />
-          )}
-          <StoryAt moments={story} place={`page:${page.id}`} className={column} onBegin={beginAt(`section-${page.sections[0]?.id}`)} />
-          {page.sections.map((s, i) => (
-            <section key={s.id} id={`section-${s.id}`} tabIndex={-1} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8 outline-none">
-              <div className={cx(column, "mag-reveal")}>
-                <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">{String(i + 1).padStart(2, "0")}</p>
-                <h2 id={`h-${s.id}`} className="mt-1 font-serif text-3xl font-semibold tracking-tight">
-                  {s.title}
-                </h2>
-                {/* The same as highlighting, with nothing to select: for touch, a keyboard or a screen reader. */}
-                {!preview && page.kind === "content" && (
-                  <p className="mt-2 print:hidden">
-                    <SaveSection source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} sectionId={s.id} />
-                  </p>
-                )}
-              </div>
-              {s.blocks.map((b) => (
-                <Fragment key={b.id}>
-                  <StoryAt moments={story} place={b.id} className={column} onBegin={beginAt(`block-${b.id}`)} />
-                  <div id={`block-${b.id}`} tabIndex={-1} className="mag-reveal scroll-mt-24 outline-none" data-reveal={b.reveal}>
-                    <GuideBlock block={b} ctx={ctx} />
-                  </div>
-                  <StoryAt moments={story} place={b.id} position="after" className={column} />
-                </Fragment>
-              ))}
-            </section>
-          ))}
-          <Finish
+      {/* This reader's earlier highlights on this page, marked where they still stand word for word (favourites/SavedMarks). */}
+      <SavedMarks root={pageBody} source="guide" id={guide.slug} page={page.id} off={preview}>
+        <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
+          <Rail
             guide={guide}
             page={page}
             base={base}
-            preview={preview}
-            answers={answers}
+            active={active}
             finished={finished}
-            completed={completed}
-            send={send}
-            onFinished={(f, c) => {
-              setFinished(f);
-              if (c) setCompleted({ ...c, thisRevision: true });
-            }}
+            extra={
+              (selfReview.available || myNotes.available || !preview) && (
+                <div className="flex flex-col items-start gap-2">
+                  {selfReview.button("rail")}
+                  {myNotes.button}
+                  {/* Save this page (or, when it isn't offered by itself, its course) to a personal Discovery Path. */}
+                  {!preview && <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />}
+                </div>
+              )
+            }
           />
+          <div ref={pageBody} className="flex min-w-0 flex-col gap-16">
+            {/* Opened from Favourites: the saved passage, where it stands against this version, and the way back. */}
+            <FavouriteBanner className={column} />
+            {/* A return episode (docs/living-cases.md): where we left the person, what's changed, what to decide. Before Ava's bar. */}
+            {returning.opening && <ReturnOpeningPanel key={returning.opening.id} opening={returning.opening} noteId={returning.noteId} className={column} />}
+            {/* Ava Relay (docs/ava-relay.md): one dial bar, after the page's introduction and before its first block. Part of the page, not of its content. */}
+            {relayOn(guide.doc.relay, page) && (
+              <AvaRelay
+                key={page.id}
+                className={column}
+                slug={guide.slug}
+                revisionId={guide.revisionId}
+                pageId={page.id}
+                preview={preview ? { guideId: guide.id, answers } : undefined}
+              />
+            )}
+            <StoryAt moments={story} place={`page:${page.id}`} className={column} onBegin={beginAt(`section-${page.sections[0]?.id}`)} />
+            {page.sections.map((s, i) => (
+              <section key={s.id} id={`section-${s.id}`} tabIndex={-1} aria-labelledby={`h-${s.id}`} className="flex scroll-mt-24 flex-col gap-8 outline-none">
+                <div className={cx(column, "mag-reveal")}>
+                  {/* The section's number, with Save this section floated right on the same line, so it takes no room of its own. */}
+                  <div className="flex min-h-11 items-center justify-between gap-3">
+                    <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">{String(i + 1).padStart(2, "0")}</p>
+                    {/* The same as highlighting, with nothing to select: for touch, a keyboard or a screen reader. */}
+                    {!preview && page.kind === "content" && (
+                      <div className="print:hidden">
+                        <SaveSection source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} sectionId={s.id} />
+                      </div>
+                    )}
+                  </div>
+                  <h2 id={`h-${s.id}`} className="mt-1 font-serif text-3xl font-semibold tracking-tight">
+                    {s.title}
+                  </h2>
+                </div>
+                {s.blocks.map((b) => (
+                  <Fragment key={b.id}>
+                    <StoryAt moments={story} place={b.id} className={column} onBegin={beginAt(`block-${b.id}`)} />
+                    <div id={`block-${b.id}`} tabIndex={-1} className="mag-reveal scroll-mt-24 outline-none" data-reveal={b.reveal}>
+                      <GuideBlock block={b} ctx={ctx} />
+                      <SavedMarkChips blockId={b.id} className={cx(column, "mt-3")} />
+                    </div>
+                    <StoryAt moments={story} place={b.id} position="after" className={column} />
+                  </Fragment>
+                ))}
+              </section>
+            ))}
+            <Finish
+              guide={guide}
+              page={page}
+              base={base}
+              preview={preview}
+              answers={answers}
+              finished={finished}
+              completed={completed}
+              send={send}
+              onFinished={(f, c) => {
+                setFinished(f);
+                if (c) setCompleted({ ...c, thisRevision: true });
+              }}
+            />
+          </div>
         </div>
-      </div>
-      {!preview && <Highlighter root={pageBody} source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} />}
+        {!preview && <Highlighter root={pageBody} source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} />}
+      </SavedMarks>
       {selfReview.button("float")}
       {selfReview.dialog}
       {myNotes.dialog}
@@ -637,42 +734,69 @@ function Rail({
 }) {
   const course = guide.doc.pages.length > 1;
   const close = (e: React.MouseEvent<HTMLAnchorElement>) => e.currentTarget.closest("details")?.removeAttribute("open");
-  const pageList = (onPick?: (e: React.MouseEvent<HTMLAnchorElement>) => void) => (
-    <ol className="flex flex-col gap-0.5">
-      {guide.doc.pages.map((p, i) => {
-        const current = p.id === page.id;
-        const done = finished.includes(p.id);
-        return (
-          <li key={p.id}>
-            <Link
-              href={`${base}/${p.id}`}
-              onClick={onPick}
-              aria-current={current ? "page" : undefined}
-              className={cx(
-                "flex items-start gap-2.5 rounded-xl border-l-[3px] px-3 py-2 text-[0.95rem] leading-snug",
-                current ? "border-action bg-tealtint font-semibold" : "border-transparent text-ink-muted hover:bg-muted hover:text-ink",
+  const pages = guide.doc.pages;
+  const here = chapterOf(pages, page.id);
+  // In a course with chapters, the pages are listed under their chapters, and the current chapter is marked.
+  const pageList = (onPick?: (e: React.MouseEvent<HTMLAnchorElement>) => void) =>
+    hasChapters(pages) ? (
+      <ol className="flex flex-col gap-3">
+        {pageGroups(pages).map((g) => {
+          const isHere = Boolean(g.chapter && here && g.chapter.startPageId === here.startPageId);
+          return (
+            <li key={g.chapter?.startPageId ?? "before"}>
+              {g.chapter && (
+                <p
+                  className={cx(
+                    "mb-1 border-l-[3px] px-3 font-mulish text-xs font-extrabold uppercase tracking-[0.1em]",
+                    isHere ? "border-accent text-accent" : "border-transparent text-ink-muted",
+                  )}
+                >
+                  {chapterLabel(g.chapter)}
+                  {isHere && <span className="sr-only"> (the chapter you’re in)</span>}
+                </p>
               )}
-            >
-              <span
-                className={cx(
-                  "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full font-mulish text-[0.65rem] font-extrabold",
-                  done ? "bg-[#2f8f5b] text-white" : "border border-line-strong",
-                )}
-                aria-hidden
-              >
-                {done ? <Icon name="check" className="size-3" /> : i + 1}
-              </span>
-              <span className="min-w-0">
-                {pageTitle(guide.doc, p, guide.title)}
-                {done && <span className="sr-only"> (finished)</span>}
-                {!p.required && <span className="block text-xs font-normal text-ink-muted">Optional</span>}
-              </span>
-            </Link>
-          </li>
-        );
-      })}
-    </ol>
-  );
+              <ol className="flex flex-col gap-0.5" aria-label={g.chapter ? `Pages in chapter ${g.chapter.number}` : "Pages before the chapters"}>
+                {g.pages.map((p) => pageRow(p, pages.indexOf(p), onPick))}
+              </ol>
+            </li>
+          );
+        })}
+      </ol>
+    ) : (
+      <ol className="flex flex-col gap-0.5">{pages.map((p, i) => pageRow(p, i, onPick))}</ol>
+    );
+  function pageRow(p: Page, i: number, onPick?: (e: React.MouseEvent<HTMLAnchorElement>) => void) {
+    const current = p.id === page.id;
+    const done = finished.includes(p.id);
+    return (
+      <li key={p.id}>
+        <Link
+          href={`${base}/${p.id}`}
+          onClick={onPick}
+          aria-current={current ? "page" : undefined}
+          className={cx(
+            "flex items-start gap-2.5 rounded-xl border-l-[3px] px-3 py-2 text-[0.95rem] leading-snug",
+            current ? "border-action bg-tealtint font-semibold" : "border-transparent text-ink-muted hover:bg-muted hover:text-ink",
+          )}
+        >
+          <span
+            className={cx(
+              "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full font-mulish text-[0.65rem] font-extrabold",
+              done ? "bg-[#2f8f5b] text-white" : "border border-line-strong",
+            )}
+            aria-hidden
+          >
+            {done ? <Icon name="check" className="size-3" /> : i + 1}
+          </span>
+          <span className="min-w-0">
+            {pageTitle(guide.doc, p, guide.title)}
+            {done && <span className="sr-only"> (finished)</span>}
+            {!p.required && <span className="block text-xs font-normal text-ink-muted">Optional</span>}
+          </span>
+        </Link>
+      </li>
+    );
+  }
   const sectionList = (onPick?: (e: React.MouseEvent<HTMLAnchorElement>) => void) => (
     <ol className="flex flex-col gap-0.5">
       {page.sections.map((s, i) => (

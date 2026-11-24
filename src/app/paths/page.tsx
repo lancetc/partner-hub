@@ -27,7 +27,7 @@ export default function LearningPathsPage() {
         eyebrow="Step by step"
         title="Discovery Paths"
         // A colleague on a garden bench working through something on her phone, on the right, with lawn behind the words.
-        image={{ src: "/images/hero-bench-reading.webp", width: 1914, height: 822, position: "80% 14%" }}
+        image={{ src: "/images/hero-bench-reading.webp", width: 1914, height: 822, position: "80% 14%", minHeight: 336 }}
         aside={
           <Suspense>
             <PathStats />

@@ -38,7 +38,8 @@ export function AskTrilogy({ className }: { className?: string }) {
     setDraft(q);
     setResult({ question: q, found: null, text: "", pending: true, ai: null });
     const update = (fn: (r: Result) => Result) => setResult((r) => (r ? fn(r) : r));
-    if (typeof navigator !== "undefined" && !navigator.onLine) return update((r) => ({ ...r, pending: false, error: "You’re offline. Ask Trilogy needs a connection." }));
+    if (typeof navigator !== "undefined" && !navigator.onLine)
+      return update((r) => ({ ...r, pending: false, error: "You’re offline. Ask Trilogy needs a connection." }));
     try {
       const res = await fetch("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: q }) });
       if (!res.ok || !res.body) {
@@ -78,12 +79,13 @@ export function AskTrilogy({ className }: { className?: string }) {
       className={cx(
         // The Trilogy mark on brand teal (public/brand/ask-trilogy-bg.svg). On a phone it sits small in the top
         // corner; wider, the picture fills the card and the content stops short of the mark (its right quarter).
-        "relative overflow-hidden rounded-3xl bg-[#007b7c] bg-[url(/brand/ask-trilogy-bg.svg)] bg-[length:auto_8rem] bg-right-top bg-no-repeat p-5 text-white shadow-sm sm:bg-cover sm:bg-right sm:p-6 sm:pr-[25%]",
+        // ask-alive (globals.css): a glint sweeps across now and then, a light runs round the question box, and the spark twinkles.
+        "ask-alive relative overflow-hidden rounded-3xl bg-[#007b7c] bg-[url(/brand/ask-trilogy-bg.svg)] bg-[length:auto_8rem] bg-right-top bg-no-repeat p-5 text-white shadow-sm sm:bg-cover sm:bg-right sm:p-6 sm:pr-[25%]",
         className,
       )}
     >
       <h2 id={`${id}-title`} className="relative flex items-center gap-2 font-serif text-2xl font-semibold">
-        <Icon name="spark" className="size-6 text-[#fab53d]" /> Ask Trilogy
+        <Icon name="spark" className="ask-spark size-6 text-[#fab53d]" /> Ask Trilogy
       </h2>
       <p className="relative mt-1 pr-20 text-white/90 sm:pr-0">Find an answer, resource or learning topic.</p>
       <form
@@ -96,16 +98,19 @@ export function AskTrilogy({ className }: { className?: string }) {
         <label htmlFor={`${id}-q`} className="sr-only">
           Your question
         </label>
-        <input
-          ref={inputRef}
-          id={`${id}-q`}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="What can I invoice for?"
-          maxLength={1000}
-          autoComplete="off"
-          className="min-h-12 min-w-0 flex-1 rounded-full border-0 bg-white px-5 text-[1.02rem] text-[#102a43] placeholder:text-[#627d98] focus-visible:outline-[#fab53d]"
-        />
+        {/* The ring: a slow light running round the box, so it looks ready for a question. */}
+        <span className="ask-ring flex min-w-0 flex-1 rounded-full p-[2px]">
+          <input
+            ref={inputRef}
+            id={`${id}-q`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="What can I invoice for?"
+            maxLength={1000}
+            autoComplete="off"
+            className="min-h-11 min-w-0 flex-1 rounded-full border-0 bg-white px-5 text-[1.02rem] text-[#102a43] placeholder:text-[#627d98] focus-visible:outline-[#fab53d]"
+          />
+        </span>
         <button
           type="submit"
           aria-label="Ask"

@@ -37,7 +37,7 @@ export function PathCelebration({ lessonSlug, confetti = true }: { lessonSlug: s
           <Icon name="star" className="size-5" />
         </span>
         <span>
-          <span className="block font-serif text-xl font-semibold">Learning path complete!</span>
+          <span className="block font-serif text-xl font-semibold">Discovery Path complete!</span>
           <span className="block">
             You’ve finished every topic in <strong>{path.name}</strong>. Your certificate is ready.
           </span>

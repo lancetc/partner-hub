@@ -24,6 +24,7 @@ import {
   type Mark,
 } from "@/lib/auditor";
 import { AUDIT_CASES } from "@/content/auditCases";
+import { sourceTypeOf } from "@/lib/auditorVetting";
 import { answerVariant, auditorState, auditorStats, restartAuditor, saveAuditor, submitAuditor } from "./auditor";
 
 /* The Document Auditor: careful verification over red marks, proportionate decisions, plain checks behind every date and sum, fictional data only, and an answer key that stays on the server. */
@@ -97,15 +98,19 @@ describe("the starter cases", () => {
 
   it("are fictional: every ABN fails the real checksum, and nothing looks like a real identifier", () => {
     for (const c of AUDIT_CASES) expect(auditorIdentifiers(c.data), c.id).toEqual([]);
-    for (const abn of ["12 345 678 901", "98 765 432 109", "23 456 789 012", "34 567 890 123"]) expect(abnChecksum(abn)).toBe(false);
+    for (const abn of ["12 345 678 901", "98 765 432 109", "23 456 789 012", "34 567 890 123", "45 678 901 234"]) expect(abnChecksum(abn)).toBe(false);
     // The ATO's own published ABN passes, so a real-format ABN is caught.
     expect(abnChecksum("51 824 753 556")).toBe(true);
   });
 
   it("keep supplier insurance, screening, service-list and pricing rules separate, each with a source and dates", () => {
     const rules = AUDIT_CASES.flatMap((c) => c.data.rules);
-    expect(new Set(rules.map((r) => r.family))).toEqual(new Set(["insurance", "screening", "verification", "claims", "pricing", "service_list"]));
-    for (const r of rules) expect(r.url.startsWith("https://") && r.effectiveFrom && r.reviewBy, r.id).toBeTruthy();
+    expect(new Set(rules.map((r) => r.family))).toEqual(
+      new Set(["insurance", "screening", "verification", "claims", "pricing", "service_list", "benchmark", "engagement"]),
+    );
+    for (const r of rules) expect(r.source && r.effectiveFrom && r.reviewBy, r.id).toBeTruthy();
+    // A public rule links to its source; a fictional training policy has no link to pretend to.
+    for (const r of rules.filter((x) => sourceTypeOf(x) === "public_rule")) expect(r.url.startsWith("https://"), r.id).toBe(true);
     expect(rules.find((r) => r.family === "service_list")!.text).toMatch(/no blanket “gutters are excluded” rule/);
   });
 });
@@ -150,8 +155,8 @@ describe("the plain checks", () => {
 describe("pilot A: the sole trader cleaner", () => {
   const a = seed("sole-trader-cleaner");
 
-  it("gives full credit for marking the expiry and the screening date, compared, and rejecting", () => {
-    const r = scoreAuditor(a, state(careful(a), "reject_current_submission", "corrected"));
+  it("gives full credit for marking the expiry and the screening date, compared, and requesting current evidence", () => {
+    const r = scoreAuditor(a, state(careful(a), "request_evidence", "corrected"));
     expect(r.scores).toEqual({ identification: 1, comparison: 1, interpretation: 1, decision: 1, action: 1 });
     expect(r.critical).toBeNull();
   });
@@ -159,19 +164,19 @@ describe("pilot A: the sole trader cleaner", () => {
   it("doesn't count the absent PI or WorkCover against a sole trader with no employees, unless they're flagged as failures", () => {
     const ok = scoreAuditor(
       a,
-      state([...careful(a), mark("a-miss-pi", "looks_correct", [], true), mark("a-miss-wc", "looks_correct", [], true)], "reject_current_submission", "hold"),
+      state([...careful(a), mark("a-miss-pi", "looks_correct", [], true), mark("a-miss-wc", "looks_correct", [], true)], "cannot_engage", "hold"),
     );
     expect(ok.falsePositives).toBe(0);
     const flagged = scoreAuditor(
       a,
-      state([...careful(a), mark("a-miss-pi", "missing", [], true), mark("a-miss-wc", "missing", [], true)], "reject_current_submission", "hold"),
+      state([...careful(a), mark("a-miss-pi", "missing", [], true), mark("a-miss-wc", "missing", [], true)], "cannot_engage", "hold"),
     );
     expect(flagged.falsePositives).toBe(2);
     expect(flagged.scores.identification).toBeCloseTo(0.6);
   });
 
   it("treats approving with an expired certificate as critical", () => {
-    const r = scoreAuditor(a, state(careful(a), "approve", "proceed"));
+    const r = scoreAuditor(a, state(careful(a), "ready", "proceed"));
     expect(r.critical).toMatch(/public liability expired/);
     expect(r.scores.decision).toBe(0);
     expect(r.actionRight).toBe(false);
@@ -180,14 +185,14 @@ describe("pilot A: the sole trader cleaner", () => {
   it("doesn't reward a count of red marks: missing the screening date is missed however many other marks there are", () => {
     const r = scoreAuditor(
       a,
-      state([mark("a-pl-to", "expired", ["a-req-date"]), mark("a-reg-name", "mismatch"), mark("a-abn-gst", "unverified")], "reject_current_submission", "hold"),
+      state([mark("a-pl-to", "expired", ["a-req-date"]), mark("a-reg-name", "mismatch"), mark("a-abn-gst", "unverified")], "cannot_engage", "hold"),
     );
     expect(r.scores.identification).toBeCloseTo(0.1); // one of two found, less 0.2 for each false positive
     expect(r.extra).toHaveLength(2);
   });
 
   it("explains the changed fact: an NDIS clearance and a new certificate make it approvable", () => {
-    expect(a.variant).toMatchObject({ decision: "approve" });
+    expect(a.variant).toMatchObject({ decision: "ready" });
     expect(a.variant!.why).toMatch(/accepted alternative/);
   });
 });
@@ -196,13 +201,13 @@ describe("pilot B: the cleaning invoice", () => {
   const b = seed("cleaning-invoice");
 
   it("finds the rate and units only through the agreed price and the service log", () => {
-    const r = scoreAuditor(b, state(careful(b), "reject_current_submission", "corrected"));
+    const r = scoreAuditor(b, state(careful(b), "cannot_engage", "corrected"));
     expect(r.scores).toMatchObject({ identification: 1, comparison: 1, decision: 1 });
     const uncompared = scoreAuditor(
       b,
       state(
         careful(b).map((m) => ({ ...m, compared: [] })),
-        "reject_current_submission",
+        "cannot_engage",
         "corrected",
       ),
     );
@@ -210,11 +215,7 @@ describe("pilot B: the cleaning invoice", () => {
   });
 
   it("flags the participant admin charge under the pricing rule, and pet care under the service list", () => {
-    const debrief = buildDebrief(
-      b,
-      state(careful(b), "reject_current_submission", "corrected"),
-      scoreAuditor(b, state(careful(b), "reject_current_submission", "corrected")),
-    );
+    const debrief = buildDebrief(b, state(careful(b), "cannot_engage", "corrected"), scoreAuditor(b, state(careful(b), "cannot_engage", "corrected")));
     expect(debrief.items.find((i) => i.id === "b-e-l2")!.rule!.family).toBe("pricing");
     expect(debrief.items.find((i) => i.id === "b-e-l3")!.rule!.family).toBe("service_list");
     expect(debrief.items.find((i) => i.id === "b-e-l3")!.explain).not.toMatch(/gutter/i);
@@ -228,12 +229,12 @@ describe("pilot B: the cleaning invoice", () => {
   });
 
   it("gives partial credit for Query, and none for approving", () => {
-    expect(scoreAuditor(b, state(careful(b), "query", "clarify")).decisionCredit).toBe("partial");
-    expect(scoreAuditor(b, state(careful(b), "approve", "proceed")).critical).toBeTruthy();
+    expect(scoreAuditor(b, state(careful(b), "request_evidence", "clarify")).decisionCredit).toBe("partial");
+    expect(scoreAuditor(b, state(careful(b), "ready", "proceed")).critical).toBeTruthy();
   });
 
   it("says the line marks would be false positives under the changed fact, and it's still rejected", () => {
-    expect(b.variant).toMatchObject({ decision: "reject_current_submission" });
+    expect(b.variant).toMatchObject({ decision: "cannot_engage" });
     expect(b.variant!.why).toMatch(/false positives/);
   });
 });
@@ -241,35 +242,40 @@ describe("pilot B: the cleaning invoice", () => {
 describe("the other cases", () => {
   it("rewards approving a complete pack, without penalising the NDIS clearance in place of a police certificate", () => {
     const c = seed("garden-pack");
-    const r = scoreAuditor(c, state([mark("c-pl-to", "looks_correct"), mark("c-miss-police", "looks_correct", [], true)], "approve", "proceed"));
+    const r = scoreAuditor(c, state([mark("c-pl-to", "looks_correct"), mark("c-miss-police", "looks_correct", [], true)], "ready", "proceed"));
     expect(r.scores).toMatchObject({ identification: 1, decision: 1, action: 1 });
     expect(r.scores.comparison).toBeNull();
-    const rejecting = scoreAuditor(
-      c,
-      state([mark("c-reg-trading", "mismatch"), mark("c-miss-police", "missing", [], true)], "reject_current_submission", "corrected"),
-    );
+    const rejecting = scoreAuditor(c, state([mark("c-reg-trading", "mismatch"), mark("c-miss-police", "missing", [], true)], "cannot_engage", "corrected"));
     expect(rejecting.falsePositives).toBe(2);
     expect(rejecting.scores.decision).toBe(0);
   });
 
   it("gives Query full credit for a cropped certificate, and none for concluding it's expired", () => {
     const d = seed("cropped-certificate");
-    expect(scoreAuditor(d, state(careful(d), "query", "corrected")).scores).toMatchObject({ decision: 1, action: 1, identification: 1 });
-    expect(scoreAuditor(d, state([mark("d-pl-period", "expired")], "reject_current_submission", "corrected")).scores).toMatchObject({
+    expect(scoreAuditor(d, state(careful(d), "request_evidence", "corrected")).scores).toMatchObject({ decision: 1, action: 1, identification: 1 });
+    expect(scoreAuditor(d, state([mark("d-pl-period", "expired")], "cannot_engage", "corrected")).scores).toMatchObject({
       decision: 0,
       interpretation: 0,
     });
-    expect(scoreAuditor(d, state(careful(d), "approve", "proceed")).critical).toBeTruthy();
+    expect(scoreAuditor(d, state(careful(d), "ready", "proceed")).critical).toBeTruthy();
   });
 });
 
 describe("what a learner must do", () => {
   it("asks for a mark, a category for each, a decision, a reason and a next action", () => {
     expect(submitProblems(emptyState())).toHaveLength(4);
-    expect(submitProblems(state([{ ...mark("a-pl-to", "expired"), category: "" }], "query", "hold"))).toEqual(["Say what you noticed for each marker."]);
+    expect(submitProblems(state([{ ...mark("a-pl-to", "expired"), category: "" }], "request_evidence", "hold"))).toEqual([
+      "Say what you noticed for each marker.",
+    ]);
     expect(
-      summary(state([mark("a-pl-to", "expired", ["a-req-date"]), mark("a-police-issued", "expired"), mark("a-abn-status", "looks_correct")], "query", "hold")),
-    ).toBe("You identified 2 possible issues, compared 1 with another source, and chose Query.");
+      summary(
+        state(
+          [mark("a-pl-to", "expired", ["a-req-date"]), mark("a-police-issued", "expired"), mark("a-abn-status", "looks_correct")],
+          "request_evidence",
+          "hold",
+        ),
+      ),
+    ).toBe("You identified 2 possible issues, compared 1 with another source, and chose Request evidence or clarification.");
   });
 });
 
@@ -346,21 +352,21 @@ describe("attempts", () => {
     saveAuditor(db, riley, c.id, { blockId: "au", state: { ...emptyState(), marks: [mark("b-inv-l1", "mismatch")] } }, now);
     expect(auditorState(db, riley, c.id, "au").state.marks).toHaveLength(1);
     expect(() => submitAuditor(db, riley, c.id, { blockId: "au" }, now)).toThrow(/Not yet/);
-    const done = submitAuditor(db, riley, c.id, { blockId: "au", state: state(careful(b), "reject_current_submission", "corrected") }, now);
+    const done = submitAuditor(db, riley, c.id, { blockId: "au", state: state(careful(b), "cannot_engage", "corrected") }, now);
     expect(done.status).toBe("finished");
     expect(done.debrief!.decision.credit).toBe("full");
     expect(done.debrief!.items.find((i) => i.id === "b-e-l1")!.checks.length).toBeGreaterThan(1);
     // Settled: a later save doesn't change it.
-    expect(saveAuditor(db, riley, c.id, { blockId: "au", state: state([], "approve", "proceed") }, now)).toEqual({ saved: false });
-    expect(auditorState(db, riley, c.id, "au").state.decision).toBe("reject_current_submission");
-    const v = answerVariant(db, riley, c.id, { blockId: "au", variant: "reject_current_submission" }, now);
+    expect(saveAuditor(db, riley, c.id, { blockId: "au", state: state([], "ready", "proceed") }, now)).toEqual({ saved: false });
+    expect(auditorState(db, riley, c.id, "au").state.decision).toBe("cannot_engage");
+    const v = answerVariant(db, riley, c.id, { blockId: "au", variant: "cannot_engage" }, now);
     expect(v.debrief!.variant).toMatchObject({ right: true });
   });
 
   it("offers the hint on a new try after a decision without full credit", () => {
     const c = course(signed("cleaning-invoice"));
     const b = seed("cleaning-invoice");
-    submitAuditor(db, riley, c.id, { blockId: "au", state: state(careful(b), "query", "clarify") }, now);
+    submitAuditor(db, riley, c.id, { blockId: "au", state: state(careful(b), "request_evidence", "clarify") }, now);
     expect(auditorState(db, riley, c.id, "au").hint).toBeNull();
     const again = restartAuditor(db, riley, c.id, { blockId: "au" }, now);
     expect(again).toMatchObject({ status: "active", tries: 1 });
@@ -375,11 +381,12 @@ describe("attempts", () => {
       db,
       riley,
       c.id,
-      { blockId: "au", state: state([mark("a-pl-to", "expired"), mark("a-miss-wc", "missing", [], true)], "approve", "proceed") },
+      { blockId: "au", state: state([mark("a-pl-to", "expired"), mark("a-miss-wc", "missing", [], true)], "ready", "proceed") },
       now,
     );
     const s = auditorStats(db, jordan, c.id).blocks[0];
-    expect(s).toMatchObject({ finished: 1, critical: 1, decisions: { approve: 1 }, missed: { "a-e-police": 1 }, falsePositives: { "a-e-wc": 1 } });
+    // One person: counts only, so nobody's choices can be singled out.
+    expect(s).toMatchObject({ finished: 1, people: 1, suppressed: true, decisions: null, missed: null, falsePositives: null });
     expect(JSON.stringify(s)).not.toMatch(/Checked it/);
     expect(() => auditorStats(db, riley, c.id)).toThrow();
     expect(a.findings.length).toBeGreaterThan(0);

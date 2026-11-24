@@ -33,6 +33,8 @@ export type Member = {
   online?: boolean;
   /** The community team, who look after the space. */
   host?: boolean;
+  /** Their profile photo (a fictional person, made by scripts/member-photos.ts). Initials when there's none. */
+  photo?: string;
 };
 
 export const members: Member[] = [
@@ -41,6 +43,7 @@ export const members: Member[] = [
     name: "Maya Thompson",
     role: "Community host",
     region: "Brisbane, QLD",
+    photo: "/images/members/maya.webp",
     joinedMonthsAgo: 18,
     points: { week: 41, month: 160, all: 2240 },
     bio: "I look after the Community and the Partner Hub. Tell me what would make this space more useful.",
@@ -53,6 +56,7 @@ export const members: Member[] = [
     name: "Priya Raman",
     role: "Physiotherapist",
     region: "Ballarat, VIC",
+    photo: "/images/members/priya.webp",
     joinedMonthsAgo: 26,
     points: { week: 58, month: 212, all: 1890 },
     bio: "Home physio for 12 years. Falls prevention is my thing, and getting people back to the letterbox.",
@@ -64,6 +68,7 @@ export const members: Member[] = [
     name: "Dan Kowalski",
     role: "Gardener and handyman",
     region: "Newcastle, NSW",
+    photo: "/images/members/dan.webp",
     joinedMonthsAgo: 14,
     points: { week: 37, month: 131, all: 1205 },
     bio: "Gardens, gutters, grab rails. If it's outside or screwed to a wall, I've probably fixed one.",
@@ -74,6 +79,7 @@ export const members: Member[] = [
     name: "Grace Liu",
     role: "Registered nurse",
     region: "Hobart, TAS",
+    photo: "/images/members/grace.webp",
     joinedMonthsAgo: 31,
     points: { week: 33, month: 148, all: 1760 },
     bio: "Community nurse. Wounds, medication and the conversations nobody else wants to have.",
@@ -85,6 +91,7 @@ export const members: Member[] = [
     name: "Tom Fraser",
     role: "Care coordinator",
     region: "Geelong, VIC",
+    photo: "/images/members/tom.webp",
     joinedMonthsAgo: 22,
     points: { week: 29, month: 117, all: 1340 },
     bio: "Coordinator for about 90 clients. Spreadsheets by day, footy by night.",
@@ -95,6 +102,7 @@ export const members: Member[] = [
     name: "Aroha Wiremu",
     role: "Occupational therapist",
     region: "Cairns, QLD",
+    photo: "/images/members/aroha.webp",
     joinedMonthsAgo: 9,
     points: { week: 26, month: 95, all: 610 },
     bio: "OT keen on small changes that keep people independent: a stool in the shower, a rail by the step.",
@@ -106,6 +114,7 @@ export const members: Member[] = [
     name: "Sam Okafor",
     role: "Cleaner",
     region: "Wollongong, NSW",
+    photo: "/images/members/sam.webp",
     joinedMonthsAgo: 11,
     points: { week: 22, month: 84, all: 540 },
     bio: "Domestic assistance across the Illawarra. I notice things, and I've learned to say something.",
@@ -116,6 +125,7 @@ export const members: Member[] = [
     name: "Leanne Brooks",
     role: "Care coordinator",
     region: "Bunbury, WA",
+    photo: "/images/members/leanne.webp",
     joinedMonthsAgo: 16,
     points: { week: 19, month: 77, all: 880 },
     bio: "Regional coordinator. Long drives, good podcasts and clients who keep me laughing.",
@@ -126,6 +136,7 @@ export const members: Member[] = [
     name: "Nick Papadopoulos",
     role: "Podiatrist",
     region: "Adelaide, SA",
+    photo: "/images/members/nick.webp",
     joinedMonthsAgo: 7,
     points: { week: 15, month: 52, all: 310 },
     bio: "Feet first. Happy feet, fewer falls.",
@@ -136,6 +147,7 @@ export const members: Member[] = [
     name: "Jess Nguyen",
     role: "Support worker",
     region: "Darwin, NT",
+    photo: "/images/members/jess.webp",
     joinedMonthsAgo: 2,
     points: { week: 12, month: 30, all: 30 },
     bio: "New to Trilogy and to aged care. Learning heaps. Ask me nothing yet!",
@@ -147,6 +159,7 @@ export const members: Member[] = [
     name: "Rob Campbell",
     role: "Gardener",
     region: "Toowoomba, QLD",
+    photo: "/images/members/rob.webp",
     joinedMonthsAgo: 20,
     points: { week: 9, month: 44, all: 720 },
     bio: "Mowing, pruning, a chat over the fence.",
@@ -157,6 +170,7 @@ export const members: Member[] = [
     name: "Mei Chen",
     role: "Dietitian",
     region: "Canberra, ACT",
+    photo: "/images/members/mei.webp",
     joinedMonthsAgo: 5,
     points: { week: 8, month: 39, all: 205 },
     bio: "Food is medicine, and also joy. I help people eat well at home.",

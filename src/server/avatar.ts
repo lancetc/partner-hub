@@ -71,7 +71,7 @@ export function setAvatarPortrait(db: Db, actor: User, portrait: unknown, now: D
 const MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 /** The portrait's bytes: an upload, or one of the built-in pictures. */
-function portraitBytes(db: Db, src: string) {
+export function portraitBytes(db: Db, src: string) {
   if (src.startsWith("/api/uploads/")) {
     const f = readUpload(db, src.split("/").pop()!);
     if (!f) throw new HttpError(404, "That photo isn’t in the image library any more.");

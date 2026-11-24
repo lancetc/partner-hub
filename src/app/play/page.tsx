@@ -23,7 +23,7 @@ export default function PlayPage() {
         eyebrow="Learn by doing"
         title="Play"
         // A colleague in headphones working through something at his table by the louvres, on the right, with a sunlit wall behind the words.
-        image={{ src: "/images/hero-headphones-notes.webp", width: 1914, height: 822, position: "88% 32%" }}
+        image={{ src: "/images/hero-headphones-notes.webp", width: 1914, height: 822, position: "88% 32%", minHeight: 336 }}
         aside={
           <HeroStats
             stats={[

@@ -68,6 +68,17 @@ export function FavouritesList() {
   };
   const d = loaded.data;
   const none = d && d.counts.all === 0;
+  // Arrived from "Open in Favourites" on a marked passage (/favourites#fav-…): that item, in view and outlined, once.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || !d) return;
+    const el = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+    if (!el) return;
+    landed.current = true;
+    el.setAttribute("data-fav-target", "");
+    el.scrollIntoView({ block: "center" });
+    el.focus({ preventScroll: true });
+  }, [d]);
 
   return (
     <div className="mt-6">
@@ -108,7 +119,8 @@ export function FavouritesList() {
         <div className="mt-6 rounded-3xl bg-muted p-6">
           <p className="text-lg font-semibold">Nothing saved yet.</p>
           <p className="mt-1 text-ink-muted">
-            Save a Job Aid with <strong>Save to Favourites</strong>, or select a sentence in a Magazine guide and save that. They’ll be here, one tap away.
+            Save a Job Aid with <strong>Save to Favourites</strong>, or select a sentence in a Magazine guide, a Topic card or a news story and save that.
+            They’ll be here, one tap away.
           </p>
           <Link href="/tools" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 font-semibold text-on-action">
             Browse Work Tools <Icon name="arrow-right" className="size-4" />
@@ -119,9 +131,9 @@ export function FavouritesList() {
       ) : (
         <ul className="mt-5 flex flex-col gap-3">
           {d.items.map((i) => (
-            <li key={i.id} className="rounded-3xl border border-line bg-surface p-4 sm:p-5">
+            <li key={i.id} id={i.id} tabIndex={-1} className="scroll-mt-24 rounded-3xl border border-line bg-surface p-4 sm:p-5">
               <p className="flex flex-wrap items-center gap-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                <Icon name={i.kind === "job_aid" ? "clipboard" : "pen"} className="size-4" /> {i.label}
+                <Icon name={i.kind === "job_aid" ? "clipboard" : i.kind === "tool" ? "sliders" : "pen"} className="size-4" /> {i.label}
                 {i.pinned && <span className="rounded-full bg-tealtint px-2 py-0.5 normal-case tracking-normal text-ink">Pinned</span>}
                 {STATE[i.state] && <span className={cx("rounded-full px-2 py-0.5 normal-case tracking-normal", TONE[i.state])}>{STATE[i.state]}</span>}
               </p>
@@ -154,7 +166,13 @@ export function FavouritesList() {
                   onClick={() => void api("/api/favourites", { body: { action: "opened", id: i.id, key: eventKey() } }).catch(() => undefined)}
                   className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent underline underline-offset-2"
                 >
-                  {i.kind === "passage" ? "Open current guidance" : i.state === "unavailable" ? "See what to use instead" : "Open the Job Aid"}{" "}
+                  {i.state === "unavailable"
+                    ? "See what to use instead"
+                    : i.kind === "passage"
+                      ? "Open current guidance"
+                      : i.kind === "tool"
+                        ? "Open the tool"
+                        : "Open the Job Aid"}{" "}
                   <Icon name="arrow-right" className="size-4" />
                 </Link>
                 <button

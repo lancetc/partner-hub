@@ -35,6 +35,8 @@ By default each introduction plays as the learner arrives on a page, and they ca
 
 A one-page guide has a page introduction only. Its course introduction is the same thing, so authors don't see two.
 
+**Ava's spoken introduction.** A course's approved introduction script (`audio.intro`) is what Ava says on the cover, live in her voice (OpenAI Alloy by default; docs/ai-learning-guide.md), with no recording needed. A one-page course has no cover, so Ava gives the same introduction at the top of its page, where the page's picture goes (`GuideReader`, `magazine:<id>:intro`). Every course had one written in November 2026.
+
 ## 4. What the learner experiences
 
 ### The Audio Guide card

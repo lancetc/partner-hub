@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { WorkTools } from "@/components/playbooks/WorkTools";
+import { PocketToolCards } from "@/components/pocket/HomePinnedTools";
 
 export const metadata: Metadata = {
   title: "Work Tools",
@@ -24,6 +25,8 @@ export default function WorkToolsPage() {
       >
         <Icon name="bookmark" className="size-4" /> Your Favourites
       </Link>
+      {/* The Live Call Pocket Playbook's tools (docs/pocket-playbook.md), for the person's role. */}
+      <PocketToolCards />
       <WorkTools />
     </div>
   );

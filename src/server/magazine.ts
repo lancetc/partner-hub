@@ -10,6 +10,8 @@ import {
   activityDone,
   openActivities,
   formatLabel,
+  guideFormat,
+  guideTags,
   isSiteMedia,
   pageBlocks,
   pageMinutes,
@@ -28,6 +30,7 @@ import { audit, ensureNotes, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 import { quizOffer } from "./pathQuiz";
 import { liveItems } from "@/lib/magazineReview";
+import { quizGap } from "@/lib/magazineQuizzes";
 import { questionsInGuide } from "@/lib/questionPool";
 import { afterPublish, publishGate } from "./questionPool";
 import { guideForReaders, guideIdentity } from "./learningGuide";
@@ -44,13 +47,43 @@ import { journeyApproved, journeyForReaders } from "@/lib/journey";
 import { benchmarkApproved, benchmarkForReaders, benchmarkStale } from "@/lib/benchmark";
 import { unpublishableTiles } from "./myths";
 import { deckProblems } from "./notes";
-import { playbookBlockProblems } from "./playbooks";
+import { playbookBlockMissing } from "./playbooks";
+import { demoEditionOf, demoSignOffEnabled, demoSignOffOf, recordDemoEdition } from "./demoSignOff";
 import { charactersAfterPublish } from "./characters";
-import { auditorForReaders, auditorHardProblems } from "@/lib/auditor";
+import { auditorCaseProblems, auditorForReaders, auditorHardProblems } from "@/lib/auditor";
 import { phoneForReaders, phoneHardProblems } from "@/lib/phonecall";
 import { sandboxForReaders, sandboxHardProblems } from "@/lib/sandbox";
+import { hiringForReaders, labHardProblems } from "@/lib/hiringRunway";
+import { oneDayForReaders, oneDayHardProblems } from "@/lib/oneDay";
+import { intakeForReaders, intakeHardProblems } from "@/lib/growthLab";
+import { workloadForReaders, workloadHardProblems } from "@/lib/workloadLab";
+import { coverageForReaders, coverageHardProblems } from "@/lib/coverageLab";
+import { referralForReaders, referralHardProblems } from "@/lib/referralLab";
+import { reliabilityForReaders, reliabilityHardProblems } from "@/lib/reliabilityLab";
+import { cashBridgeForReaders, cashBridgeHardProblems } from "@/lib/cashBridgeLab";
+import type { CashBridgeBlock, CoverageBlock, IntakeBlock, ReferralBlock, ReliabilityBlock, WorkloadBlock } from "@/lib/magazine";
 import { batonApproved, batonForReaders, batonStale } from "@/lib/baton";
+import { caseThreadForReaders } from "@/lib/caseThread";
+import { budgetLabForReaders, budgetLabHardProblems } from "@/lib/budgetLab";
+import { hazardScanForReaders, hazardScanHardProblems } from "@/lib/hazardScan";
+import { dischargeForReaders, pivotHardProblems, scenarioProblems } from "@/lib/dischargePivot";
+import { caseAttemptComplete, caseThreadPublishProblems, caseThreadsAfterPublish } from "./caseThreads";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
+import type { ReaderAva } from "./ava";
+
+/** The growth readiness, Workload Lens, Local Coverage, Referral Journey, Service Reliability and 90-Day Cash Bridge calculators, for readers: the case and the model, without the answer key. */
+const calculatorForReaders = (b: IntakeBlock | WorkloadBlock | CoverageBlock | ReferralBlock | ReliabilityBlock | CashBridgeBlock) =>
+  b.type === "intake"
+    ? intakeForReaders(b)
+    : b.type === "workload"
+      ? workloadForReaders(b)
+      : b.type === "coverage"
+        ? coverageForReaders(b)
+        : b.type === "referral"
+          ? referralForReaders(b)
+          : b.type === "reliability"
+            ? reliabilityForReaders(b)
+            : cashBridgeForReaders(b);
 
 /*
   Magazine courses: one or more pages (a one-page course shows as a Guide). An author edits a draft;
@@ -283,40 +316,66 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
             : // A Budget Sandbox: everything to plan with, without the explanation checks or the reviewed illustrative plan.
               b.type === "sandbox"
               ? sandboxForReaders(b)
-              : // Spot the Signal: the case, without what marks an answer right.
-                b.type === "signal"
-                ? signalForReaders(b)
-                : // The Mission Board: the case and board, without what marks a choice right.
-                  b.type === "mission"
-                  ? missionForReaders(b)
-                  : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
-                    b.type === "balance"
-                    ? balanceForReaders(b)
-                    : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
-                      b.type === "xray"
-                      ? xrayForReaders(b)
-                      : // Where Is the Line?: the requests and choices, without the answers.
-                        b.type === "line"
-                        ? lineForReaders(b)
-                        : // While You Wait: the scenario, without the summary checks or the model summary.
-                          b.type === "bridge"
-                          ? bridgeForReaders(b)
-                          : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
-                            b.type === "journey"
-                            ? journeyForReaders(b)
-                            : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
-                              b.type === "benchmark"
-                              ? benchmarkForReaders(b)
-                              : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
-                                b.type === "baton"
-                                ? batonForReaders(b)
-                                : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
-                                  b.type === "redpen"
-                                  ? redPenForReaders(b)
-                                  : // Document Auditor: the documents, records and rules, without the answer key.
-                                    b.type === "auditor"
-                                    ? auditorForReaders(b)
-                                    : b,
+              : // A Quarterly Budget Decision Lab: the case and the rules, without the feedback, levels, flags, endings or debrief.
+                b.type === "budgetlab"
+                ? budgetLabForReaders(b)
+                : // A Hiring Runway lab: the story, evidence and model, without the new information, the rubric or the reviewed plans.
+                  b.type === "hiring"
+                  ? hiringForReaders(b)
+                  : // One Day, Five Perspectives: the frame only. Events, facts and lenses come from the server as they arrive.
+                    b.type === "onedaymap"
+                    ? oneDayForReaders(b)
+                    : // Growth readiness, the Workload Lens and Local Coverage: the case and the model, without the answer key, the feedback or the debrief.
+                      b.type === "intake" ||
+                        b.type === "workload" ||
+                        b.type === "coverage" ||
+                        b.type === "referral" ||
+                        b.type === "reliability" ||
+                        b.type === "cashbridge"
+                      ? calculatorForReaders(b)
+                      : // Spot the Signal: the case, without what marks an answer right.
+                        b.type === "signal"
+                        ? signalForReaders(b)
+                        : // The Mission Board: the case and board, without what marks a choice right.
+                          b.type === "mission"
+                          ? missionForReaders(b)
+                          : // The Balance Scale: the situation and cards, without the criteria, what each card is worth, or the new fact.
+                            b.type === "balance"
+                            ? balanceForReaders(b)
+                            : // The Invoice X-Ray: the document and choices, without the answer key or the model script.
+                              b.type === "xray"
+                              ? xrayForReaders(b)
+                              : // Where Is the Line?: the requests and choices, without the answers.
+                                b.type === "line"
+                                ? lineForReaders(b)
+                                : // While You Wait: the scenario, without the summary checks or the model summary.
+                                  b.type === "bridge"
+                                  ? bridgeForReaders(b)
+                                  : // The SaH Journey: the story, without what marks a decision right or the reviewed responses.
+                                    b.type === "journey"
+                                    ? journeyForReaders(b)
+                                    : // A peer benchmark poll: the case and choices, without how each choice reads or the reviewed perspective.
+                                      b.type === "benchmark"
+                                      ? benchmarkForReaders(b)
+                                      : // Pass the Baton: the story and choices, without the rules, consequences or debrief.
+                                        b.type === "baton"
+                                        ? batonForReaders(b)
+                                        : // Red Pen: the case and the document, without the rubric or the reviewed rewrite.
+                                          b.type === "redpen"
+                                          ? redPenForReaders(b)
+                                          : // Document Auditor: the documents, records and rules, without the answer key.
+                                            b.type === "auditor"
+                                            ? auditorForReaders(b)
+                                            : // A case thread: the case and prompts, without the case note, self-review or seed responses (sent after a first take).
+                                              b.type === "casethread"
+                                              ? caseThreadForReaders(b)
+                                              : // Spot the Hazard: the scene set, without any variant, answer key or action. The attempt API sends the learner's room.
+                                                b.type === "hazardscan"
+                                                ? hazardScanForReaders(b)
+                                                : // The 72-Hour Discharge Pivot: the frame only. The record, alerts, cards and gates come from the attempt API as they arrive.
+                                                  b.type === "discharge"
+                                                  ? dischargeForReaders(b)
+                                                  : b,
       ),
     })),
   })),
@@ -362,6 +421,10 @@ export function learnerGuides(db: Db, user: User, now = new Date()) {
         standfirst: r.standfirst,
         cover: r.cover,
         format: formatLabel(doc),
+        // For browsing: a course, a simulation or a guide (lib/magazine).
+        kind: guideFormat(doc),
+        // Roles and goals for browsing: the author’s, or worked out from the guide (lib/magazine).
+        tags: guideTags(doc, audienceOf(g), `${r.title} ${r.standfirst}`),
         pages: doc.pages.length,
         minutes: r.minutes,
         audience: audienceOf(g),
@@ -463,14 +526,23 @@ function quizStates(db: Db, user: User, doc: GuideDoc) {
     if (b.type !== "quiz" || !b.pathId) continue;
     const path = db.prepare("SELECT name FROM learning_paths WHERE id = ? AND archived = 0").get(b.pathId) as { name: string } | undefined;
     const offer = path ? quizOffer(db, user, b.pathId) : null;
+    // Finishing the path the usual way counts as passing: its quiz closes then, and someone who did the Topic first
+    // (ALIS: the same five questions at 100%) would otherwise be stuck on the page with no way to finish it.
     quizzes[b.id] = path
-      ? { pathId: b.pathId, pathName: path.name, passed: Boolean(offer?.passed), available: Boolean(offer?.available), passMark: offer?.passMark ?? null }
+      ? {
+          pathId: b.pathId,
+          pathName: path.name,
+          passed: Boolean(offer?.passed || offer?.done),
+          available: Boolean(offer?.available),
+          passMark: offer?.passMark ?? null,
+        }
       : null;
   }
   return quizzes;
 }
 
-export type ReaderGuide = ReturnType<typeof readGuide>;
+/** ava: Ava's videos for the course, added as the page loads (components/magazine/loadGuide.ts). */
+export type ReaderGuide = ReturnType<typeof readGuide> & { ava?: ReaderAva };
 
 /**
   A course as its reader sees it: the version they're on, every page with its time and whether they've
@@ -498,6 +570,8 @@ export function readGuide(db: Db, user: User, slug: string) {
     minutes: r.minutes,
     pageMinutes: Object.fromEntries(doc.pages.map((pg) => [pg.id, pageMinutes(pg)])),
     publishedAt: r.published_at,
+    /** Published under a demo sign-off (server/demoSignOff): learners are told it hasn't been reviewed. */
+    demo: Boolean(demoEditionOf(db, r.id)),
     completion: r.completion,
     // Guide recordings only when they're cleared to play (and not withdrawn); never the self-review answers.
     doc: relayForReaders(withoutScenes(withoutPractice(guideForReaders(db, doc)))),
@@ -693,6 +767,9 @@ export function recordGuideEvent(
       // The reader has worked through a block (flipped every card, opened every tab, checked an answer…).
       const block = allBlocks(doc).find((b) => b.id === input.blockId);
       if (!block || activityDone(block, {}) === null) throw new HttpError(400, "That activity isn’t in this course.");
+      // A case thread is finished only on the server's record: first take, case note, a peer approach and a reflection.
+      if (block.type === "casethread" && !caseAttemptComplete(db, user, block.threadId))
+        throw new HttpError(409, "Finish the case first: your first take, the case note, at least one peer approach and a reflection.");
       const answers = JSON.parse(p.answers) as Record<string, string>;
       if (answers[`done:${block.id}`] !== "1") {
         db.prepare("UPDATE magazine_progress SET answers = ? WHERE guide_id = ? AND user_id = ?").run(
@@ -731,6 +808,18 @@ export function recordGuideEvent(
           "conversation",
           "phonecall",
           "sandbox",
+          "hiring",
+          "onedaymap",
+          "intake",
+          "workload",
+          "coverage",
+          "referral",
+          "reliability",
+          "cashbridge",
+          "casethread",
+          "budgetlab",
+          "hazardscan",
+          "discharge",
           "spot",
           "budget",
           "signal",
@@ -839,7 +928,11 @@ export function pageGap(guide: ReaderGuide, page: Page) {
 /** What still stands between the reader and completing the course, by its completion mode. */
 export function completionGap(guide: ReaderGuide) {
   if (guide.completion === "reference") return null;
-  if (guide.completion === "assessed" && !Object.values(guide.quizzes).some((q) => q?.passed)) return "Pass the quiz first.";
+  // Every linked quiz must be passed (lib/magazineQuizzes), such as one per chapter.
+  if (guide.completion === "assessed") {
+    const gap = quizGap(guide.doc, guide.quizzes);
+    if (gap) return gap;
+  }
   const left = guide.doc.pages.filter((p) => p.required && !guide.progress.finished.includes(p.id));
   if (left.length)
     return guide.doc.pages.length === 1
@@ -1101,6 +1194,8 @@ export function authorGuide(db: Db, actor: User, id: string) {
       live.cover !== g.cover ||
       live.completion !== g.completion,
     checks,
+    /** Demo sign-off: whether this Hub offers it, and the course's, when recorded (server/demoSignOff). */
+    demoSignOff: { enabled: demoSignOffEnabled(), signed: demoSignOffEnabled() ? demoSignOffOf(db, g.id) : null },
     flags: verifyFlags(doc, signoffs),
     // While review is optional, open verification flags don't stop publishing (Publish anyway records them).
     reviewRequired: reviewRequired(),
@@ -1158,203 +1253,341 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
         problems: identified,
       },
     );
-  const unpenned = draftBlocks.filter((b) => b.type === "redpen" && (!redPenApproved(b) || redPenStale(b, now.toISOString().slice(0, 10))));
-  if (unpenned.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Red Pen critique needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unpenned.map(
-          (b) =>
-            `“${b.type === "redpen" ? b.title : ""}”: record the content owner, the Clinical, Quality and Privacy reviewers, the date, the policy IDs, and a review date that hasn’t passed.`,
-        ),
-      },
-    );
-  // And Pass the Baton: its roles, escalation language, budget assumptions and privacy rules need their reviewers.
-  const unrelayed = draftBlocks.filter((b) => b.type === "baton" && (!batonApproved(b) || batonStale(b, now.toISOString().slice(0, 10))));
-  if (unrelayed.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Pass the Baton relay needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unrelayed.map(
-          (b) =>
-            `“${b.type === "baton" ? b.title : ""}”: record the content owner, the Clinical, Care Operations, Finance, Quality and Privacy reviewers, the date, the policy or SOP IDs, and a review date that hasn’t passed.`,
-        ),
-      },
-    );
-  // And a Document Auditor: its answer key is Compliance, Finance, Care Operations and Quality judgement, its rules must be in date, and its documents must be fictional.
-  const unaudited = draftBlocks.flatMap((b) => (b.type === "auditor" ? auditorHardProblems(b, now.toISOString().slice(0, 10)) : []));
-  if (unaudited.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Document Auditor case needs its sign-off, in-date rules and fictional details before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      { problems: unaudited },
-    );
-  // And a Tough Phone Call: its billing answers, escalation route, complaint handling and privacy rules need Finance, Care Operations, Quality and Privacy, and its sources must be in date.
-  const uncalled = draftBlocks.flatMap((b) => (b.type === "phonecall" ? phoneHardProblems(b.title, b.phone, now.toISOString().slice(0, 10)) : []));
-  if (uncalled.length)
-    throw Object.assign(
-      new HttpError(400, "A Tough Phone Call needs its sign-off and in-date sources before it can be published. “Publish anyway” doesn’t cover this."),
-      { problems: uncalled },
-    );
-  // And a Budget Sandbox: its ledger, prices and contribution wording need Support at Home operations, Finance, Quality and accessibility, on a ruleset that's in date and fixtures that pass.
-  const unbudgeted = draftBlocks.flatMap((b) => (b.type === "sandbox" ? sandboxHardProblems(b, now.toISOString().slice(0, 10)) : []));
-  if (unbudgeted.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Budget Sandbox needs its sign-off, an in-date ruleset and passing calculation checks before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      { problems: unbudgeted },
-    );
-  // And a Live SOP playbook: the snippet must have an approved release that isn't withdrawn.
-  const unreleased = draftBlocks.flatMap((b) => (b.type === "playbook" ? playbookBlockProblems(db, b.snippetId, now) : []));
+  // A 72-Hour Discharge Pivot whose scenario doesn't hold together (a click that could confirm a service, a path that
+  // doesn't end where it says) is never published, even under a demo sign-off: that's the engine, not a reviewer's call.
+  const unplayable = draftBlocks.flatMap((b) => (b.type === "discharge" ? scenarioProblems(b) : []));
+  if (unplayable.length)
+    throw Object.assign(new HttpError(400, "A 72-Hour Discharge Pivot’s scenario check doesn’t pass. Fix the scenario before publishing."), {
+      problems: unplayable,
+    });
+  // Nor a Document Auditor or Contractor Vetting Card that contradicts itself (a known blocker that could reach Ready,
+  // a median shown as a cap, supplier and participant prices conflated, the old police certificate treated as decisive
+  // beside a valid NDIS clearance, insurance resting on anything but Trilogy Care policy) or looks like it holds a real
+  // identifier: that's the case's own logic and fictional data, not a reviewer's call, so a demo sign-off doesn't cover it.
+  const unsound = draftBlocks.flatMap((b) => (b.type === "auditor" ? auditorCaseProblems(b) : []));
+  if (unsound.length)
+    throw Object.assign(new HttpError(400, "A Document Auditor or Contractor Vetting Card case doesn’t hold together. Fix the case before publishing."), {
+      problems: unsound,
+    });
+  // A demo Hub can record a demo sign-off in place of the reviewers' sign-offs below (server/demoSignOff.ts).
+  const demo = demoSignOffEnabled() ? demoSignOffOf(db, a.id) : null;
+  if (!demo)
+    try {
+      const unpenned = draftBlocks.filter((b) => b.type === "redpen" && (!redPenApproved(b) || redPenStale(b, now.toISOString().slice(0, 10))));
+      if (unpenned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Red Pen critique needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unpenned.map(
+              (b) =>
+                `“${b.type === "redpen" ? b.title : ""}”: record the content owner, the Clinical, Quality and Privacy reviewers, the date, the policy IDs, and a review date that hasn’t passed.`,
+            ),
+          },
+        );
+      // And Pass the Baton: its roles, escalation language, budget assumptions and privacy rules need their reviewers.
+      const unrelayed = draftBlocks.filter((b) => b.type === "baton" && (!batonApproved(b) || batonStale(b, now.toISOString().slice(0, 10))));
+      if (unrelayed.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Pass the Baton relay needs its sign-off, policy IDs and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unrelayed.map(
+              (b) =>
+                `“${b.type === "baton" ? b.title : ""}”: record the content owner, the Clinical, Care Operations, Finance, Quality and Privacy reviewers, the date, the policy or SOP IDs, and a review date that hasn’t passed.`,
+            ),
+          },
+        );
+      // And a Document Auditor: its answer key is Compliance, Finance, Care Operations and Quality judgement, its rules must be in date, and its documents must be fictional.
+      const unaudited = draftBlocks.flatMap((b) => (b.type === "auditor" ? auditorHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unaudited.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Document Auditor case needs its sign-off, in-date rules and fictional details before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unaudited },
+        );
+      // And a Tough Phone Call: its billing answers, escalation route, complaint handling and privacy rules need Finance, Care Operations, Quality and Privacy, and its sources must be in date.
+      const uncalled = draftBlocks.flatMap((b) => (b.type === "phonecall" ? phoneHardProblems(b.title, b.phone, now.toISOString().slice(0, 10)) : []));
+      if (uncalled.length)
+        throw Object.assign(
+          new HttpError(400, "A Tough Phone Call needs its sign-off and in-date sources before it can be published. “Publish anyway” doesn’t cover this."),
+          { problems: uncalled },
+        );
+      // And a Budget Sandbox: its ledger, prices and contribution wording need Support at Home operations, Finance, Quality and accessibility, on a ruleset that's in date and fixtures that pass.
+      const unbudgeted = draftBlocks.flatMap((b) => (b.type === "sandbox" ? sandboxHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unbudgeted.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Budget Sandbox needs its sign-off, an in-date ruleset and passing calculation checks before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unbudgeted },
+        );
+      // And a Hiring Runway lab: a complete, reconciled fictional case, the model's fixtures, and Finance, Operations/Quality, Partnerships and privacy sign-off.
+      const unhired = draftBlocks.flatMap((b) => (b.type === "hiring" ? labHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unhired.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Hiring Runway lab needs a complete case that reconciles, passing model checks, and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unhired },
+        );
+      // And a One Day, Five Perspectives map: a case whose branch test passes, and its owner, story, Operations, Quality, Billing, supplier and privacy sign-off.
+      const undayed = draftBlocks.flatMap((b) => (b.type === "onedaymap" ? oneDayHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (undayed.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A One Day, Five Perspectives map needs a case that passes its branch test, and its sign-off, before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: undayed },
+        );
+      // And a growth readiness block: a valid case with something to find, and its owner, Operations/Quality, Partnerships, policy and privacy sign-off.
+      const unready = draftBlocks.flatMap((b) => (b.type === "intake" ? intakeHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unready.length)
+        throw Object.assign(
+          new HttpError(400, "A growth readiness block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this."),
+          { problems: unready },
+        );
+      // And a Workload Lens: a valid case with something to find, and its owner, Care Coordination operations, Quality/clinical, Partnerships, privacy and pilot sign-off.
+      const unmapped = draftBlocks.flatMap((b) => (b.type === "workload" ? workloadHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unmapped.length)
+        throw Object.assign(
+          new HttpError(400, "A Workload Lens block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this."),
+          { problems: unmapped },
+        );
+      // And a Local Coverage Comparison: a valid case with something to find, and its owner, Operations, supplier onboarding, Quality/clinical, Partnerships, policy, privacy and pilot sign-off.
+      const uncovered = draftBlocks.flatMap((b) => (b.type === "coverage" ? coverageHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (uncovered.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Local Coverage Comparison block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: uncovered },
+        );
+      // And a Referral Journey Calculator: a valid case with something to find, and its owner, referral pathway, intake, Partnerships, Operations, Quality, privacy and pilot sign-off.
+      const unreferred = draftBlocks.flatMap((b) => (b.type === "referral" ? referralHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unreferred.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Referral Journey Calculator block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unreferred },
+        );
+      // And a Service Reliability Calculator: a valid case with something to find, and its owner, Operations, Quality, clinical, supplier, Finance, policy, Partnerships and privacy sign-off.
+      const unreliable = draftBlocks.flatMap((b) => (b.type === "reliability" ? reliabilityHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unreliable.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Service Reliability Calculator block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unreliable },
+        );
+      // And a 90-Day Cash Bridge: a valid case with something to find, and its owner, Finance, Operations, Quality, Partnerships, privacy and partner-representative sign-off.
+      const unfunded = draftBlocks.flatMap((b) => (b.type === "cashbridge" ? cashBridgeHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unfunded.length)
+        throw Object.assign(
+          new HttpError(400, "A 90-Day Cash Bridge block needs a valid case and its sign-off before it can be published. “Publish anyway” doesn’t cover this."),
+          { problems: unfunded },
+        );
+      // And a Quarterly Budget Decision Lab: a valid case, a current rule set, and its owner, Operations/Finance, policy owner, Quality and learning reviewer sign-off.
+      const unplanned = draftBlocks.flatMap((b) => (b.type === "budgetlab" ? budgetLabHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unplanned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Quarterly Budget Decision Lab needs a valid case, a current rule set and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unplanned },
+        );
+      // And Spot the Hazard: the publication preflight. Approved variants, each checked by a named reviewer, on current sources, with role actions, and the release's sign-off.
+      const unscanned = draftBlocks.flatMap((b) => (b.type === "hazardscan" ? hazardScanHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unscanned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "Spot the Hazard needs reviewed, approved room variants and its release sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unscanned },
+        );
+      // And the 72-Hour Discharge Pivot: a scenario that passes its check, current (non-placeholder) sources, and its owner, clinical, operations, policy, process and learning sign-off.
+      const undischarged = draftBlocks.flatMap((b) => (b.type === "discharge" ? pivotHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (undischarged.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A 72-Hour Discharge Pivot needs a scenario that passes its check, current sources and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: undischarged },
+        );
+      // And a "What Would You Do?" case thread: the case note's approval and sign-off, its policy version and review date, seed responses and the source guardrails.
+      const uncased = caseThreadPublishProblems(db, { id: a.id, audience: a.audience }, readGuideDoc(a.doc, { draft: true }), now.toISOString().slice(0, 10));
+      if (uncased.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A “What Would You Do?” case thread needs its case note approval and sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: uncased },
+        );
+      // And Notes to a Younger Me: pinned cards must be reviewed, and a pool needs enough reviewed notes on its topic.
+      const undealt = draftBlocks.flatMap((b) => (b.type === "mentor" ? deckProblems(db, b, now) : []));
+      if (undealt.length)
+        throw Object.assign(
+          new HttpError(400, "A Notes to a Younger Me deck needs reviewed notes before the course can be published. “Publish anyway” doesn’t cover this."),
+          { problems: undealt },
+        );
+      // And Myth vs Reality: every tile it shows needs an approved version in the library that isn't under review.
+      const untiled = draftBlocks.flatMap((b) => (b.type === "myths" ? unpublishableTiles(db, b.tileIds, now) : []));
+      if (untiled.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "Myth vs Reality tiles need an approved version, not under review, before the course can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: untiled },
+        );
+      const unpolled = draftBlocks.filter((b) => b.type === "benchmark" && (!benchmarkApproved(b) || benchmarkStale(b, now.toISOString().slice(0, 10))));
+      if (unpolled.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A peer benchmark poll needs its sign-off, policy version and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unpolled.map(
+              (b) =>
+                `“${b.type === "benchmark" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality and Privacy reviewers, the date, the policy and its version, and a review date that hasn’t passed.`,
+            ),
+          },
+        );
+      if (unjourneyed.length)
+        throw Object.assign(
+          new HttpError(400, "The SaH Journey needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this."),
+          {
+            problems: unjourneyed.map(
+              (b) =>
+                `“${b.type === "journey" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+            ),
+          },
+        );
+      if (unpriced.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A While You Wait calculator needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unpriced.map(
+              (b) =>
+                `“${b.type === "bridge" ? b.title : ""}”: record the content owner, the Operations, Finance, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+            ),
+          },
+        );
+      if (unkeyed.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "“Where Is the Line?” needs every card approved and the deck signed off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unkeyed.map(
+              (b) =>
+                `“${b.type === "line" ? b.title : ""}”: approve each card with its Clinical or Quality approver and review date, and record the deck’s owner, Care Partner, Clinical and Quality reviewers, date, and policy set version.`,
+            ),
+          },
+        );
+      if (unreviewed.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "An Expectation Reset timeline needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unreviewed.map(
+              (b) =>
+                `“${b.type === "reset" ? b.title : ""}”: record the content owner, the Care Operations, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
+            ),
+          },
+        );
+      if (unchecked.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "An Invoice X-Ray case needs its sign-off and ruleset version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unchecked.map(
+              (b) =>
+                `“${b.type === "xray" ? b.title : ""}”: record the content owner, the Finance, Care Operations and Quality reviewers, the date, and the ruleset and its version.`,
+            ),
+          },
+        );
+      if (unbalanced.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Balance Scale case needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unbalanced.map(
+              (b) =>
+                `“${b.type === "balance" ? b.title : ""}”: record the content owner, the Clinical, Quality and Care Operations reviewers (and WHS, where workers are at risk), the date, and the policy source and version.`,
+            ),
+          },
+        );
+      if (unsigned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A First 30 Days Mission Board needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unsigned.map(
+              (b) =>
+                `“${b.type === "mission" ? b.title : ""}”: record the Care Operations owner, the Supplier Compliance, Finance and Quality reviewers, the approval date, and the policy source and version.`,
+            ),
+          },
+        );
+      if (unapproved.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Spot the Signal case needs its Clinical and Quality approval and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          {
+            problems: unapproved.map(
+              (b) =>
+                `“${b.type === "signal" ? b.title : ""}”: record the content owner, clinical reviewer, Quality reviewer, approval date, and the policy source and version.`,
+            ),
+          },
+        );
+    } catch (e) {
+      // On a demo Hub, say how to get past a reviewers' gate for a demonstration.
+      const problems = (e as { problems?: string[] }).problems;
+      if (demoSignOffEnabled() && e instanceof HttpError && problems)
+        (e as { problems?: string[] }).problems = [
+          ...problems,
+          "This is a demo Hub: choose “Record a demo sign-off” in Review and publish, then publish.",
+        ];
+      throw e;
+    }
+  // And a Job Aid: it must be in the library. One not yet approved is hidden from learners until it is (docs/job-aids.md).
+  const unreleased = draftBlocks.flatMap((b) => (b.type === "playbook" ? playbookBlockMissing(db, b.snippetId, now) : []));
   if (unreleased.length)
-    throw Object.assign(
-      new HttpError(400, "A playbook block needs an approved release before the course can be published. “Publish anyway” doesn’t cover this."),
-      {
-        problems: unreleased,
-      },
-    );
-  // And Notes to a Younger Me: pinned cards must be reviewed, and a pool needs enough reviewed notes on its topic.
-  const undealt = draftBlocks.flatMap((b) => (b.type === "mentor" ? deckProblems(db, b, now) : []));
-  if (undealt.length)
-    throw Object.assign(
-      new HttpError(400, "A Notes to a Younger Me deck needs reviewed notes before the course can be published. “Publish anyway” doesn’t cover this."),
-      { problems: undealt },
-    );
-  // And Myth vs Reality: every tile it shows needs an approved version in the library that isn't under review.
-  const untiled = draftBlocks.flatMap((b) => (b.type === "myths" ? unpublishableTiles(db, b.tileIds, now) : []));
-  if (untiled.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "Myth vs Reality tiles need an approved version, not under review, before the course can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      { problems: untiled },
-    );
-  const unpolled = draftBlocks.filter((b) => b.type === "benchmark" && (!benchmarkApproved(b) || benchmarkStale(b, now.toISOString().slice(0, 10))));
-  if (unpolled.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A peer benchmark poll needs its sign-off, policy version and a current review date before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unpolled.map(
-          (b) =>
-            `“${b.type === "benchmark" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality and Privacy reviewers, the date, the policy and its version, and a review date that hasn’t passed.`,
-        ),
-      },
-    );
-  if (unjourneyed.length)
-    throw Object.assign(
-      new HttpError(400, "The SaH Journey needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this."),
-      {
-        problems: unjourneyed.map(
-          (b) =>
-            `“${b.type === "journey" ? b.title : ""}”: record the content owner, the Care Operations, Clinical, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
-        ),
-      },
-    );
-  if (unpriced.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A While You Wait calculator needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unpriced.map(
-          (b) =>
-            `“${b.type === "bridge" ? b.title : ""}”: record the content owner, the Operations, Finance, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
-        ),
-      },
-    );
-  if (unkeyed.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "“Where Is the Line?” needs every card approved and the deck signed off before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unkeyed.map(
-          (b) =>
-            `“${b.type === "line" ? b.title : ""}”: approve each card with its Clinical or Quality approver and review date, and record the deck’s owner, Care Partner, Clinical and Quality reviewers, date, and policy set version.`,
-        ),
-      },
-    );
-  if (unreviewed.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "An Expectation Reset timeline needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unreviewed.map(
-          (b) =>
-            `“${b.type === "reset" ? b.title : ""}”: record the content owner, the Care Operations, Quality, Privacy and Communications reviewers, the date, and the source and version.`,
-        ),
-      },
-    );
-  if (unchecked.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "An Invoice X-Ray case needs its sign-off and ruleset version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unchecked.map(
-          (b) =>
-            `“${b.type === "xray" ? b.title : ""}”: record the content owner, the Finance, Care Operations and Quality reviewers, the date, and the ruleset and its version.`,
-        ),
-      },
-    );
-  if (unbalanced.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Balance Scale case needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unbalanced.map(
-          (b) =>
-            `“${b.type === "balance" ? b.title : ""}”: record the content owner, the Clinical, Quality and Care Operations reviewers (and WHS, where workers are at risk), the date, and the policy source and version.`,
-        ),
-      },
-    );
-  if (unsigned.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A First 30 Days Mission Board needs its sign-off and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unsigned.map(
-          (b) =>
-            `“${b.type === "mission" ? b.title : ""}”: record the Care Operations owner, the Supplier Compliance, Finance and Quality reviewers, the approval date, and the policy source and version.`,
-        ),
-      },
-    );
-  if (unapproved.length)
-    throw Object.assign(
-      new HttpError(
-        400,
-        "A Spot the Signal case needs its Clinical and Quality approval and source version recorded before it can be published. “Publish anyway” doesn’t cover this.",
-      ),
-      {
-        problems: unapproved.map(
-          (b) =>
-            `“${b.type === "signal" ? b.title : ""}”: record the content owner, clinical reviewer, Quality reviewer, approval date, and the policy source and version.`,
-        ),
-      },
-    );
+    throw Object.assign(new HttpError(400, "A Job Aid block names a Job Aid that isn’t in the library. Choose another, or remove the block."), {
+      problems: unreleased,
+    });
   // The Question Pool's gate (only when "require approval" is on): every question an approved version.
   publishGate(db, questionsInGuide({ id: a.id, title: a.title, audience: "" }, readGuideDoc(a.doc, { draft: true }), "next", true), now);
   const prev = a.publishedRevisionId ? revisionById(db, a.publishedRevisionId) : undefined;
@@ -1390,6 +1623,8 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
       at,
       a.id,
     );
+    // Published under a demo sign-off: this edition says so to learners for as long as it's live.
+    if (demo) recordDemoEdition(db, a.id, revisionId, demo);
     if (moveLearners && prev)
       db.prepare("UPDATE magazine_progress SET revision_id = ?, answers = '{}', last_page = NULL, last_section = NULL, updated_at = ? WHERE guide_id = ?").run(
         revisionId,
@@ -1409,6 +1644,8 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
   afterPublish(db, actor, now);
   // Anyone its scenarios name without a portrait gets one queued, in the background (docs/character-photos.md).
   charactersAfterPublish(db, actor, doc, now);
+  // Its "What Would You Do?" case threads: registered, or a new case version (docs/case-threads.md).
+  caseThreadsAfterPublish(db, actor, doc, { id: a.id, audience: a.audience }, now);
   return authorGuide(db, actor, id);
 }
 
@@ -1458,8 +1695,15 @@ export function duplicateGuide(db: Db, actor: User, id: string, now: Date) {
 export function adminGuides(db: Db, actor: User) {
   requireAuthor(actor);
   const rows = db.prepare("SELECT id, updated_at FROM magazine_guides ORDER BY updated_at DESC").all() as { id: string; updated_at: string }[];
-  return rows.map(({ id, updated_at }) => {
-    const a = authorGuide(db, actor, id);
+  // One course the server can't read (a block type it doesn't know yet) is left out of the list, not the whole list.
+  return rows.flatMap(({ id, updated_at }) => {
+    let a: ReturnType<typeof authorGuide>;
+    try {
+      a = authorGuide(db, actor, id);
+    } catch (e) {
+      console.error(`Magazine list: left out ${id}:`, e instanceof Error ? e.message : e);
+      return [];
+    }
     return {
       id: a.id,
       slug: a.slug,
@@ -1498,6 +1742,7 @@ export function previewGuide(db: Db, actor: User, id: string): ReaderGuide {
     revisionId: "draft",
     revision: (a.publishedNumber ?? 0) + 1,
     olderEdition: false,
+    demo: Boolean(a.demoSignOff.signed),
     title: a.title || "Untitled guide",
     standfirst: a.standfirst,
     cover: a.cover,

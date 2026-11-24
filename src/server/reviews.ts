@@ -2,14 +2,13 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import type { Card } from "@/content/lessons";
 import type { Db } from "./db";
-import { audit } from "./db";
+
 import { HttpError, requireAuthor, type User } from "./auth";
 import { editorLesson } from "./authoredLessons";
 
 /*
-  Review comments, like Articulate Rise's Review: an author switches on a private link for a lesson,
-  and anyone with it (no hub account) gives their name and email once, then reads the latest saved
-  draft and comments on individual cards. Comments are threads: reviewers and authors reply, and
+  Review comments, like Articulate Rise's Review, for people signed in to the hub: they give their name once,
+  then comment on individual cards of a topic. (There are no review links for people outside the hub.) Comments are threads: reviewers and authors reply, and
   authors resolve them. Each comment keeps a fingerprint of its card, so the author can see when a
   card has changed since it was commented on.
 */
@@ -17,10 +16,9 @@ import { editorLesson } from "./authoredLessons";
 export const MAX_REVIEW_COMMENT = 2000;
 const PER_HOUR = 40;
 
-/** Who is commenting: a reviewer from a link, or a signed-in author. */
+/** Who is commenting: a named reviewer, or a signed-in author. */
 export type Reviewer = { kind: "reviewer"; id: string; name: string } | { kind: "author"; user: User };
 
-type LinkRow = { token: string; lesson_slug: string; created_by: string; created_at: string; revoked_at: string | null };
 type CommentRow = {
   id: number;
   lesson_slug: string;
@@ -53,23 +51,6 @@ function draftOf(db: Db, slug: string) {
   return d.lesson;
 }
 
-const activeLink = (db: Db, slug: string) =>
-  db.prepare("SELECT * FROM review_links WHERE lesson_slug = ? AND revoked_at IS NULL ORDER BY created_at DESC").get(slug) as LinkRow | undefined;
-
-/** The lesson a review link opens, or undefined when it's switched off or the lesson has gone. */
-export function linkLesson(db: Db, token: string) {
-  if (!/^[\w-]{16,64}$/.test(token)) return undefined;
-  const link = db.prepare("SELECT * FROM review_links WHERE token = ? AND revoked_at IS NULL").get(token) as LinkRow | undefined;
-  if (!link || !editorLesson(db, link.lesson_slug)) return undefined;
-  return link.lesson_slug;
-}
-
-export function requireLink(db: Db, token: string) {
-  const slug = linkLesson(db, token);
-  if (!slug) throw new HttpError(404, "This review link isn’t active. Ask the person who sent it for a new one.");
-  return slug;
-}
-
 /** The reviewer kept in this browser, if they've joined. */
 export function reviewerById(db: Db, id: string | undefined): Reviewer | undefined {
   if (!id) return undefined;
@@ -77,13 +58,7 @@ export function reviewerById(db: Db, id: string | undefined): Reviewer | undefin
   return r && { kind: "reviewer", id: r.id, name: r.name };
 }
 
-/** Someone opening a review link gives their name and email. Returns the secret kept in their browser. */
-export function joinReview(db: Db, token: string, input: { name?: unknown; email?: unknown }, now: Date) {
-  requireLink(db, token);
-  return addReviewer(db, input, now);
-}
-
-/** A new reviewer, once their link has been checked. Comments on an open topic ask only for a name. */
+/** A new named reviewer. Comments on a topic ask only for a name. */
 export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, now: Date, { emailOptional = false } = {}) {
   const name = String(input.name ?? "")
     .trim()
@@ -104,41 +79,6 @@ export function addReviewer(db: Db, input: { name?: unknown; email?: unknown }, 
     now.toISOString(),
   );
   return { id, name };
-}
-
-/** For the editor: the lesson's review link (if on) and who has joined through it. */
-export function reviewSharing(db: Db, actor: User, slug: string) {
-  requireAuthor(actor);
-  draftOf(db, slug);
-  const link = activeLink(db, slug);
-  const reviewers = db
-    .prepare(
-      `SELECT r.name, r.email, COUNT(c.id) AS comments, MAX(c.created_at) AS last_comment
-         FROM review_comments c JOIN reviewers r ON r.id = c.reviewer_id
-        WHERE c.lesson_slug = ? AND c.deleted_at IS NULL GROUP BY r.id ORDER BY last_comment DESC`,
-    )
-    .all(slug) as { name: string; email: string; comments: number; last_comment: string }[];
-  return {
-    link: link ? { token: link.token, path: `/review/${link.token}`, since: link.created_at } : null,
-    reviewers: reviewers.map((r) => ({ name: r.name, email: r.email, comments: r.comments, lastComment: r.last_comment })),
-  };
-}
-
-/** Switch the review link on (a new address if there isn't one) or off (it stops working for everyone). */
-export function setReviewLink(db: Db, actor: User, slug: string, on: boolean, now: Date) {
-  requireAuthor(actor);
-  draftOf(db, slug);
-  const link = activeLink(db, slug);
-  if (on && !link) {
-    const token = randomBytes(18).toString("base64url");
-    db.prepare("INSERT INTO review_links (token, lesson_slug, created_by, created_at) VALUES (?, ?, ?, ?)").run(token, slug, actor.id, now.toISOString());
-    audit(db, { actor: actor.id, event: "review_link.on", entity: `lesson:${slug}`, at: now });
-  }
-  if (!on && link) {
-    db.prepare("UPDATE review_links SET revoked_at = ?, revoked_by = ? WHERE lesson_slug = ? AND revoked_at IS NULL").run(now.toISOString(), actor.id, slug);
-    audit(db, { actor: actor.id, event: "review_link.off", entity: `lesson:${slug}`, at: now });
-  }
-  return reviewSharing(db, actor, slug);
 }
 
 const SELECT = `SELECT c.*, r.name AS reviewer_name, r.email AS reviewer_email, u.name AS user_name, ru.name AS resolver_name

@@ -22,7 +22,7 @@ export function TopicOutline({ lesson, progress, path }: { lesson: Lesson; progr
   return (
     <div className="flex flex-col gap-4">
       <section className={panel}>
-        <p className={label}>{path ? "Learning path" : "Topic"}</p>
+        <p className={label}>{path ? "Discovery Path" : "Topic"}</p>
         {path ? (
           <Link href={path.href} className="mt-1 block font-semibold leading-snug hover:underline">
             {path.name}

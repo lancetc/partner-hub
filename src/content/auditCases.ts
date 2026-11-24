@@ -1,4 +1,5 @@
 import type { AuditorBlockData, AuditRule, DecisionKey } from "@/lib/auditor";
+import { DOT_GARDENER } from "./vettingCases";
 
 /*
   Starter cases for the Document Auditor (docs/document-auditor.md). Every person, business, ABN, insurer and
@@ -276,18 +277,19 @@ const cleaner: AuditorBlockData = {
     },
   ],
   decisions: {
-    approve: d(
+    ready: d(
       "none",
-      "Approving engages a supplier whose public liability expired before the start date and whose screening is out of date: exactly what these checks exist to stop.",
+      "Marking it ready engages a supplier whose public liability expired before the start date and whose screening is out of date: exactly what these checks exist to stop.",
       true,
     ),
-    query: d(
-      "partial",
-      "Holding is right, but this isn’t uncertainty: the certificate has expired and the screening is out of date. These are confirmed failures in this submission, so it’s rejected as submitted while current evidence is requested.",
-    ),
-    reject_current_submission: d(
+    request_evidence: d(
       "full",
-      "Two confirmed failures for this engagement: expired public liability and out-of-date screening. Reject the current submission, ask for current evidence and re-verify before engagement. It doesn’t stop the supplier from being engaged later.",
+      "Two gaps for this engagement, both correctable: expired public liability and out-of-date screening. Hold the start, ask for a current certificate and current screening evidence (a new police certificate or an NDIS clearance), and re-verify. The supplier can still be engaged once they arrive.",
+    ),
+    escalate: d("none", "There’s nothing here for anyone to decide: the dates settle it. Ask the supplier for current evidence."),
+    cannot_engage: d(
+      "partial",
+      "Holding the start is right, but nothing here is a barrier this supplier can’t fix: current evidence closes both gaps. Saying it can’t go ahead risks an unnecessary refusal.",
     ),
   },
   actions: [
@@ -307,8 +309,8 @@ const cleaner: AuditorBlockData = {
   hint: "Check each date against the proposed engagement date, not today’s date. And check which documents this business structure actually needs.",
   variant: {
     fact: "The supplier now sends a current NDIS worker screening clearance and a new public liability certificate for 1 Nov 2026 to 1 Nov 2027, both naming the same legal entity and ABN.",
-    decision: "approve",
-    why: "The NDIS clearance is an accepted alternative to the police certificate, and the new certificate covers the engagement date. Approve for this simulated stage, and keep tracking both expiries.",
+    decision: "ready",
+    why: "The NDIS clearance is an accepted alternative to the police certificate, and the new certificate covers the engagement date. It’s ready for engagement review at this simulated stage; keep tracking both expiries.",
   },
   ...unsigned(),
 };
@@ -484,16 +486,17 @@ const invoice: AuditorBlockData = {
     },
   ],
   decisions: {
-    approve: d(
+    ready: d(
       "none",
-      "Approving pays for an hour that wasn’t delivered, at a rate that wasn’t agreed, plus a fee a participant can’t be charged and an excluded service.",
+      "Processing it pays for an hour that wasn’t delivered, at a rate that wasn’t agreed, plus a fee a participant can’t be charged and an excluded service.",
       true,
     ),
-    query: d(
+    request_evidence: d(
       "partial",
-      "The duplicate date does need a question, but the rest are confirmed errors in this submission, not open questions. It’s rejected as submitted and corrected at source.",
+      "The duplicate date does need a question, but the rest are confirmed errors in this submission, not open questions. It can’t be processed as submitted and is corrected at source.",
     ),
-    reject_current_submission: d(
+    escalate: d("none", "Nothing here shows a concern for a delegated decision yet. Check the duplicate date with the supplier first."),
+    cannot_engage: d(
       "full",
       "Confirmed errors: units and rate that don’t match the agreed price and the log, a separate participant admin charge, and pet care. Reject the current submission and ask for a corrected, itemised invoice, checking the 6 Nov date against INV-0402.",
     ),
@@ -507,7 +510,7 @@ const invoice: AuditorBlockData = {
   hint: "Compare each line with the agreed price and the service log, not with what seems reasonable. And look at who each charge is billed to.",
   variant: {
     fact: "Suppose the agreed schedule were $72.00 an hour, and the service log showed 3 hours on 6 Nov.",
-    decision: "reject_current_submission",
+    decision: "cannot_engage",
     why: "Line 1 would then reconcile, and marks on its rate and hours would be false positives. But the participant administration charge and the pet care still can’t go through, so the submission is still corrected at source.",
   },
   ...unsigned(),
@@ -651,15 +654,16 @@ const garden: AuditorBlockData = {
     },
   ],
   decisions: {
-    approve: d(
+    ready: d(
       "full",
-      "Everything required for this service and structure is here and current on the engagement date. Approve for this simulated stage. A careful check that finds nothing wrong is still a careful check.",
+      "Everything required for this service and structure is here and current on the engagement date. It’s ready for engagement review at this simulated stage. A careful check that finds nothing wrong is still a careful check.",
     ),
-    query: d("partial", "Nothing material is missing or unclear, so holding it up adds delay without protecting anyone. Approving here isn’t careless."),
-    reject_current_submission: d(
-      "none",
-      "There’s no confirmed failure to reject. Treating the trading name or the missing police certificate as failures misreads the rules.",
+    request_evidence: d(
+      "partial",
+      "Nothing material is missing or unclear, so holding it up adds delay without protecting anyone. Marking it ready here isn’t careless.",
     ),
+    escalate: d("none", "There’s nothing for anyone to decide: the pack is complete for this service."),
+    cannot_engage: d("none", "There’s no barrier here. Treating the trading name or the missing police certificate as failures misreads the rules."),
   },
   actions: [
     { id: "proceed", right: true, why: "Proceed to the next simulated stage, with the expiries tracked for recheck." },
@@ -767,9 +771,13 @@ const cropped: AuditorBlockData = {
     },
   ],
   decisions: {
-    approve: d("none", "Approving without seeing the period of insurance means engaging a supplier without knowing they’re insured on the start date.", true),
-    query: d("full", "A material fact can’t be read, and it can be fixed by asking for the complete certificate. Query, and hold until it arrives."),
-    reject_current_submission: d("none", "Nothing shows the certificate has expired. Rejecting treats an unknown as a confirmed failure."),
+    ready: d("none", "Marking it ready without seeing the period of insurance engages a supplier without knowing they’re insured on the start date.", true),
+    request_evidence: d(
+      "full",
+      "A material fact can’t be read, and it can be fixed by asking for the complete certificate. Ask for it, and hold until it arrives.",
+    ),
+    escalate: d("none", "It isn’t a judgement call: the complete certificate settles it."),
+    cannot_engage: d("none", "Nothing shows the certificate has expired. Refusing treats an unknown as a confirmed failure."),
   },
   actions: [
     { id: "corrected", right: true, why: "Ask for the complete certificate of currency, showing the period of insurance." },
@@ -782,6 +790,7 @@ const cropped: AuditorBlockData = {
 };
 
 export const AUDIT_CASES: { id: string; label: string; data: AuditorBlockData }[] = [
+  { id: "dot-gardener", label: "Contractor Vetting Card: Dot’s gardener (screening alternative, insurance, scope and price)", data: DOT_GARDENER },
   { id: "sole-trader-cleaner", label: "Contractor Vetting: a sole trader cleaner (expired certificate, old screening)", data: cleaner },
   { id: "cleaning-invoice", label: "Invoice Red Flags: a monthly cleaning invoice", data: invoice },
   { id: "garden-pack", label: "Contractor Vetting: an approvable garden maintenance pack", data: garden },

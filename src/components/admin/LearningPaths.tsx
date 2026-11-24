@@ -9,12 +9,11 @@ import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx, formatHoursMinutes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
+import { AvaVideoSlot } from "./AvaVideoSlot";
 import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
 import { Icon } from "../Icon";
 import { confirmAction } from "@/lib/confirm";
 import { QrShare } from "./QrShare";
-import { PathReviewShare } from "./PathReviewShare";
-import { PathPublicShare } from "./PathPublicShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
 import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft, type OutlinePlan } from "./PathChapters";
 import { ClaudeDraftDialog } from "./ClaudeDraft";
@@ -180,8 +179,8 @@ export function LearningPathList() {
           </Link>
         }
       >
-        A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Discovery Paths page with their
-        progress and what’s next.
+        A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Discovery Paths page
+        with their progress and what’s next.
       </AdminListHeader>
       {error && (
         <div className="mt-4">
@@ -206,7 +205,12 @@ export function LearningPathList() {
                 onChange: setAudience,
                 options: [{ value: "all", label: "All audiences" }, ...audiences.map((a) => ({ value: a, label: a })), { value: "none", label: "Not set yet" }],
               },
-              { label: "Sort by", value: sort, onChange: (v) => setSort(v as PathSort), options: (Object.keys(PATH_SORTS) as PathSort[]).map((s) => ({ value: s, label: PATH_SORTS[s] })) },
+              {
+                label: "Sort by",
+                value: sort,
+                onChange: (v) => setSort(v as PathSort),
+                options: (Object.keys(PATH_SORTS) as PathSort[]).map((s) => ({ value: s, label: PATH_SORTS[s] })),
+              },
             ]}
             count={shown.length === paths.length ? `${paths.length} ${paths.length === 1 ? "path" : "paths"}` : `Showing ${shown.length} of ${paths.length}`}
           />
@@ -312,7 +316,11 @@ function PathTile({ path: p, canPreview, busy, onDelete }: { path: PathSummary; 
       {p.description && <p className="line-clamp-2 text-sm text-ink-muted">{p.description}</p>}
       {p.lessons.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${ready} of ${p.lessons.length} topics ready, ${drafts} in draft`}>
+          <div
+            className="flex h-1.5 overflow-hidden rounded-full bg-muted"
+            role="img"
+            aria-label={`${ready} of ${p.lessons.length} topics ready, ${drafts} in draft`}
+          >
             <div className="h-full bg-action" style={{ width: pct(ready, p.lessons.length) }} />
             <div className="h-full bg-gold/60" style={{ width: pct(drafts, p.lessons.length) }} />
           </div>
@@ -336,7 +344,7 @@ export function LearningPathEditor({ id }: { id?: string }) {
   const loadError = isNew ? list.error : detail.error;
   if (loadError || !source) {
     return (
-      <AdminShell title={isNew ? "New learning path" : "Learning path"} back={{ href: "/admin/learning-paths", label: "Discovery Paths" }}>
+      <AdminShell title={isNew ? "New Discovery Path" : "Discovery Path"} back={{ href: "/admin/learning-paths", label: "Discovery Paths" }}>
         {loadError ? <ErrorNote text={loadError} /> : <p className="text-ink-muted">Loading…</p>}
       </AdminShell>
     );
@@ -451,7 +459,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   }
 
   return (
-    <AdminShell title={isNew ? "New learning path" : name || "Learning path"} back={{ href: "/admin/learning-paths", label: "Discovery Paths" }}>
+    <AdminShell title={isNew ? "New Discovery Path" : name || "Discovery Path"} back={{ href: "/admin/learning-paths", label: "Discovery Paths" }}>
       {me?.canAuthor && canEdit && (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
           <Icon name="spark" className="size-4 text-accent" />
@@ -546,6 +554,19 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               />
             </fieldset>
           </section>
+
+          {/* Ava introduces the path at the top of its page: her video (made in ElevenLabs) and what it says. */}
+          {id && canEdit && (
+            <section aria-labelledby="path-ava" className="rounded-3xl border border-line bg-surface p-5">
+              <h2 id="path-ava" className="mb-1 font-serif text-xl font-semibold">
+                Ava’s introduction
+              </h2>
+              <p className="mb-4 text-sm text-ink-muted">
+                Ava, the AI Learning Guide, introduces the path at the top of its page. Upload her video and its script here.
+              </p>
+              <AvaVideoSlot lineKey={`path:${id}`} script={detail?.description ?? ""} where="path" />
+            </section>
+          )}
 
           {canEdit && (
             <LessonPicker
@@ -766,8 +787,6 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <QrShare kind="path" id={id} assigned={detail?.assignments.length ?? 0} className={btn.secondary} />
             </div>
           )}
-          {!isNew && id && me?.canAuthor && <PathReviewShare id={id} />}
-          {!isNew && id && me?.canAuthor && <PathPublicShare id={id} />}
           {!canEdit && (
             <p className="text-sm text-ink-muted">Made by another organisation’s administrator or a learning author. You can assign it to your people.</p>
           )}

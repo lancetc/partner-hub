@@ -23,6 +23,7 @@ import {
 import { Badge, btn, ErrorNote, input } from "./ui";
 import { stream } from "./MagazineAi";
 import { Icon } from "../Icon";
+import { AvaVideoSlot } from "./AvaVideoSlot";
 
 /*
   The Audio Guide in the editor (docs/magazine-audio-guide.md): its settings in the sidebar, the
@@ -611,7 +612,11 @@ export function NarrationReview({ guideId, draft, change, onClose }: { guideId: 
         {actions.errors.all && <ErrorNote text={actions.errors.all} />}
         {targets.length === 0 && <p className="text-ink-muted">Nothing to narrate: turn on course or page introductions in the Audio guide settings.</p>}
         {shown.map((t) => (
-          <NarrationRow key={t} draft={draft} change={change} target={t} actions={actions} busy={busy} />
+          <div key={t} className="flex flex-col gap-2">
+            <NarrationRow draft={draft} change={change} target={t} actions={actions} busy={busy} />
+            {/* Ava's video for the course introduction: it plays on the cover, before the cover picture. */}
+            {t === "intro" && <AvaVideoSlot lineKey={`magazine:${guideId}:intro`} script={draft.doc.audio?.intro?.script} />}
+          </div>
         ))}
         {attention && shown.length === 0 && <p className="text-ink-muted">Everything is narrated and current.</p>}
       </div>
@@ -619,7 +624,41 @@ export function NarrationReview({ guideId, draft, change, onClose }: { guideId: 
   );
 }
 
-/** At the top of a page in the editor: its narration, collapsed to a line until opened. */
+/**
+  On the course outline, under the cover: the course introduction's narration and Ava's video for it (she plays on the
+  learner's cover page before the cover picture), collapsed to a line until opened, like a page's strip.
+*/
+export function CourseIntroStrip({ guideId, draft, change }: { guideId: string; draft: Draft; change: Change }) {
+  const actions = useNarration(guideId, draft, change);
+  const narrated = Boolean(draft.doc.audio?.levels.course);
+  const state = stateOf(draft, "intro");
+  const intro = draft.doc.audio?.intro;
+  const [open, setOpen] = useState(false);
+  const busy = Object.keys(actions.jobs).length > 0;
+  return (
+    <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="group rounded-2xl border border-[#b7dede] bg-tealtint">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm">
+        <Icon name="volume" className="size-4 text-accent" />
+        <span className="font-semibold">Course introduction: Audio guide and Ava’s video</span>
+        {narrated && <Badge tone={STATE_TONE[state]}>{NARRATION_STATES[state].label}</Badge>}
+        {intro && !open && <span className="min-w-0 flex-1 truncate text-ink-muted">“{intro.script}”</span>}
+        <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="flex flex-col gap-2 px-3 pb-3">
+        {open && <AvaVideoSlot lineKey={`magazine:${guideId}:intro`} script={intro?.script} />}
+        {narrated ? (
+          <NarrationRow draft={draft} change={change} target="intro" actions={actions} busy={busy} label="Course introduction" />
+        ) : (
+          <p className="rounded-2xl bg-surface p-4 text-sm text-ink-muted">
+            The Audio guide’s course introduction is off (Audio guide settings, in the sidebar). Ava’s video can still go on the cover.
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** At the top of a page in the editor: its narration and Ava's video for it, collapsed to a line until opened. */
 export function PageNarrationStrip({ guideId, draft, change, page }: { guideId: string; draft: Draft; change: Change; page: Page }) {
   const actions = useNarration(guideId, draft, change);
   const state = stateOf(draft, page.id);
@@ -629,12 +668,14 @@ export function PageNarrationStrip({ guideId, draft, change, page }: { guideId: 
     <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="group rounded-2xl border border-[#b7dede] bg-tealtint">
       <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm">
         <Icon name="volume" className="size-4 text-accent" />
-        <span className="font-semibold">Audio guide</span>
+        <span className="font-semibold">{draft.doc.pages.length > 1 ? "Audio guide and Ava’s video" : "Audio guide"}</span>
         <Badge tone={STATE_TONE[state]}>{NARRATION_STATES[state].label}</Badge>
         {page.narration && !open && <span className="min-w-0 flex-1 truncate text-ink-muted">“{page.narration.script}”</span>}
         <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
       </summary>
-      <div className="px-3 pb-3">
+      <div className="flex flex-col gap-2 px-3 pb-3">
+        {/* Ava's video for the page: with one, she plays where the picture goes and the audio introduction steps aside. */}
+        {draft.doc.pages.length > 1 && open && <AvaVideoSlot lineKey={`magazine:${guideId}:page:${page.id}`} script={page.narration?.script} />}
         <NarrationRow
           draft={draft}
           change={change}

@@ -15,11 +15,11 @@ import { Composer, openCounts, threadsOf, ThreadView, type ReviewAction, type Re
 */
 
 /**
-  The review's comments, kept fresh while the reviewer works (others may be commenting too). From a
-  review link's token, or (`slug`) straight on a topic, where reviewers add their name in the panel.
+  The review's comments, kept fresh while the reviewer works (others may be commenting too): straight on a topic
+  (`slug`), for people signed in to the hub, who add their name in the panel. There are no review links.
 */
-export function useReview(token: string | undefined, slug?: string) {
-  const url = token ? `/api/review/${encodeURIComponent(token)}` : slug ? `/api/topic-review/${encodeURIComponent(slug)}` : null;
+export function useReview(slug?: string) {
+  const url = slug ? `/api/topic-review/${encodeURIComponent(slug)}` : null;
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {

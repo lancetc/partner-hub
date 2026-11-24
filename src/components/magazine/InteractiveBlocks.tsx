@@ -54,6 +54,20 @@ import { NotesDeck } from "./NotesDeck";
 import { PlaybookBlockView } from "./PlaybookBlock";
 import { DocumentAuditor } from "./DocumentAuditor";
 import { BudgetSandbox } from "./BudgetSandbox";
+import { HiringRunwayLab } from "./HiringRunwayLab";
+import { OneDayMap } from "./OneDayMap";
+import { GrowthReadinessLab } from "./GrowthReadinessLab";
+import { WorkloadLensLab } from "./WorkloadLensLab";
+import { LocalCoverageLab } from "./LocalCoverageLab";
+import { ReferralJourneyLab } from "./ReferralJourneyLab";
+import { ServiceReliabilityLab } from "./ServiceReliabilityLab";
+import { CashBridgeLab } from "./CashBridgeLab";
+import { BudgetDecisionLab } from "./BudgetDecisionLab";
+import { SpotTheHazard } from "./SpotTheHazard";
+import { DischargePivot } from "./DischargePivot";
+import { CaseThread } from "../caseThreads/CaseThread";
+import { caseDataOf } from "@/lib/caseThread";
+import { HubVisual } from "./HubVisual";
 import type { GuideIdentity } from "@/lib/magazineGuide";
 import "../player/fx.css";
 import { Icon, type IconName } from "../Icon";
@@ -169,6 +183,67 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <Roleplay block={b} ctx={ctx} />;
     case "sandbox":
       return <BudgetSandbox block={b} ctx={ctx} />;
+    case "hiring":
+      return <HiringRunwayLab block={b} ctx={ctx} />;
+    case "onedaymap":
+      return <OneDayMap block={b} ctx={ctx} />;
+    case "intake":
+      return <GrowthReadinessLab block={b} ctx={ctx} />;
+    case "workload":
+      return <WorkloadLensLab block={b} ctx={ctx} />;
+    case "coverage":
+      return <LocalCoverageLab block={b} ctx={ctx} />;
+    case "referral":
+      return <ReferralJourneyLab block={b} ctx={ctx} />;
+    case "reliability":
+      return <ServiceReliabilityLab block={b} ctx={ctx} />;
+    case "cashbridge":
+      return <CashBridgeLab block={b} ctx={ctx} />;
+    case "budgetlab":
+      // Finished on the server once the feedback is viewed; the same block renders on a Topic card by reference.
+      return (
+        <BudgetDecisionLab
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ending, score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "hazardscan":
+      // Completed on the server once the debrief is viewed (a visual practice completion, never a quiz pass); the same block renders on a Topic card by reference.
+      return (
+        <SpotTheHazard
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={() => {
+            // Practice: no score is reported as a mark, only that it was practised.
+            if (!ctx.preview) ctx.activity(b.id, { outcome: "practised" });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "discharge":
+      // Completed on the server once the debrief is viewed; the same block renders on a Topic card by reference.
+      return (
+        <DischargePivot
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ending, score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "casethread":
+      // The canonical Community thread, as the Community page shows it. Finished only on the server's record.
+      return <CaseThread threadId={b.threadId} preview={ctx.preview ? caseDataOf(b) : undefined} onComplete={() => ctx.engaged(b.id)} place="magazine" />;
+    case "hubvisual":
+      return <HubVisual block={b} />;
     case "wall":
       return <Wall block={b} ctx={ctx} />;
     case "poll":

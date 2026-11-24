@@ -533,7 +533,7 @@ function AssignLearning({
           ))}
         </div>
 
-        <Field label={kind === "path" ? "Learning path" : "Topic"}>
+        <Field label={kind === "path" ? "Discovery Path" : "Topic"}>
           <span className="relative">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
             <input

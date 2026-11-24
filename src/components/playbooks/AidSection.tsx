@@ -31,6 +31,8 @@ export function AidSection({ snippetId, why, preview, place }: { snippetId: stri
   const v = loaded.data;
   if (!v) return loaded.error ? null : <div aria-hidden className="h-40 w-full animate-pulse rounded-3xl bg-muted motion-reduce:animate-none" />;
   if (!v.permitted) return null;
+  // Not approved yet: learners don't see it until its first release. Authors previewing see where it will go.
+  if (v.unreleased && !preview) return null;
 
   const save = async () => {
     if (busy || preview) return;

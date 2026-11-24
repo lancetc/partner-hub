@@ -38,7 +38,12 @@ const SKIP_AUDIO_HOLD = true;
   Set back to false to bring the assistant back.
 */
 const REVIEW_COMMENTS_IN_FOOTER = true;
-import { CardVisual, PhotoCredit } from "./CardVisual";
+/*
+  The footer's speech-bubble button (review comments, or the topic assistant) is hidden for now. Set back to true to bring
+  it back. Reviewers on a review link keep their comments button in the header.
+*/
+const FOOTER_SPEECH_BUTTON = false;
+import { CardVisual, PhotoCredit, isAvaPresenter } from "./CardVisual";
 import { WrittenAnswer } from "./WrittenAnswer";
 import { Hotspots } from "./Hotspots";
 import { Resources } from "./Resources";
@@ -49,7 +54,6 @@ import { ReportProblem } from "./ReportProblem";
 import { OfflineButton } from "../OfflineButton";
 import { EnrolButton } from "../EnrolButton";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
-import { PublicQr } from "../PublicQr";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
 import { Calculator } from "./Calculator";
@@ -65,10 +69,16 @@ import { leavesSite, rememberCard, takeReturnCard } from "@/lib/lessonReturn";
 import "./fx.css";
 import { PathCelebration } from "../PathCelebration";
 import { Confetti } from "../Confetti";
-import { finishOpenTopic, readOpen } from "@/lib/openProgress";
 import { bookmarksOn } from "@/lib/features";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AidSection } from "../playbooks/AidSection";
+import { TopicBudgetLab } from "../magazine/BudgetDecisionLab";
+import { TopicSpotTheHazard } from "../magazine/SpotTheHazard";
+import { TopicDischargePivot } from "../magazine/DischargePivot";
+import { FavouriteBanner } from "../favourites/FavouriteBanner";
+import { Highlighter, SaveSection } from "../favourites/Highlighter";
+import { SavedMarkChips, SavedMarks } from "../favourites/SavedMarks";
+import { plainText } from "@/lib/richText";
 
 type Phase = "intro" | "playing" | "complete";
 type CompletionResult = {
@@ -90,9 +100,7 @@ export function LessonPlayer({
   notice,
   startAt,
   backTo,
-  reviewToken,
   refresh,
-  publicLink,
   nextTopic,
   enrol = false,
   personal = false,
@@ -115,22 +123,16 @@ export function LessonPlayer({
   startAt?: string;
   /** Where closing or finishing leads, e.g. back to the learning path being previewed. */
   backTo?: { href: string; label: string };
-  /** Opened from a review link (with `preview`): every card gets a Comments button for review comments. */
-  reviewToken?: string;
   /** Required training that's due soon or has expired: doing the topic again refreshes it. */
   refresh?: { status: "due_soon" | "expired" | "evidence"; expiresAt: string | null } | null;
-  /** Opened from a learning path's public link, without signing in: nothing is saved to the hub, only an anonymous count when it's finished. */
-  publicLink?: { token: string; topics: string[]; titles?: Record<string, string> };
   /** A topic in the learner's learning path: the next topic to go on to when it's finished, and the path itself. */
   nextTopic?: { next: { href: string; title: string; done: boolean } | null; path: { href: string; name: string } } | null;
 }) {
-  // Not signed in: no saved progress, bookmarks, comments or votes.
-  const anonymous = Boolean(publicLink);
   // Story moments placed on this Topic's cards (docs/story-plans.md), for people signed in to the Hub.
-  const story = useStory("topic", anonymous || reviewToken ? null : lesson.slug);
+  const story = useStory("topic", lesson.slug);
   // Job Aids placed on this Topic's cards (docs/job-aids.md): by reference, for the reader's role only.
   const aids = useApi<{ aids: { placementId: string; snippetId: string; card: string; why: string }[] }>(
-    anonymous || reviewToken ? null : `/api/playbooks?topic=${encodeURIComponent(lesson.slug)}`,
+    `/api/playbooks?topic=${encodeURIComponent(lesson.slug)}`,
   ).data?.aids;
   const hydrated = useHydrated();
   const stored = useHub((s) => s.lessons[lesson.slug]);
@@ -143,7 +145,6 @@ export function LessonPlayer({
   const [completionQueued, setCompletionQueued] = useState(false);
   const [followUps, setFollowUps] = useState<CompletionResult["followUps"]>([]);
   // On a public path, the next topic this device hasn't finished, worked out when this one is done.
-  const [publicNext, setPublicNext] = useState<string | null>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const [stayFeedback, setStayFeedback] = useState<string | null>(null);
   // A good choice can show its feedback first; the next press continues.
@@ -151,7 +152,9 @@ export function LessonPlayer({
   const [quizChecked, setQuizChecked] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const reviewing = useReview(reviewToken, REVIEW_COMMENTS_IN_FOOTER && !personal ? lesson.slug : undefined);
+  // The card's words (label, heading, body, key points, details): where a passage can be highlighted (docs/job-aids.md).
+  const cardText = useRef<HTMLDivElement>(null);
+  const reviewing = useReview(FOOTER_SPEECH_BUTTON && REVIEW_COMMENTS_IN_FOOTER && !personal ? lesson.slug : undefined);
   const seq = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
 
@@ -193,8 +196,7 @@ export function LessonPlayer({
     const mine = ++seq.current;
     pending.current = a;
     // Author previews record nothing, not even on this device, so the author's own progress is untouched.
-    // Public visitors aren't signed in, so their progress stays out of the hub too.
-    if (preview || anonymous) {
+    if (preview) {
       setSaveState("saved");
       return Promise.resolve();
     }
@@ -348,18 +350,6 @@ export function LessonPlayer({
       setPhase("complete");
       return;
     }
-    if (publicLink) {
-      // Remembered on this device; the hub only counts it, anonymously.
-      finishOpenTopic(publicLink.token, lesson.slug, publicLink.topics).catch(() => {});
-      const finished = new Set([...readOpen(publicLink.token).done, lesson.slug]);
-      const at = publicLink.topics.indexOf(lesson.slug);
-      const left = (t: string) => !finished.has(t);
-      // The next topic not done yet (or one skipped earlier), else simply the next one in order.
-      setPublicNext(publicLink.topics.slice(at + 1).find(left) ?? publicLink.topics.slice(0, Math.max(at, 0)).find(left) ?? publicLink.topics[at + 1] ?? null);
-      setAttempt(done);
-      setPhase("complete");
-      return;
-    }
     setCompleting("saving");
     try {
       // The server records the confirmed completion time and any follow up enrolment. In a learning
@@ -425,45 +415,36 @@ export function LessonPlayer({
           <Intro
             part="actions"
             lesson={lesson}
-            stored={preview || anonymous ? undefined : stored}
+            stored={preview ? undefined : stored}
             onStart={() => begin(true, preview)}
             onResume={() => begin(false)}
             onReview={() => begin(true, true)}
-            refresh={preview || anonymous ? null : refresh}
+            refresh={preview ? null : refresh}
           />
         }
       >
         {notice && <div className="mb-3">{notice}</div>}
         {preview && (
           <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
-            {reviewToken ? (
-              <>
-                <strong>You’re reviewing this topic.</strong> Work through it as a learner would, and press <strong>Comment</strong> at the top of any card to
-                leave feedback for the author. Nothing you answer is recorded.
-              </>
-            ) : (
-              <>
-                <strong>Author preview.</strong> Nothing is recorded. This draft isn’t visible to learners until it’s approved.
-              </>
-            )}
+            <>
+              <strong>Author preview.</strong> Nothing is recorded. This draft isn’t visible to learners until it’s approved.
+            </>
           </p>
         )}
         <Intro
           part="body"
           lesson={lesson}
-          stored={preview || anonymous ? undefined : stored}
+          stored={preview ? undefined : stored}
           onStart={() => begin(true, preview)}
           onResume={() => begin(false)}
           onReview={() => begin(true, true)}
-          refresh={preview || anonymous ? null : refresh}
+          refresh={preview ? null : refresh}
         />
-        {!preview && !anonymous && !personal && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
-        {enrol && !preview && !anonymous && lesson.track !== "reinforcement" && <TopicEnrol slug={lesson.slug} />}
+        {!preview && !personal && lesson.track !== "reinforcement" && <SpacedNote slug={lesson.slug} />}
+        {enrol && !preview && lesson.track !== "reinforcement" && <TopicEnrol slug={lesson.slug} />}
         {/* Save it to a personal Discovery Path (not for follow-up steps or challenge missions, which can't be saved). */}
-        {enrol && !preview && !anonymous && !personal && lesson.track !== "reinforcement" && (
-          <AddToDiscovery itemKey={`topic:${lesson.slug}`} className="mt-3" />
-        )}
-        {!preview && !anonymous && !personal && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
+        {enrol && !preview && !personal && lesson.track !== "reinforcement" && <AddToDiscovery itemKey={`topic:${lesson.slug}`} className="mt-3" />}
+        {!preview && !personal && <OfflineButton lessons={[{ slug: lesson.slug, version: lesson.version }]} className="mt-3" />}
       </Frame>
     );
   }
@@ -484,19 +465,7 @@ export function LessonPlayer({
           attempt={attempt}
           review={review || preview}
           preview={preview}
-          reviewLink={Boolean(reviewToken)}
-          anonymous={anonymous}
-          next={
-            publicLink && publicNext
-              ? {
-                  href: `/open/${publicLink.token}/${encodeURIComponent(publicNext)}`,
-                  title: publicLink.titles?.[publicNext] ?? null,
-                  done: readOpen(publicLink.token).done.includes(publicNext),
-                }
-              : publicLink
-                ? null
-                : (nextTopic?.next ?? null)
-          }
+          next={nextTopic?.next ?? null}
           // A topic in the learner's path goes back to that path, not the Learning page.
           pathBack={nextTopic ? { href: nextTopic.path.href, label: "Back to the learning path" } : undefined}
           headingRef={headingRef}
@@ -518,8 +487,13 @@ export function LessonPlayer({
     pendingNext,
   });
 
+  // Ava, the AI Learning Guide, presenting: her transmission window sits in the card above the words (Ava 2.0).
+  const avaCard = node.type === "presenter" && node.visual.kind === "presenter" && isAvaPresenter(node.visual);
+  // Ava presenting in a portrait video: her window takes the whole card, like any vertical video.
+  const avaFull = avaCard && node.visual.kind === "presenter" && node.visual.video?.orientation === "portrait";
   // A vertical presenter video takes the whole card: no label, heading or body on screen.
   const fullVideo =
+    !avaCard &&
     node.visual.kind === "presenter" &&
     node.visual.video?.orientation === "portrait" &&
     (Boolean(node.visual.video.src) || node.visual.video.provider === "youtube");
@@ -534,6 +508,10 @@ export function LessonPlayer({
   const onColour = bgPhoto ? tone : gradient ? toneClasses(gradient.text) : null;
   // Where the text sits: the top by default, or the bottom over a full-background photo.
   const textPosition = node.textPosition ?? (bgPhoto ? "bottom" : "top");
+  // Highlights and Save this card (docs/job-aids.md): for a signed-in reader of the published Topic, never in a preview,
+  // a review link or a public path. Speaking cards (an insight wall, a written or spoken answer) are about the answer, not the words.
+  const canHighlight = !preview;
+  const cardSaveable = canHighlight && !speaksFirst(node.type) && plainText(`${node.heading} ${node.body}`).trim().length >= 12;
 
   // Card audio lives in the footer so it never pushes the card content down.
   const dock =
@@ -542,8 +520,9 @@ export function LessonPlayer({
           text: node.transcript,
           label: "Introduction",
           durationSec: node.durationSec,
-          // The video speaks for itself; an AI presenter still waiting for its video has the script read instead.
-          speech: !(node.visual.kind === "presenter" && node.visual.video && !(node.visual.video.provider === "elevenlabs" && !node.visual.video.src)),
+          // The video speaks for itself, and so does Ava's transmission; an AI presenter still waiting for its video has the script read instead.
+          speech:
+            !avaCard && !(node.visual.kind === "presenter" && node.visual.video && !(node.visual.video.provider === "elevenlabs" && !node.visual.video.src)),
         }
       : node.type === "audio" || node.type === "listen"
         ? { text: node.script, label: node.type === "listen" ? "Audio" : "Explanation" }
@@ -666,9 +645,7 @@ export function LessonPlayer({
       beats={lesson.beats}
       saveState={review ? "idle" : saveState}
       headerAction={
-        reviewToken ? (
-          <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} />
-        ) : preview || anonymous || !bookmarksOn() ? undefined : (
+        preview || !bookmarksOn() ? undefined : (
           <CardBookmark lesson={lesson.slug} lessonTitle={lesson.title} card={node.id} label={node.label} heading={node.heading} />
         )
       }
@@ -676,7 +653,7 @@ export function LessonPlayer({
       progress={{ beat: node.beat, done: false }}
       aside={aside({ beat: node.beat, done: false })}
       review={review}
-      fill={fullVideo || Boolean(bgPhoto) || listen}
+      fill={fullVideo || avaFull || Boolean(bgPhoto) || listen}
       deck={{
         id: node.id,
         behind: lesson.beats.length - 1 - node.beat,
@@ -724,8 +701,7 @@ export function LessonPlayer({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
-              {!reviewToken &&
-                !anonymous &&
+              {FOOTER_SPEECH_BUTTON &&
                 !personal &&
                 (REVIEW_COMMENTS_IN_FOOTER ? (
                   <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
@@ -742,7 +718,8 @@ export function LessonPlayer({
                   <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
                 </button>
               ) : (
-                dock && (reviewToken || anonymous) && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
+                // With nothing on the left, a space keeps the audio control in the middle.
+                dock && !FOOTER_SPEECH_BUTTON && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
               )}
             </div>
             {dock && (
@@ -784,6 +761,19 @@ export function LessonPlayer({
           </h2>
           <CardVisual visual={node.visual} className="h-full w-full" onComplete={() => markDone(node.id)} autoPlay />
         </div>
+      ) : avaFull && node.type === "presenter" ? (
+        <div key={node.id} className="animate-card-in h-full">
+          <h2 ref={headingRef} tabIndex={-1} className="sr-only">
+            {node.heading || "Ava’s introduction"}
+          </h2>
+          <CardVisual
+            visual={node.visual}
+            className="h-full w-full"
+            onComplete={() => markDone(node.id)}
+            autoPlay
+            ava={{ ttsKey: `lesson:${lesson.slug}:${node.id}`, script: node.transcript, title: node.heading || lesson.title, fill: true }}
+          />
+        </div>
       ) : node.type === "listen" ? (
         <div key={node.id} className="animate-card-in h-full">
           <ListenCard
@@ -796,198 +786,243 @@ export function LessonPlayer({
           />
         </div>
       ) : (
-        <div
-          key={node.id}
-          className={cx(
-            "animate-card-in flex flex-col gap-4",
-            bgPhoto
-              ? cx(
-                  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative isolate h-full overflow-y-auto bg-black p-5",
-                  textPosition === "top" ? "justify-start pt-16" : textPosition === "center" ? "justify-center" : "justify-end pt-24",
-                  tone.text,
-                )
-              : (textPosition !== "top" || speaksFirst(node.type)) && "min-h-full",
-          )}
-        >
-          {bgPhoto && (
-            <>
-              {bgPhoto.animated ? (
-                <MotionPhoto
-                  still={bgPhoto.src}
-                  mp4={bgPhoto.animated.mp4}
-                  alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
-                  className="-z-10"
-                  style={{ objectPosition: bgPhoto.position ?? "center" }}
-                  buttonClassName="left-3 top-3"
-                />
-              ) : (
-                <Image
-                  src={bgPhoto.src}
-                  alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
-                  fill
-                  sizes="30rem"
-                  className="-z-10 object-cover"
-                  style={{ objectPosition: bgPhoto.position ?? "center" }}
-                />
-              )}
-              <div aria-hidden className={cx("absolute inset-0 -z-10", tone.fade)} />
-              {bgPhoto.credit && <PhotoCredit credit={bgPhoto.credit} className="absolute right-3 top-3 [text-shadow:none]" />}
-            </>
-          )}
-          {node.visual.kind !== "none" && !bgPhoto && (
-            <CardVisual
-              visual={node.visual}
-              onComplete={() => markDone(node.id)}
-              autoPlay
-              // Full bleed: past the card's padding to its top and side edges, square where the text starts.
-              className={cx(
-                "-mx-4 -mt-4 rounded-none!",
-                node.visual.kind === "presenter"
-                  ? node.visual.video
-                    ? node.visual.video.orientation === "portrait"
-                      ? undefined
-                      : "aspect-video"
-                    : "aspect-[4/3]"
-                  : node.visual.kind === "orbit"
-                    ? "aspect-square min-[400px]:aspect-[4/3]"
-                    : "aspect-[16/10]",
-              )}
-            />
-          )}
-          {/* Talking-head video bubbles, centred at the top of the card. */}
-          {node.bubbles && node.bubbles.length > 0 && <VideoBubbles key={node.id} bubbles={node.bubbles} onComplete={() => markDone(node.id)} />}
-          {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
-          {!bgPhoto && textPosition !== "top" && <div aria-hidden className="-my-2 flex-1" />}
-          {/* Wall and written-answer cards are mainly about speaking: the heading is centred over the mic. */}
-          <div className={cx(speaksFirst(node.type) && "text-center")}>
-            <p
-              className={cx(
-                "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
-                onColour ? (gradient?.accent ?? onColour.soft) : node.emphasis === "consequence" ? "text-warm" : "text-accent",
-              )}
-            >
-              {node.emphasis === "consequence" && <Icon name="alert" className="mr-1 inline size-4 align-[-3px]" />}
-              {node.label}
-            </p>
-            <h2
-              ref={headingRef}
-              tabIndex={-1}
-              className={cx(
-                "mt-2 font-serif font-semibold tracking-tight outline-none focus-visible:outline-none",
-                speaksFirst(node.type) ? "text-balance text-[1.6rem] leading-[1.18] sm:text-[1.8rem]" : "text-[1.85rem] leading-[1.12] sm:text-[2.1rem]",
-              )}
-            >
-              {node.type === "wall" ? node.prompt : node.heading}
-            </h2>
-            {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
-            {node.body && node.type !== "wall" && (
-              <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />
-            )}
-            {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
-            {node.pdf && (
-              <CardDocument
-                pdf={node.pdf}
-                onColour={Boolean(onColour)}
-                className="mt-4"
-                status={attempt.answers[`pdf:${node.id}`] === "end" ? "end" : attempt.answers[`pdf:${node.id}`] ? "opened" : undefined}
-                onOpened={() => attempt.answers[`pdf:${node.id}`] || setAnswer(`pdf:${node.id}`, "opened")}
-                onFinished={() => setAnswer(`pdf:${node.id}`, "end")}
-              />
-            )}
-            {node.keyPoints && <KeyPoints points={node.keyPoints} onColour={Boolean(onColour)} />}
-            {node.source && (
-              <a
-                href={node.source.url}
-                rel="noreferrer"
-                className={cx(
-                  "mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm underline-offset-4 hover:underline",
-                  onColour ? cx(onColour.soft, "hover:underline") : "text-ink-muted hover:text-accent",
-                )}
-              >
-                <Icon name="external" className="size-3.5 shrink-0" />
-                Source: {node.source.title}
-                <span className="sr-only">(opens in a new tab)</span>
-              </a>
-            )}
-            {node.detail && (
-              <button
-                type="button"
-                aria-expanded={detailOpen}
-                onClick={() => setDetailOpen((o) => !o)}
-                className="mt-2 inline-flex min-h-11 items-center gap-1 font-semibold text-accent"
-              >
-                Learn more <Icon name="chevron-down" className={cx("size-4 transition-transform", detailOpen && "rotate-180")} />
-              </button>
-            )}
-            {node.detail && detailOpen && (
-              <div className="mt-1 rounded-2xl bg-muted p-4 text-[0.95rem]">
-                <p className="font-semibold">{node.detail.title}</p>
-                {node.detail.paragraphs.map((p) => (
-                  <p key={p} className="mt-2 text-ink-muted">
-                    {p}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Story moments placed on this card: an approved line, a check-in or a transmission. Optional, and never counted. */}
-          <StoryAt moments={story} place={node.id} className="mb-4 text-ink" />
-          {aids
-            ?.filter((a) => a.card === node.id)
-            .map((a) => (
-              <div key={a.placementId} className="mb-4 text-left text-ink">
-                <AidSection snippetId={a.snippetId} why={a.why} place={`topic:${lesson.slug}`} />
-              </div>
-            ))}
-
-          {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
-          {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}
+        <SavedMarks key={node.id} root={cardText} source="topic" id={lesson.slug} page={node.id} off={!canHighlight}>
           <div
+            key={node.id}
             className={cx(
-              onColour && panelledOnColour(node.type) && !speaksFirst(node.type) && onColour.panel,
-              speaksFirst(node.type) && "flex flex-1 flex-col",
+              "animate-card-in flex flex-col gap-4",
+              bgPhoto
+                ? cx(
+                    "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative isolate h-full overflow-y-auto bg-black p-5",
+                    textPosition === "top" ? "justify-start pt-16" : textPosition === "center" ? "justify-center" : "justify-end pt-24",
+                    tone.text,
+                  )
+                : (textPosition !== "top" || speaksFirst(node.type)) && "min-h-full",
             )}
           >
-            <CardBody
-              node={node}
-              attempt={attempt}
-              choice={choice}
-              setChoice={(c) => {
-                setChoice(c);
-                setStayFeedback(null);
-                setPendingNext(null);
-              }}
-              stayFeedback={stayFeedback}
-              positive={Boolean(pendingNext)}
-              setAnswer={setAnswer}
-              quizChecked={quizChecked}
-              setQuizChecked={setQuizChecked}
-              lessonSlug={lesson.slug}
-              lessonInfo={{ title: lesson.title, outcome: lesson.outcome }}
-              authorPreview={preview}
-              countVotes={!preview && !review && !anonymous}
-              tinted={Boolean(onColour)}
-            />
-          </div>
-          {/* Reviewers comment through the Comment button instead. */}
-          {personal ? null : !reviewToken && !anonymous && speaksFirst(node.type) ? (
-            // Speaking cards: comments and reporting share one quiet row at the foot of the card.
-            <div className={cx("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-1", onColour ? "border-white/20" : "border-line")}>
-              {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} quiet />}
-              <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} quiet />
+            {bgPhoto && (
+              <>
+                {bgPhoto.animated ? (
+                  <MotionPhoto
+                    still={bgPhoto.src}
+                    mp4={bgPhoto.animated.mp4}
+                    alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
+                    className="-z-10"
+                    style={{ objectPosition: bgPhoto.position ?? "center" }}
+                    buttonClassName="left-3 top-3"
+                  />
+                ) : (
+                  <Image
+                    src={bgPhoto.src}
+                    alt={node.visual.kind === "illustration" ? node.visual.alt : ""}
+                    fill
+                    sizes="30rem"
+                    className="-z-10 object-cover"
+                    style={{ objectPosition: bgPhoto.position ?? "center" }}
+                  />
+                )}
+                <div aria-hidden className={cx("absolute inset-0 -z-10", tone.fade)} />
+                {bgPhoto.credit && <PhotoCredit credit={bgPhoto.credit} className="absolute right-3 top-3 [text-shadow:none]" />}
+              </>
+            )}
+            {node.visual.kind !== "none" && !bgPhoto && (
+              <CardVisual
+                visual={node.visual}
+                onComplete={() => markDone(node.id)}
+                autoPlay
+                ava={
+                  avaCard && node.type === "presenter"
+                    ? { ttsKey: `lesson:${lesson.slug}:${node.id}`, script: node.transcript, title: node.heading }
+                    : undefined
+                }
+                // Full bleed: past the card's padding to its top and side edges, square where the text starts. Ava's window keeps its own frame.
+                className={cx(
+                  avaCard ? "mb-1" : "-mx-4 -mt-4 rounded-none!",
+                  avaCard
+                    ? ""
+                    : node.visual.kind === "presenter"
+                      ? node.visual.video
+                        ? node.visual.video.orientation === "portrait"
+                          ? undefined
+                          : "aspect-video"
+                        : "aspect-[4/3]"
+                      : node.visual.kind === "orbit"
+                        ? "aspect-square min-[400px]:aspect-[4/3]"
+                        : "aspect-[16/10]",
+                )}
+              />
+            )}
+            {/* Talking-head video bubbles, centred at the top of the card. */}
+            {node.bubbles && node.bubbles.length > 0 && <VideoBubbles key={node.id} bubbles={node.bubbles} onComplete={() => markDone(node.id)} />}
+            {/* Centre or bottom text: the space above the text grows (and below it too, for centre). */}
+            {!bgPhoto && textPosition !== "top" && <div aria-hidden className="-my-2 flex-1" />}
+            {/* Opened from Favourites on this card: the saved passage, where it stands now, and the way back. Not part of the card's words. */}
+            {node.id === startAt && canHighlight && <FavouriteBanner className="text-left text-ink" />}
+            {/* Wall and written-answer cards are mainly about speaking: the heading is centred over the mic. */}
+            <div ref={cardText} data-hl={node.id} className={cx(speaksFirst(node.type) && "text-center")}>
+              {/* The card's label, with Save this card on the same line, floated right: no room of its own. */}
+              <div className={cx(cardSaveable && "flex min-h-11 items-center justify-between gap-3")}>
+                <p
+                  className={cx(
+                    "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
+                    onColour ? (gradient?.accent ?? onColour.soft) : node.emphasis === "consequence" ? "text-warm" : "text-accent",
+                  )}
+                >
+                  {node.emphasis === "consequence" && <Icon name="alert" className="mr-1 inline size-4 align-[-3px]" />}
+                  {/* Ava's card doesn't carry the new card's default label: she names herself in her window. */}
+                  {avaCard && node.label === "Presenter" ? "" : node.label}
+                </p>
+                {cardSaveable && (
+                  <div className="print:hidden">
+                    <SaveSection
+                      source="topic"
+                      id={lesson.slug}
+                      revisionId={lesson.version}
+                      sectionId={node.id}
+                      label="Save this card"
+                      onColour={Boolean(onColour)}
+                    />
+                  </div>
+                )}
+              </div>
+              <h2
+                ref={headingRef}
+                tabIndex={-1}
+                className={cx(
+                  "mt-2 font-serif font-semibold tracking-tight outline-none focus-visible:outline-none",
+                  speaksFirst(node.type) ? "text-balance text-[1.6rem] leading-[1.18] sm:text-[1.8rem]" : "text-[1.85rem] leading-[1.12] sm:text-[2.1rem]",
+                )}
+              >
+                {node.type === "wall" ? node.prompt : node.heading}
+              </h2>
+              {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
+              {node.body && node.type !== "wall" && (
+                <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />
+              )}
+              {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
+              {node.pdf && (
+                <CardDocument
+                  pdf={node.pdf}
+                  onColour={Boolean(onColour)}
+                  className="mt-4"
+                  status={attempt.answers[`pdf:${node.id}`] === "end" ? "end" : attempt.answers[`pdf:${node.id}`] ? "opened" : undefined}
+                  onOpened={() => attempt.answers[`pdf:${node.id}`] || setAnswer(`pdf:${node.id}`, "opened")}
+                  onFinished={() => setAnswer(`pdf:${node.id}`, "end")}
+                />
+              )}
+              {node.keyPoints && <KeyPoints points={node.keyPoints} onColour={Boolean(onColour)} />}
+              {node.source && (
+                <a
+                  href={node.source.url}
+                  rel="noreferrer"
+                  className={cx(
+                    "mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm underline-offset-4 hover:underline",
+                    onColour ? cx(onColour.soft, "hover:underline") : "text-ink-muted hover:text-accent",
+                  )}
+                >
+                  <Icon name="external" className="size-3.5 shrink-0" />
+                  Source: {node.source.title}
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              )}
+              {node.detail && (
+                <button
+                  type="button"
+                  aria-expanded={detailOpen}
+                  onClick={() => setDetailOpen((o) => !o)}
+                  className="mt-2 inline-flex min-h-11 items-center gap-1 font-semibold text-accent"
+                >
+                  Learn more <Icon name="chevron-down" className={cx("size-4 transition-transform", detailOpen && "rotate-180")} />
+                </button>
+              )}
+              {node.detail && detailOpen && (
+                <div className="mt-1 rounded-2xl bg-muted p-4 text-[0.95rem]">
+                  <p className="font-semibold">{node.detail.title}</p>
+                  {node.detail.paragraphs.map((p) => (
+                    <p key={p} className="mt-2 text-ink-muted">
+                      {p}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            !reviewToken &&
-            !anonymous && (
+
+            {/* This reader's earlier highlights on this card, and highlighting a new one. */}
+            <SavedMarkChips blockId={node.id} />
+            {canHighlight && <Highlighter root={cardText} source="topic" id={lesson.slug} revisionId={lesson.version} />}
+
+            {/* Story moments placed on this card: an approved line, a check-in or a transmission. Optional, and never counted. */}
+            <StoryAt moments={story} place={node.id} className="mb-4 text-ink" />
+            {aids
+              ?.filter((a) => a.card === node.id)
+              .map((a) => (
+                <div key={a.placementId} className="mb-4 text-left text-ink">
+                  <AidSection snippetId={a.snippetId} why={a.why} place={`topic:${lesson.slug}`} />
+                </div>
+              ))}
+            {/* A Quarterly Budget Decision Lab placed on this card by reference: the published Magazine block and the learner’s own attempt. */}
+            {node.labRef && (
+              <div className="mb-4 text-ink">
+                <TopicBudgetLab guide={node.labRef.guide} block={node.labRef.block} why={node.labRef.why} topic={lesson.slug} />
+              </div>
+            )}
+            {/* A Spot the Hazard scene placed on this card by reference: the published Magazine block and the learner’s own attempt. */}
+            {node.sceneRef && (
+              <div className="mb-4 text-ink">
+                <TopicSpotTheHazard guide={node.sceneRef.guide} block={node.sceneRef.block} why={node.sceneRef.why} topic={lesson.slug} />
+              </div>
+            )}
+            {/* A 72-Hour Discharge Pivot placed on this card by reference: the published Magazine block and the learner’s own attempt. */}
+            {node.pivotRef && (
+              <div className="mb-4 text-ink">
+                <TopicDischargePivot guide={node.pivotRef.guide} block={node.pivotRef.block} why={node.pivotRef.why} topic={lesson.slug} />
+              </div>
+            )}
+
+            {/* On a coloured background, choices and controls sit on a frosted panel so they stay easy to read. */}
+            {/* Speaking cards skip it: the mic sits on the card colour, and their answer box and feedback are white panels of their own. */}
+            <div
+              className={cx(
+                onColour && panelledOnColour(node.type) && !speaksFirst(node.type) && onColour.panel,
+                speaksFirst(node.type) && "flex flex-1 flex-col",
+              )}
+            >
+              <CardBody
+                node={node}
+                attempt={attempt}
+                choice={choice}
+                setChoice={(c) => {
+                  setChoice(c);
+                  setStayFeedback(null);
+                  setPendingNext(null);
+                }}
+                stayFeedback={stayFeedback}
+                positive={Boolean(pendingNext)}
+                setAnswer={setAnswer}
+                quizChecked={quizChecked}
+                setQuizChecked={setQuizChecked}
+                lessonSlug={lesson.slug}
+                lessonInfo={{ title: lesson.title, outcome: lesson.outcome }}
+                authorPreview={preview}
+                countVotes={!preview && !review}
+                tinted={Boolean(onColour)}
+              />
+            </div>
+            {personal ? null : speaksFirst(node.type) ? (
+              // Speaking cards: comments and reporting share one quiet row at the foot of the card.
+              <div className={cx("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-1", onColour ? "border-white/20" : "border-line")}>
+                {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} quiet />}
+                <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} quiet />
+              </div>
+            ) : (
               <>
                 <ReportProblem key={`report-${node.id}`} slug={lesson.slug} cardId={node.id} preview={preview || review} onColour={Boolean(onColour)} />
                 {commentsOn(node) && <CardComments key={node.id} slug={lesson.slug} cardId={node.id} onColour={Boolean(onColour)} readOnly={preview} />}
               </>
-            )
-          )}
-          {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
-        </div>
+            )}
+            {!bgPhoto && textPosition === "center" && <div aria-hidden className="-my-2 flex-1" />}
+          </div>
+        </SavedMarks>
       )}
     </Frame>
   );
@@ -1664,8 +1699,6 @@ function Complete({
   attempt,
   review,
   preview,
-  reviewLink = false,
-  anonymous = false,
   next,
   pathBack,
   headingRef,
@@ -1677,10 +1710,6 @@ function Complete({
   attempt: LessonAttempt;
   review: boolean;
   preview: boolean;
-  /** Reached the end from a review link. */
-  reviewLink?: boolean;
-  /** Reached the end from a public link, not signed in. */
-  anonymous?: boolean;
   /** The next topic to go on to, if there is one. Its title, when known, goes on the button. */
   next?: { href: string; title: string | null; done?: boolean } | null;
   /** The learning path this topic belongs to, for going back to it. */
@@ -1704,39 +1733,33 @@ function Complete({
       )}
       {/* The same confetti as finishing a learning path, for every topic finished (not previews or reviews). */}
       {!preview && !review && <Confetti />}
-      {!preview && !review && !queued && !anonymous && <PathCelebration lessonSlug={lesson.slug} confetti={false} />}
+      {!preview && !review && !queued && <PathCelebration lessonSlug={lesson.slug} confetti={false} />}
       <span className="inline-flex size-16 items-center justify-center rounded-full bg-tealtint text-accent">
         <Icon name="check" className="size-8" />
       </span>
       <div>
         <h2 ref={headingRef} tabIndex={-1} className="font-serif text-[2rem] font-semibold leading-tight outline-none">
-          {reviewLink
-            ? "End of the topic"
-            : preview
-              ? "Preview finished"
-              : review
-                ? "Review finished"
-                : lesson.track === "reinforcement"
-                  ? "Follow up done"
-                  : ack
-                    ? "Briefing acknowledged"
-                    : "Topic complete"}
+          {preview
+            ? "Preview finished"
+            : review
+              ? "Review finished"
+              : lesson.track === "reinforcement"
+                ? "Follow up done"
+                : ack
+                  ? "Briefing acknowledged"
+                  : "Topic complete"}
         </h2>
         <p className="mt-3 text-lg">
-          {reviewLink
-            ? "Thanks for reviewing. Your comments go straight to the author. To add more, go back to any card and press Comment."
-            : preview
-              ? "Nothing was recorded. Approve the variations when you’re happy with them."
-              : review
-                ? "Your original completion record is unchanged."
-                : anonymous
-                  ? "Well done. This phone or computer remembers that you’ve finished it, so you can see your progress on the learning path."
-                  : "Your result is saved. You can come back to this topic at any time."}
+          {preview
+            ? "Nothing was recorded. Approve the variations when you’re happy with them."
+            : review
+              ? "Your original completion record is unchanged."
+              : "Your result is saved. You can come back to this topic at any time."}
         </p>
         {lesson.completionMessage && <p className="mt-4 font-serif text-2xl font-semibold leading-snug text-accent">{lesson.completionMessage}</p>}
       </div>
       {/* Surveys this completion triggered: the lesson's own, or the module survey if it finished a learning path. */}
-      {!review && !preview && !anonymous && lesson.track !== "reinforcement" && <WaitingSurveys lesson={lesson.slug} />}
+      {!review && !preview && lesson.track !== "reinforcement" && <WaitingSurveys lesson={lesson.slug} />}
       {!review &&
         followUps.map((f) => (
           <div key={f.pathName} className="rounded-2xl bg-tealtint p-4">
@@ -1749,7 +1772,7 @@ function Complete({
             </p>
           </div>
         ))}
-      {!review && !anonymous && attempt.completedAt && (
+      {!review && attempt.completedAt && (
         <dl className="rounded-2xl border border-line p-4 text-[0.95rem]">
           <div className="flex justify-between gap-3 py-1">
             <dt className="text-ink-muted">Completed</dt>
@@ -1945,8 +1968,6 @@ function TopicEnrol({ slug }: { slug: string }) {
         }
         className="mt-4"
       />
-      {/* Beside Enrol: a QR code that opens this topic on any phone without signing in. */}
-      <PublicQr kind="topic" id={slug} className="mt-3" />
     </>
   );
 }

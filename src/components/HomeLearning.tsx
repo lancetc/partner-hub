@@ -85,7 +85,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
     : samples[0]
       ? `Made for you: ${samples[0].title}`
       : paths[0]
-      ? `${paths[0].name} learning path`
+      ? `${paths[0].name} Discovery Path`
       : ready.length + due.length + enrolled.length
         ? `${ready.length + due.length + enrolled.length} ready for you`
         : null;
@@ -157,7 +157,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
                     <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                      {p.selfEnrolled ? "Learning path you enrolled in" : p.assigned === false ? "Learning path you’ve started" : "Learning path"}
+                      {p.selfEnrolled ? "Discovery Path you enrolled in" : p.assigned === false ? "Discovery Path you’ve started" : "Discovery Path"}
                     </span>
                     <Link href={`/paths/${encodeURIComponent(p.id)}`} className="font-serif text-lg font-semibold leading-snug hover:underline">
                       {p.name}

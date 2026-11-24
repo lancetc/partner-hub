@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { backdropImage, backdropShownOn, isPlayerPath,checkBackground, coverSizes, DEFAULT_BACKGROUND, parseBackground, sameBackground, type PexelsChoice } from "./background";
+import {
+  backdropImage,
+  backdropShownOn,
+  isPlayerPath,
+  checkBackground,
+  coverSizes,
+  DEFAULT_BACKGROUND,
+  parseBackground,
+  sameBackground,
+  type PexelsChoice,
+} from "./background";
 
 /* Backgrounds: what can be saved, how saved ones are read back, how photos are sized, and where they show. */
 
@@ -85,14 +95,39 @@ describe("sizing photos", () => {
 });
 
 describe("where the background shows", () => {
-  it.each(["/", "/news/some-story", "/community", "/topics", "/paths", "/paths/abc", "/magazine", "/inbox", "/resources", "/resources/glossary", "/play", "/settings", "/webinars/3", "/challenge/2", "/topics/dementia-basics", "/topics/s/lf-recall", "/topics/follow-ups/12"])(
-    "shows on %s",
-    (p) => expect(backdropShownOn(p)).toBe(true),
-  );
-  it.each(["/topics/a/b", "/elearning/crs-1", "/magazine/draft/mag-1", "/admin", "/admin/lessons", "/login", "/paths/abc/certificate", "/explorer", "/play/conversations/room/ABCD", "/open/x", "/review/x"])(
-    "is left off %s",
-    (p) => expect(backdropShownOn(p)).toBe(false),
-  );
+  it.each([
+    "/",
+    "/news/some-story",
+    "/community",
+    "/topics",
+    "/paths",
+    "/paths/abc",
+    "/magazine",
+    "/inbox",
+    "/resources",
+    "/resources/glossary",
+    "/play",
+    "/settings",
+    "/webinars/3",
+    "/challenge/2",
+    "/discovery",
+    "/topics/dementia-basics",
+    "/topics/s/lf-recall",
+    "/topics/follow-ups/12",
+  ])("shows on %s", (p) => expect(backdropShownOn(p)).toBe(true));
+  it.each([
+    "/topics/a/b",
+    "/elearning/crs-1",
+    "/magazine/draft/mag-1",
+    "/admin",
+    "/admin/lessons",
+    "/login",
+    "/paths/abc/certificate",
+    "/explorer",
+    "/play/conversations/room/ABCD",
+    "/open/x",
+    "/review/x",
+  ])("is left off %s", (p) => expect(backdropShownOn(p)).toBe(false));
   it("knows the topic player, where the background sits behind the card deck", () => {
     expect(["/topics/dementia-basics", "/topics/s/lf-recall", "/topics/follow-ups/12"].every(isPlayerPath)).toBe(true);
     expect(["/topics", "/paths/abc", "/topics/a/b"].some(isPlayerPath)).toBe(false);

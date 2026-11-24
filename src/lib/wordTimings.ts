@@ -66,3 +66,45 @@ export function wordAround(text: string, index: number): { from: number; to: num
   while (to < text.length && /\S/.test(text[to])) to++;
   return to > from ? { from, to } : null;
 }
+
+/** One piece of what speech-to-text heard (ElevenLabs Scribe): a word, the space after it, or a sound ("[laughs]"). */
+export type HeardToken = { text: string; start?: number; end?: number; type?: string };
+
+/**
+  What a recording says, as heard: its words written out, each with when it's said. The words and spaces are put back
+  together in order (sounds such as "[laughs]" are left out), so each word knows its place in the text.
+*/
+export function wordsFromSpeech(tokens: HeardToken[] | null | undefined): { text: string; words: WordTiming[] } | null {
+  let text = "";
+  const words: WordTiming[] = [];
+  for (const t of tokens ?? []) {
+    if (t.type === "audio_event" || typeof t.text !== "string") continue;
+    if (t.type === "spacing" || !t.text.trim()) {
+      // One space between words, however the gap was heard.
+      if (text && !text.endsWith(" ")) text += " ";
+      continue;
+    }
+    const piece = t.text.trim();
+    // A word straight after another (no spacing token between them) still gets its own place.
+    if (text && !text.endsWith(" ") && words.length) text += " ";
+    const from = text.length;
+    text += piece;
+    const start = Number(t.start);
+    const end = Number(t.end);
+    words.push({ from, to: text.length, start: Number.isFinite(start) ? start : 0, end: Number.isFinite(end) ? end : Number.isFinite(start) ? start : 0 });
+  }
+  text = text.trimEnd();
+  return words.length ? { text, words } : null;
+}
+
+/**
+  The same timings over a lightly edited script (a spelling fixed, punctuation added): when the edit keeps every word in
+  place (the same number of words), each keeps its time and takes its new place in the text. Otherwise null: they have
+  to be timed again.
+*/
+export function retimeWords(words: WordTiming[] | null | undefined, text: string): WordTiming[] | null {
+  if (!words?.length) return null;
+  const found = [...text.matchAll(/\S+/g)];
+  if (found.length !== words.length) return null;
+  return found.map((m, i) => ({ from: m.index, to: m.index + m[0].length, start: words[i].start, end: words[i].end }));
+}

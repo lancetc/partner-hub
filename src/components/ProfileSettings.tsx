@@ -11,6 +11,7 @@ import { MyCertificates } from "./MyCertificates";
 import { EmailSettings } from "./EmailSettings";
 import { ProfilePicture } from "./ProfilePicture";
 import { BackgroundSettings } from "./BackgroundSettings";
+import { AtlasSettings } from "./community/AtlasSettings";
 
 /* Your profile and settings: your certificates, the language you read the hub in, and audio. */
 export function ProfileSettings() {
@@ -65,6 +66,8 @@ export function ProfileSettings() {
           <p className="mt-3 text-ink-muted">Loading…</p>
         )}
       </section>
+
+      <AtlasSettings />
 
       <BackgroundSettings />
 

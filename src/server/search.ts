@@ -10,6 +10,8 @@ import { forLearner, parseWebinar, type Row as WebinarRow } from "./webinars";
 import { missionSlugs } from "./challenges";
 import { keywords } from "@/lib/keywords";
 import { aidDocs } from "./favourites";
+import { businessSearchDocs } from "./businessNotes";
+import { pocketSearchDocs } from "./pocketTools";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -87,8 +89,34 @@ function documents(db: Db, user: User): Doc[] {
     body: r.points.join(" "),
   }));
 
+  // The Work Tools library itself, so it's found by name on a phone (where it isn't in the bottom bar), even before
+  // any Job Aid is approved for this person's role.
+  const places: Doc[] = [
+    {
+      id: "page:tools",
+      href: "/tools",
+      title: "Work Tools",
+      meta: "Library · Job Aids",
+      head: "Work Tools",
+      summary: "Job Aids for your role: short, approved checklists, conversation prompts, decision paths and escalation maps for a task at work.",
+      body: "",
+    },
+  ];
+
   // Work Tools (docs/job-aids.md): Job Aids this person's role may open, found by the task they're for.
-  return [...aidDocs(db, user), ...topics, ...paths, ...webinars, ...news, ...library];
+  // Business Field Notes: principals only, published cards only (server/businessNotes).
+  // Live Call Pocket Playbook tools (docs/pocket-playbook.md): by role, never a withdrawn one.
+  return [
+    ...places,
+    ...pocketSearchDocs(db, user),
+    ...aidDocs(db, user),
+    ...businessSearchDocs(db, user),
+    ...topics,
+    ...paths,
+    ...webinars,
+    ...news,
+    ...library,
+  ];
 }
 
 /** A short piece of the text around the first word that matched, so people can see why it came up. */

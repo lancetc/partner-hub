@@ -27,6 +27,11 @@ import {
 import { cardOfTheWeek, perspectives, themeOf } from "@/content/conversations";
 import Link from "next/link";
 import { Icon } from "../Icon";
+import { DigitalMembers } from "./DigitalMembers";
+import { portraitCard } from "./portraitCard";
+import { CommunityAtlas } from "./CommunityAtlas";
+import { BusinessNotesLink } from "../business/BusinessNotesLink";
+import { CaseThreadsPanel } from "../caseThreads/CaseThreadsPanel";
 
 /*
   The Community: a feed of posts in spaces, events, a member directory and a leaderboard, in the
@@ -64,6 +69,8 @@ const TABS = [
   { id: "feed", label: "Feed", icon: "chat" },
   { id: "events", label: "Events", icon: "calendar" },
   { id: "members", label: "Members", icon: "people" },
+  { id: "digital", label: "Digital Members", icon: "spark" },
+  { id: "atlas", label: "Atlas", icon: "pin" },
   { id: "leaderboard", label: "Leaderboard", icon: "star" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
@@ -115,7 +122,7 @@ export function Community() {
         eyebrow="Together"
         title="Learn from each other"
         // Colleagues, clients and a gardener at a garden lunch outside a Queenslander, across the middle and right, with lawn behind the words.
-        image={{ src: "/images/hero-garden-lunch.webp", width: 1914, height: 822, position: "70% 26%" }}
+        image={{ src: "/images/hero-garden-lunch.webp", width: 1914, height: 822, position: "70% 26%", minHeight: 403 }}
         aside={
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex -space-x-2" aria-hidden>
@@ -162,6 +169,8 @@ export function Community() {
         {tab === "feed" && <Feed you={you} mine={mine} update={update} hydrated={hydrated} yourPoints={yourPoints} goTo={setTab} />}
         {tab === "events" && <Events mine={mine} update={update} hydrated={hydrated} />}
         {tab === "members" && <Members />}
+        {tab === "digital" && <DigitalMembers />}
+        {tab === "atlas" && <CommunityAtlas />}
         {tab === "leaderboard" && <Leaderboard you={you} yourPoints={yourPoints} />}
       </div>
     </div>
@@ -318,6 +327,10 @@ function Feed({
       </div>
 
       <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start" aria-label="Around the community">
+        {/* The principal-only business space: each Business Field Note's canonical thread, kept on the server (docs/business-field-notes.md). */}
+        <BusinessNotesLink threads />
+        {/* "What Would You Do?" case threads: real server-backed threads, the same ones the Magazine blocks show (docs/case-threads.md). */}
+        <CaseThreadsPanel />
         {hydrated && <WeekCard />}
         <section className="rounded-2xl border border-line bg-surface p-4">
           <h2 className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Community guidelines</h2>
@@ -930,48 +943,110 @@ function Members() {
           </button>
         ))}
       </div>
-      <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {shown.map((m) => (
-          <li key={m.id} className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5">
-            <div className="flex items-center gap-3">
-              <Avatar person={m} size="lg" level={levelFor(m.points.all).level} />
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-semibold">
-                  {m.name}
-                  {m.online && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[#1f8a52] dark:text-[#7ef0a6]">
-                      <span className="size-2 rounded-full bg-[#2fbf71]" aria-hidden /> Online
-                    </span>
-                  )}
-                </p>
-                <p className="text-sm text-ink-muted">{m.role}</p>
-                <p className="text-sm text-ink-muted">
-                  <Icon name="pin" className="mr-1 inline size-3.5" />
-                  {m.region}
-                </p>
-              </div>
-            </div>
-            <p className="text-sm">{m.bio}</p>
-            <div className="mt-auto">
-              <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ask me about</p>
-              <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                {m.askMeAbout.map((t) => (
-                  <li key={t} className="rounded-full bg-tealtint px-2.5 py-1 text-xs font-medium">
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="text-xs text-ink-muted">
-              Member for{" "}
-              {m.joinedMonthsAgo >= 12 ? `${Math.floor(m.joinedMonthsAgo / 12)} year${m.joinedMonthsAgo >= 24 ? "s" : ""}` : `${m.joinedMonthsAgo} months`} ·{" "}
-              {m.points.all.toLocaleString("en-AU")} points
-            </p>
+          <li key={m.id}>
+            <MemberPortrait m={m} />
           </li>
         ))}
       </ul>
       {shown.length === 0 && <p className="mt-6 rounded-2xl border border-dashed border-line p-6 text-center text-ink-muted">No one matches that yet.</p>}
     </div>
+  );
+}
+
+/**
+  A member as a portrait card, in the same style as the Digital Members: their photo, or their initials large on a soft wash of
+  their own colour when there is none, and their name, role and place on the pale fade at the foot,
+  with their points and how long they've been a member. "Ask me" slides up what they're happy to be asked about.
+*/
+function MemberPortrait({ m }: { m: Member }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const colour = avatarColour(m.id);
+  const level = levelFor(m.points.all).level;
+  const since = m.joinedMonthsAgo >= 12 ? `${Math.floor(m.joinedMonthsAgo / 12)} yr${m.joinedMonthsAgo >= 24 ? "s" : ""}` : `${m.joinedMonthsAgo} mo`;
+  return (
+    <article className={portraitCard.frame} aria-label={m.name}>
+      <div className={portraitCard.window}>
+        {m.photo ? (
+          // Their photo fills the card, as on Digital Members.
+          // eslint-disable-next-line @next/next/no-img-element -- a small fixed picture from /public
+          <img src={m.photo} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover object-[center_20%]" />
+        ) : (
+          <>
+            {/* No photo: their colour, light at the top, with their initials where a face would be. */}
+            <div
+              aria-hidden
+              className="absolute inset-0"
+              style={{ background: `linear-gradient(160deg, ${colour}33 0%, ${colour}66 55%, ${colour}99 100%)` }}
+            />
+            <div aria-hidden className="absolute -right-10 -top-10 size-48 rounded-full opacity-30" style={{ background: colour }} />
+            <span
+              aria-hidden
+              className="absolute left-1/2 top-[14%] grid size-28 -translate-x-1/2 place-items-center rounded-full font-mulish text-4xl font-extrabold text-white shadow-lg ring-4 ring-white/70"
+              style={{ background: colour }}
+            >
+              {initials(m.name)}
+            </span>
+          </>
+        )}
+        <span className="absolute left-4 top-4 rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-ink backdrop-blur dark:bg-black/40 dark:text-white">
+          Level {level}
+        </span>
+        {m.online && (
+          <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-[#1f8a52] backdrop-blur dark:bg-black/40 dark:text-[#7ef0a6]">
+            <span className="size-2 rounded-full bg-[#2fbf71]" aria-hidden /> Online
+          </span>
+        )}
+        <div aria-hidden className={portraitCard.fade} />
+        <div className={portraitCard.foot}>
+          <h3 className={portraitCard.name}>
+            <span className="truncate">{m.name}</span>
+            {m.host && (
+              <span title="Community team: they look after this space" className={cx(portraitCard.badge, "bg-[#008282]")}>
+                <Icon name="check" className="size-3.5" />
+                <span className="sr-only">Community team</span>
+              </span>
+            )}
+          </h3>
+          <p className="line-clamp-1 text-[0.95rem] leading-snug text-ink-muted">{m.role}</p>
+          <p className="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
+            <Icon name="pin" className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {m.region} · {since}
+            </span>
+          </p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-ink" title={`${m.points.all.toLocaleString("en-AU")} points`}>
+              <Icon name="star" className="size-4 text-ink-muted" />
+              {m.points.all >= 1000 ? `${(m.points.all / 1000).toFixed(1)}k` : m.points.all}
+              <span className="sr-only">points</span>
+            </p>
+            <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className={portraitCard.pill}>
+              Ask me <Icon name={open ? "close" : "plus"} className="size-4" />
+            </button>
+          </div>
+        </div>
+        {/* What they're happy to be asked about, over the picture. */}
+        <div
+          id={id}
+          hidden={!open}
+          className="absolute inset-x-0 bottom-16 top-0 overflow-y-auto bg-white p-4 dark:bg-[#13233a] motion-safe:animate-[learn-item-in_260ms_ease-out_both]"
+        >
+          <p className="font-semibold">{m.name}</p>
+          <p className="mt-1 text-sm">{m.bio}</p>
+          <p className="mt-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ask me about</p>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {m.askMeAbout.map((t) => (
+              <li key={t} className="rounded-full bg-tealtint px-2.5 py-1 text-xs font-medium">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </article>
   );
 }
 

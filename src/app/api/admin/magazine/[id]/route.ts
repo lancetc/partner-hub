@@ -3,6 +3,7 @@ import { HttpError } from "@/server/auth";
 import { publishCourse } from "@/server/magazineApproval";
 import { archiveGuide, authorGuide, duplicateGuide, restoreGuide, saveGuideDraft, type GuideInput } from "@/server/magazine";
 import type { Db } from "@/server/db";
+import { setDemoSignOff } from "@/server/demoSignOff";
 
 /** The learning paths a quiz block can use: each has its own quiz in the Hub's quiz engine. */
 const paths = (db: Db) =>
@@ -33,7 +34,13 @@ export async function PUT(req: Request, ctx: RouteContext<"/api/admin/magazine/[
 export async function POST(req: Request, ctx: RouteContext<"/api/admin/magazine/[id]">) {
   const { id } = await ctx.params;
   return handle(async ({ db, user, now }) => {
-    const { action, summary, moveLearners, anyway } = await body<{ action?: string; summary?: string; moveLearners?: boolean; anyway?: boolean }>(req);
+    const { action, summary, moveLearners, anyway, on } = await body<{
+      action?: string;
+      summary?: string;
+      moveLearners?: boolean;
+      anyway?: boolean;
+      on?: boolean;
+    }>(req);
     try {
       // Through the review rules, as from the review panel.
       if (action === "publish") return publishCourse(db, user, id, { summary, moveLearners, anyway }, now);
@@ -44,6 +51,11 @@ export async function POST(req: Request, ctx: RouteContext<"/api/admin/magazine/
     }
     if (action === "archive") {
       archiveGuide(db, user, id, now);
+      return { guide: authorGuide(db, user, id) };
+    }
+    // A demo Hub's stand-in for reviewers' sign-offs (server/demoSignOff): superadmins only.
+    if (action === "demo-signoff") {
+      setDemoSignOff(db, user, id, on === true, now);
       return { guide: authorGuide(db, user, id) };
     }
     if (action === "restore") return { guide: restoreGuide(db, user, id, now) };

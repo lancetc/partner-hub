@@ -40,7 +40,7 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: "popular", label: "Most popular" },
   { value: "az", label: "Title A–Z" },
   { value: "za", label: "Title Z–A" },
-  { value: "path", label: "Learning path" },
+  { value: "path", label: "Discovery Path" },
   { value: "shortest", label: "Shortest first" },
   { value: "longest", label: "Longest first" },
 ];
@@ -71,7 +71,7 @@ function byPath(shown: TopicSummary[], paths: PathTopics[]) {
   const groups = paths.map((p) => ({ id: p.id as string | null, name: p.name, topics: p.slugs.flatMap((s) => bySlug.get(s) ?? []) })).filter((g) => g.topics.length);
   const inAPath = new Set(paths.flatMap((p) => p.slugs));
   const loose = shown.filter((t) => !inAPath.has(t.slug));
-  return loose.length ? [...groups, { id: null, name: "Not in a learning path", topics: loose }] : groups;
+  return loose.length ? [...groups, { id: null, name: "Not in a Discovery Path", topics: loose }] : groups;
 }
 
 /*

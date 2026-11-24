@@ -7,6 +7,7 @@ import { GUIDE_MODES, guideSeconds } from "@/lib/magazineGuide";
 import { Icon } from "../Icon";
 import type { InteractiveContext } from "./InteractiveBlocks";
 import "./guide.css";
+import { AvaTransmission } from "../ava/AvaTransmission";
 
 /*
   The AI Learning Guide, as learners meet it (docs/ai-learning-guide.md): a recorded, scripted segment in
@@ -313,6 +314,30 @@ export function GuidePlayer({ block: b, ctx }: { block: GuideBlock; ctx: Interac
         {broken}
         {showScript && transcript}
       </figure>
+    );
+
+  // Transmission: Ava's window (Ava 2.0). The recording arrives as a transmission and, once it ends, gives way to its poster.
+  if (b.mode === "transmission" && m.kind === "video")
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+        {intro && <div className="guide-frame rounded-2xl p-3">{intro}</div>}
+        <AvaTransmission
+          layout="block"
+          media={{ kind: "video", src: m.src, poster: m.poster ?? null, captions: m.captions ?? null }}
+          portrait={m.poster ?? who.portrait}
+          name={who.name || "Ava"}
+          script={b.script}
+          title={b.screenText || label}
+          afterEnd="poster"
+          caseLabel={b.caseLabel}
+          onEvent={(e) => {
+            if (e === "started" && !introSeen) writePref(PREFS.intro, true);
+            event(e);
+          }}
+        />
+        {b.screenText && <p className="font-serif text-2xl font-semibold leading-snug">{b.screenText}</p>}
+        {details(false)}
+      </div>
     );
 
   const inset = b.mode === "inset";

@@ -6,18 +6,7 @@ import { useId, useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { useHydrated } from "@/lib/store";
 import { cx, formatDate } from "@/lib/format";
-import {
-  cardById,
-  cardOfTheWeek,
-  cards,
-  deckFor,
-  perspectives,
-  shuffled,
-  themeOf,
-  themes,
-  type ConversationCard,
-  type ThemeId,
-} from "@/content/conversations";
+import { cardById, cardOfTheWeek, cards, deckFor, perspectives, shuffled, themeOf, themes, type ConversationCard, type ThemeId } from "@/content/conversations";
 import { avatarColour, initials, memberById } from "@/content/community";
 import { Icon } from "../Icon";
 import { FlipCard } from "./FlipCard";
@@ -80,8 +69,12 @@ export function CareConversations() {
         <div className="relative max-w-xl">
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#9fe3e3]">A conversation card game</p>
           <h1 className="mt-1 font-serif text-4xl font-semibold tracking-tight sm:text-5xl">Care Conversations</h1>
-          <p className="mt-3 text-lg text-white/90">Pick a card. Consider the question. Share your perspective. Discover how others approach the same situation.</p>
-          <p className="mt-3 text-sm text-white/75">48 cards in six themes. No scores and no right answers: it’s about thinking it through and learning from each other.</p>
+          <p className="mt-3 text-lg text-white/90">
+            Pick a card. Consider the question. Share your perspective. Discover how others approach the same situation.
+          </p>
+          <p className="mt-3 text-sm text-white/75">
+            48 cards in six themes. No scores and no right answers: it’s about thinking it through and learning from each other.
+          </p>
         </div>
       </header>
 
@@ -168,7 +161,11 @@ function Draw({ mine, update, name }: { mine: Mine; update: Update; name: string
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex flex-col items-center gap-4">
-        <div className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:w-full sm:flex-wrap sm:justify-center sm:px-0" role="group" aria-label="Theme">
+        <div
+          className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:w-full sm:flex-wrap sm:justify-center sm:px-0"
+          role="group"
+          aria-label="Theme"
+        >
           <ThemeChip active={theme === "all"} onClick={() => pick("all")} label="All themes" emoji="🃏" />
           {themes.map((t) => (
             <ThemeChip key={t.id} active={theme === t.id} onClick={() => pick(t.id)} label={t.name} emoji={t.emoji} colour={t.colour} />
@@ -182,7 +179,11 @@ function Draw({ mine, update, name }: { mine: Mine; update: Update; name: string
           <span className="text-sm font-semibold tabular-nums text-ink-muted">
             {(at % order.length) + 1} of {order.length}
           </span>
-          <button type="button" onClick={() => go(1)} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#008282] px-5 font-semibold text-white hover:bg-[#006b6b]">
+          <button
+            type="button"
+            onClick={() => go(1)}
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#008282] px-5 font-semibold text-white hover:bg-[#006b6b]"
+          >
             Next card <Icon name="arrow-right" className="size-4" />
           </button>
         </div>
@@ -244,12 +245,34 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
     setJustSaved(shared ? "Shared with the community." : "Saved privately. Only you can see it.");
   };
   const others = perspectives.filter((p) => p.cardId === card.id);
-  const yours = kept?.shared ? [{ id: `you-${card.id}`, text: kept.text, by: name, role: "You", colour: "#102a43", appreciations: 0, when: "Just now" }] : [];
+  const yours = kept?.shared
+    ? [
+        {
+          id: `you-${card.id}`,
+          text: kept.text,
+          by: name,
+          role: "You",
+          photo: undefined as string | undefined,
+          colour: "#102a43",
+          appreciations: 0,
+          when: "Just now",
+        },
+      ]
+    : [];
   const list = [
     ...yours,
     ...others.map((p) => {
       const m = memberById(p.memberId)!;
-      return { id: p.id, text: p.text, by: m.name, role: m.role, colour: avatarColour(m.id), appreciations: p.appreciations, when: p.daysAgo === 1 ? "Yesterday" : `${p.daysAgo} days ago` };
+      return {
+        id: p.id,
+        text: p.text,
+        by: m.name,
+        role: m.role,
+        photo: m.photo,
+        colour: avatarColour(m.id),
+        appreciations: p.appreciations,
+        when: p.daysAgo === 1 ? "Yesterday" : `${p.daysAgo} days ago`,
+      };
     }),
   ];
 
@@ -257,7 +280,9 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
     <div className="flex min-w-0 flex-col gap-5">
       <section className="rounded-3xl border border-line bg-surface p-5">
         <h2 className="font-serif text-xl font-semibold">Your reflection</h2>
-        <p className="mt-1 text-sm text-ink-muted">Write what comes to mind. It’s private unless you choose to share it. Leave out client names and anything that could identify someone.</p>
+        <p className="mt-1 text-sm text-ink-muted">
+          Write what comes to mind. It’s private unless you choose to share it. Leave out client names and anything that could identify someone.
+        </p>
         <label htmlFor={id} className="sr-only">
           Your reflection on this card
         </label>
@@ -274,10 +299,20 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
           className="mt-3 w-full rounded-2xl border border-line-strong bg-surface px-4 py-3 leading-relaxed"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => save(false)} disabled={!text.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold hover:bg-muted disabled:opacity-45">
+          <button
+            type="button"
+            onClick={() => save(false)}
+            disabled={!text.trim()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold hover:bg-muted disabled:opacity-45"
+          >
             <Icon name="lock" className="size-4" /> Keep it private
           </button>
-          <button type="button" onClick={() => save(true)} disabled={!text.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#008282] px-4 font-semibold text-white hover:bg-[#006b6b] disabled:opacity-45">
+          <button
+            type="button"
+            onClick={() => save(true)}
+            disabled={!text.trim()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#008282] px-4 font-semibold text-white hover:bg-[#006b6b] disabled:opacity-45"
+          >
             <Icon name="people" className="size-4" /> Share with the community
           </button>
         </div>
@@ -293,7 +328,9 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
           How others see it
         </h2>
         {list.length === 0 ? (
-          <p className="mt-2 rounded-2xl border border-dashed border-line p-4 text-ink-muted">Nobody has shared a perspective on this card yet. You could be the first.</p>
+          <p className="mt-2 rounded-2xl border border-dashed border-line p-4 text-ink-muted">
+            Nobody has shared a perspective on this card yet. You could be the first.
+          </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-3">
             {list.map((p) => {
@@ -301,8 +338,17 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
               return (
                 <li key={p.id} className="rounded-2xl bg-muted p-4">
                   <p className="flex items-center gap-2 text-sm">
-                    <span className="grid size-8 place-items-center rounded-full font-mulish text-xs font-extrabold text-white" style={{ background: p.colour }} aria-hidden>
-                      {initials(p.by)}
+                    <span
+                      className="grid size-8 place-items-center overflow-hidden rounded-full font-mulish text-xs font-extrabold text-white"
+                      style={{ background: p.colour }}
+                      aria-hidden
+                    >
+                      {p.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- a small fixed picture from /public
+                        <img src={p.photo} alt="" className="size-full object-cover" />
+                      ) : (
+                        initials(p.by)
+                      )}
                     </span>
                     <span className="font-semibold">{p.by}</span>
                     <span className="text-ink-muted">
@@ -315,9 +361,13 @@ function Respond({ card, mine, update, name }: { card: ConversationCard; mine: M
                       type="button"
                       aria-pressed={liked}
                       onClick={() => update((m) => ({ ...m, appreciated: liked ? m.appreciated.filter((x) => x !== p.id) : [...m.appreciated, p.id] }))}
-                      className={cx("mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold", liked ? "bg-[#fde8e9] text-[#c7393e] dark:bg-[#4a1c1e] dark:text-[#ff9ea2]" : "text-ink-muted hover:bg-surface")}
+                      className={cx(
+                        "mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold",
+                        liked ? "bg-[#fde8e9] text-[#c7393e] dark:bg-[#4a1c1e] dark:text-[#ff9ea2]" : "text-ink-muted hover:bg-surface",
+                      )}
                     >
-                      <Icon name="heart" className={cx("size-4", liked && "fill-current")} /> {liked ? "Appreciated" : "Appreciate"} · {p.appreciations + Number(liked)}
+                      <Icon name="heart" className={cx("size-4", liked && "fill-current")} /> {liked ? "Appreciated" : "Appreciate"} ·{" "}
+                      {p.appreciations + Number(liked)}
                     </button>
                   )}
                 </li>
@@ -351,19 +401,27 @@ function Team() {
       setBusy(false);
     }
   }
-  const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const clean = code
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 6);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <section className="rounded-3xl border border-line bg-surface p-6">
         <h2 className="font-serif text-2xl font-semibold">Host a session</h2>
         <p className="mt-2 text-ink-muted">
-          For team meetings, onboarding, webinars and challenge days. Put the card on the big screen, and everyone who joins with the code sees it on their phone
-          too. You turn the cards; the group talks.
+          For team meetings, onboarding, webinars and challenge days. Put the card on the big screen, and everyone who joins with the code sees it on their
+          phone too. You turn the cards; the group talks.
         </p>
         <label className="mt-4 block text-sm font-semibold" htmlFor={`${codeId}-theme`}>
           Deck
         </label>
-        <select id={`${codeId}-theme`} value={theme} onChange={(e) => setTheme(e.target.value as ThemeId | "all")} className="mt-1 min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3">
+        <select
+          id={`${codeId}-theme`}
+          value={theme}
+          onChange={(e) => setTheme(e.target.value as ThemeId | "all")}
+          className="mt-1 min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3"
+        >
           <option value="all">All themes (48 cards)</option>
           {themes.map((t) => (
             <option key={t.id} value={t.id}>
@@ -371,7 +429,12 @@ function Team() {
             </option>
           ))}
         </select>
-        <button type="button" onClick={host} disabled={busy} className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#008282] px-6 font-semibold text-white hover:bg-[#006b6b] disabled:opacity-60">
+        <button
+          type="button"
+          onClick={host}
+          disabled={busy}
+          className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#008282] px-6 font-semibold text-white hover:bg-[#006b6b] disabled:opacity-60"
+        >
           <Icon name="play" className="size-4" /> {busy ? "Starting…" : "Start a session"}
         </button>
         {problem && <p className="mt-2 text-sm font-semibold text-danger">{problem}</p>}
@@ -405,7 +468,11 @@ function Team() {
             autoCapitalize="characters"
             className="min-h-12 w-44 rounded-xl border border-[#008282]/40 bg-white px-4 font-mulish text-xl font-extrabold uppercase tracking-[0.3em] text-[#102a43]"
           />
-          <button type="submit" disabled={clean.length !== 6} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#102a43] px-6 font-semibold text-white disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={clean.length !== 6}
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#102a43] px-6 font-semibold text-white disabled:opacity-50"
+          >
             Join <Icon name="arrow-right" className="size-4" />
           </button>
         </form>
