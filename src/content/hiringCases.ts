@@ -28,7 +28,9 @@ export const HIRING_CASES: { id: string; label: string; data: HiringLabData }[] 
     data: {
       title: "Maya’s next coordinator",
       intro: "Maya’s business is growing faster than her team. Look at the evidence, compare the options, decide, then see what changes.",
-      storyVersion: "maya-1",
+      // maya-2 (24 Nov 2026) adds two story facts: the caseload's Support at Home classification mix (context only) and the
+      // agreement giving Maya's business the monthly direct contact. Every figure the model uses is unchanged.
+      storyVersion: "maya-2",
       assessment: "formative",
       identity: {
         audience: "Independent Care Partner business owners and operators",
@@ -56,6 +58,7 @@ export const HIRING_CASES: { id: string; label: string; data: HiringLabData }[] 
             "Payment: in arrears. Income for a month’s services is paid at the end of the following month.",
             "Already earned: $12,600 for last month’s services arrives in Month 1.",
             "This fee isn’t a share of any participant’s Support at Home budget or of the care-management allocation.",
+            "Contact: under this agreement Maya’s business makes the monthly direct care-management contact with each participant. That time is already in Sam’s recurring hours.",
           ].join("\n"),
           figures: [
             { key: "incomePerClient", value: 360 },
@@ -78,6 +81,8 @@ export const HIRING_CASES: { id: string; label: string; data: HiringLabData }[] 
             "Sam is paid 38 hours a week. After leave about 90% of that time is available, and about 80% of the available time goes on participant work.",
             "Maya’s planning threshold: keep work under 85% of available hours, so there’s room for the unexpected.",
             "Intake lately: 3 new participants a month, and 1 leaves.",
+            "This month: a hospital discharge and two complex family situations, which is why five participants sit in intensive work.",
+            "Support at Home classifications: 5 participants in classification 2, 9 in 3, 10 in 4, 7 in 5 and 4 in 6. The classification doesn’t set the hours: the work band does.",
           ].join("\n"),
           figures: [
             { key: "band.standard.count", value: 20 },
@@ -121,6 +126,9 @@ export const HIRING_CASES: { id: string; label: string; data: HiringLabData }[] 
         },
       ],
       inputs: { ...MAYA_INPUTS, currentFte: 1 },
+      classifications: [0, 5, 9, 10, 7, 4, 0, 0],
+      contactDuty: true,
+      leadSpread: 1,
       editable: [
         { key: "newPerMonth", min: 1, max: 6, step: 1 },
         { key: "threshold", min: 0.75, max: 0.95, step: 0.05 },

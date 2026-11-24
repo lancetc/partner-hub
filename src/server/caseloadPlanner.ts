@@ -1,7 +1,8 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { MODEL_VERSION } from "@/lib/hiringModel";
-import { analyse, cleanPlan, FIELD_KEYS, FIELDS, OPTION_IDS, PLANNER_VERSION, workbookSheets, type OptionId, type Plan } from "@/lib/caseloadPlanner";
+import { analyse, cleanPlan, FIELD_KEYS, FIELDS, GROUPS, OPTION_IDS, PLANNER_VERSION, workbookSheets, type OptionId, type Plan } from "@/lib/caseloadPlanner";
+import { windowSummary, type WindowSummary } from "@/lib/hiringWindow";
 import { ensureCaseload, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
 import { workbook } from "./xlsx";
@@ -57,8 +58,30 @@ export function ensurePlanner(db: Db, now = new Date()) {
       casey.id,
       now.toISOString(),
     );
+  migratePlanner(db);
   seeded.add(db);
 }
+
+/**
+  Planner 2's columns, added in place to a database made before them (kept here, not in server/db, so a running
+  server picks them up without a restart). Every existing row keeps its values; the new columns start empty.
+  - business_plan_versions.idem: the client's key for a save, so a retried save returns the version it made.
+  - planner_events.detail: an id from a fixed list (a field key, a case, an option): never a value or a result.
+  - planner_events.idem: the client's key for an event, so a retried event is counted once.
+*/
+function migratePlanner(db: Db) {
+  const cols = (t: string) => new Set((db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name));
+  const versions = cols("business_plan_versions");
+  if (!versions.has("idem")) db.exec("ALTER TABLE business_plan_versions ADD COLUMN idem TEXT");
+  const events = cols("planner_events");
+  if (!events.has("detail")) db.exec("ALTER TABLE planner_events ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+  if (!events.has("idem")) db.exec("ALTER TABLE planner_events ADD COLUMN idem TEXT");
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS business_plan_versions_idem ON business_plan_versions (saved_by, idem) WHERE idem IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS planner_events_idem ON planner_events (user_id, idem) WHERE idem IS NOT NULL;`);
+}
+
+/** A client's idempotency key: short, plain, or nothing. */
+const idemOf = (v: unknown) => (typeof v === "string" && /^[\w-]{8,80}$/.test(v) ? v : null);
 
 /** This person's access to plan their own business, if any. Only ever their own organisation. */
 export function plannerAccess(db: Db, user: User) {
@@ -123,12 +146,14 @@ export function setAccess(db: Db, user: User, input: { userId?: unknown; grant?:
 // Plans and versions
 // ---------------------------------------------------------------------------------------------
 
-/** The headline results a version showed, under the expected case, kept with it for comparing. Figures, not inputs. */
-function snapshotOf(p: Plan) {
+/** The headline results a version showed, under the expected case, kept with it for comparing. Figures, not inputs. Planner 2 adds the decision window. */
+export function snapshotOf(p: Plan) {
   const out: Record<string, unknown> = {};
+  let window: ReturnType<typeof windowSummary> | null = null;
   for (const id of OPTION_IDS) {
     const a = analyse(p, "expected", id);
     if (!a) return { complete: false };
+    if (id === "add-06") window = windowSummary(a.range);
     out[id] = {
       monthsAbove: a.selected.monthsAbove,
       firstPressure: a.selected.firstPressure,
@@ -137,7 +162,7 @@ function snapshotOf(p: Plan) {
       firstReserveBreach: a.moneyKnown ? a.selected.firstReserveBreach : null,
     };
   }
-  return { complete: true, options: out };
+  return { complete: true, options: out, window };
 }
 
 /** A plan in this person's business, or "not found": the same answer whether it's someone else's or doesn't exist. */
@@ -165,6 +190,8 @@ export function listPlans(db: Db, user: User) {
         updatedAt: r.updated_at,
         updatedBy: last ? nameOf(db, last.saved_by) : "",
         modelVersion: last?.model_version ?? "",
+        /** The latest version's decision window (months and a kind, no figures), or null before planner 2. */
+        window: last ? ((JSON.parse(last.snapshot) as { window?: WindowSummary | null }).window ?? null) : null,
       };
     }),
   };
@@ -177,6 +204,7 @@ export function getPlan(db: Db, user: User, id: unknown, version?: unknown) {
   const n = Number(version);
   const chosen = (Number.isInteger(n) && versions.find((v) => v.number === n)) || versions.at(-1);
   if (!chosen) throw new HttpError(404, "That plan isn’t here.");
+  const plan = cleanPlan(JSON.parse(chosen.inputs));
   return {
     id: row.id,
     name: row.name,
@@ -191,19 +219,33 @@ export function getPlan(db: Db, user: User, id: unknown, version?: unknown) {
       snapshot: JSON.parse(v.snapshot),
     })),
     version: chosen.number,
-    plan: cleanPlan(JSON.parse(chosen.inputs)),
+    plan,
     /** Saved under an earlier model: the figures shown now are recalculated, and may differ from what it showed then. */
     earlierModel: chosen.model_version !== MODEL_VERSION,
+    /** Saved under earlier decision rules (planner 1 had no decision window). */
+    earlierRules: chosen.planner_version !== PLANNER_VERSION,
+    /**
+      "Recalculate with current assumptions" as a comparison, never an overwrite: the saved headline results stay with
+      the version, and these are the same inputs under today's model and rules.
+    */
+    recalculated: snapshotOf(plan),
   };
 }
 
 const cleanName = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
 
 /** Saves a business plan: a new plan, or the next version of one. Nothing is overwritten. The fictional example can't be saved. */
-export function savePlan(db: Db, user: User, input: { id?: unknown; name?: unknown; plan?: unknown; note?: unknown }, now: Date) {
+export function savePlan(db: Db, user: User, input: { id?: unknown; name?: unknown; plan?: unknown; note?: unknown; idem?: unknown }, now: Date) {
   const a = requireAccess(db, user);
   const plan = cleanPlan(input.plan);
   if (plan.kind !== "business") throw new HttpError(400, "The fictional example isn’t saved. Start Plan my business to save your own.");
+  // A retried save (the same key) returns the version the first one made: a network failure never makes a duplicate.
+  const idem = idemOf(input.idem);
+  const done = idem
+    ? (db.prepare("SELECT plan_id, number FROM business_plan_versions WHERE saved_by = ? AND idem = ?").get(user.id, idem) as
+        { plan_id: string; number: number } | undefined)
+    : undefined;
+  if (done) return getPlan(db, user, done.plan_id, done.number);
   const at = now.toISOString();
   const note = typeof input.note === "string" ? input.note.trim().slice(0, 200) : "";
   let id: string;
@@ -229,9 +271,9 @@ export function savePlan(db: Db, user: User, input: { id?: unknown; name?: unkno
     );
   }
   db.prepare(
-    "INSERT INTO business_plan_versions (plan_id, number, inputs, model_version, planner_version, snapshot, note, saved_by, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run(id, number, JSON.stringify(plan), MODEL_VERSION, PLANNER_VERSION, JSON.stringify(snapshotOf(plan)), note, user.id, at);
-  recordPlannerEvent(db, user, { event: "scenario_saved", mode: "plan" }, now);
+    "INSERT INTO business_plan_versions (plan_id, number, inputs, model_version, planner_version, snapshot, note, saved_by, saved_at, idem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(id, number, JSON.stringify(plan), MODEL_VERSION, PLANNER_VERSION, JSON.stringify(snapshotOf(plan)), note, user.id, at, idem);
+  recordPlannerEvent(db, user, { event: "scenario_saved", mode: "plan", idem: idem ? `save-${idem}` : undefined }, now);
   return getPlan(db, user, id, number);
 }
 
@@ -329,23 +371,54 @@ export function exportWorkbook(
 
 export const PLANNER_EVENTS = [
   "business_simulator_opened",
+  "scenario_mode_selected",
+  "assumption_changed",
   "scenario_compared",
   "quality_guardrail_seen",
   "cash_warning_seen",
   "scenario_saved",
   "scenario_exported",
+  "source_opened",
 ] as const;
 export type PlannerEvent = (typeof PLANNER_EVENTS)[number];
 
-/** Records what happened, the mode and the person's access role: never an input or a result. */
-export function recordPlannerEvent(db: Db, user: User, input: { event?: unknown; mode?: unknown }, now: Date) {
+/**
+  The only details an event may carry: an id from a fixed list, never a value, figure or result. A field key says
+  which assumption changed, not to what; a case or option says what was compared; "versions" a saved-version compare;
+  "sensitivity" the one-at-a-time table; "basis" the calculation basis.
+*/
+const DETAILS = new Set<string>([
+  ...FIELD_KEYS.map((k) => `field:${k}`),
+  ...Object.keys(GROUPS).map((g) => `group:${g}`),
+  "field:incomeBasis",
+  "field:classifications",
+  "field:contactDuty",
+  "field:workflowChecked",
+  "field:growthCases",
+  "growth:slower",
+  "growth:expected",
+  "growth:faster",
+  ...OPTION_IDS.map((o) => `option:${o}`),
+  "versions",
+  "sensitivity",
+  "basis",
+  "mode:learn",
+  "mode:plan",
+]);
+
+/** Records what happened, the mode and the person's access role: never an input or a result. A repeated key is counted once. */
+export function recordPlannerEvent(db: Db, user: User, input: { event?: unknown; mode?: unknown; detail?: unknown; idem?: unknown }, now: Date) {
   ensurePlanner(db);
   const event = PLANNER_EVENTS.find((e) => e === input.event);
   if (!event) throw new HttpError(400, "Unknown event.");
   const mode = input.mode === "plan" ? "plan" : "learn";
   const a = plannerAccess(db, user);
   if (mode === "plan" && !a) throw new HttpError(403, "Plan my business is for the business owner and the people they’ve authorised.");
-  db.prepare("INSERT INTO planner_events (id, event, mode, access, model_version, user_id, org_id, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+  // Anything not on the list is dropped, not stored: a figure sent by mistake never reaches the log.
+  const detail = typeof input.detail === "string" && DETAILS.has(input.detail) ? input.detail : "";
+  db.prepare(
+    "INSERT OR IGNORE INTO planner_events (id, event, mode, access, model_version, user_id, org_id, at, detail, idem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(
     randomUUID(),
     event,
     mode,
@@ -354,6 +427,8 @@ export function recordPlannerEvent(db: Db, user: User, input: { event?: unknown;
     user.id,
     mode === "plan" ? a!.orgId : null,
     now.toISOString(),
+    detail,
+    idemOf(input.idem),
   );
   return { ok: true };
 }
@@ -372,10 +447,16 @@ export function plannerReport(db: Db, user: User) {
     n: number;
   }[];
   const count = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+  // People who looked at a low or high case, or the sensitivity table: how far the uncertainty is used. People, not businesses.
+  const sensitivityUsers = count("SELECT COUNT(DISTINCT user_id) AS n FROM planner_events WHERE detail IN ('growth:slower', 'growth:faster', 'sensitivity')");
+  const users = count("SELECT COUNT(DISTINCT user_id) AS n FROM planner_events WHERE event = 'business_simulator_opened'");
   return {
     eligibleBusinesses: cohort(count("SELECT COUNT(DISTINCT org_id) AS n FROM business_planner_access")),
     businessesPlanning: cohort(count("SELECT COUNT(DISTINCT org_id) AS n FROM planner_events WHERE mode = 'plan'")),
     savedPlans: cohort(count("SELECT COUNT(*) AS n FROM business_plans")),
+    /** People who opened the tool, and how many of them used a low or high case or the sensitivity table. */
+    openedBy: cohort(users),
+    usedSensitivity: cohort(sensitivityUsers),
     events: events.map((e) => ({ ...e, n: cohort(e.n) })),
   };
 }

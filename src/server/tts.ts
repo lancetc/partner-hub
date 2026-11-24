@@ -92,6 +92,28 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const text = approved(row?.doc ?? null) ?? (drafts ? approved(row?.draft ?? null) : null);
     if (text) return text;
   }
+  // A Tough Family Call's briefing or debrief (`familycall:<guideId>:<blockId>:brief|debrief`), as Ava says it: the reviewed script on the
+  // published block, or the saved draft for an author previewing it. Nothing else in the call can be read aloud from here.
+  if (kind === "familycall" && (key.split(":")[3] === "brief" || key.split(":")[3] === "debrief")) {
+    const which = key.split(":")[3] as "brief" | "debrief";
+    const row = db.prepare("SELECT g.draft, r.doc FROM magazine_guides g LEFT JOIN magazine_revisions r ON r.id = g.revision_id WHERE g.id = ?").get(a) as
+      { draft: string | null; doc: string | null } | undefined;
+    type Doc = { pages?: { sections?: { blocks?: { id: string; family?: { ava?: Record<string, string> } }[] }[] }[] };
+    const find = (raw: string | null) => {
+      try {
+        const doc = raw ? (JSON.parse(raw) as Doc) : undefined;
+        const blk = (doc?.pages ?? [])
+          .flatMap((p) => p.sections ?? [])
+          .flatMap((s) => s.blocks ?? [])
+          .find((x) => x.id === b);
+        return blk?.family?.ava?.[which]?.trim() || null;
+      } catch {
+        return null;
+      }
+    };
+    const text = find(row?.doc ?? null) ?? (drafts ? find(row?.draft ?? null) : null);
+    if (text) return text;
+  }
   // A Discovery Path's introduction, as Ava says it: the path's own description (`path:<id>`).
   if (kind === "path") {
     const row = db.prepare("SELECT description FROM learning_paths WHERE id = ? AND archived = 0").get(a) as { description: string | null } | undefined;
@@ -103,7 +125,7 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
 /** Lines Ava speaks, in her own voice (server/ava.ts): a path's introduction, a Magazine course's introduction, and a Topic's presenter card. */
 export function avaSpeaks(db: Db, key: string, drafts = false) {
   const [kind, a, b] = key.split(":");
-  if (kind === "path" || kind === "magazine") return true;
+  if (kind === "path" || kind === "magazine" || kind === "familycall") return true;
   if (kind !== "lesson") return false;
   return lessonWith(db, a, b, drafts)?.nodes[b]?.type === "presenter";
 }
@@ -119,9 +141,14 @@ function lessonWith(db: Db, slug: string, card: string, drafts: boolean) {
 
 const cacheDir = () => path.join(process.cwd(), "data", "tts");
 
-const hashOf = (text: string, voiceId: string) => {
+const hashOf = (text: string, voiceId: string, style = "") => {
   const modelId = voiceId.startsWith("openai:") ? process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts" : ttsConfig().modelId;
-  return crypto.createHash("sha256").update(`${voiceId}|${modelId}|${text}`).digest("hex").slice(0, 32);
+  // A character's delivery notes change the recording, so they're part of its key (and absent for every existing voice).
+  return crypto
+    .createHash("sha256")
+    .update(`${voiceId}|${modelId}|${text}${style ? `|${style}` : ""}`)
+    .digest("hex")
+    .slice(0, 32);
 };
 
 // One request to ElevenLabs per script at a time, however many ask at once.
@@ -131,13 +158,13 @@ const inFlight = new Map<string, Promise<{ audio: Buffer; words: WordTiming[] | 
   The narration and its word timings, from the disk cache or ElevenLabs. Both are made in one call
   so they always match. A recording cached before timings were kept is made again once.
 */
-export async function narration(text: string, voice?: string): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
+export async function narration(text: string, voice?: string, style?: string): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
   const { apiKey, modelId } = ttsConfig();
   // The hub's narrator unless another voice is asked for (a Magazine Audio Guide may choose one).
   const voiceId = voice ?? ttsConfig().voiceId;
   const openai = voiceId.startsWith("openai:");
   if (!openai && !apiKey) throw new HttpError(503, "ElevenLabs isn't configured. Set ELEVENLABS_API_KEY.");
-  const hash = hashOf(text, voiceId);
+  const hash = hashOf(text, voiceId, openai ? style : "");
   const mp3 = path.join(cacheDir(), `${hash}.mp3`);
   const json = path.join(cacheDir(), `${hash}.json`);
   if (fs.existsSync(mp3) && fs.existsSync(json)) {
@@ -151,7 +178,7 @@ export async function narration(text: string, voice?: string): Promise<{ audio: 
   const job = (async () => {
     if (openai) {
       // OpenAI doesn't say when each word is spoken, so the timings are estimated from the recording's length.
-      const audio = await openaiSpeech(text, voiceId.slice("openai:".length));
+      const audio = await openaiSpeech(text, voiceId.slice("openai:".length), style);
       const seconds = mp3Seconds(audio);
       fs.mkdirSync(cacheDir(), { recursive: true });
       fs.writeFileSync(mp3, audio);

@@ -13,6 +13,7 @@ import {
   decision,
   fictionalExample,
   FICTIONAL_NOTICE,
+  FIELD_KEYS as FIELD_KEYS_ALL,
   FIELDS,
   fieldProblem,
   fieldsIn,
@@ -40,6 +41,8 @@ import {
 import type { getPlan, plannerHome } from "@/server/caseloadPlanner";
 import { Icon } from "../Icon";
 import { CapacityChart, FinanceChart } from "./CaseloadCharts";
+import { DecisionWindowPanel } from "./DecisionWindow";
+import { RECOMMENDATION_LABELS, sensitivity, type RecommendationKind, type WindowSummary } from "@/lib/hiringWindow";
 
 /*
   Caseload-to-Margin & Hiring Capacity Calculator (docs/caseload-margin-calculator.md). A Work Tool with two ways in:
@@ -51,8 +54,12 @@ import { CapacityChart, FinanceChart } from "./CaseloadCharts";
 type Home = ReturnType<typeof plannerHome>;
 type Saved = ReturnType<typeof getPlan>;
 
-const event = (name: string, mode: "learn" | "plan") =>
-  void api("/api/tools/caseload", { body: { action: "event", event: name, mode } }).catch(() => undefined);
+/**
+  A use event: its name, the mode and at most a fixed-list detail (a field key, a case, an option), never a value. Each
+  carries its own key, so a retried request is counted once. Keys are made when the event happens, never in render.
+*/
+const event = (name: string, mode: "learn" | "plan", detail?: string) =>
+  void api("/api/tools/caseload", { body: { action: "event", event: name, mode, detail, idem: crypto.randomUUID() } }).catch(() => undefined);
 
 const card = "rounded-3xl border border-line bg-surface p-5 sm:p-6";
 const eyebrow = "font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent";
@@ -68,6 +75,8 @@ export function CaseloadPlanner() {
   const [changes, setChanges] = useState<Change[]>([]);
   const [saved, setSaved] = useState<Saved | null>(null);
   const seenWarnings = useRef(new Set<string>());
+  // Which assumptions have been changed this session: each is logged once (the field, never its value).
+  const changedFields = useRef(new Set<string>());
 
   // The last plan that could be calculated: its result stays on screen while a field is blank or being corrected.
   const [goodPlan, setGoodPlan] = useState<Plan | null>(null);
@@ -98,6 +107,19 @@ export function CaseloadPlanner() {
     if (plan) {
       const c = whatChanged(analyse(plan, growthId, optionId), analyse(next, growthId, optionId));
       if (c.length) setChanges(c);
+      const moved = [
+        ...FIELD_KEYS_ALL.filter((k) => plan.values[k] !== next.values[k]).map((k) => `field:${k}`),
+        ...(plan.incomeBasis !== next.incomeBasis ? ["field:incomeBasis"] : []),
+        ...(plan.contactDuty !== next.contactDuty ? ["field:contactDuty"] : []),
+        ...(plan.workflowChecked !== next.workflowChecked ? ["field:workflowChecked"] : []),
+        ...(JSON.stringify(plan.classifications) !== JSON.stringify(next.classifications) ? ["field:classifications"] : []),
+        ...(JSON.stringify([plan.slower, plan.faster]) !== JSON.stringify([next.slower, next.faster]) ? ["field:growthCases"] : []),
+      ];
+      for (const d of moved)
+        if (!changedFields.current.has(d)) {
+          changedFields.current.add(d);
+          event("assumption_changed", mode, d);
+        }
     }
     if (readPlan(next).ok) setGoodPlan(next);
     setPlan(next);
@@ -111,7 +133,17 @@ export function CaseloadPlanner() {
     setChanges([]);
     setSaved(null);
     setTab("caseload");
+    changedFields.current = new Set();
     event("business_simulator_opened", kind === "example" ? "learn" : "plan");
+    event("scenario_mode_selected", kind === "example" ? "learn" : "plan", kind === "example" ? "mode:learn" : "mode:plan");
+  };
+  const chooseGrowth = (id: string) => {
+    setGrowthId(id);
+    if (id !== growthId) event("scenario_compared", mode, `growth:${id}`);
+  };
+  const chooseOption = (id: OptionId) => {
+    setOptionId(id);
+    if (id !== optionId) event("scenario_compared", mode, `option:${id}`);
   };
 
   if (!plan) return <Choose home={h} onStart={start} reload={home.reload} />;
@@ -185,6 +217,23 @@ export function CaseloadPlanner() {
               <Field key={k} k={k} plan={plan} draft={drafts[k]} setDraft={(t) => setDrafts((d) => ({ ...d, [k]: t }))} update={update} />
             ))}
             {tab === "caseload" && <Classifications plan={plan} update={update} />}
+            {tab === "work" && (
+              <label className="flex items-start gap-3 rounded-2xl bg-muted p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-5"
+                  checked={plan.contactDuty}
+                  onChange={(e) => update({ ...plan, contactDuty: e.target.checked })}
+                />
+                <span>
+                  <span className="font-semibold">My agreement with Trilogy Care gives my business the monthly direct care-management contact.</span>
+                  <span className="block text-sm text-ink-muted">
+                    Tick only if your current agreement says so. Then months above your threshold are shown as a risk to that contact. It’s a guardrail, not a
+                    claimable-hours figure.
+                  </span>
+                </span>
+              </label>
+            )}
             {tab === "hiring" && (
               <label className="flex items-start gap-3 rounded-2xl bg-muted p-3">
                 <input
@@ -228,13 +277,25 @@ export function CaseloadPlanner() {
               <Headlines a={shown} />
               <DecisionCard a={shown} d={decided} />
               {changes.length > 0 && <WhatChanged changes={changes} onDismiss={() => setChanges([])} />}
-              <Cases plan={plan} growthId={growthId} setGrowthId={setGrowthId} update={update} />
+              <DecisionWindowPanel
+                dw={shown.range}
+                getSensitivity={() => sensitivity(shown.windowIn)}
+                onView={(v) => event(v === "sensitivity" ? "scenario_compared" : "source_opened", mode, v)}
+                note={
+                  plan.kind === "example"
+                    ? "Fictional example: every figure is invented."
+                    : shown.illustrative
+                      ? "Illustrative from entered values: the income isn’t marked verified against your agreement."
+                      : "Income marked verified. Other assumptions are as entered or estimated."
+                }
+              />
+              <Cases plan={plan} growthId={growthId} setGrowthId={chooseGrowth} update={update} />
               <section id="options" aria-labelledby="options-h" className={cx(card, "scroll-mt-32")}>
                 <h2 id="options-h" className="font-serif text-2xl font-semibold">
                   Compare options
                 </h2>
                 <p className="mt-1 text-ink-muted">In the {shown.growth.label.toLowerCase()} case. Choosing an option doesn’t change your assumptions.</p>
-                <OptionCards a={shown} optionId={optionId} setOptionId={setOptionId} />
+                <OptionCards a={shown} optionId={optionId} setOptionId={chooseOption} />
               </section>
               <ChartSection title="Capacity" subtitle="Utilisation each month: required hours ÷ available hours.">
                 {(table) =>
@@ -606,7 +667,12 @@ function WhatChanged({ changes, onDismiss }: { changes: Change[]; onDismiss: () 
       <ul className="mt-2 grid gap-1 sm:grid-cols-2">
         {changes.map((c) => (
           <li key={c.label} className="text-sm">
-            <span className="font-semibold">{c.label}:</span> <span className="tabular-nums">{c.before}</span> →{" "}
+            <span className="font-semibold">{c.label}:</span>{" "}
+            {c.before ? (
+              <>
+                <span className="tabular-nums">{c.before}</span> →{" "}
+              </>
+            ) : null}
             <span className="font-semibold tabular-nums">{c.after}</span>
           </li>
         ))}
@@ -1000,6 +1066,7 @@ function PlansPanel({
   const [cmp, setCmp] = useState<{ a: number; b: number }>({ a: 1, b: 1 });
   const [compared, setCompared] = useState<Compared | null>(null);
   const [access, setAccess] = useState<AccessList | null>(null);
+  const saveKey = useRef<string | null>(null);
   const run = async <T,>(fn: () => Promise<T>) => {
     setBusy(true);
     setProblem("");
@@ -1053,7 +1120,10 @@ function PlansPanel({
             disabled={busy || (!saved && !name.trim()) || Boolean(saved && !changed)}
             onClick={() =>
               run(async () => {
-                onSaved(await api<Saved>("/api/tools/caseload", { body: { action: "save", id: saved?.id, name, plan, note } }));
+                // The same key until this save succeeds: a retry after a lost answer returns the version already made.
+                saveKey.current ??= crypto.randomUUID();
+                onSaved(await api<Saved>("/api/tools/caseload", { body: { action: "save", id: saved?.id, name, plan, note, idem: saveKey.current } }));
+                saveKey.current = null;
                 setNote("");
               })
             }
@@ -1111,7 +1181,22 @@ function PlansPanel({
       {saved && saved.versions.length > 0 && (
         <div className="mt-5">
           <h3 className="font-semibold">Versions of {saved.name}</h3>
-          {saved.earlierModel && <p className="text-sm">This version was saved under an earlier model. The figures shown are recalculated now.</p>}
+          {(saved.earlierModel || saved.earlierRules) && (
+            <div className="mt-1">
+              <p className="text-sm">
+                Version {saved.version} was saved under earlier {saved.earlierModel ? "model" : "decision rules"}. The page shows it recalculated with the
+                current ones; what it showed when saved is kept with it, and nothing is overwritten. Review before relying on it.
+              </p>
+              <Comparison
+                title={`Version ${saved.version}: as saved → recalculated now`}
+                c={{
+                  a: { version: saved.version, snapshot: saved.versions.find((v) => v.number === saved.version)?.snapshot ?? {} },
+                  b: { version: saved.version, snapshot: saved.recalculated },
+                  inputs: [],
+                }}
+              />
+            </div>
+          )}
           <ul className="mt-2 flex flex-col gap-1 text-sm">
             {saved.versions.map((v) => (
               <li key={v.number} className="flex flex-wrap items-center gap-2">
@@ -1221,17 +1306,26 @@ function PlansPanel({
   );
 }
 
-function Comparison({ c }: { c: Compared }) {
+function Comparison({ c, title }: { c: Compared; title?: string }) {
   type Snap = { monthsAbove: number; operating12: number | null; lowestCash: number | null };
   const opts = (s: Record<string, unknown>) => (s as { options?: Record<string, Snap> }).options ?? null;
   const A = opts(c.a.snapshot);
   const B = opts(c.b.snapshot);
+  // Planner 2 keeps the decision window with each version; older versions don't have one.
+  const win = (s: Record<string, unknown>) => {
+    const w = (s as { window?: WindowSummary | null }).window;
+    if (!w) return "Not recorded";
+    const start =
+      w.startFrom === null ? "no start needed" : w.startFrom === w.startTo ? `start Month ${w.startFrom}` : `start Month ${w.startFrom} to ${w.startTo}`;
+    return `${RECOMMENDATION_LABELS[w.kind as RecommendationKind] ?? w.kind}, ${start}`;
+  };
   return (
     <div className="mt-3 rounded-2xl bg-muted p-4">
-      <h4 className="font-semibold">
-        Version {c.a.version} → version {c.b.version}
-      </h4>
-      {c.inputs.length ? (
+      <h4 className="font-semibold">{title ?? `Version ${c.a.version} → version ${c.b.version}`}</h4>
+      <p className="mt-1 text-sm">
+        <span className="font-semibold">Decision window:</span> {win(c.a.snapshot)} → <span className="font-semibold">{win(c.b.snapshot)}</span>
+      </p>
+      {title ? null : c.inputs.length ? (
         <ul className="mt-1 list-disc pl-5 text-sm">
           {c.inputs.map((i) => (
             <li key={i.key}>

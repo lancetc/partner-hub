@@ -89,7 +89,8 @@ describe("the pilot's arithmetic", () => {
 
 describe("the case an author publishes", () => {
   it("every starter case is complete apart from its sign-off", () => {
-    for (const c of XRAY_CASES) {
+    // Review-mode cases (content/xrayReviewCases) gate sign-off at publishing instead: server/xrayFunding.test.ts.
+    for (const c of XRAY_CASES.filter((x) => !x.data.funding)) {
       expect(blocking(c.data).join(" ")).toMatch(/sign-off is required/);
       expect(blocking({ ...c.data, approval: SIGNED, source: SOURCE })).toEqual([]);
     }

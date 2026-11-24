@@ -50,6 +50,30 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/family-calls",
+        label: "Tough Family Calls",
+        icon: "phone",
+        description:
+          "Published family-call practice: participation, the five dimensions with denominators, approved critical patterns, content health and the review queue.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/referral-studio",
+        label: "Local Referral Studio",
+        icon: "chat",
+        description:
+          "The referral claim register and the outreach template’s approval, with practice, approved material use and the referral pathway kept apart, and an Excel export.",
+        authorOnly: true,
+      },
+      {
+        href: "/admin/hiring-runway",
+        label: "Hiring Runway",
+        icon: "people",
+        description:
+          "The fictional hiring labs’ participation, rubric means and misconceptions, and the Plan capacity tool’s use counts. No partner’s figures.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/challenges",
         label: "Challenges",
         icon: "flag",

@@ -84,6 +84,10 @@ import { RELIABILITY_CASES } from "@/content/reliabilityCases";
 import { BUDGET_LAB_CASES } from "@/content/budgetLabCases";
 import { HAZARD_SCENES } from "@/content/hazardScenes";
 import { DISCHARGE_CASES } from "@/content/dischargeCases";
+import { NETWORK_CASES } from "@/content/networkCases";
+import { TRUST_CASES } from "@/content/trustCases";
+import { LOCAL_REFERRAL_STUDIO_DATA } from "@/content/referralStudio";
+import { SHADOW_CASES } from "@/content/shadowCoachCases";
 import { CASH_BRIDGE_CASES } from "@/content/cashBridgeCases";
 import { CASE_THREAD_CASES } from "@/content/caseThreadCases";
 import { freshCaseThread } from "@/lib/caseThread";
@@ -190,6 +194,10 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   budgetlab: "money",
   hazardscan: "eye",
   discharge: "clipboard",
+  network: "people",
+  trustcheck: "calendar",
+  referralstudio: "chat",
+  shadowcoach: "people",
   cashbridge: "money",
   casethread: "chat",
   hubvisual: "route",
@@ -230,7 +238,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   signal: "Three updates about one client: spot the pattern, act first, then a provisional SIRS assessment.",
   mission: "A participant’s first 30 days as a task board with dated events: sequence the work, keep them told, recover when a promise slips.",
   balance: "A person’s choice that carries risk: build a plan that supports both, then test it against a new fact.",
-  xray: "A fictional quote or receipt, line by line: eligible, contribution, needs review or private, with the split and an explanation.",
+  xray: "A fictional quote, receipt or invoice, line by line. Best used when “it’s on the list” or a fee line is taken as a yes or no: quote or invoice review with six decisions, evidence, sources and an explanation rehearsal.",
   reset: "A waiting-period story with markers that open a reviewed check-in script and moderated peer approaches from the Community.",
   line: "Self-managed requests: the participant’s choice, check and agree first, or cannot authorise as requested, with the reason and next step.",
   bridge: "While someone waits for funding: compare CHSP, a private quote and the funded picture, then write the family a summary.",
@@ -242,7 +250,8 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   playbook: "A Job Aid from the Work Tools library, always showing its current approved release, with Ask a Lead.",
   auditor:
     "A Contractor Vetting Card (Dot’s gardener) or a fictional pack or invoice to inspect and mark: check the business and the worker apart, the price, and recommend ready, request evidence, escalate or cannot engage as proposed.",
-  phonecall: "A difficult call from a fictional client or family member, typed or spoken, with case tools and a debrief in the learner’s own words.",
+  phonecall:
+    "A difficult call from a fictional client or family member, typed or spoken, with case tools and a debrief in the learner’s own words. Choose the Tough Family Call pilot (Fiona and Dot’s missed garden visit, about 5–8 minutes) for a bounded AI caller with a scripted fallback, the older person’s sharing preferences, a follow-up note and a five-dimension rubric: best when a verified theme is escalated family calls after a missed visit.",
   sandbox: "Build a Support at Home care plan with a fictional participant: the quarterly ledger, who pays which part, and an explanation to them.",
   hubvisual:
     "One of the Hub’s own diagrams, kept current: the client journey map, or a partner model’s who-does-what onboarding diagram. Explain it with the blocks around it.",
@@ -258,6 +267,14 @@ const BLOCK_HINTS: Record<BlockType, string> = {
     "A drawn room in someone’s home to scan: flag what needs attention, say what comes first, then choose what to do within the role. Approved variants are chosen per attempt, with a list route by area.",
   discharge:
     "A participant is due home from hospital tomorrow: alerts arrive, the handover has gaps, and the first nursing visit isn’t confirmed. Verify, arrange, escalate and follow up, then record an honest handover. Choose it when recommendations get treated as arrangements, or gaps surface late.",
+  network:
+    "Five contractors nearby, and nobody free at 7 am. Find the real early-morning gap, keep the participant’s chosen worker in view, draft a brief for the right role, and read a quality scorecard with no single score. Choose it when interest or daytime hours get counted as cover.",
+  referralstudio:
+    "Practise a short, truthful pitch with a fictional GP practice manager or hospital social worker: find out the older person’s stage first, answer the objection, use only approved claims, and agree a realistic next step. Choose it when partners over-promise speed or skip the assessment step.",
+  shadowcoach:
+    "A manager’s calibration: review a fictional new coordinator’s call or note, protect the participant first, tell a skill gap from a workflow defect, coach without humiliation, assign a two-week plan from existing Hub content, and check a second sample before a scoped readiness decision. Choose it when managers skip the follow-up observation, or answer every mistake with another course.",
+  trustcheck:
+    "Two missed Tuesday cleans, a disputed charge, a worried daughter and a budget that looks underused. Read the signals in context, ask the person what she wants, plan an owned fix, and check it helped. Choose it when balances or missed calls get read as ‘she’ll leave’, or a fix is closed without asking the person.",
   budgetlab:
     "A participant has a sizeable balance late in her Support at Home quarter. Tell current from projected, check with her, build a deliverable plan from real dates, route AT–HM separately, and explain what may carry over. Choose it when coordinators treat a balance as money to spend.",
   reliability:
@@ -580,6 +597,18 @@ function newBlock(item: PaletteItem): Block {
     case "discharge":
       // Starts from Dot comes home, unsigned: it can’t be published until its placeholder sources are replaced and every reviewer signs off.
       return { id, type, ...structuredClone(DISCHARGE_CASES[0].data) };
+    case "network":
+      // Starts from Priya's mornings, unsigned: it can't be published until every reviewer signs off.
+      return { id, type, ...structuredClone(NETWORK_CASES[0].data) };
+    case "trustcheck":
+      // Starts from Mrs Patel's Week 8, unsigned: it can't be published until its placeholder procedures are replaced and every reviewer signs off.
+      return { id, type, ...structuredClone(TRUST_CASES[0].data) };
+    case "referralstudio":
+      // Starts from the GP practice manager and hospital social worker, unsigned, on the reviewed script: it can't be published until every reviewer signs off.
+      return { id, type, ...structuredClone(LOCAL_REFERRAL_STUDIO_DATA) };
+    case "shadowcoach":
+      // Starts from Maya's new coordinator, unsigned: it can't be published until its placeholder procedures are replaced and every reviewer signs off.
+      return { id, type, ...structuredClone(SHADOW_CASES[0].data) };
     case "hazardscan":
       // Starts from Mrs Pearce's bedroom, its variants in review: it can't be published until a named reviewer approves each and the release is signed off.
       return { id, type, ...structuredClone(HAZARD_SCENES[0].data) };
@@ -841,6 +870,14 @@ function isBlank(b: Block): boolean {
       return !b.approval.quality && b.variants.every((v) => !v.review.reviewer);
     case "discharge":
       return !b.approval.owner && !b.approval.clinical;
+    case "network":
+      return !b.approval.owner && !b.approval.onboarding;
+    case "trustcheck":
+      return !b.approval.owner && !b.approval.quality;
+    case "referralstudio":
+      return !b.approval.owner && !b.approval.pathway;
+    case "shadowcoach":
+      return !b.approval.owner && !b.approval.quality;
     case "casethread":
       return !b.approval.owner && !b.approval.clinical;
     case "hubvisual":

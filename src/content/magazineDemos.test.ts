@@ -12,7 +12,13 @@ import { caseGuardrailProblems, caseThreadHardProblems, type CaseThreadData } fr
 import { caseProblems as budgetLabCaseProblems, type BudgetLabData } from "@/lib/budgetLab";
 import { hazardScanHardProblems, sceneProblems, variantProblems, type HazardScanData } from "@/lib/hazardScan";
 import { pivotHardProblems, scenarioProblems, type DischargeData } from "@/lib/dischargePivot";
+import { benchSignOffProblems, caseProblems as benchCaseProblems, type NetworkData } from "@/lib/networkBench";
+import { caseProblems as trustCaseProblems, trustSignOffProblems, type TrustData } from "@/lib/trustCheck";
 import { auditorCaseProblems, auditorHardProblems, type AuditorBlockData } from "@/lib/auditor";
+import { familyCaseProblems, familyHardProblems, type FamilyBlock } from "@/lib/familyCall";
+import { studioCaseProblems, studioSignOffProblems, type StudioData } from "@/lib/referralStudio";
+import { caseProblems as shadowCaseProblems, signOffProblems as shadowSignOffProblems, type ShadowData } from "@/lib/shadowCoach";
+import { REFERRAL_CLAIMS } from "./referralStudio";
 import { MAGAZINE_DEMOS } from "./magazineDemos";
 
 /* The demonstration articles: each parses as a real Magazine guide, and the only things holding publishing are the claims flagged to verify. */
@@ -44,6 +50,12 @@ describe("the demonstration articles", () => {
       "spot-the-hazard",
       "discharge-pivot",
       "contractor-vetting",
+      "quote-invoice-xray",
+      "family-call",
+      "network-bench",
+      "referral-studio",
+      "trust-check",
+      "shadow-coach",
     ]);
     const types = (key: string) => allBlocks(readGuideDoc(MAGAZINE_DEMOS.find((d) => d.key === key)!.doc as never, { draft: true })).map((b) => b.type);
     expect(types("hiring")).toContain("hiring");
@@ -61,6 +73,21 @@ describe("the demonstration articles", () => {
     expect(types("spot-the-hazard").filter((t) => t === "hazardscan")).toHaveLength(3);
     expect(types("discharge-pivot")).toContain("discharge");
     expect(types("contractor-vetting")).toContain("auditor");
+    expect(types("family-call")).toContain("phonecall");
+    expect(types("referral-studio")).toContain("referralstudio");
+  });
+
+  it("puts Fiona’s call in the family-call article: a case that passes its own check, every sign-off empty, so it can’t publish as it stands", () => {
+    const d = MAGAZINE_DEMOS.find((x) => x.key === "family-call")!;
+    const b = allBlocks(readGuideDoc(d.doc as never, { draft: true })).find((x) => x.type === "phonecall") as unknown as FamilyBlock;
+    expect(b.person).toBe("Fiona");
+    expect(b.phone.client).toBe("Dot");
+    expect(familyCaseProblems(b)).toEqual([]);
+    expect(Object.values(b.phone.approval).every((x) => x === "")).toBe(true);
+    expect(Object.values(b.family.approval).every((x) => x === "")).toBe(true);
+    expect(familyHardProblems(b, "2026-11-24").length).toBeGreaterThan(0);
+    expect(b.family.jobAid.snippetId).toBe("difficult-family-call");
+    expect(d.audience).toEqual(["coordinator", "staff"]);
   });
 
   it("puts Dot’s gardener in the contractor-vetting article: a case that passes its own check, every sign-off empty, so it can’t publish as it stands", () => {
@@ -84,6 +111,47 @@ describe("the demonstration articles", () => {
     expect(pivotHardProblems(b, "2026-11-24").length).toBeGreaterThan(0);
     expect(b.jobAid.snippetId).toBe("hospital-to-home-handover-check");
     expect(d.audience).toEqual(["coordinator", "staff"]);
+  });
+
+  it("puts Priya’s mornings in the network article: a case that holds together, every sign-off empty, so it can’t publish as it stands", () => {
+    const d = MAGAZINE_DEMOS.find((x) => x.key === "network-bench")!;
+    const b = allBlocks(readGuideDoc(d.doc as never, { draft: true })).find((x) => x.type === "network") as unknown as NetworkData;
+    expect(b.story.character).toBe("Priya Raman");
+    expect(benchCaseProblems(b)).toEqual([]);
+    expect(Object.values(b.approval).every((x) => x === "")).toBe(true);
+    expect(benchSignOffProblems(b, "2026-11-24").length).toBeGreaterThan(0);
+    expect(b.jobAid.snippetId).toBe("choosing-and-checking-your-contractor");
+  });
+
+  it("puts Mrs Patel’s Week 8 in the trust-check article: a case that passes its own check, every sign-off empty, so it can’t publish as it stands", () => {
+    const d = MAGAZINE_DEMOS.find((x) => x.key === "trust-check")!;
+    const b = allBlocks(readGuideDoc(d.doc as never, { draft: true })).find((x) => x.type === "trustcheck") as unknown as TrustData;
+    expect([b.participant.name, b.supporter.name]).toEqual(["Mrs Patel", "Asha"]);
+    expect(trustCaseProblems(b)).toEqual([]);
+    expect(Object.values(b.approval).every((x) => x === "")).toBe(true);
+    expect(trustSignOffProblems(b, "2026-11-24").length).toBeGreaterThan(0);
+    expect(b.jobAid.snippetId).toBe("trust-check-plan");
+  });
+
+  it("puts Maya’s new coordinator in the shadow-coach article: both episodes pass their check, every sign-off empty, so it can’t publish as it stands", () => {
+    const d = MAGAZINE_DEMOS.find((x) => x.key === "shadow-coach")!;
+    const b = allBlocks(readGuideDoc(d.doc as never, { draft: true })).find((x) => x.type === "shadowcoach") as unknown as ShadowData;
+    expect([b.manager.name, b.participant.name, b.coordinator.label]).toEqual(["Maya", "Mrs Lin", "Maya’s new coordinator"]);
+    expect(b.scenarios.map((s) => s.id)).toEqual(["contribution-call", "minimised-incident"]);
+    expect(shadowCaseProblems(b)).toEqual([]);
+    expect(Object.values(b.approval).every((x) => x === "")).toBe(true);
+    expect(shadowSignOffProblems(b, "2026-11-24").length).toBeGreaterThan(0);
+    expect(b.jobAid.snippetId).toBe("coaching-conversation-card");
+  });
+
+  it("puts both referrers in the referral studio article: scenarios that pass their check, every sign-off empty, so it can’t publish as it stands", () => {
+    const d = MAGAZINE_DEMOS.find((x) => x.key === "referral-studio")!;
+    const b = allBlocks(readGuideDoc(d.doc as never, { draft: true })).find((x) => x.type === "referralstudio") as unknown as StudioData;
+    expect(b.scenarios.map((x) => x.persona.role)).toEqual(["gp", "hospital"]);
+    expect(studioCaseProblems(b, REFERRAL_CLAIMS)).toEqual([]);
+    expect(Object.values(b.approval).every((x) => x === "")).toBe(true);
+    expect(b.caller).toBe("script");
+    expect(studioSignOffProblems(b, REFERRAL_CLAIMS, "2026-11-24").length).toBeGreaterThan(0);
   });
 
   it("puts the three pilot rooms in the Spot the Hazard article: complete scenes, two or more variants each, all in review and unsigned", () => {

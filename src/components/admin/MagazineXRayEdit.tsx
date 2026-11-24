@@ -22,6 +22,7 @@ import {
 import { XRAY_CASES } from "@/content/xrayCases";
 import { btn, Field, input } from "./ui";
 import { rid, type Update } from "./MagazineEditParts";
+import { blankFunding, XRayFundingEdit } from "./MagazineXRayFundingEdit";
 import { Icon } from "../Icon";
 
 /*
@@ -55,7 +56,9 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
       >
         {signed
           ? `Signed off by ${b.approval.finance} (Finance), ${b.approval.operations} (Care Operations) and ${b.approval.quality} (Quality) on ${b.approval.approvedOn}.`
-          : "Sign-off required. This case can’t be published until Finance, Care Operations and Quality sign-off and the ruleset version are recorded below."}
+          : b.funding
+            ? "Sign-off required. This case can’t be published until the content owner, the Support at Home policy owner, Operations or Finance, the AT–HM or clinical reviewer, Care Operations and Quality, and the rule set version are recorded, and every source is reviewed."
+            : "Sign-off required. This case can’t be published until Finance, Care Operations and Quality sign-off and the ruleset version are recorded below."}
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -137,12 +140,32 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
         </Field>
       </div>
 
-      <p className="mt-3 rounded-2xl bg-muted p-3 text-sm">
-        <span className="font-semibold">The reviewed split, from the prices: </span>
-        {money(split.total)} total = {money(split.eligible)} eligible + {money(split.private)} private + {money(split.pending)} pending. Of the eligible:{" "}
-        {split.subsidy === null ? RATE_TBC : money(split.subsidy)} subsidy and {split.contribution === null ? RATE_TBC : money(split.contribution)}{" "}
-        contribution.
-      </p>
+      {b.funding ? (
+        // Quote and invoice review mode: six decisions over separate checks, instead of the four outcomes and their split.
+        <XRayFundingEdit block={b} set={set} />
+      ) : (
+        <>
+          <p className="mt-3 rounded-2xl bg-muted p-3 text-sm">
+            <span className="font-semibold">The reviewed split, from the prices: </span>
+            {money(split.total)} total = {money(split.eligible)} eligible + {money(split.private)} private + {money(split.pending)} pending. Of the eligible:{" "}
+            {split.subsidy === null ? RATE_TBC : money(split.subsidy)} subsidy and {split.contribution === null ? RATE_TBC : money(split.contribution)}{" "}
+            contribution.
+          </p>
+          <div className="mt-2">
+            <button
+              type="button"
+              className={btn.secondary}
+              title="Six decisions over separate checks (list scope, need, approval, route, advice, detail, price, delivery, contribution, source), the document’s role, evidence and sources, and an explanation rehearsal"
+              onClick={() => {
+                if (window.confirm("Switch this case to quote and invoice review? Each line’s outcome and account are replaced by a decision over its checks."))
+                  set((x) => void (x.funding = blankFunding(x)));
+              }}
+            >
+              Switch to quote and invoice review
+            </button>
+          </div>
+        </>
+      )}
 
       <details className={cx(group, "mt-3")}>
         <summary className="min-h-11 cursor-pointer py-2 font-semibold">
@@ -194,7 +217,8 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
           return (
             <details key={l.id} className={inner}>
               <summary className="min-h-11 cursor-pointer py-2 font-semibold">
-                {i + 1}. {l.description || "untitled"}, {money(l.amountCents)} · {OUTCOMES[l.outcome].label}
+                {i + 1}. {l.description || "untitled"}, {money(l.amountCents)}
+                {b.funding ? "" : ` · ${OUTCOMES[l.outcome].label}`}
               </summary>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Field label="Description">
@@ -213,16 +237,18 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
                     onChange={(e) => put((x) => void (x.amountCents = Math.round(Number(e.target.value || 0) * 100)), "a")}
                   />
                 </Field>
-                <Field label="Reviewed outcome">
-                  <select className={input} value={l.outcome} onChange={(e) => put((x) => void (x.outcome = e.target.value as LineOutcome))}>
-                    {OUTCOME_ORDER.map((o) => (
-                      <option key={o} value={o}>
-                        {OUTCOMES[o].label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {isEligible(l.outcome) && (
+                {!b.funding && (
+                  <Field label="Reviewed outcome">
+                    <select className={input} value={l.outcome} onChange={(e) => put((x) => void (x.outcome = e.target.value as LineOutcome))}>
+                      {OUTCOME_ORDER.map((o) => (
+                        <option key={o} value={o}>
+                          {OUTCOMES[o].label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {!b.funding && isEligible(l.outcome) && (
                   <Field label="Funded from">
                     <select className={input} value={l.account} onChange={(e) => put((x) => void (x.account = e.target.value as FundingAccount))}>
                       {(Object.keys(ACCOUNTS) as FundingAccount[]).map((a) => (
@@ -248,9 +274,9 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
                   </label>
                 ))}
               </fieldset>
-              {l.outcome === "needs_review" && (
+              {(l.outcome === "needs_review" || b.funding) && (
                 <fieldset className="flex flex-col gap-1">
-                  <legend className="text-sm font-semibold">What the learner must name as missing</legend>
+                  <legend className="text-sm font-semibold">What the learner must name as missing{b.funding ? " (for a line that stays open)" : ""}</legend>
                   {b.checks.map((r) => (
                     <label key={r.id} className="flex min-h-11 items-center gap-2 text-sm">
                       <input
@@ -512,24 +538,32 @@ export function XRayEdit({ block: b, update }: { block: XRayBlock; update: Updat
                   ))}
                 </select>
               </Field>
-              <Field label="Now it is">
-                <select className={input} value={b.twist.outcome} onChange={(e) => set((x) => void (x.twist!.outcome = e.target.value as LineOutcome))}>
-                  {OUTCOME_ORDER.map((o) => (
-                    <option key={o} value={o}>
-                      {OUTCOMES[o].label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Funded from">
-                <select className={input} value={b.twist.account} onChange={(e) => set((x) => void (x.twist!.account = e.target.value as FundingAccount))}>
-                  {(Object.keys(ACCOUNTS) as FundingAccount[]).map((a) => (
-                    <option key={a} value={a}>
-                      {ACCOUNTS[a]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              {b.funding ? (
+                <p className="text-sm sm:col-span-2">
+                  Its reviewed decision after the change is set under “Overall result, model response and complaints route”.
+                </p>
+              ) : (
+                <>
+                  <Field label="Now it is">
+                    <select className={input} value={b.twist.outcome} onChange={(e) => set((x) => void (x.twist!.outcome = e.target.value as LineOutcome))}>
+                      {OUTCOME_ORDER.map((o) => (
+                        <option key={o} value={o}>
+                          {OUTCOMES[o].label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Funded from">
+                    <select className={input} value={b.twist.account} onChange={(e) => set((x) => void (x.twist!.account = e.target.value as FundingAccount))}>
+                      {(Object.keys(ACCOUNTS) as FundingAccount[]).map((a) => (
+                        <option key={a} value={a}>
+                          {ACCOUNTS[a]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
+              )}
             </div>
             <Field label="Why it changes">
               <input className={input} value={b.twist.why} maxLength={400} onChange={(e) => set((x) => void (x.twist!.why = e.target.value), "tw")} />

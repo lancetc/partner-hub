@@ -107,7 +107,7 @@ export const OPENAI_VOICES: { id: string; label: string }[] = [
 ];
 
 /** Reads a script aloud with OpenAI's speech model, as an MP3. */
-export async function openaiSpeech(text: string, voice: string) {
+export async function openaiSpeech(text: string, voice: string, style?: string) {
   if (!openaiReady()) throw new HttpError(503, "OpenAI isn’t connected. Add OPENAI_API_KEY to .env.local and restart the server.");
   if (!OPENAI_VOICES.some((v) => v.id === voice)) throw new HttpError(400, "Choose one of OpenAI’s voices.");
   const r = await openai(
@@ -116,7 +116,9 @@ export async function openaiSpeech(text: string, voice: string) {
       model: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
       voice,
       input: text,
+      // A fictional character (a Tough Family Call's caller) brings its own reviewed delivery notes; otherwise the Hub's companion manner.
       instructions:
+        style ||
         "A warm, friendly learning companion with a natural Australian manner, speaking to a support worker. Conversational and unhurried, never salesy. Pause briefly before a question.",
       response_format: "mp3",
     },

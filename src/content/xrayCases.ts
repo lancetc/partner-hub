@@ -1,4 +1,5 @@
 import type { XLine, XRayBlockData } from "@/lib/xray";
+import { XRAY_REVIEW_CASES } from "./xrayReviewCases";
 
 /*
   Starter cases for the Invoice X-Ray (docs/invoice-xray.md). Fictional people, suppliers and prices, drafted
@@ -583,4 +584,6 @@ export const XRAY_CASES = [
     teaches: "Not everything from a chemist is the same: medicine, nursing consumables, nutrition, personal items",
     data: wong,
   },
+  // Quote and invoice review mode (content/xrayReviewCases).
+  ...XRAY_REVIEW_CASES,
 ] as const;

@@ -35,6 +35,7 @@ import type { xrayState } from "@/server/xray";
 import { Icon } from "../Icon";
 import { CharacterRow } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
+import { QuoteInvoiceXRay } from "./QuoteInvoiceXRay";
 
 /*
   Invoice X-Ray (docs/invoice-xray.md). The document's lines are buttons, so the document is also the list:
@@ -61,7 +62,12 @@ const showDate = (d: string) =>
     ? new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${d}T00:00:00Z`))
     : "";
 
+/** A case with a review section runs as the Quote/Invoice X-Ray (QuoteInvoiceXRay); a classic case runs as it always has. */
 export function InvoiceXRay({ block: b, ctx }: { block: XRayBlock; ctx: InteractiveContext }) {
+  return b.funding ? <QuoteInvoiceXRay block={b} ctx={ctx} /> : <ClassicXRay block={b} ctx={ctx} />;
+}
+
+function ClassicXRay({ block: b, ctx }: { block: XRayBlock; ctx: InteractiveContext }) {
   const url = `/api/magazine/${ctx.guideId}/xray`;
   const loaded = useApi<Loaded>(ctx.preview ? null : `${url}?block=${b.id}`);
   const [s, setS] = useState<XRayState | null>(ctx.preview ? emptyState() : null);

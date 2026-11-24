@@ -40,6 +40,7 @@ import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
 import { balanceApproved, balanceForReaders } from "@/lib/balance";
 import { xrayApproved, xrayForReaders } from "@/lib/xray";
+import { fundingHardProblems, fundingProblems } from "@/lib/xrayFunding";
 import { resetApproved } from "@/lib/reset";
 import { lineApproved, lineForReaders } from "@/lib/line";
 import { bridgeApproved, bridgeForReaders } from "@/lib/bridge";
@@ -52,6 +53,7 @@ import { demoEditionOf, demoSignOffEnabled, demoSignOffOf, recordDemoEdition } f
 import { charactersAfterPublish } from "./characters";
 import { auditorCaseProblems, auditorForReaders, auditorHardProblems } from "@/lib/auditor";
 import { phoneForReaders, phoneHardProblems } from "@/lib/phonecall";
+import { familyCaseProblems, familyForReaders, familyHardProblems } from "@/lib/familyCall";
 import { sandboxForReaders, sandboxHardProblems } from "@/lib/sandbox";
 import { hiringForReaders, labHardProblems } from "@/lib/hiringRunway";
 import { oneDayForReaders, oneDayHardProblems } from "@/lib/oneDay";
@@ -67,6 +69,11 @@ import { caseThreadForReaders } from "@/lib/caseThread";
 import { budgetLabForReaders, budgetLabHardProblems } from "@/lib/budgetLab";
 import { hazardScanForReaders, hazardScanHardProblems } from "@/lib/hazardScan";
 import { dischargeForReaders, pivotHardProblems, scenarioProblems } from "@/lib/dischargePivot";
+import { benchSignOffProblems, caseProblems as benchCaseProblems, networkForReaders } from "@/lib/networkBench";
+import { caseProblems as trustCaseProblems, trustForReaders, trustSignOffProblems } from "@/lib/trustCheck";
+import { studioCaseProblems, studioForReaders, studioSignOffProblems } from "@/lib/referralStudio";
+import { caseProblems as shadowCaseProblems, shadowForReaders, signOffProblems as shadowSignOffProblems } from "@/lib/shadowCoach";
+import { claimRegister } from "./referralClaims";
 import { caseAttemptComplete, caseThreadPublishProblems, caseThreadsAfterPublish } from "./caseThreads";
 import { redPenApproved, redPenForReaders, redPenIdentifiers, redPenStale } from "@/lib/redpen";
 import type { ReaderAva } from "./ava";
@@ -312,7 +319,13 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
           ? { ...b, roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] } }
           : // A Tough Phone Call: the same, and the case tools without what they reveal, who may be told what, or the urgent cue.
             b.type === "phonecall"
-            ? { ...b, roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] }, phone: phoneForReaders(b.phone) }
+            ? {
+                ...b,
+                roleplay: { ...b.roleplay, profile: "", moves: [], risks: [], safety: [] },
+                phone: phoneForReaders(b.phone),
+                // A Tough Family Call: the briefing and labels only. Facts, replies, rubric and fixtures come from the attempt API.
+                ...(b.family ? { family: familyForReaders(b.family) } : {}),
+              }
             : // A Budget Sandbox: everything to plan with, without the explanation checks or the reviewed illustrative plan.
               b.type === "sandbox"
               ? sandboxForReaders(b)
@@ -375,7 +388,19 @@ const withoutScenes = (doc: GuideDoc): GuideDoc => ({
                                                 : // The 72-Hour Discharge Pivot: the frame only. The record, alerts, cards and gates come from the attempt API as they arrive.
                                                   b.type === "discharge"
                                                   ? dischargeForReaders(b)
-                                                  : b,
+                                                  : // Build Your Local Bench: the frame only. The cards, decisions, reveal and scorecard come from the attempt API.
+                                                    b.type === "network"
+                                                    ? networkForReaders(b)
+                                                    : // Local Referral Studio: the frame only. Persona cards, replies and the debrief come from the practice API.
+                                                      b.type === "referralstudio"
+                                                      ? studioForReaders(b)
+                                                      : // The 28-Day Trust Check: the frame only. Signals, decisions, the plan builder and the checkpoints come from the attempt API.
+                                                        b.type === "trustcheck"
+                                                        ? trustForReaders(b)
+                                                        : // First 100 Days: Shadow & Coach: the frame only. Artefacts, options, the plan and the second sample come from the attempt API.
+                                                          b.type === "shadowcoach"
+                                                          ? shadowForReaders(b)
+                                                          : b,
       ),
     })),
   })),
@@ -820,6 +845,10 @@ export function recordGuideEvent(
           "budgetlab",
           "hazardscan",
           "discharge",
+          "network",
+          "referralstudio",
+          "trustcheck",
+          "shadowcoach",
           "spot",
           "budget",
           "signal",
@@ -1255,6 +1284,11 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     );
   // A 72-Hour Discharge Pivot whose scenario doesn't hold together (a click that could confirm a service, a path that
   // doesn't end where it says) is never published, even under a demo sign-off: that's the engine, not a reviewer's call.
+  // A Tough Family Call whose case doesn't hold together (an unresolved reference, a fixture that doesn't end where it
+  // says, a model debrief the rubric reads as unsafe) is never published either: that's the engine, not a reviewer's call.
+  const uncallable = draftBlocks.flatMap((b) => (b.type === "phonecall" && b.family ? familyCaseProblems({ ...b, family: b.family }) : []));
+  if (uncallable.length)
+    throw Object.assign(new HttpError(400, "A Tough Family Call’s case check doesn’t pass. Fix the case before publishing."), { problems: uncallable });
   const unplayable = draftBlocks.flatMap((b) => (b.type === "discharge" ? scenarioProblems(b) : []));
   if (unplayable.length)
     throw Object.assign(new HttpError(400, "A 72-Hour Discharge Pivot’s scenario check doesn’t pass. Fix the scenario before publishing."), {
@@ -1269,6 +1303,39 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
     throw Object.assign(new HttpError(400, "A Document Auditor or Contractor Vetting Card case doesn’t hold together. Fix the case before publishing."), {
       problems: unsound,
     });
+  // Nor a Quote/Invoice X-Ray review case that contradicts itself (a line marked ready with a check open, an out-of-scope
+  // verdict with no source, an AT–HM rule resting on the service list, a fee read without the document's role, a quote
+  // taken as delivery): the case's own logic, so a demo sign-off doesn't cover it.
+  const unreviewedCase = draftBlocks.flatMap((b) => (b.type === "xray" ? fundingProblems(b) : []));
+  if (unreviewedCase.length)
+    throw Object.assign(new HttpError(400, "A Quote/Invoice X-Ray case doesn’t hold together. Fix the case before publishing."), {
+      problems: unreviewedCase,
+    });
+  // Nor a Build Your Local Bench case that doesn't hold together (an approved card with a check open, no gap to find,
+  // no safe choice, outreach copy that promises work or a rate, a real-looking identifier): the case's own logic.
+  const unbenched = draftBlocks.flatMap((b) => (b.type === "network" ? benchCaseProblems(b) : []));
+  if (unbenched.length)
+    throw Object.assign(new HttpError(400, "A Build Your Local Bench case doesn’t hold together. Fix the case before publishing."), { problems: unbenched });
+  // Nor a Local Referral Studio whose scenarios don't hold together (an unresolved claim, a critical flag with no
+  // approved correction, a fixture that doesn't end where it says, an ending that says a service is confirmed).
+  const unstudied = draftBlocks.some((b) => b.type === "referralstudio")
+    ? draftBlocks.flatMap((b) => (b.type === "referralstudio" ? studioCaseProblems(b, claimRegister(db)) : []))
+    : [];
+  if (unstudied.length)
+    throw Object.assign(new HttpError(400, "A Local Referral Studio’s scenario check doesn’t pass. Fix the scenarios before publishing."), {
+      problems: unstudied,
+    });
+  // Nor a 28-Day Trust Check whose case doesn't hold together (a churn score on a signal card, a step with no safe
+  // choice, a path that doesn't end where it says, a real-looking identifier): the engine's rules, not a reviewer's call.
+  const untrusted = draftBlocks.flatMap((b) => (b.type === "trustcheck" ? trustCaseProblems(b) : []));
+  if (untrusted.length)
+    throw Object.assign(new HttpError(400, "A 28-Day Trust Check’s case check doesn’t pass. Fix the case before publishing."), { problems: untrusted });
+  // Nor a First 100 Days: Shadow & Coach whose case doesn't hold together (an urgent finding with nothing that can't wait,
+  // a second sample that repeats the first, a contribution claim the current rule set contradicts, a named coordinator,
+  // a ranking, a real-looking identifier): the case's own logic, not a reviewer's call.
+  const unshadowed = draftBlocks.flatMap((b) => (b.type === "shadowcoach" ? shadowCaseProblems(b) : []));
+  if (unshadowed.length)
+    throw Object.assign(new HttpError(400, "A Shadow & Coach case check doesn’t pass. Fix the case before publishing."), { problems: unshadowed });
   // A demo Hub can record a demo sign-off in place of the reviewers' sign-offs below (server/demoSignOff.ts).
   const demo = demoSignOffEnabled() ? demoSignOffOf(db, a.id) : null;
   if (!demo)
@@ -1302,6 +1369,16 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
             ),
           },
         );
+      // And a Quote/Invoice X-Ray review case: the policy owner, Operations/Finance, the AT–HM or clinical reviewer, Care Operations and Quality, with every source reviewed and in date.
+      const unfundable = draftBlocks.flatMap((b) => (b.type === "xray" ? fundingHardProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unfundable.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Quote/Invoice X-Ray case needs its sign-off and reviewed, in-date sources before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unfundable },
+        );
       // And a Document Auditor: its answer key is Compliance, Finance, Care Operations and Quality judgement, its rules must be in date, and its documents must be fictional.
       const unaudited = draftBlocks.flatMap((b) => (b.type === "auditor" ? auditorHardProblems(b, now.toISOString().slice(0, 10)) : []));
       if (unaudited.length)
@@ -1318,6 +1395,18 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
         throw Object.assign(
           new HttpError(400, "A Tough Phone Call needs its sign-off and in-date sources before it can be published. “Publish anyway” doesn’t cover this."),
           { problems: uncalled },
+        );
+      // And a Tough Family Call: the story owner, Quality/complaints, policy, accessibility and escalation reviewers, each critical error's threshold, the voice's rights and the privacy notice.
+      const unfamilied = draftBlocks.flatMap((b) =>
+        b.type === "phonecall" && b.family ? familyHardProblems({ ...b, family: b.family }, now.toISOString().slice(0, 10)) : [],
+      );
+      if (unfamilied.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Tough Family Call needs its reviewers, approved critical errors, voice rights and privacy notice before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unfamilied },
         );
       // And a Budget Sandbox: its ledger, prices and contribution wording need Support at Home operations, Finance, Quality and accessibility, on a ruleset that's in date and fixtures that pass.
       const unbudgeted = draftBlocks.flatMap((b) => (b.type === "sandbox" ? sandboxHardProblems(b, now.toISOString().slice(0, 10)) : []));
@@ -1429,6 +1518,48 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
             "A 72-Hour Discharge Pivot needs a scenario that passes its check, current sources and its sign-off before it can be published. “Publish anyway” doesn’t cover this.",
           ),
           { problems: undischarged },
+        );
+      // And Build Your Local Bench: its owner, Operations, supplier onboarding, Quality/screening, Partnerships, Finance, privacy and learning sign-off, reviewed profiles and an approved outreach template.
+      const unbenchSigned = draftBlocks.flatMap((b) => (b.type === "network" ? benchSignOffProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unbenchSigned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "Build Your Local Bench needs its reviewers’ sign-off, reviewed checklist profiles and an approved outreach template. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unbenchSigned },
+        );
+      // And the 28-Day Trust Check: Trilogy Care's procedures in place of the placeholders, a current budget rule set, the Job Aid, and its nine reviewers' sign-off on this scenario version.
+      const untrustSigned = draftBlocks.flatMap((b) => (b.type === "trustcheck" ? trustSignOffProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (untrustSigned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A 28-Day Trust Check needs Trilogy Care’s procedures, a current rule set and its reviewers’ sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: untrustSigned },
+        );
+      // And First 100 Days: Shadow & Coach: Trilogy Care's procedures in place of the placeholders, current sources, the Job Aid, and its eight reviewers' sign-off on this scenario version.
+      const unshadowSigned = draftBlocks.flatMap((b) => (b.type === "shadowcoach" ? shadowSignOffProblems(b, now.toISOString().slice(0, 10)) : []));
+      if (unshadowSigned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "First 100 Days: Shadow & Coach needs Trilogy Care’s procedures, current sources and its reviewers’ sign-off before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unshadowSigned },
+        );
+      // And the Local Referral Studio: its owner, referral pathway, Partnerships/Marketing, Quality and Privacy sign-off, approved critical flags, an accepted rationale, and no withdrawn or expired claim.
+      const unstudiedSigned = draftBlocks.some((b) => b.type === "referralstudio")
+        ? draftBlocks.flatMap((b) => (b.type === "referralstudio" ? studioSignOffProblems(b, claimRegister(db), now.toISOString().slice(0, 10)) : []))
+        : [];
+      if (unstudiedSigned.length)
+        throw Object.assign(
+          new HttpError(
+            400,
+            "A Local Referral Studio needs its reviewers’ sign-off, approved critical flags and current claims before it can be published. “Publish anyway” doesn’t cover this.",
+          ),
+          { problems: unstudiedSigned },
         );
       // And a "What Would You Do?" case thread: the case note's approval and sign-off, its policy version and review date, seed responses and the source guardrails.
       const uncased = caseThreadPublishProblems(db, { id: a.id, audience: a.audience }, readGuideDoc(a.doc, { draft: true }), now.toISOString().slice(0, 10));
@@ -1576,10 +1707,7 @@ export function publishGuide(db: Db, actor: User, id: string, summary: unknown, 
       // On a demo Hub, say how to get past a reviewers' gate for a demonstration.
       const problems = (e as { problems?: string[] }).problems;
       if (demoSignOffEnabled() && e instanceof HttpError && problems)
-        (e as { problems?: string[] }).problems = [
-          ...problems,
-          "This is a demo Hub: choose “Record a demo sign-off” in Review and publish, then publish.",
-        ];
+        (e as { problems?: string[] }).problems = [...problems, "This is a demo Hub: choose “Record a demo sign-off” in Review and publish, then publish."];
       throw e;
     }
   // And a Job Aid: it must be in the library. One not yet approved is hidden from learners until it is (docs/job-aids.md).

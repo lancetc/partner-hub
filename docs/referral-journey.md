@@ -7,7 +7,7 @@ A reusable Magazine block (type `referral`, labelled **Referral Journey Calculat
 
 Every rate shows its numerator, denominator, cohort and source ("GP practice, April–June 2026 enquiries: 4/12 = 33%"). There's no best-referrer score and no leaderboard.
 
-It answers _which relationships deserve more attention, a better handoff or a different expectation_. It isn't a referral system: it doesn't contact a referrer, record a live referral or decide eligibility. Pitch practice, approved one-pagers and follow-up drafts belong to the Local Referral Studio Work Tool, which **isn't in the Hub yet** (see "Not yet").
+It answers _which relationships deserve more attention, a better handoff or a different expectation_. It isn't a referral system: it doesn't contact a referrer, record a live referral or decide eligibility. Pitch practice, approved one-pagers and follow-up drafts belong to the Local Referral Studio Work Tool (`/tools/referral-studio`, docs/local-referral-studio.md). It now exists and reads its stage model from this block's `referral-stages-1`; this block's "Local Referral Studio" placeholder isn't wired to it yet (see "Not yet").
 
 Source: _Partner Hub PRD: Which referrals become active clients?_ (22 November 2026).
 

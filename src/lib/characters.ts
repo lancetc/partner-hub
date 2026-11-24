@@ -232,6 +232,32 @@ export function charactersInBlock(b: Record<string, unknown>): { name: string; r
       add({ name: sup.name, about: typeof sup.relation === "string" && typeof pt.name === "string" ? `${pt.name}’s ${sup.relation}` : "" }, "family");
       break;
     }
+    case "network": {
+      // The recurring principal (Priya Raman, already in the library from the growth readiness story). Participants are
+      // "Participant 1" to "Participant 3" and workers are anonymous ("Worker A"), never library characters.
+      const st = (b.story ?? {}) as Record<string, unknown>;
+      add({ name: st.character, about: [st.role, st.situation].filter((x) => typeof x === "string" && x).join(". ") }, "other");
+      break;
+    }
+    case "trustcheck": {
+      // The 28-Day Trust Check (docs/trust-check.md): the recurring participant (Mrs Patel) and her daughter (Asha), both
+      // already in the library. The coordinator, suppliers and clinical lead are roles, never names.
+      const pt = (b.participant ?? {}) as Record<string, unknown>;
+      add({ name: pt.name, about: typeof pt.about === "string" ? pt.about : "" }, "participant");
+      const sup = (b.supporter ?? {}) as Record<string, unknown>;
+      add({ name: sup.name, about: typeof sup.relation === "string" && typeof pt.name === "string" ? `${pt.name}’s ${sup.relation}` : "" }, "family");
+      break;
+    }
+    case "shadowcoach": {
+      // First 100 Days: Shadow & Coach (docs/shadow-and-coach.md): the recurring principal (Maya) and participant (Mrs Lin),
+      // both already in the library. The new coordinator is a role ("Maya’s new coordinator"), never a name, so she is
+      // never added; workers, relatives and other participants are roles or labels ("Participant 6").
+      const mg = (b.manager ?? {}) as Record<string, unknown>;
+      add({ name: mg.name, about: [mg.role, mg.situation].filter((x) => typeof x === "string" && x).join(". ") }, "other");
+      const pt = (b.participant ?? {}) as Record<string, unknown>;
+      add({ name: pt.name, about: typeof pt.about === "string" ? pt.about : "" }, "participant");
+      break;
+    }
     case "hazardscan":
       // The person whose room it is (Mrs Pearce, Mr Okafor, Dot): a recurring participant, drawn out of frame, so no
       // portrait is needed in the scene. Workers and coordinators are roles.

@@ -1,4 +1,5 @@
 import type { PhoneCallData, PhoneSource } from "@/lib/phonecall";
+import { FIONA_GARDENER } from "./familyCalls";
 
 /*
   The two pilot Tough Phone Call scenes (docs/tough-phone-call.md): a declined self-managed invoice, and a
@@ -486,4 +487,6 @@ export const PHONE_CALLS: { id: string; label: string; data: PhoneCallData }[] =
       },
     },
   },
+  // A Tough Family Call (lib/familyCall): Fiona and Dot’s missed garden visit, with its own engine and five-dimension rubric.
+  { id: "fiona-gardener", label: "Tough Family Call: Fiona and the missed garden visit", data: FIONA_GARDENER },
 ];

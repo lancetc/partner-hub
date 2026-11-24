@@ -22,6 +22,7 @@ import { parsePlaybookBlock, type PlaybookBlockData } from "./playbook";
 import { cleanRelayCourse, cleanRelayPage, relayChecks, type RelayCourse, type RelayPage } from "./relayConfig";
 import { parseAuditor, type AuditorBlockData } from "./auditor";
 import { parsePhoneCase, type PhoneCallData } from "./phonecall";
+import { parseFamilyCall } from "./familyCall";
 import { parseSandbox, type SandboxBlockData } from "./sandbox";
 import { parseHiringLab, type HiringLabData } from "./hiringRunway";
 import { parseOneDay, type OneDayData } from "./oneDay";
@@ -35,6 +36,10 @@ import { parseCaseThread, type CaseThreadData } from "./caseThread";
 import { parseBudgetLab, type BudgetLabData } from "./budgetLab";
 import { parseHazardScan, type HazardScanData } from "./hazardScan";
 import { parseDischarge, type DischargeData } from "./dischargePivot";
+import { parseNetwork, type NetworkData } from "./networkBench";
+import { parseTrust, type TrustData } from "./trustCheck";
+import { parseStudio, type StudioData } from "./referralStudio";
+import { parseShadow, type ShadowData } from "./shadowCoach";
 
 /*
   Magazine: the Hub's desk-reading format. A Magazine is a course of one or more pages; a one-page
@@ -139,6 +144,10 @@ export const SIMULATION_BLOCKS = [
   "cashbridge",
   "budgetlab",
   "discharge",
+  "network",
+  "trustcheck",
+  "referralstudio",
+  "shadowcoach",
 ] as const satisfies readonly BlockType[];
 
 /**
@@ -626,6 +635,10 @@ export type Block =
   | BudgetLabBlock
   | HazardScanBlock
   | DischargeBlock
+  | NetworkBlock
+  | TrustCheckBlock
+  | ReferralStudioBlock
+  | ShadowCoachBlock
   | HubVisualBlock;
 /** Spot the Signal (lib/signal): three updates about one fictional client, read for a pattern, then triage, a provisional assessment and a handover. */
 export type SignalBlock = Base & { type: "signal" } & SignalBlockData;
@@ -689,6 +702,14 @@ export type BudgetLabBlock = Base & { type: "budgetlab" } & BudgetLabData;
 export type HazardScanBlock = Base & { type: "hazardscan" } & HazardScanData;
 /** The 72-Hour Discharge Pivot: a time-aware triage simulation of a participant's return home from hospital, replayed on the server (docs/discharge-pivot.md). */
 export type DischargeBlock = Base & { type: "discharge" } & DischargeData;
+/** Build Your Local Bench: the Contractor Network Builder's fictional early-morning gap, replayed on the server (docs/network-builder.md). */
+export type NetworkBlock = Base & { type: "network" } & NetworkData;
+/** The 28-Day Trust Check: a fictional service-recovery case (Mrs Patel's Week 8), replayed on the server (docs/trust-check.md). */
+export type TrustCheckBlock = Base & { type: "trustcheck" } & TrustData;
+/** Local Referral Studio: pitch and objection practice with a fictional referrer, on the Tough Family Call's engine (docs/local-referral-studio.md). */
+export type ReferralStudioBlock = Base & { type: "referralstudio" } & StudioData;
+/** First 100 Days: Shadow & Coach: a manager calibrates on a fictional new coordinator's work, replayed on the server (docs/shadow-and-coach.md). */
+export type ShadowCoachBlock = Base & { type: "shadowcoach" } & ShadowData;
 /**
   One of the Hub's own reviewed diagrams, placed in an article so it can be explained around: the client journey map
   (its feeling curve and road), or a partner model's who-does-what onboarding diagram. The diagram's content lives
@@ -932,7 +953,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   mentor: "Notes to a Younger Me deck",
   playbook: "Job Aid",
   auditor: "Contractor Vetting Card / Document Auditor",
-  phonecall: "Tough Phone Call",
+  phonecall: "Tough Phone Call / Tough Family Call",
   sandbox: "Budget Sandbox",
   hiring: "Hiring Runway Decision Lab",
   onedaymap: "One Day, Five Perspectives",
@@ -946,6 +967,10 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   budgetlab: "Quarterly Budget Decision Lab",
   hazardscan: "Spot the Hazard",
   discharge: "72-Hour Discharge Pivot",
+  network: "Build Your Local Bench",
+  trustcheck: "28-Day Trust Check",
+  referralstudio: "Local Referral Studio",
+  shadowcoach: "First 100 Days: Shadow & Coach",
   hubvisual: "Hub diagram",
 };
 export const OUTCOMES: Record<BranchOutcome, string> = { good: "A good outcome", mixed: "A mixed outcome", poor: "A poor outcome" };
@@ -1880,6 +1905,14 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         return { ...base, type: "hazardscan", ...parseHazardScan(o, where, { str, unfinished }) };
       case "discharge":
         return { ...base, type: "discharge", ...parseDischarge(o, where, { str, unfinished }) };
+      case "network":
+        return { ...base, type: "network", ...parseNetwork(o, where, { str, unfinished }) };
+      case "trustcheck":
+        return { ...base, type: "trustcheck", ...parseTrust(o, where, { str, unfinished }) };
+      case "referralstudio":
+        return { ...base, type: "referralstudio", ...parseStudio(o, where, { str, unfinished }) };
+      case "shadowcoach":
+        return { ...base, type: "shadowcoach", ...parseShadow(o, where, { str, unfinished }) };
       case "hubvisual": {
         const visual = typeof o.visual === "string" && o.visual in HUB_VISUALS ? (o.visual as HubVisualKind) : "client-journey";
         const caption = str(o.caption, `${where} caption`, { max: 300 });
@@ -1897,7 +1930,9 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           role: str(o.role, `${where} caller’s relationship`, { max: 120 }) ?? "",
           setting: str(o.setting, `${where} setting`, { max: 600 }) ?? "",
           roleplay: roleplay ?? blankRoleplay(),
-          phone: parsePhoneCase(p, where, roleplay, { str, idOf, list, unfinished }),
+          phone: parsePhoneCase(p, where, roleplay, { str, idOf, list, unfinished }, { family: Boolean(o.family) }),
+          // A Tough Family Call (lib/familyCall): the family case, checked as a whole by familyCaseProblems.
+          ...(o.family && typeof o.family === "object" ? { family: parseFamilyCall(o.family) } : {}),
         };
       }
       case "budget": {
@@ -2371,6 +2406,10 @@ export function pageMinutes(page: Page) {
     if (b.type === "budgetlab") extra += 15;
     if (b.type === "hazardscan") extra += 5;
     if (b.type === "discharge") extra += 20;
+    if (b.type === "network") extra += 20;
+    if (b.type === "trustcheck") extra += 20;
+    if (b.type === "referralstudio") extra += 10;
+    if (b.type === "shadowcoach") extra += 25;
     if (b.type === "hubvisual") extra += b.visual === "client-journey" ? 5 : 2;
     if (b.type === "wall") extra += 2;
     if (b.type === "poll") extra += 0.5;

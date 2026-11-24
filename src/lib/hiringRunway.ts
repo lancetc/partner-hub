@@ -12,6 +12,7 @@ import {
   type HiringInputs,
   type HiringOption,
 } from "./hiringModel";
+import { decisionWindow, WINDOW_VERSION, type DecisionWindow, type WindowInput } from "./hiringWindow";
 
 /*
   Hiring Runway Decision Lab (docs/hiring-runway-lab.md): a Magazine block where a learner works through a fictional
@@ -27,7 +28,8 @@ import {
   rubric's keywords, the feedback wording or the reviewed alternatives (until the debrief).
 */
 
-export const LAB_VERSION = "hiring-lab-1";
+/** 2: the decision window across the growth cases, sensitivity, the classification mix and the contact guardrail (hiringWindow). */
+export const LAB_VERSION = "hiring-lab-2";
 export const RUBRIC_VERSION = "hiring-rubric-1";
 export const FICTIONAL_NOTICE =
   "Fictional case: Maya, her business, the agreement and every figure are invented for practice. They aren’t Trilogy Care pricing, staffing norms or a hiring recommendation.";
@@ -133,6 +135,17 @@ export type HiringLabData = {
   editable: Editable[];
   options: HiringOption[];
   growth: GrowthCase[];
+  /**
+    Optional, added with the decision window (lab 2). Left out, a case reads exactly as before.
+    - classifications: participants in Support at Home classifications 1 to 8, for context only. They never set hours,
+      income or a hire; the work bands do. When given they must add up to the caseload.
+    - contactDuty: the fictional agreement assigns the monthly direct care-management contact to the business, so
+      months above the threshold are shown as a service risk to that contact.
+    - leadSpread: months recruitment may run over its stated lead, the window's uncertainty band (default 1).
+  */
+  classifications?: number[];
+  contactDuty?: boolean;
+  leadSpread?: number;
   /** How the learner's combinable actions change the forecast. */
   actions: {
     temporary: { label: string; fromMonth: number; months: number; hours: number; cost: number };
@@ -170,6 +183,10 @@ export type HiringLabData = {
     effectiveFrom: string;
     reviewBy: string;
     sources: { title: string; url: string }[];
+    /** The verified partner-growth theme this responds to (Problem desk id), for the decision register. Optional. */
+    themeId?: string;
+    /** The latest review decision for the register: keep, revise, retarget or withdraw. Optional. */
+    review?: "" | "keep" | "revise" | "retarget" | "withdraw";
   };
 };
 
@@ -330,10 +347,56 @@ export function caseProblems(d: HiringLabData): string[] {
   for (const alt of d.feedback.alternatives)
     if (alt.plan.recruit && !d.options.some((o) => o.id === alt.plan.optionId && o.kind === "hire"))
       out.push(`${t}: “${alt.label}” recruits for an option that isn’t in the case.`);
+  // The classification mix is context: when it's given it has to describe the same caseload, all eight of them.
+  if (d.classifications?.length) {
+    const total = d.classifications.reduce((n, c) => n + c, 0);
+    if (d.classifications.length !== 8 || d.classifications.some((c) => !Number.isInteger(c) || c < 0))
+      out.push(`${t}: give the classification mix as whole numbers for all eight classifications.`);
+    else if (total > 0 && total !== bandSum)
+      out.push(`${t}: the classification mix adds up to ${total}, but the caseload is ${bandSum}. Make them describe the same participants.`);
+  }
   return out;
 }
 const labelOf = (k: FigureKey) =>
   k.startsWith("band.") ? `${BAND_LABELS[k.split(".")[1] as BandKey]} ${k.split(".")[2]}` : INPUTS[k as InputKey].label.toLowerCase();
+
+/** The decision window for a case (lib/hiringWindow): every growth case, with the learner's what-ifs and any revealed event. */
+export function labWindowInput(d: HiringLabData, inputs: HiringInputs = d.inputs, extra: Adjustment[] = [], hireId?: string): WindowInput {
+  return {
+    inputs,
+    options: d.options,
+    growth: d.growth,
+    baseId: expectedCase(d).id,
+    adjustments: extra,
+    leadSpread: d.leadSpread,
+    contactDuty: d.contactDuty,
+    hireId,
+  };
+}
+export const labWindow = (d: HiringLabData, inputs: HiringInputs = d.inputs, extra: Adjustment[] = [], hireId?: string): DecisionWindow =>
+  decisionWindow(labWindowInput(d, inputs, extra, hireId));
+
+/**
+  The reviewed decision-window fixture: Maya's expected case must give the reviewed window. Pressure in Month 3
+  (Month 1 when faster, none when slower), a recruitment start that's already late, so interim capacity while
+  recruiting; 0.6 FTE above the reserve with its monthly result back above zero from Month 6; 1.0 FTE below the reserve
+  from Month 5. If the rules change and these don't hold, nothing publishes until someone reviews why.
+*/
+export function windowFixturesPass() {
+  const w = decisionWindow({ inputs: MAYA_INPUTS, options: MAYA_OPTIONS, growth: MAYA_GROWTH });
+  const o = (id: string) => w.options.find((x) => x.id === id)!;
+  return (
+    w.version === WINDOW_VERSION &&
+    w.cases.map((c) => c.capacityMonth).join(",") === ",3,1" &&
+    w.recruit?.late === true &&
+    w.recommendation.kind === "interim-and-recruit" &&
+    o("add-06").firstReserveBreach === null &&
+    o("add-06").breakEven === 6 &&
+    o("add-10").firstReserveBreach === 5 &&
+    // Never a client count: the window is in months, under its stated assumptions.
+    !/\b\d+ (clients|participants)\b/.test(`${w.recommendation.headline} ${w.recommendation.factors.join(" ")}`)
+  );
+}
 
 /** Who has to sign off before learners see it: the owner, Finance, Operations/Quality, Partnerships and privacy, with the date. */
 export const labApproved = (d: Pick<HiringLabData, "governance">) => {
@@ -349,6 +412,7 @@ export function labHardProblems(d: HiringLabData, today: string): string[] {
     out.push(`“${d.title}” was due for review on ${d.governance.reviewBy}. Confirm its facts are current.`);
   out.push(...caseProblems(d));
   if (!modelFixturesPass()) out.push("The hiring model’s reviewed fixtures don’t pass, so no Hiring Runway lab can be published.");
+  if (!windowFixturesPass()) out.push("The decision window’s reviewed fixture doesn’t pass, so no Hiring Runway lab can be published.");
   return out;
 }
 
@@ -659,7 +723,12 @@ export function parseHiringLab(o: Raw, where: string, h: ParseHelpers): HiringLa
       })),
       nextStep: typeof fb.nextStep === "string" ? fb.nextStep.slice(0, 300) : "",
     },
+    classifications: Array.isArray(o.classifications) ? Array.from({ length: 8 }, (_, k) => Math.max(0, int((o.classifications as unknown[])[k]))) : undefined,
+    contactDuty: o.contactDuty === true,
+    leadSpread: Math.max(0, Math.min(6, int(o.leadSpread, 1))),
     governance: {
+      themeId: typeof gv.themeId === "string" ? gv.themeId.slice(0, 80) : "",
+      review: gv.review === "keep" || gv.review === "revise" || gv.review === "retarget" || gv.review === "withdraw" ? gv.review : "",
       signal: str(gv.signal, `${where} verified signal`, { max: 600 }) ?? "",
       whySimulation: str(gv.whySimulation, `${where} why a simulation`, { max: 600 }) ?? "",
       whyNow: str(gv.whyNow, `${where} why now`, { max: 600 }) ?? "",
@@ -723,6 +792,8 @@ export type HiringState = {
   edits: Partial<Record<InputKey, number>>;
   /** The option cards were compared under at least these growth cases. */
   compared: string[];
+  /** Lab 2: the sensitivity table and the calculation basis were opened. Absent on older attempts (read as none). */
+  views: ("sensitivity" | "basis")[];
   initial: Decision | null;
   revised: Decision | null;
   retries: number;
@@ -734,6 +805,7 @@ export const emptyHiringState = (d: Pick<HiringLabData, "growth" | "options">): 
   optionId: d.options.find((o) => o.kind === "hire")?.id ?? d.options[0]?.id ?? "",
   edits: {},
   compared: [],
+  views: [],
   initial: null,
   revised: null,
   retries: 0,
@@ -766,6 +838,7 @@ export function cleanHiringState(d: HiringLabData, raw: unknown): HiringState {
     optionId: typeof o.optionId === "string" && d.options.some((x) => x.id === o.optionId) ? o.optionId : empty.optionId,
     edits,
     compared: (Array.isArray(o.compared) ? o.compared : []).filter((x): x is string => typeof x === "string" && gs.has(x)).slice(0, 5),
+    views: (Array.isArray(o.views) ? o.views : []).filter((x): x is "sensitivity" | "basis" => x === "sensitivity" || x === "basis").slice(0, 2),
     initial: o.initial ? cleanDecision(o.initial, d) : null,
     revised: o.revised ? cleanDecision(o.revised, d) : null,
     retries: Number.isInteger(o.retries) ? Math.max(0, Math.min(50, o.retries as number)) : 0,
@@ -896,6 +969,9 @@ export function buildHiringDebrief(d: HiringLabData, s: HiringState) {
   const alternatives = d.feedback.alternatives.map((a) => ({ ...a, summary: planSummary(d, a.plan), f: planForecast(d, a.plan, undefined, true) }));
   return {
     labVersion: LAB_VERSION,
+    windowVersion: WINDOW_VERSION,
+    /** The decision window for the case as given, with the new information: what the debrief compares the plan with. */
+    range: labWindow(d, d.inputs, d.event.adjustments, revised.recruit ? revised.optionId : undefined),
     modelVersion: MODEL_VERSION,
     rubricVersion: RUBRIC_VERSION,
     storyVersion: d.storyVersion,

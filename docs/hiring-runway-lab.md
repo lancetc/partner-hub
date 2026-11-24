@@ -4,6 +4,36 @@ Built from *Partner Hub: Hiring Runway Decision Lab block* (21 November 2026), w
 
 In the Magazine editor: **Add block → Simulate → Hiring Runway Decision Lab**. It starts from Maya's case as a draft.
 
+## Lab 2: the decision window (24 November 2026)
+
+Built from *Partner Hub: Care Partner Caseload, Margin and Hiring Runway Simulator* (21 November 2026). That PRD asks for a Care Partner business Work Tool plus a fictional learning block, using one reviewed model. Both already existed (this block, and the Caseload-to-Margin Work Tool, `docs/caseload-margin-calculator.md`), so they were **extended**, not duplicated.
+
+### What changed, against the PRD
+
+| PRD asks for | Before | Now |
+| --- | --- | --- |
+| A decision **window** with its assumptions, never one exact trigger | One heuristic month for the expected case | `lib/hiringWindow.ts` (`hiring-window-1`): a capacity date for the slower, expected and faster cases; a recruitment start window from each (capacity − lead − ramp + 1), widened by the stated recruitment uncertainty (default ±1 month); the assumptions and unknowns listed with it |
+| Capacity, margin and cash side by side | Option cards: months over, lowest cash, operating result | A table for every option: months above the threshold, **contribution margin**, result **before owner remuneration**, operating result (owner pay always included), **break-even month**, lowest cash and the worst case across the three cases, with risks in words |
+| Options to compare | Keep, 0.6 FTE, 1.0 FTE, workflow | The same, plus the alternatives the PRD names whenever pressure is forecast (interim capacity, pacing intake, repairing a process, talking with Trilogy Care), each marked as needing judgement |
+| Recruitment and ramp | In the model | The window is timed by them; hires are costed from the base case's start-by, so a late pressure date isn't judged on a hire paid from Month 1 |
+| Sensitivity ranges | Three growth cases | Plus a one-at-a-time table: one more referral a month, onboarding 50% longer, recurring work 10% heavier, one more exit, two weeks' unplanned leave, a month longer to recruit, payments a month later. Each says what moved |
+| Honest uncertainty | "A window under these assumptions" | Plus: a suggestion that can be **Hold and monitor**, **Watch the faster case**, **Plan recruitment**, **Consider beginning recruitment**, **Interim capacity while recruiting** or a plain **Capacity and cash conflict**, with its factors. Revenue unknown stays unknown |
+| Quality guardrail despite margin; cash warning despite a profitable hire | Partly | Both are explicit factors (tested) |
+| Monthly direct contact as a guardrail only where the agreement assigns it | Not modelled | `contactDuty` on the case (and on a plan): then months above the threshold are a service risk to that contact. Never a claimable-hours figure |
+| Classifications 1 to 8 | Work bands only | Optional `classifications` (eight counts), shown as context. They must add up to the caseload and never change hours, income or the window (tested) |
+| Events | Lab events | Plus `assumption_changed` (the key, never the value), `scenario_compared` (sensitivity opened) and `source_opened` (calculation basis) |
+| Admin and the Excel register | Authors' totals by API | `/admin/hiring-runway` and a **Hiring Runway labs** sheet in the Problem desk decision register (`hiringRegister`): response id, versions, audience, dates, reviewers, participation, rubric means and misconceptions over the denominator, use of the low/high cases, the owned work measure and keep/revise/retarget/withdraw. Under five people: counts only |
+| A role-gated link from the lesson to the private tool | Not built | After the debrief, only for someone in `business_planner_access` |
+
+Maya's starter case is now `maya-2`: two new story facts (the caseload's classification mix, 5/9/10/7/4 in classifications 2 to 6, and the agreement giving her business the monthly contact) and a line on the hospital discharge and two complex families. Every figure the model uses is unchanged, so the reviewed fixture holds. Nobody new is named.
+
+### Older cases and attempts
+
+- A block saved before lab 2 has no classification mix, contact duty, uncertainty band, theme or review decision: each reads as absent (the window still works, with ±1 month). The published "Maya's next coordinator" (`maya-1`) is unchanged and now shows the window.
+- An attempt stored before lab 2 has no `views`: it reads as none. Its stored result and versions are never rewritten. An attempt started under an earlier model says its figures are worked out again with the current one (`earlierModel`). Both are tested.
+- The model gained `variableCost`, `fixedCost`, `ownerPay`, `contribution` and `operatingBeforeOwner` on each month. Additions only: other costs, operating result and cash are what they were, so `MODEL_VERSION` stays `hiring-model-2`. `LAB_VERSION` is `hiring-lab-2`; the rubric is unchanged (`hiring-rubric-1`), so scores are comparable.
+- Publishing also needs the window's reviewed fixture to pass (`windowFixturesPass`, beside `modelFixturesPass`). The classification check is structural (`caseProblems`), so no sign-off can waive it.
+
 ## What it is
 
 A learner works through a **fictional** Care Partner business story. Maya has 35 participants and one coordinator, Sam. The learner reads the evidence, compares options across capacity, operating result and cash, commits a plan, and then gets new information. They revise the plan and read a debrief. The block teaches how to justify a hiring decision, not how to find one "right" hire. Completion never depends on choosing the highest margin.
@@ -178,12 +208,22 @@ At phone width nothing overflowed, and the option cards stacked. That found and 
 - **Operations/Quality:** the workload bands and hours, the 85% threshold as an educational assumption, and the guardrail wording in the feedback.
 - **Partnerships:** the "Care Partner business owner" label and role (not the Support at Home "care partner"), the fictional agreement wording, and who may see the future Work Tool link.
 - **Privacy/security:** confirm the events and the authors' totals carry nothing private; retention for attempts.
-- **Product:** a partner-business-owner role and the Work Tool, before the post-debrief link can exist; whether an Admin improvement view and Excel decision register are wanted for this block.
+- **Product:** a partner-business-owner role and the Work Tool, before the post-debrief link can exist; whether an Admin improvement view and Excel decision register are wanted for this block. (Lab 2 built both, and the link, on the existing `business_planner_access` grant.)
+
+Added by lab 2 (the window), before partners rely on real figures:
+
+- **Finance:** contribution margin (recruitment in staff cost; temporary help as a variable cost), "before owner remuneration", the break-even definition, costing a hire from the base case's start-by, and the cash and tax basis.
+- **Operations/Quality:** the ±1 month recruitment uncertainty, the seven sensitivity steps and their sizes, the suggestion kinds and their wording, and whether the monthly direct contact is the partner's duty under each agreement variant.
+- **Partnerships:** which agreement variants assign the monthly contact, the "Plan capacity" label, the "Hiring Runway Simulator" picker name (the block is still labelled "Hiring Runway Decision Lab"), and who counts as an eligible owner (today one seeded grant).
+- **Privacy/security:** the fixed-list event details, retention of saved versions and their windows, and whether audited Trilogy support access is wanted.
+- **Partner pilot:** whether the window, sensitivity steps and alternatives match how owners decide.
 
 ## Not yet
 
-- The link from the debrief to the Plan my business Work Tool (the tool itself is built: `docs/caseload-margin-calculator.md`).
+- AI explanations of the window ("why did it move?"): none built; everything works without AI.
+- Forecast-versus-actual on the partner dashboard, and sharing a scenario with a relationship manager.
+- `source_issue_reported`: there's no source register for the tool's assumptions yet.
+- A per-band classification forecast in the lab (classifications are context only, as the PRD says).
 - AI suggestions for case narratives, events or explanations. The block works without them, as required.
 - Band-by-band forecasting in this block. The model supports it since `hiring-model-2` (the Work Tool uses it), but the block keeps the prototype's blended figure.
-- An Admin dashboard and Excel decision register for this block. The totals are available from the API.
 - The follow-up chapter (Maya four weeks on), as a linked block.

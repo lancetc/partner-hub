@@ -14,7 +14,9 @@ import {
   freshHiringLab,
   INPUTS,
   labApproved,
+  labWindow,
   modelFixturesPass,
+  windowFixturesPass,
   noneOption,
   planForecast,
   planSummary,
@@ -24,6 +26,7 @@ import {
   type InputKey,
 } from "@/lib/hiringRunway";
 import { HIRING_CASES } from "@/content/hiringCases";
+import { recruitText } from "@/lib/hiringWindow";
 import { btn, Field, input } from "./ui";
 import type { Update } from "./MagazineEditParts";
 import { Icon } from "../Icon";
@@ -83,7 +86,7 @@ function NumberField({
 export function HiringLabEdit({ block: b, update }: { block: HiringBlock; update: Update }) {
   const set = (fn: (x: HiringBlock) => void, tag?: string) => update<HiringBlock>(b.id, fn, tag && `${b.id}:${tag}`);
   const problems = caseProblems(b);
-  const fixtures = modelFixturesPass();
+  const fixtures = modelFixturesPass() && windowFixturesPass();
   const signed = labApproved(b);
   return (
     <div className="w-full rounded-3xl border border-line-strong bg-surface p-5 shadow-sm sm:p-7">
@@ -100,7 +103,7 @@ export function HiringLabEdit({ block: b, update }: { block: HiringBlock; update
         )}
       >
         {!fixtures
-          ? "The hiring model’s reviewed fixtures don’t pass: nothing can be published."
+          ? "The hiring model’s or decision window’s reviewed fixtures don’t pass: nothing can be published."
           : problems.length
             ? `The case isn’t complete yet (${problems.length} to fix below). It can’t be published until it reconciles.`
             : signed
@@ -237,6 +240,50 @@ export function HiringLabEdit({ block: b, update }: { block: HiringBlock; update
             onChange={(v) => set((x) => void (x.inputs[k] = v), `in-${k}`)}
           />
         ))}
+      </div>
+
+      <h4 className="mt-5 font-serif text-lg font-semibold">Context and the decision window</h4>
+      <p className="text-sm text-ink-muted">
+        Optional. The classification mix is context only: it never sets hours, income or a hire. Leave all eight at zero to leave it out; otherwise they must
+        add up to the caseload.
+      </p>
+      <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {Array.from({ length: 8 }, (_, k) => (
+          <NumberField
+            key={k}
+            label={`Class. ${k + 1}`}
+            value={b.classifications?.[k] ?? 0}
+            onChange={(v) =>
+              set((x) => {
+                const c = x.classifications?.length === 8 ? [...x.classifications] : Array(8).fill(0);
+                c[k] = Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
+                x.classifications = c;
+              }, `cls-${k}`)
+            }
+          />
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="flex items-start gap-3 rounded-2xl bg-muted p-3">
+          <input
+            type="checkbox"
+            className="mt-1 size-5"
+            checked={Boolean(b.contactDuty)}
+            onChange={(e) => set((x) => void (x.contactDuty = e.target.checked))}
+          />
+          <span>
+            <span className="font-semibold">The fictional agreement gives the business the monthly direct care-management contact</span>
+            <span className="block text-sm text-ink-muted">
+              Then months above the threshold are shown as a risk to that contact. Say so on the agreement card.
+            </span>
+          </span>
+        </label>
+        <NumberField
+          label="Recruitment uncertainty"
+          unit="months the search may run over its lead (widens the start window)"
+          value={b.leadSpread ?? 1}
+          onChange={(v) => set((x) => void (x.leadSpread = Number.isFinite(v) ? Math.max(0, Math.min(6, Math.round(v))) : 1), "spread")}
+        />
       </div>
 
       <h4 className="mt-5 font-serif text-lg font-semibold">What learners can change while exploring</h4>
@@ -583,6 +630,27 @@ export function HiringLabEdit({ block: b, update }: { block: HiringBlock; update
             <input type="date" className={input} value={b.governance[k]} onChange={(e) => set((x) => void (x.governance[k] = e.target.value))} />
           </Field>
         ))}
+        <Field label="Partner-growth theme" hint="The verified Problem desk theme id, for the decision register.">
+          <input
+            className={input}
+            value={b.governance.themeId ?? ""}
+            maxLength={80}
+            onChange={(e) => set((x) => void (x.governance.themeId = e.target.value), "gv-theme")}
+          />
+        </Field>
+        <Field label="Review decision" hint="Recorded in the decision register.">
+          <select
+            className={input}
+            value={b.governance.review ?? ""}
+            onChange={(e) => set((x) => void (x.governance.review = e.target.value as NonNullable<HiringBlock["governance"]["review"]>))}
+          >
+            <option value="">Not decided</option>
+            <option value="keep">Keep</option>
+            <option value="revise">Revise</option>
+            <option value="retarget">Retarget</option>
+            <option value="withdraw">Withdraw</option>
+          </select>
+        </Field>
       </div>
     </div>
   );
@@ -747,9 +815,29 @@ function AdjustmentEdit({ a, set, remove }: { a: Adjustment; set: (a: Adjustment
 /** What learners will see, worked out: each option under each growth case, and each reviewed plan with the new information. */
 function Checks({ b, problems }: { b: HiringBlock; problems: string[] }) {
   const ok = !problems.length;
+  const w = ok ? labWindow(b) : null;
+  const we = ok ? labWindow(b, b.inputs, b.event.adjustments) : null;
   return (
     <section className="mt-5 rounded-2xl border border-line-strong p-4">
       <h4 className="font-serif text-lg font-semibold">Check the case</h4>
+      {w && we && (
+        <div className="mt-2 rounded-xl bg-muted p-3 text-sm">
+          <p className="font-semibold">Decision window learners will see ({w.version})</p>
+          {(
+            [
+              ["Before the new information", w],
+              ["With the new information", we],
+            ] as const
+          ).map(([label, d]) => {
+            return (
+              <p key={label} className="mt-1">
+                <span className="font-semibold">{label}:</span> {d.recommendation.label}. Pressure{" "}
+                {d.pressure ? `Month ${d.pressure.from} to ${d.pressure.to}` : "none in 12 months"}; recruitment start {recruitText(d).toLowerCase()}.
+              </p>
+            );
+          })}
+        </div>
+      )}
       {ok ? (
         <p className="mt-1 text-sm font-semibold text-[#0f5b3a] dark:text-[#8fe0b5]">Complete, and every evidence figure matches the model.</p>
       ) : (

@@ -113,6 +113,18 @@ export type Month = {
   operating: number;
   closingCash: number;
   reserveBreach: boolean;
+  /*
+    The split of otherCost and the margins (Care Partner Hiring Runway PRD, section 6). Additions only: otherCost,
+    operating and cash are exactly what they were, so every saved result and fixture holds.
+  */
+  /** Participant-driven costs and any temporary help. */
+  variableCost: number;
+  fixedCost: number;
+  ownerPay: number;
+  /** Earned income − staff costs (recruitment and setup included) − variable costs. */
+  contribution: number;
+  /** Contribution − fixed overhead: the result before owner remuneration. */
+  operatingBeforeOwner: number;
 };
 
 export type Forecast = {
@@ -212,11 +224,13 @@ export function forecast(i: HiringInputs, o: HiringOption, g: GrowthCase, adjust
     receipts.set(payMonth(m), (receipts.get(payMonth(m)) ?? 0) + earned);
     const received = receipts.get(m) ?? 0;
     const staffCost = i.currentFte * i.staffCostPerFte + (joins !== null && m >= joins ? o.fte * i.staffCostPerFte : 0);
-    const otherCost = clients * i.variableCostPerClient + i.fixedOverhead + i.ownerPay + temp.reduce((n, t) => n + t.cost, 0);
+    const variableCost = clients * i.variableCostPerClient + temp.reduce((n, t) => n + t.cost, 0);
+    const otherCost = variableCost + i.fixedOverhead + i.ownerPay;
     const oneOff =
       (o.kind !== "none" && m === o.startMonth ? o.oneOffCost : 0) +
       adjustments.reduce((n, a) => (a.kind === "saving" && m === Math.max(1, a.fromMonth - 1) ? n + a.setupCost : n), 0);
     const operating = earned - staffCost - otherCost - oneOff;
+    const contribution = earned - staffCost - variableCost - oneOff;
     cash = cash + received - staffCost - otherCost - oneOff;
 
     months.push({
@@ -236,6 +250,11 @@ export function forecast(i: HiringInputs, o: HiringOption, g: GrowthCase, adjust
       operating,
       closingCash: cash,
       reserveBreach: cash < i.reserve,
+      variableCost,
+      fixedCost: i.fixedOverhead,
+      ownerPay: i.ownerPay,
+      contribution,
+      operatingBeforeOwner: contribution - i.fixedOverhead,
     });
   }
   const lowest = months.reduce((lo, x) => (x.closingCash < lo.closingCash ? x : lo), months[0]);

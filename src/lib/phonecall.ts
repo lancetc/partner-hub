@@ -1,4 +1,5 @@
 import type { Roleplay } from "./roleplay";
+import { refreshFamily, type FamilyCase } from "./familyCall";
 
 /*
   Tough Phone Call (docs/tough-phone-call.md): a telephone preset of the conversational roleplay engine
@@ -123,7 +124,7 @@ export function phoneHardProblems(title: string, p: PhoneCase, today: string): s
 }
 
 /** The phone case, checked against the scene it belongs to. */
-export function parsePhoneCase(o: Raw, where: string, scene: Roleplay | undefined, h: PhoneParseHelpers): PhoneCase {
+export function parsePhoneCase(o: Raw, where: string, scene: Roleplay | undefined, h: PhoneParseHelpers, opts: { family?: boolean } = {}): PhoneCase {
   const { str, idOf, list, unfinished } = h;
   const at = `${where} phone case`;
   const actions = list(o.actions, at, "information actions", 8).map((a, i) => ({
@@ -136,10 +137,11 @@ export function parsePhoneCase(o: Raw, where: string, scene: Roleplay | undefine
       .filter(Boolean),
   }));
   if (!actions.some((a) => a.kind === "permission")) unfinished(`${at} needs a “Check caller and permissions” action.`);
-  for (const a of actions) if (!a.facts.length) unfinished(`${at}: “${a.label}” needs the facts it reveals.`);
+  // A Tough Family Call keeps its case-file facts (with their status) in the family case, and rates moves on its own five dimensions.
+  for (const a of actions) if (!a.facts.length && !opts.family) unfinished(`${at}: “${a.label}” needs the facts it reveals.`);
   const ids = new Set([...(scene?.moves ?? []).map((m) => m.id), ...(scene?.risks ?? []).map((r) => r.id)]);
   const dims = map(o.dims, (x): x is PhoneDim => PHONE_DIM_ORDER.includes(x as PhoneDim), ids);
-  for (const id of ids) if (!dims[id]) unfinished(`${at}: say which dimension “${id}” counts towards.`);
+  for (const id of ids) if (!dims[id] && !opts.family) unfinished(`${at}: say which dimension “${id}” counts towards.`);
   const sources = list(o.sources, at, "sources", 8).map((s, i) => {
     const src = {
       id: idOf(s.id, `${at} source ${i + 1}`),
@@ -396,7 +398,16 @@ export function phoneResult(scene: Roleplay, p: PhoneCase, turns: PhoneTurn[], l
 }
 
 /** A Tough Phone Call block's own fields: a scene title, the caller, the shared roleplay scene and the phone case. */
-export type PhoneCallData = { title: string; person: string; role: string; setting: string; roleplay: Roleplay; phone: PhoneCase };
+export type PhoneCallData = {
+  title: string;
+  person: string;
+  role: string;
+  setting: string;
+  roleplay: Roleplay;
+  phone: PhoneCase;
+  /** A Tough Family Call (lib/familyCall): when present, the call runs on the family engine instead of the free roleplay. */
+  family?: FamilyCase;
+};
 
 /** What a phone call's case tools show now: the actions on offer, what each lookup revealed, and the permission once it's been checked. */
 export function phoneToolsView(p: PhoneCase, turns: number, lookups: Lookup[]) {
@@ -418,8 +429,15 @@ export function freshPhoneCall(data: PhoneCallData, tag = Math.random().toString
   const re = (id: string) => (id ? `${id.replace(/-p[a-z0-9]{5}$/, "")}-p${tag}` : "");
   const keys = <T>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [re(k), v]));
   const c = structuredClone(data);
+  const known = new Set([
+    ...c.roleplay.moves.map((m) => m.id),
+    ...c.roleplay.risks.map((r) => r.id),
+    ...c.phone.actions.map((a) => a.id),
+    ...c.phone.sources.map((s) => s.id),
+  ]);
   return {
     ...c,
+    ...(c.family ? { family: refreshFamily(c.family, known, re) } : {}),
     roleplay: {
       ...c.roleplay,
       moves: c.roleplay.moves.map((m) => ({ ...m, id: re(m.id) })),

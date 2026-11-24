@@ -20,6 +20,8 @@ import {
   FICTIONAL_NOTICE,
   FUNDING_NOTE,
   INPUTS,
+  labWindow,
+  labWindowInput,
   MISCONCEPTIONS,
   noneOption,
   planSummary,
@@ -31,7 +33,10 @@ import {
   type HiringState,
 } from "@/lib/hiringRunway";
 import type { HiringView } from "@/server/hiringRunway";
+import { recruitText, sensitivity } from "@/lib/hiringWindow";
+import Link from "next/link";
 import { Icon } from "../Icon";
+import { DecisionWindowPanel } from "../tools/DecisionWindow";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import type { InteractiveContext } from "./InteractiveBlocks";
 
@@ -66,7 +71,7 @@ export function HiringRunwayLab({ block: b, ctx }: { block: HiringBlock; ctx: In
   const [event, setEvent] = useState<Revealed | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [debrief, setDebrief] = useState<HiringDebrief | null>(null);
-  const [meta, setMeta] = useState<{ attemptNo: number; earlierCase: boolean } | null>(null);
+  const [meta, setMeta] = useState<{ attemptNo: number; earlierCase: boolean; earlierModel: boolean; planner: string | null } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const dirty = useRef(false);
@@ -79,7 +84,7 @@ export function HiringRunwayLab({ block: b, ctx }: { block: HiringBlock; ctx: In
     setEvent(v.event);
     setComparison(v.comparison);
     setDebrief(v.debrief);
-    setMeta({ attemptNo: v.attemptNo, earlierCase: v.earlierCase });
+    setMeta({ attemptNo: v.attemptNo, earlierCase: v.earlierCase, earlierModel: v.earlierModel, planner: v.planner });
   };
   if (!ctx.preview && loaded.data && s === null) take(loaded.data);
 
@@ -178,6 +183,11 @@ export function HiringRunwayLab({ block: b, ctx }: { block: HiringBlock; ctx: In
           This attempt was made on an earlier version of the case. Try another approach to use the current one.
         </p>
       )}
+      {meta?.earlierModel && !meta.earlierCase && (
+        <p className="mb-3 rounded-2xl bg-muted px-4 py-2 text-sm">
+          This attempt began under an earlier version of the calculation. Its figures are worked out again with the current one; its recorded result is kept.
+        </p>
+      )}
       <Story b={b} />
       {s.stage === 0 ? (
         <div className="mt-4">
@@ -213,7 +223,7 @@ export function HiringRunwayLab({ block: b, ctx }: { block: HiringBlock; ctx: In
               busy={busy}
             />
           )}
-          {s.stage === 3 && debrief && <Debrief b={b} d={debrief} s={s} />}
+          {s.stage === 3 && debrief && <Debrief b={b} d={debrief} s={s} planner={ctx.preview ? "preview" : (meta?.planner ?? null)} />}
           {problem && (
             <p role="alert" className="rounded-2xl bg-[#fde2e0] px-4 py-3 text-[#5c1410] dark:bg-[#3d1512] dark:text-[#ffb4ab]">
               {problem}
@@ -303,15 +313,24 @@ function Snapshot({ b }: { b: HiringBlock }) {
     ["Cash today", dollars(i.openingCash)],
     ["Reserve she keeps", dollars(i.reserve)],
   ];
+  const mix = (b.classifications ?? []).map((n, k) => [k + 1, n] as const).filter(([, n]) => n > 0);
   return (
-    <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      {items.map(([k, v]) => (
-        <div key={k} className="rounded-2xl bg-muted px-3 py-2">
-          <dt className="text-xs font-semibold text-ink-muted">{k}</dt>
-          <dd className="font-serif text-lg font-semibold">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {items.map(([k, v]) => (
+          <div key={k} className="rounded-2xl bg-muted px-3 py-2">
+            <dt className="text-xs font-semibold text-ink-muted">{k}</dt>
+            <dd className="font-serif text-lg font-semibold">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {mix.length > 0 && (
+        <p className="mt-2 text-sm">
+          <span className="font-semibold">Support at Home classifications:</span> {mix.map(([k, n]) => `${n} in ${k}`).join(", ")}.{" "}
+          <span className="text-ink-muted">Context only: the work bands, not the classification, set the hours.</span>
+        </p>
+      )}
+    </>
   );
 }
 
@@ -475,6 +494,13 @@ function Explore({ b, s, change, event }: { b: HiringBlock; s: HiringState; chan
 
         <div className="flex min-w-0 flex-col gap-4">
           <DecisionCard b={b} none={none} selected={selected} planWindow={planWindow} />
+          <DecisionWindowPanel
+            dw={labWindow(b, inputs, extra, selected.option.kind === "hire" ? selected.option.id : undefined)}
+            getSensitivity={() => sensitivity(labWindowInput(b, inputs, extra, selected.option.kind === "hire" ? selected.option.id : undefined))}
+            onView={(v) => change((p) => (p.views.includes(v) ? p : { ...p, views: [...p.views, v] }))}
+            note={`Fictional: ${b.story.character || "the business"}’s figures are invented for practice${event && withEvent ? ", with the new information included" : ""}.`}
+            level={4}
+          />
           <CapacityChart b={b} none={none} selected={selected} threshold={inputs.threshold} />
           <div>
             <h5 className="mb-2 font-semibold">Compare the options</h5>
@@ -1037,8 +1063,9 @@ function EventReveal({ b, event, comparison }: { b: HiringBlock; event: Revealed
 }
 
 /** The rubric in words, misconceptions, your plan beside the reviewed ones, and what next. */
-function Debrief({ b, d, s }: { b: HiringBlock; d: HiringDebrief; s: HiringState }) {
+function Debrief({ b, d, s, planner }: { b: HiringBlock; d: HiringDebrief; s: HiringState; planner: string | null }) {
   const yours = d.yours.after;
+  const w = d.range;
   return (
     <section aria-labelledby={`${b.id}-db`} className="flex flex-col gap-4">
       <h4 id={`${b.id}-db`} className="font-serif text-2xl font-semibold">
@@ -1089,15 +1116,43 @@ function Debrief({ b, d, s }: { b: HiringBlock; d: HiringDebrief; s: HiringState
           </div>
         </div>
       )}
+      {w && (
+        <div className={box}>
+          <p className={kicker}>The decision window, with the new information</p>
+          <p className="mt-1 font-semibold">{w.recommendation.label}</p>
+          <p className="mt-1">{w.recommendation.headline}</p>
+          <p className="mt-1 text-sm">
+            Pressure: {w.pressure ? `Month ${w.pressure.from}${w.pressure.to !== w.pressure.from ? ` to ${w.pressure.to}` : ""}` : "none in 12 months"}.
+            Recruitment start: {recruitText(w)}. Several plans fit this window: it’s a range under the case’s assumptions, not a client count or the one right
+            answer.
+          </p>
+        </div>
+      )}
       {(d.nextStep || b.story.followUp) && (
         <div className="rounded-2xl bg-tealtint p-4">
           {d.nextStep && <p>{d.nextStep}</p>}
           {b.story.followUp && <p className="mt-1 text-sm">{b.story.followUp}</p>}
         </div>
       )}
+      {planner === "preview" ? (
+        <p className="rounded-2xl bg-muted px-4 py-3 text-sm">
+          Preview: a Care Partner business owner, or someone they’ve authorised, sees a link to Plan my business here. Everyone else sees the fictional case
+          only.
+        </p>
+      ) : (
+        planner && (
+          <p className="rounded-2xl bg-tealtint px-4 py-3">
+            <span className="font-semibold">For your own business:</span> try the same model with your own aggregate figures in{" "}
+            <Link href={planner} className="font-semibold underline underline-offset-2">
+              Plan my business
+            </Link>
+            . It’s private to your business and saves nothing unless you choose to.
+          </p>
+        )
+      )}
       <p className="text-xs text-ink-muted">
-        Read with case {d.storyVersion}, model {d.modelVersion} and rubric {d.rubricVersion}. Feedback comes from authored criteria and the calculated figures,
-        not an AI score.
+        Read with case {d.storyVersion}, model {d.modelVersion}, window rules {d.windowVersion} and rubric {d.rubricVersion}. Feedback comes from authored
+        criteria and the calculated figures, not an AI score.
       </p>
     </section>
   );

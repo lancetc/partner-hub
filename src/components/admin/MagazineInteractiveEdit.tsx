@@ -53,6 +53,10 @@ import { ReliabilityEdit } from "./MagazineReliabilityEdit";
 import { BudgetLabEdit } from "./MagazineBudgetLabEdit";
 import { HazardScanEdit } from "./MagazineHazardScanEdit";
 import { DischargeEdit } from "./MagazineDischargeEdit";
+import { NetworkEdit } from "./MagazineNetworkEdit";
+import { TrustCheckEdit } from "./MagazineTrustCheckEdit";
+import { ReferralStudioEdit } from "./MagazineReferralStudioEdit";
+import { ShadowCoachEdit } from "./MagazineShadowCoachEdit";
 import { CashBridgeEdit } from "./MagazineCashBridgeEdit";
 import { CaseThreadEdit } from "./MagazineCaseThreadEdit";
 import { AuditorEdit } from "./MagazineAuditorEdit";
@@ -290,6 +294,14 @@ export function InteractiveEdit({ block: b, update }: { block: Block; update: Up
       return <HazardScanEdit block={b} update={update} />;
     case "discharge":
       return <DischargeEdit block={b} update={update} />;
+    case "network":
+      return <NetworkEdit block={b} update={update} />;
+    case "trustcheck":
+      return <TrustCheckEdit block={b} update={update} />;
+    case "referralstudio":
+      return <ReferralStudioEdit block={b} update={update} />;
+    case "shadowcoach":
+      return <ShadowCoachEdit block={b} update={update} />;
     case "cashbridge":
       return <CashBridgeEdit block={b} update={update} />;
     case "casethread":
@@ -1612,6 +1624,42 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
           without the clock.
         </p>
       );
+    case "network":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional early-morning gap: Priya, the suburbs, the workers and every figure are invented, and nothing a learner does approves a contractor, sends
+          a message or books a service. The coverage arithmetic is Local Coverage’s and the evidence states are the Contractor Vetting Card’s. The server
+          replays each attempt, and learners never receive the feedback before they submit. It can’t be published until the case check passes and every
+          reviewer’s sign-off is recorded. Use Preview (desktop and phone) to play every branch.
+        </p>
+      );
+    case "trustcheck":
+      return (
+        <p className="text-sm text-ink-muted">
+          A fictional service-recovery case: Mrs Patel, Asha, the supplier and every record and figure are invented, and nothing a learner does sends a message,
+          books a service, lodges a complaint or starts a transfer. Missed visits use the Service Reliability Calculator’s definitions, the money card the
+          Quarterly Budget Decision Lab’s carryover rule, and sharing and complaint wording the Tough Family Call’s. It can’t be published until the case check
+          passes, the placeholder procedures are replaced and every reviewer signs off. Use Preview (desktop and phone) to play every branch.
+        </p>
+      );
+    case "referralstudio":
+      return (
+        <p className="text-sm text-ink-muted">
+          Fictional referrers and situations: no real clinician, practice, hospital or patient, and nothing a learner does contacts anyone, creates a referral
+          or sends a message. It runs on the Tough Family Call’s engine, and every claim comes from the central register. It can’t be published until the
+          scenario check passes, every reviewer signs off, the critical flags are approved and no claim it uses is withdrawn. Use Preview to play each referrer
+          at each stage, or “Test a line” to see what an unsafe phrase does.
+        </p>
+      );
+    case "shadowcoach":
+      return (
+        <p className="text-sm text-ink-muted">
+          A manager’s calibration on a fictional new coordinator: Maya, Mrs Lin and every call, note and record are invented, the coordinator is never named,
+          and nothing a learner does reports an incident, corrects a bill, assigns real learning or creates an HR record. Coaching words are read by the Tough
+          Family Call’s interpreter; the plan only offers content the server finds current and approved. It can’t be published until the case check passes, the
+          placeholder procedures are replaced and every reviewer signs off. Use Preview (desktop and phone) to play each episode.
+        </p>
+      );
     case "cashbridge":
       return (
         <p className="text-sm text-ink-muted">
@@ -1657,6 +1705,8 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
           A practice call with a fictional AI character. Nothing a learner does changes a real invoice, roster or complaint. It can’t be published until Care
           Operations, Quality and Privacy (and Finance, for a billing call) sign-off is recorded, and its sources are in date. Use Preview, or Try a reply, to
           test it.
+          {b.family &&
+            " As a Tough Family Call it also needs a case check that passes (never waived), the story owner, Quality/complaints, policy, accessibility and escalation reviewers, each critical error approved, and the caller voice’s rights. Preview plays it on the reviewed script, with no AI call."}
         </p>
       );
     case "auditor":

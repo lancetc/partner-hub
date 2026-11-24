@@ -96,6 +96,22 @@ Each event has the mode (learn or plan), the person's access role (owner, member
 
 The tool can be pinned to Favourites from its first screen by anyone the card is shown to. Favourites gained a `tool` kind. On an older database, `ensureCaseload` rebuilds the `favourites` table once to allow it, keeping every row.
 
+## Planner 2: the decision window and Plan capacity (24 November 2026)
+
+From the Care Partner Caseload, Margin and Hiring Runway Simulator PRD; the details are in `docs/hiring-runway-lab.md` ("Lab 2").
+
+- **Decision window** (`lib/hiringWindow.ts`), on the page after the decision card: the suggestion and why, the likely pressure window across the three cases, the recruitment start window, cash runway with each hire, capacity, contribution margin, before-owner result, operating result, break-even month and lowest cash side by side, the alternatives, the assumptions and unknowns, and a one-at-a-time sensitivity table. It's timed by 0.6 FTE (or 1.0 FTE when that's selected) and doesn't move when you switch case.
+- **What changed** now includes the suggestion, the recruitment start window and the months whose capacity verdict moved.
+- **Contact guardrail:** "My agreement with Trilogy Care gives my business the monthly direct care-management contact" (Work and team). Off by default; plans saved before planner 2 read as off.
+- **Workbook:** the Summary has the window and its factors; the monthly sheet adds contribution margin and the result before owner remuneration (at the end, so earlier columns keep their places); the option sheet adds those totals and the break-even month; the assumptions sheet defines them.
+- **Saving is idempotent:** each save carries a key, and a retried save returns the version the first one made. Each version also keeps its decision window (months and a kind, no dollars).
+- **Recalculate as a comparison:** a version saved under an earlier model or planner shows "as saved → recalculated now" beside it. Nothing is overwritten.
+- **Events:** `scenario_mode_selected`, `assumption_changed` (the field key only), `scenario_compared` (case, option, versions or sensitivity) and `source_opened` join the earlier six. Each has a fixed-list `detail` (anything else is dropped) and an idempotency key. The authors' report adds people who opened the tool and how many used a low/high case or the sensitivity table, small numbers suppressed.
+- **Older databases:** `ensurePlanner` adds `business_plan_versions.idem`, `planner_events.detail` and `planner_events.idem` in place, keeping every row.
+- **Plan capacity:** a card in the Care Partner business area (`/business-notes`) for someone who may plan the business, with the latest saved plan's name, date and window, never a figure. Everyone else sees nothing.
+- **Work Tools search** also finds the tool by "when should I hire", "staffing", "runway" and "plan".
+- **Admin:** `/admin/hiring-runway` (authors).
+
 ## Decisions Trilogy Care needs to own
 
 1. **Finance:**

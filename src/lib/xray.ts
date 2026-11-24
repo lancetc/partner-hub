@@ -10,7 +10,29 @@
     a real participant's contribution. No rate means "rate to be confirmed", not a made-up figure.
   - A quote is an estimate. Nothing here is a claim, a payment, a reimbursement or a message to anyone.
   - The answer key stays on the server until the learner has submitted.
+
+  With a `funding` section the block runs in quote and invoice review mode (lib/xrayFunding): six decisions over ten
+  separate checks, the document's role, separate price contexts and an explanation rehearsal. A case without one runs
+  exactly as before, so older cases and their attempts are unchanged.
 */
+
+import {
+  cleanFundingPick,
+  cleanFundingState,
+  DECISION_ORDER,
+  freshFunding,
+  fundingCritical,
+  fundingFinishProblems,
+  fundingForReaders,
+  fundingIncomplete,
+  parseFunding,
+  type CoachPoint,
+  type FDecision,
+  type FundingData,
+  type Overall,
+  type Route,
+  type AskWho,
+} from "./xrayFunding";
 
 // ---------------------------------------------------------------------------------------------
 // The case's parts
@@ -42,7 +64,7 @@ export const ACCOUNTS = {
 export type FundingAccount = keyof typeof ACCOUNTS;
 const ATHM: FundingAccount[] = ["assistive_technology", "home_modifications"];
 
-export const PHASES = { quote: "Quote", receipt: "Paid receipt or final invoice" } as const;
+export const PHASES = { quote: "Quote", receipt: "Paid receipt or final invoice", invoice: "Invoice after delivery" } as const;
 export type Phase = keyof typeof PHASES;
 
 export const SCRIPT_PARTS = {
@@ -111,6 +133,8 @@ export type XRayBlockData = {
   twist: { fact: string; lineId: string; outcome: LineOutcome; account: FundingAccount; why: string } | null;
   source: { title: string; version: string; reviewedOn: string };
   approval: { owner: string; finance: string; operations: string; quality: string; approvedOn: string };
+  /** Quote and invoice review mode (lib/xrayFunding). Absent on a classic case. */
+  funding?: FundingData;
 };
 
 export const XRAY_NOTICE =
@@ -202,18 +226,22 @@ export function parseXRay(o: Raw, where: string, h: ParseHelpers): XRayBlockData
   }));
   const reasonIds = new Set(reasons.map((r) => r.id));
   const evidenceIds = new Set(checks.map((r) => r.id));
+  // Review mode decides lines with its own six decisions; the four outcomes, their accounts and sign-off check are the classic case's.
+  const review = Boolean(o.funding && typeof o.funding === "object");
 
   const lines = list(o.lines, where, "lines", 10).map((l, i): XLine => {
     const at = `${where} line ${i + 1}`;
-    const outcome = oneOf(l.outcome, OUTCOME_ORDER, "needs_review");
+    const outcome = review ? "needs_review" : oneOf(l.outcome, OUTCOME_ORDER, "needs_review");
     const cents = Number(l.amountCents);
     if (!Number.isInteger(cents) || cents <= 0 || cents > 100_000_00) unfinished(`${at} needs a price in whole cents, more than nothing.`);
     const account = isEligible(outcome) ? oneOf(l.account, Object.keys(ACCOUNTS) as FundingAccount[], "none") : "none";
     if (isEligible(outcome) && account === "none") unfinished(`${at} is eligible, so it needs the account it’s funded from.`);
     const lineReasons = ids(l.reasons).filter((x) => reasonIds.has(x));
     if (!lineReasons.length) unfinished(`${at} needs at least one reason that explains it correctly.`);
+    // In review mode the missing facts belong to any open decision (lib/xrayFunding checks they're there).
     const lineEvidence = outcome === "needs_review" ? ids(l.evidence).filter((x) => evidenceIds.has(x)) : [];
-    if (outcome === "needs_review" && !lineEvidence.length) unfinished(`${at} needs review, so it needs the missing evidence the learner must name.`);
+    if (outcome === "needs_review" && !lineEvidence.length && !review)
+      unfinished(`${at} needs review, so it needs the missing evidence the learner must name.`);
     const s = obj(l.source);
     return {
       id: idOf(l.id, at),
@@ -301,13 +329,15 @@ export function parseXRay(o: Raw, where: string, h: ParseHelpers): XRayBlockData
     version: str(s.version, `${where} ruleset version`, { max: 80 }) ?? "",
     reviewedOn: date(s.reviewedOn),
   };
-  if (!xrayApproved({ approval, source }))
+  // A review-mode case's sign-off is a publishing gate (lib/xrayFunding fundingHardProblems), as for the other specialist blocks.
+  if (!review && !xrayApproved({ approval, source }))
     unfinished(
       `${where}: sign-off is required. Record the content owner, the Finance, Care Operations and Quality reviewers, the date, and the ruleset and its version.`,
     );
   const docDate = date(o.docDate);
   const decisionDate = date(o.decisionDate);
   if (!docDate || !decisionDate) unfinished(`${where} needs the document’s date and the date the decision is made.`);
+  const funding = review ? parseFunding(o.funding, where, h, lineIds) : undefined;
   return {
     title: str(o.title, `${where} title`, { required: true, max: 160 }) ?? "",
     intro: str(o.intro, `${where} introduction`, { max: 600 }) ?? "",
@@ -330,12 +360,25 @@ export function parseXRay(o: Raw, where: string, h: ParseHelpers): XRayBlockData
     twist,
     source,
     approval,
+    ...(funding ? { funding } : {}),
   };
 }
 
-/** Whether a case has its sign-off: owner, Finance, Care Operations, Quality, a date, and a ruleset version. */
-export const xrayApproved = (b: { approval: XRayBlockData["approval"]; source: { title: string; version: string } }) =>
-  Boolean(b.approval.owner && b.approval.finance && b.approval.operations && b.approval.quality && b.approval.approvedOn && b.source.title && b.source.version);
+/**
+  Whether a case has its sign-off: owner, Finance, Care Operations, Quality, a date, and a ruleset version. A review-mode
+  case also needs the Support at Home policy owner and the AT–HM or clinical reviewer.
+*/
+export const xrayApproved = (b: { approval: XRayBlockData["approval"]; source: { title: string; version: string }; funding?: FundingData }) =>
+  Boolean(
+    b.approval.owner &&
+    b.approval.finance &&
+    b.approval.operations &&
+    b.approval.quality &&
+    b.approval.approvedOn &&
+    b.source.title &&
+    b.source.version &&
+    (!b.funding || (b.funding.reviewers.policy && b.funding.reviewers.clinical)),
+  );
 
 /** The block as a learner's browser gets it: the document and the choices, without the answer key. */
 export function xrayForReaders<T extends XRayBlockData>(b: T): T {
@@ -354,6 +397,7 @@ export function xrayForReaders<T extends XRayBlockData>(b: T): T {
     next: { ...b.next, options: b.next.options.map((x) => ({ ...x, right: false, critical: false, why: "" })) },
     explain: { ...b.explain, model: "", checklist: [], avoid: [] },
     twist: b.twist ? { ...b.twist, outcome: "needs_review" as const, account: "none" as const, why: "" } : null,
+    ...(b.funding ? { funding: fundingForReaders(b.funding), approval: { owner: "", finance: "", operations: "", quality: "", approvedOn: "" } } : {}),
   };
 }
 
@@ -369,6 +413,7 @@ export function freshXRay(data: XRayBlockData, tag = Math.random().toString(36).
     next: { ...c.next, options: c.next.options.map((x) => ({ ...x, id: re(x.id) })) },
     explain: { ...c.explain, lineId: re(c.explain.lineId), checklist: c.explain.checklist.map((x) => ({ ...x, id: re(x.id) })) },
     twist: c.twist ? { ...c.twist, lineId: re(c.twist.lineId) } : null,
+    ...(c.funding ? { funding: freshFunding(c.funding, re) } : {}),
   };
 }
 
@@ -376,8 +421,25 @@ export function freshXRay(data: XRayBlockData, tag = Math.random().toString(36).
 // What the learner does
 // ---------------------------------------------------------------------------------------------
 
-export type LinePick = { outcome: LineOutcome | ""; account: FundingAccount | ""; reason: string; evidence: string[] };
+export type LinePick = {
+  outcome: LineOutcome | "";
+  account: FundingAccount | "";
+  reason: string;
+  evidence: string[];
+  /** Review mode: the decision, the funding route, who the learner would ask. */
+  decision?: FDecision | "";
+  route?: Route | "";
+  ask?: AskWho[];
+  cite?: string;
+};
 export type XRayState = {
+  /** Review mode: the evidence and sources opened, the overall result, the cited source and any coaching. */
+  opened?: string[];
+  overall?: Overall | "";
+  firstDecisions?: Record<string, FDecision | "">;
+  firstOverall?: Overall | "";
+  cite?: string;
+  coach?: { source: "ai" | "reviewed"; points: CoachPoint[] } | null;
   /** 0 sort the lines, 1 explain one line. */
   stage: number;
   picks: Record<string, LinePick>;
@@ -390,7 +452,7 @@ export type XRayState = {
   usedDraft: boolean;
   scriptTries: number;
   /** After the debrief: the changed-fact retry. */
-  twist: { outcome: LineOutcome | ""; account: FundingAccount | "" } | null;
+  twist: { outcome: LineOutcome | ""; account: FundingAccount | ""; decision?: FDecision } | null;
 };
 const blankScript = (): Record<ScriptPart, string> => ({ ack: "", rule: "", split: "", next: "" });
 export const blankPick = (): LinePick => ({ outcome: "", account: "", reason: "", evidence: [] });
@@ -415,6 +477,10 @@ export function cleanState(b: XRayBlockData, raw: unknown): XRayState {
   for (const l of b.lines) {
     const p = obj(obj(r.picks)[l.id]);
     if (!Object.keys(p).length) continue;
+    if (b.funding) {
+      picks[l.id] = cleanFundingPick(b, p);
+      continue;
+    }
     const outcome = oneOf(p.outcome, ["", ...OUTCOME_ORDER], "");
     picks[l.id] = {
       outcome,
@@ -445,14 +511,20 @@ export function cleanState(b: XRayBlockData, raw: unknown): XRayState {
     scriptTries: Number.isInteger(r.scriptTries) ? Math.min(99, Math.max(0, r.scriptTries as number)) : 0,
     twist:
       r.twist && typeof r.twist === "object"
-        ? { outcome: oneOf(tw.outcome, ["", ...OUTCOME_ORDER], ""), account: oneOf(tw.account, ["", ...(Object.keys(ACCOUNTS) as FundingAccount[])], "") }
+        ? {
+            outcome: oneOf(tw.outcome, ["", ...OUTCOME_ORDER], ""),
+            account: oneOf(tw.account, ["", ...(Object.keys(ACCOUNTS) as FundingAccount[])], ""),
+            // Review mode: the changed fact is answered with a decision.
+            ...(b.funding && DECISION_ORDER.includes(tw.decision as FDecision) ? { decision: tw.decision as FDecision } : {}),
+          }
         : null,
+    ...(b.funding ? cleanFundingState(b, r) : {}),
   };
 }
 
 /** The parts the learner owns, from saved work. The stage and the first submission only change through submit. */
 export function applyChanges(b: XRayBlockData, prev: XRayState, raw: unknown): XRayState {
-  const next = cleanState(b, { ...prev, ...obj(raw) });
+  const next = cleanState(b, { ...prev, ...obj(raw), coach: prev.coach ?? null });
   return {
     ...prev,
     // The lines are settled once they've been submitted.
@@ -461,11 +533,21 @@ export function applyChanges(b: XRayBlockData, prev: XRayState, raw: unknown): X
     script: next.script,
     usedDraft: prev.usedDraft || next.usedDraft,
     twist: next.twist,
+    ...(b.funding
+      ? {
+          // What's been opened stays opened; the overall result is settled with the lines; coaching only comes from the server.
+          opened: [...new Set([...(prev.opened ?? []), ...(next.opened ?? [])])],
+          overall: prev.stage === 0 ? next.overall : prev.overall,
+          cite: next.cite,
+          coach: prev.coach ?? null,
+        }
+      : {}),
   };
 }
 
 /** What's still to do on each line before submitting. */
 export function incomplete(b: XRayBlockData, s: XRayState): string[] {
+  if (b.funding) return fundingIncomplete(b, s);
   const out: string[] = [];
   b.lines.forEach((l, i) => {
     const p = s.picks[l.id] ?? blankPick();
@@ -487,6 +569,7 @@ export function incomplete(b: XRayBlockData, s: XRayState): string[] {
   reimbursing because there's money left). Each says why the shortcut fails.
 */
 export function criticalErrors(b: XRayBlockData, s: XRayState): { lineId: string | null; text: string }[] {
+  if (b.funding) return fundingCritical(b, s).map((c) => ({ lineId: c.lineId, text: c.text }));
   const out: { lineId: string | null; text: string }[] = [];
   b.lines.forEach((l, i) => {
     const p = s.picks[l.id];
@@ -517,6 +600,12 @@ export function submitLines(b: XRayBlockData, s: XRayState): { state: XRayState;
     tries: s.tries + 1,
     first: s.tries === 0 ? Object.fromEntries(b.lines.map((l) => [l.id, s.picks[l.id]?.outcome ?? ""])) : s.first,
     firstNext: s.tries === 0 ? s.next : s.firstNext,
+    ...(b.funding
+      ? {
+          firstDecisions: s.tries === 0 ? Object.fromEntries(b.lines.map((l) => [l.id, s.picks[l.id]?.decision ?? ""])) : (s.firstDecisions ?? {}),
+          firstOverall: s.tries === 0 ? (s.overall ?? "") : (s.firstOverall ?? ""),
+        }
+      : {}),
   };
   const critical = criticalErrors(b, s);
   if (critical.length) return { state: tried, critical };
@@ -540,6 +629,7 @@ export function checkScript(b: XRayBlockData, script: Record<ScriptPart, string>
 
 /** Finishing: the explanation can't contain a phrase that makes it wrong, and needs something in each part. */
 export function finishProblems(b: XRayBlockData, s: XRayState): string[] {
+  if (b.funding) return fundingFinishProblems(b, s);
   if (s.stage !== 1) return ["Sort every line first."];
   const empty = (Object.keys(SCRIPT_PARTS) as ScriptPart[]).filter((k) => s.script[k].trim().length < 8);
   if (empty.length) return [`Write something for each part: ${empty.map((k) => SCRIPT_PARTS[k].toLowerCase()).join(", ")}.`];

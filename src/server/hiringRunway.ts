@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
-import { allBlocks, type HiringBlock } from "@/lib/magazine";
+import { allBlocks, readGuideDoc, type HiringBlock } from "@/lib/magazine";
 import { MODEL_VERSION } from "@/lib/hiringModel";
+import { WINDOW_VERSION } from "@/lib/hiringWindow";
 import {
   buildHiringDebrief,
   cleanDecision,
@@ -9,7 +10,10 @@ import {
   compareBeforeAfter,
   decisionProblems,
   DIM_ORDER,
+  DIMENSIONS,
   emptyHiringState,
+  INPUTS,
+  MISCONCEPTIONS,
   LAB_VERSION,
   RUBRIC_VERSION,
   type Dim,
@@ -20,6 +24,7 @@ import {
 import { ensureHiring, tx, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { readerEdition } from "./magazine";
+import { plannerAccess, TOOL_HREF } from "./caseloadPlanner";
 
 /*
   Hiring Runway Decision Lab (docs/hiring-runway-lab.md): a learner's attempt, kept on the server and read against the
@@ -98,7 +103,7 @@ const choices = (x: HiringState["initial"]) =>
       }
     : null;
 
-function view(a: AttemptRow | undefined, block: HiringBlock) {
+function view(a: AttemptRow | undefined, block: HiringBlock, planner: string | null = null) {
   const state = a ? cleanHiringState(block, JSON.parse(a.state)) : emptyHiringState(block);
   const revealed = state.stage >= 2;
   return {
@@ -114,17 +119,27 @@ function view(a: AttemptRow | undefined, block: HiringBlock) {
     comparison: revealed && state.initial ? compareBeforeAfter(block, state.initial) : null,
     /** The rubric, the reviewed plans and the debrief: only once the revised plan is in. */
     debrief: state.stage === 3 ? buildHiringDebrief(block, state) : null,
-    versions: { lab: LAB_VERSION, story: block.storyVersion, model: MODEL_VERSION, rubric: RUBRIC_VERSION },
+    versions: { lab: LAB_VERSION, story: block.storyVersion, model: MODEL_VERSION, rubric: RUBRIC_VERSION, window: WINDOW_VERSION },
     /** Read against an earlier version of the case (it has since been edited). */
     earlierCase: Boolean(a && a.key_hash !== caseHash(block)),
+    /** Started under an earlier model (its figures are recalculated with today's). Older attempts still open. */
+    earlierModel: Boolean(a && a.model_version !== MODEL_VERSION),
     assessment: block.assessment,
+    /**
+      The private Plan my business Work Tool, after the debrief: only for a business owner or someone they've
+      authorised (business_planner_access). Everyone else sees the fictional case alone.
+    */
+    planner: state.stage === 3 ? planner : null,
   };
 }
 export type HiringView = ReturnType<typeof view>;
 
+/** The Work Tool's address for someone who may plan a business, or null. */
+const plannerFor = (db: Db, user: User) => (plannerAccess(db, user) ? TOOL_HREF : null);
+
 export function hiringState(db: Db, user: User, guideId: string, blockId: unknown) {
   const { edition, block } = load(db, user, guideId, blockId);
-  return view(latest(db, user, edition.guide.id, edition.revision.id, block.id), block);
+  return view(latest(db, user, edition.guide.id, edition.revision.id, block.id), block, plannerFor(db, user));
 }
 
 function create(db: Db, user: User, guideId: string, revisionId: string, block: HiringBlock, attemptNo: number, now: Date, retries = 0): AttemptRow {
@@ -174,7 +189,7 @@ export function saveHiring(db: Db, user: User, guideId: string, input: Record<st
   return tx(db, () => {
     const a = active(db, user, edition.guide.id, edition.revision.id, block, now);
     const prev = stored(a, block);
-    if (a.status === "finished") return view(a, block);
+    if (a.status === "finished") return view(a, block, plannerFor(db, user));
     const next = cleanHiringState(block, input.state);
     const merged: HiringState = {
       ...prev,
@@ -184,6 +199,7 @@ export function saveHiring(db: Db, user: User, guideId: string, input: Record<st
       optionId: next.optionId,
       edits: prev.stage < 2 ? next.edits : prev.edits,
       compared: [...new Set([...prev.compared, ...next.compared])],
+      views: [...new Set([...(prev.views ?? []), ...next.views])],
       // Drafts: the first decision until it's committed, then the revision until it's in.
       initial: prev.stage < 2 ? next.initial : prev.initial,
       revised: prev.stage === 2 ? next.revised : prev.revised,
@@ -192,7 +208,18 @@ export function saveHiring(db: Db, user: User, guideId: string, input: Record<st
     for (const id of merged.opened.filter((x) => !prev.opened.includes(x))) log(db, a, "evidence_opened", { evidence: id }, now);
     if (merged.growthId !== prev.growthId) log(db, a, "growth_case_changed", { growth: merged.growthId }, now);
     for (const g of merged.compared.filter((x) => !prev.compared.includes(x))) log(db, a, "option_compared", { growth: g }, now);
-    return view(reread(db, a.id), block);
+    // Which what-if assumption moved, never to what. Only the authored, editable keys can arrive here (cleanHiringState).
+    for (const k of Object.keys(merged.edits) as (keyof typeof merged.edits)[])
+      if (merged.edits[k] !== prev.edits[k] && k in INPUTS) log(db, a, "assumption_changed", { input: k }, now);
+    for (const v of merged.views.filter((x) => !(prev.views ?? []).includes(x)))
+      log(
+        db,
+        a,
+        v === "sensitivity" ? "scenario_compared" : "source_opened",
+        v === "sensitivity" ? { view: "sensitivity" } : { source: "calculation-basis" },
+        now,
+      );
+    return view(reread(db, a.id), block, plannerFor(db, user));
   });
 }
 
@@ -213,7 +240,7 @@ export function commitInitial(db: Db, user: User, guideId: string, input: Record
     return { id: a.id };
   });
   if ("problems" in out) throw Object.assign(new HttpError(400, `Not yet. ${out.problems!.join(" ")}`), { problems: out.problems });
-  return view(reread(db, out.id!), block);
+  return view(reread(db, out.id!), block, plannerFor(db, user));
 }
 
 /** Commits the revised decision and finishes the attempt with its rubric. */
@@ -248,13 +275,13 @@ export function commitRevised(db: Db, user: User, guideId: string, input: Record
     return { id: a.id };
   });
   if ("problems" in out) throw Object.assign(new HttpError(400, `Not yet. ${out.problems!.join(" ")}`), { problems: out.problems });
-  return view(reread(db, out.id!), block);
+  return view(reread(db, out.id!), block, plannerFor(db, user));
 }
 
 /** What's kept with a finished attempt: versions, rubric levels, misconceptions and the fictional choices. No explanation text. */
 function resultOf(d: HiringDebrief, s: HiringState) {
   return {
-    versions: { lab: d.labVersion, story: d.storyVersion, model: d.modelVersion, rubric: d.rubricVersion },
+    versions: { lab: d.labVersion, story: d.storyVersion, model: d.modelVersion, rubric: d.rubricVersion, window: d.windowVersion },
     score: d.score,
     dims: Object.fromEntries(d.dims.map((x) => [x.dim, x.rating])) as Record<Dim, number>,
     misconceptions: d.misconceptions,
@@ -317,6 +344,8 @@ export function hiringStats(db: Db, actor: User, guideId: string) {
     decided: number;
     finished: number;
     counted: Set<string>;
+    /** People who looked past the expected case: a second growth case, or the sensitivity table. */
+    sensitivity: Set<string>;
     dims: Record<Dim, number[]>;
     misconceptions: Record<string, number>;
     versions: Set<string>;
@@ -330,6 +359,7 @@ export function hiringStats(db: Db, actor: User, guideId: string) {
       decided: 0,
       finished: 0,
       counted: new Set(),
+      sensitivity: new Set(),
       dims: Object.fromEntries(DIM_ORDER.map((k) => [k, [0, 0, 0]])) as Record<Dim, number[]>,
       misconceptions: {},
       versions: new Set(),
@@ -337,8 +367,9 @@ export function hiringStats(db: Db, actor: User, guideId: string) {
     b.attempts += 1;
     b.people.add(r.user_id);
     b.versions.add(`${r.story_version} · ${r.rubric_version}`);
-    const st = JSON.parse(r.state) as { stage?: number };
+    const st = JSON.parse(r.state) as { stage?: number; compared?: unknown[]; views?: unknown[] };
     if ((st.stage ?? 0) >= 2) b.decided += 1;
+    if ((Array.isArray(st.compared) && st.compared.length > 1) || (Array.isArray(st.views) && st.views.includes("sensitivity"))) b.sensitivity.add(r.user_id);
     if (r.status === "finished" && r.result) {
       b.finished += 1;
       // One result per person: their first finished attempt.
@@ -362,6 +393,8 @@ export function hiringStats(db: Db, actor: User, guideId: string) {
         finished: b.finished,
         /** People whose first finished attempt is counted: the denominator for the breakdowns. */
         counted: b.counted.size,
+        /** People who used a low or high case or the sensitivity table (suppressed with the breakdowns). */
+        sensitivity: small ? null : b.sensitivity.size,
         suppressed: small,
         dims: small ? null : b.dims,
         misconceptions: small ? null : b.misconceptions,
@@ -369,4 +402,116 @@ export function hiringStats(db: Db, actor: User, guideId: string) {
       };
     }),
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The decision register (Problem desk export) and the Admin view
+// ---------------------------------------------------------------------------------------------
+
+type GuideRow = { id: string; slug: string; title: string; audience: string; doc: string; published_at: string | null };
+
+/** Every Hiring Runway block in a published course, read from its published revision. */
+function publishedLabs(db: Db) {
+  const rows = db
+    .prepare(
+      "SELECT g.id, g.slug, g.title, g.audience, r.doc, r.published_at FROM magazine_guides g JOIN magazine_revisions r ON r.id = g.revision_id WHERE g.status = 'published' AND r.doc LIKE '%\"hiring\"%'",
+    )
+    .all() as GuideRow[];
+  return rows.flatMap((g) =>
+    allBlocks(readGuideDoc(JSON.parse(g.doc), { draft: true }))
+      .filter((b): b is HiringBlock => b.type === "hiring")
+      .map((b) => ({ guide: g, block: b })),
+  );
+}
+
+/**
+  The decision register's "Hiring Runway labs" sheet (server/problemDesk export) and the Admin page: each published
+  lab with its response id, block, story, model, window and rubric versions, audience, dates, reviewers, participation,
+  rubric means and misconceptions over their denominator, use of the low and high cases, the separately owned work
+  measure and the keep/revise/retarget/withdraw decision. Aggregate learning data only: no plan, explanation or any
+  business's figures, never a partner's private workbook, and fewer than five people show counts only.
+*/
+export function hiringRegister(db: Db, now: Date) {
+  ensureHiring(db);
+  const today = now.toISOString().slice(0, 10);
+  return publishedLabs(db).map(({ guide, block }) => {
+    const rows = db
+      .prepare("SELECT user_id, attempt_no, status, state, result FROM hiring_lab_attempts WHERE guide_id = ? AND block_id = ? ORDER BY attempt_no")
+      .all(guide.id, block.id) as Pick<AttemptRow, "user_id" | "attempt_no" | "status" | "state" | "result">[];
+    const people = new Set<string>();
+    const decided = new Set<string>();
+    const sens = new Set<string>();
+    const firsts = new Map<string, { dims: Record<Dim, number>; misconceptions: Misconception[] }>();
+    let finished = 0;
+    let retries = 0;
+    for (const r of rows) {
+      people.add(r.user_id);
+      if (r.attempt_no > 1) retries += 1;
+      const st = JSON.parse(r.state) as { stage?: number; compared?: unknown[]; views?: unknown[] };
+      if ((st.stage ?? 0) >= 2) decided.add(r.user_id);
+      if ((Array.isArray(st.compared) && st.compared.length > 1) || (Array.isArray(st.views) && st.views.includes("sensitivity"))) sens.add(r.user_id);
+      if (r.status === "finished" && r.result) {
+        finished += 1;
+        if (!firsts.has(r.user_id)) firsts.set(r.user_id, JSON.parse(r.result));
+      }
+    }
+    const n = firsts.size;
+    const small = n < SMALL_COHORT;
+    const mean = (k: Dim) => (small ? "" : Math.round(([...firsts.values()].reduce((x, f) => x + (f.dims[k] ?? 0), 0) / n) * 10) / 10);
+    const mis: Record<string, number> = {};
+    for (const f of firsts.values()) for (const m of f.misconceptions) mis[m] = (mis[m] ?? 0) + 1;
+    let audience = "Everyone signed in";
+    try {
+      audience = (JSON.parse(guide.audience) as string[]).join(", ") || audience;
+    } catch {
+      audience = guide.audience || audience;
+    }
+    const g = block.governance;
+    return {
+      responseId: `${guide.id}:${block.id}`,
+      blockId: block.id,
+      guideId: guide.id,
+      guide: guide.title,
+      title: block.title,
+      version: [block.storyVersion, LAB_VERSION, MODEL_VERSION, WINDOW_VERSION, RUBRIC_VERSION].join(" · "),
+      mode: block.assessment,
+      audience,
+      theme: g.themeId || "",
+      signal: g.signal,
+      released: guide.published_at?.slice(0, 10) ?? "",
+      effectiveFrom: g.effectiveFrom,
+      reviewBy: g.reviewBy,
+      stale: Boolean(g.reviewBy && g.reviewBy < today),
+      reviewers: [g.owner, g.finance, g.operations, g.partnerships, g.privacy].filter(Boolean).join("; ") || "Not signed off",
+      approvedOn: g.approvedOn,
+      sources: g.sources.map((x) => x.title).join("; "),
+      started: people.size,
+      decided: decided.size,
+      finished,
+      retries,
+      people: n,
+      suppressed: small,
+      sensitivity: small ? "" : `${sens.size}/${people.size}`,
+      dims: Object.fromEntries(DIM_ORDER.map((k) => [k, mean(k)])) as Record<Dim, number | "">,
+      misconceptions: small
+        ? ""
+        : Object.entries(mis)
+            .sort((x, y) => y[1] - x[1])
+            .map(([k, c]) => `${MISCONCEPTIONS[k as Misconception] ?? k} ${c}/${n}`)
+            .join("; "),
+      measure: g.measure,
+      owner: g.owner,
+      review: g.review || "Not decided",
+    };
+  });
+}
+export type HiringRegisterRow = ReturnType<typeof hiringRegister>[number];
+
+/**
+  The Admin view (authors): the register's rows, and the Work Tool's use counts (server/caseloadPlanner, small numbers
+  suppressed). Nothing in it identifies a business or carries a business's figures.
+*/
+export function hiringAdmin<P>(db: Db, actor: User, now: Date, planner: P) {
+  requireAuthor(actor);
+  return { labs: hiringRegister(db, now), planner, dimensions: DIMENSIONS, windowVersion: WINDOW_VERSION };
 }

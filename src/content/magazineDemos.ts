@@ -13,6 +13,12 @@ import { DOT_QUARTER_END } from "./budgetLabCases";
 import { DOT_KITCHEN, OKAFOR_TRANSFER, PEARCE_BEDROOM } from "./hazardScenes";
 import { DOT_DISCHARGE } from "./dischargeCases";
 import { DOT_GARDENER } from "./vettingCases";
+import { FIONA_GARDENER } from "./familyCalls";
+import { XRAY_REVIEW_CASES } from "./xrayReviewCases";
+import { NORTH_BRISBANE_BENCH } from "./networkCases";
+import { MRS_PATEL_TRUST } from "./trustCases";
+import { LOCAL_REFERRAL_STUDIO_DATA } from "./referralStudio";
+import { MAYA_SHADOW } from "./shadowCoachCases";
 
 /*
   Demonstration Magazine articles (docs/magazine-demos.md): one of each kind the Magazine can do beside a full course.
@@ -34,7 +40,11 @@ import { DOT_GARDENER } from "./vettingCases";
   - two "What Would You Do?" Community Case Threads (What would you do?), Margaret's chosen worker and Graham's refused check;
   - three Spot the Hazard rooms in a Notice article (Look before you help), Mrs Pearce, Mr Okafor and Dot;
   - a return home from hospital (Dot comes home), the 72-Hour Discharge Pivot with its framing;
-  - a participant-chosen contractor (Dot's gardener), the Contractor Vetting Card with its framing.
+  - a participant-chosen contractor (Dot's gardener), the Contractor Vetting Card with its framing;
+  - a funding question, line by line (Can this be funded?), the Quote/Invoice X-Ray's quote and invoice cases;
+  - a difficult family call (Fiona calls), the Tough Family Call with its framing;
+  - an early-morning service gap (Build your local bench), the Contractor Network Builder's fictional block;
+  - a local referral conversation (Before you meet the referrer), the Local Referral Studio's practice block.
 
   Anything not in those sources is flagged: "verify" (a claim to confirm, which holds publishing until resolved) or
   "illustrative" (made-up linking copy or an example).
@@ -1661,6 +1671,423 @@ const contractorVetting: Demo = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------
+// Fiona calls: the Tough Family Call (docs/tough-phone-call.md, "Tough Family Call")
+// ---------------------------------------------------------------------------------------------
+
+const familyCall: Demo = {
+  key: "family-call",
+  title: "Fiona calls: when the gardener doesn’t come",
+  standfirst:
+    "Dot waited in all morning and her gardener never arrived. Now her daughter Fiona is on the phone: she wants him gone, and she wants to see Dot’s budget. Hear her out, check what’s known, keep Dot’s choices in the room, and agree something real, even if Fiona is still upset when you hang up.",
+  cover: "/images/hero-headphones-notes.webp",
+  audience: ["coordinator", "staff"],
+  // Read and confirm: the call is its own activity, completed on the server once its debrief is viewed.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    tags: { roles: ["coordinator", "staff"], goals: ["quality", "clients"] },
+    pages: [
+      page(
+        "family-call",
+        "Fiona calls",
+        "Handle a difficult call from a family member: acknowledge the concern, check the older person’s wishes and what they’ve agreed can be shared, avoid promises the record doesn’t support, offer the complaint route, and agree and record a follow-up.",
+        "decide",
+        [
+          section("fc-why", "A calmer caller isn’t the goal", [
+            {
+              id: "fc-why-text",
+              type: "text",
+              heading: "Upset for a good reason",
+              body: "Fiona’s frustration has a real cause: Dot waited in all morning and nobody came. It’s tempting to calm her down fast, with a reason for the no-show, a promise he’ll be there tomorrow, or a look at Dot’s budget. None of those is yours to give yet.\n\nIn this call you’re **Dot’s** coordinator. Open the case file, hear Fiona out, check what Dot wants and what she’s agreed Fiona can know, say what you’ll check and when you’ll call back, and offer the complaint route if Fiona wants it. Then write a short follow-up note. **A sound call can end with Fiona still upset.**",
+              ...illustrative("Framing copy for the Tough Family Call, written for this article from the PRD’s sections 1 and 6."),
+            },
+            {
+              id: "fc-why-callout",
+              type: "callout",
+              style: "important",
+              label: "A simulated call with fictional people",
+              body: "Dot, Fiona, the gardener’s business, the booking and every figure are invented. Fiona’s replies come from a reviewed script, or from an AI caller held to the same facts. Nothing here is a live phone line or a client record: no information is disclosed, no service is changed and no complaint is lodged. For a real call, follow Trilogy Care’s current approved procedures and complaint route.",
+            },
+          ]),
+          section("fc-call", "The phone rings", [{ id: "fc-call-block", type: "phonecall", ...structuredClone(FIONA_GARDENER) }]),
+          section("fc-after", "Before you hang up on a hard call", [
+            {
+              id: "fc-after-checklist",
+              type: "checklist",
+              title: "A difficult family call",
+              items: [
+                "I acknowledged what happened, in my own words",
+                "I checked whether the older person needs anything urgently today",
+                "I checked what they’ve agreed can be shared, and shared that, not everything or nothing",
+                "I said what I don’t know yet instead of guessing a reason or promising a booking",
+                "The older person is part of the next decision",
+                "I offered the complaint route when it was wanted",
+                "Someone named calls back at a time we agreed, and it’s recorded",
+              ],
+              ...illustrative("Drawn from the call’s rubric; check it against the Difficult Family Call Job Aid once it’s approved."),
+            },
+            {
+              id: "fc-after-journal",
+              type: "journal",
+              prompt: "Think of a call with an upset family member. What did you promise to calm things down, and did it happen?",
+              scaffold: "I promised… It did / didn’t happen because… Next time I’d say…",
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Can this be funded? The Quote/Invoice X-Ray (docs/invoice-xray.md)
+// ---------------------------------------------------------------------------------------------
+
+const quoteInvoiceXRay: Demo = {
+  key: "quote-invoice-xray",
+  title: "Can this be funded? A quote and an invoice, line by line",
+  standfirst:
+    "Mrs Wong wants a chair that helps her stand, and the shop says it’s covered. Mr Brennan’s podiatry invoice bundles a pedicure, an hour he didn’t have and a fee nobody agreed. Read each line, check the evidence, and decide what can honestly happen next.",
+  cover: "/images/hero-notes-at-table.webp",
+  audience: ["coordinator", "staff"],
+  // Read and confirm: each X-Ray is its own activity, completed on the server once its debrief is seen.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    tags: { roles: ["coordinator", "staff"], goals: ["quality", "clients"] },
+    pages: [
+      page(
+        "qx-quote",
+        "Mrs Wong’s chair",
+        "Review a retailer’s quote: tell a list entry from an approval, check the advice, route, price and contribution, and keep a decision pending when it should be.",
+        "decide",
+        [
+          section("qx-why", "Two different questions", [
+            {
+              id: "qx-why-text",
+              type: "text",
+              heading: "Could it be funded, or is it approved for her?",
+              body: "“Could this kind of thing be funded?” and “Is it approved for this person, through this route, at this price?” are different questions. A shop’s say-so, an item’s name or a line on an invoice doesn’t answer the second one.\n\nIn this article you’ll X-ray two fictional documents. Open each line, look at the evidence and the sources, ask the right person for what’s missing, and choose what can honestly happen next. Sometimes the right answer is **pending clarification**: that’s a good decision, not a dodge. Then practise explaining it.",
+              ...illustrative("Framing copy for the Quote/Invoice X-Ray, written for this article from the PRD’s sections 1, 3 and 5."),
+            },
+            {
+              id: "qx-why-callout",
+              type: "callout",
+              style: "important",
+              label: "Practice with fictional documents",
+              body: "The shop, the practice, every price, record and message here are invented, and every source passage is a training extract to check against the current publication. Nothing here approves a purchase, pays an invoice, makes a claim or contacts anyone. For a real request, follow Trilogy Care’s current approved procedures.",
+            },
+          ]),
+          section("qx-chair", "The quote on your desk", [{ id: "qx-chair-xray", type: "xray", ...structuredClone(XRAY_REVIEW_CASES[0].data) }]),
+        ],
+      ),
+      page(
+        "qx-invoice",
+        "Mr Brennan’s invoice",
+        "Review a supplier invoice after delivery: compare each line with what was agreed and delivered, keep supplier and participant prices apart, and hold and query what doesn’t match.",
+        "decide",
+        [
+          section("qx-inv", "The invoice on your desk", [{ id: "qx-invoice-xray", type: "xray", ...structuredClone(XRAY_REVIEW_CASES[1].data) }]),
+          section("qx-after", "Before you say yes or no", [
+            {
+              id: "qx-after-checklist",
+              type: "checklist",
+              title: "A funding question",
+              items: [
+                "I know what the person wants it to do for them",
+                "I checked the right list, and I know being on it isn’t an approval",
+                "I checked their approval, the funding route and any advice the entry needs",
+                "I kept the supplier’s cost apart from the participant’s price",
+                "I asked for itemisation, or queried the invoice, where a line didn’t match",
+                "I told them what’s confirmed, what isn’t yet, the next step and who owns it",
+              ],
+              ...illustrative("Drawn from the X-Ray’s checks; check it against the Can this be funded? Job Aid once it’s approved."),
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Priya's mornings: Build Your Local Bench (docs/network-builder.md)
+// ---------------------------------------------------------------------------------------------
+
+const networkBench: Demo = {
+  key: "network-bench",
+  title: "Build your local bench: who can be there at 7 am?",
+  standfirst:
+    "Five contractors are listed near three of Priya’s participants, and 12 early-morning hours a week still have nobody. Find the real gap, keep a participant’s chosen worker in view, and build the capacity that actually turns up.",
+  cover: "/images/hero-notes-at-table.webp",
+  audience: ["partner", "coordinator", "staff"],
+  // Read and confirm: the simulation is its own activity, completed on the server once its debrief is viewed.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    // How it browses: for business owners and coordinators, about growing local capacity, quality and the person's experience.
+    tags: { roles: ["owner", "coordinator", "staff"], goals: ["grow", "quality"] },
+    pages: [
+      page(
+        "network-bench",
+        "Build your local bench",
+        "Describe a service gap by service, place and time; tell interest, approval, availability and bookings apart; protect participant choice; recruit for the actual gap through the provider’s onboarding; and read quality evidence fairly.",
+        "decide",
+        [
+          section("nb-why", "A list of names isn’t a start date", [
+            {
+              id: "nb-why-text",
+              type: "text",
+              heading: "Interest isn’t approval, and approval isn’t availability",
+              body: "When demand grows, a contractor directory can look reassuring: plenty of names, close by. But a 7 am shower needs a worker who is approved for personal care, free at seven, willing to travel there, and booked through the provider’s process. Someone who is interested, or approved but free only after ten, doesn’t fill that visit.\n\nIn this simulation you’re planning with **Priya**, who runs a small Care Partner business in North Brisbane. Open the cards, measure the gap, decide what to tell people, draft a brief for the right role, and see what three weeks of provider checks actually produce. **An honest phased start can be the right answer.** “Sign five contractors and fill the map green” isn’t.",
+              ...illustrative("Framing copy for Build Your Local Bench, written for this article from the PRD’s sections 1, 7 and 8."),
+            },
+            {
+              id: "nb-why-callout",
+              type: "callout",
+              style: "important",
+              label: "Practice with a fictional case",
+              body: "Priya’s participants, the suburbs, every worker, figure, rate and record here are invented. Nothing here approves a contractor, checks a real register, sends a message, books a service or changes a supplier record. The checklists and outreach wording are drafts for Trilogy Care’s review. For real onboarding, follow the provider’s current process.",
+            },
+          ]),
+          section("nb-sim", "Monday morning, planning the mornings", [{ id: "nb-bench", type: "network", ...structuredClone(NORTH_BRISBANE_BENCH) }]),
+          section("nb-after", "Before you promise a start", [
+            {
+              id: "nb-after-checklist",
+              type: "checklist",
+              title: "Local capacity",
+              items: [
+                "I described the gap by service, place, time window and hours, not by classification or headcount",
+                "I counted only provider-approved workers with recently confirmed, uncommitted availability in the window",
+                "I told participants which visits are confirmed and which aren’t yet",
+                "A participant’s chosen worker went to the provider for assessment, with options if it can’t proceed",
+                "My outreach named the role, area and window, and promised no work, rate or start date",
+                "I read quality evidence with its denominators, period, source and the contractor’s response",
+              ],
+              ...illustrative("Drawn from the simulation’s rubric; check it against the Choosing and Checking Your Contractor Job Aid once it’s approved."),
+            },
+            {
+              id: "nb-after-journal",
+              type: "journal",
+              prompt: "Think of a time a worker looked available but couldn’t actually start. What was missing, and who needed to know?",
+              scaffold: "It looked available because… What was missing was… Next time I’d…",
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Before you meet the referrer: the Local Referral Studio (docs/local-referral-studio.md)
+// ---------------------------------------------------------------------------------------------
+
+const referralStudio: Demo = {
+  key: "referral-studio",
+  title: "Before you meet the referrer: practise the conversation",
+  standfirst:
+    "A GP practice manager worried about admin, and a hospital social worker with a discharge tomorrow. Find out the older person’s stage, answer the real concern, use only approved claims, and agree a next step you can keep.",
+  cover: "/images/hero-notes-at-table.webp",
+  audience: ["partner"],
+  // Read and confirm: the practice is its own activity, completed on the server once its debrief is read.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    // How it browses: for business owners, about growing the business honestly.
+    tags: { roles: ["owner", "partner"], goals: ["grow", "quality"] },
+    pages: [
+      page(
+        "referral-studio",
+        "Before you meet the referrer",
+        "Ask the older person’s stage before proposing a step; answer the referrer’s concern; use only approved claims; keep the person’s choice and consent first; and agree who does what, and when.",
+        "say",
+        [
+          section("rs-why", "Trust is local, and it’s easy to lose", [
+            {
+              id: "rs-why-text",
+              type: "text",
+              heading: "The most confident pitch isn’t the best one",
+              body: "GPs, hospital teams and community services want to know four things: who this is right for, what they need to do, what happens next, and who will respond. A generic pitch can’t answer that for every older person, because the right next step depends on their **stage**: not yet assessed, approved and waiting for funding, funding allocated and choosing a provider, already receiving care, or leaving hospital in a hurry.\n\nIn this practice you meet two **fictional** referrers. Choose the stage you’re practising (“unknown” is a valid choice), talk it through, record the next step, and read a scorecard that points to your own words. A promise nobody can keep yet, like a worker tomorrow or “same-day care”, gets flagged with the approved wording to use instead.",
+              ...illustrative("Framing copy for the Local Referral Studio, written for this article from the PRD’s sections 1, 2 and 4."),
+            },
+            {
+              id: "rs-why-callout",
+              type: "callout",
+              style: "important",
+              label: "Practice with fictional referrers",
+              body: "The referrers and every situation here are invented. Nothing here contacts a GP or hospital, creates a referral, enrols anyone or sends a message. Don’t type a real person’s details. The claim wording is a draft for Trilogy Care’s review: until it’s approved, use it to practise, not to publish.",
+            },
+          ]),
+          section("rs-sim", "Two conversations", [{ id: "rs-studio", type: "referralstudio", ...structuredClone(LOCAL_REFERRAL_STUDIO_DATA) }]),
+          section("rs-after", "Before your next meeting", [
+            {
+              id: "rs-after-checklist",
+              type: "checklist",
+              title: "A truthful local pitch",
+              items: [
+                "I answered the referrer’s concern before talking about my business",
+                "I found out the older person’s stage before proposing a step",
+                "I matched the step to the stage, with My Aged Care first where the person hasn’t been assessed",
+                "I used only approved wording: nothing free, same-day, fastest or guaranteed",
+                "I kept the older person’s choice and consent first, and patient details out of it",
+                "I agreed who does what, and when",
+              ],
+              ...illustrative("Drawn from the practice’s scorecard; check it against the Local Referral Conversation Job Aid once it’s approved."),
+            },
+            {
+              id: "rs-after-journal",
+              type: "journal",
+              prompt: "Think of a referrer you’ll see soon. What’s their likely concern, and what would you ask first?",
+              scaffold: "Their concern is probably… The first thing I’d ask is… The next step I can actually offer is…",
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Mrs Patel's Week 8: the 28-Day Trust Check (docs/trust-check.md)
+// ---------------------------------------------------------------------------------------------
+
+const trustCheck: Demo = {
+  key: "trust-check",
+  title: "Mrs Patel’s Week 8: is this a concern, and what does she want?",
+  standfirst:
+    "The dashboard says 40% of her budget is unspent. Two Tuesday cleans didn’t happen, there’s a charge she doesn’t recognise, and her daughter wants answers. Work out what’s really wrong, ask her, fix it with the people who own it, and check it helped.",
+  cover: "/images/cleaner.jpg",
+  audience: ["partner", "coordinator", "staff"],
+  // Read and confirm: the simulation is its own activity, completed on the server once its debrief is viewed.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    // How it browses: for business owners and coordinators, about quality and the person's experience.
+    tags: { roles: ["owner", "coordinator", "staff"], goals: ["quality"] },
+    pages: [
+      page(
+        "trust-check",
+        "The 28-day trust check",
+        "Separate a signal from a prediction, hear the person before planning, give each fix an owner and a contingency, check the outcome with evidence, and support the person’s choice, including a choice to move.",
+        "decide",
+        [
+          section("tc-why", "A signal isn’t a verdict", [
+            {
+              id: "tc-why-text",
+              type: "text",
+              heading: "Service recovery, not retention",
+              body: "A low spend can mean a hospital stay, services deliberately paced, a claim that hasn’t landed, a contractor who never started, or a statement nobody explained. Those need different responses, and none of them is a prediction that someone will leave.\n\nIn this simulation you’re **Mrs Patel’s** Care Partner. Open the signal cards, decide whether this is a concern, ask her what she wants, build a plan with an owner, then check on Day 7 and Day 28. **She may stay, or she may choose to move**: both can be good outcomes if you were honest and supported her choice.",
+              ...illustrative("Framing copy for the 28-Day Trust Check, written for this article from the PRD’s sections 1, 2 and 7."),
+            },
+            {
+              id: "tc-why-callout",
+              type: "callout",
+              style: "important",
+              label: "Practice with a fictional case",
+              body: "Mrs Patel, Asha, the supplier and every record, figure and message here are invented. Nothing here reads a real participant record, sends a message, books a service, lodges a complaint or starts a transfer. A real safety concern goes to the current clinical and incident process straight away, never into a 28-day check.",
+            },
+          ]),
+          section("tc-sim", "Monday morning, week 8", [{ id: "tc-case", type: "trustcheck", ...structuredClone(MRS_PATEL_TRUST) }]),
+          section("tc-after", "Before you follow up a real person", [
+            {
+              id: "tc-after-checklist",
+              type: "checklist",
+              title: "A trust check",
+              items: [
+                "I kept what the record shows apart from what I inferred, and named what still needed verifying",
+                "I asked the person what they want before planning or suggesting anything",
+                "I told a relative only what the person has agreed they can know",
+                "Each fix had an operational owner, a next update and a contingency",
+                "I offered the complaint route without discouraging it",
+                "I checked the delivery record and asked the person whether it helped",
+                "If they chose to move, I supported it through the approved process",
+              ],
+              ...illustrative("Drawn from the simulation’s rubric; check it against the 28-Day Trust Check Job Aid once it’s approved."),
+            },
+            {
+              id: "tc-after-journal",
+              type: "journal",
+              prompt: "Think of a time a number on a dashboard made you assume something about a person. What did they actually want?",
+              scaffold: "The number said… When I asked, they said… Next time I’d…",
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Maya's new coordinator: First 100 Days, Shadow & Coach (docs/shadow-and-coach.md)
+// ---------------------------------------------------------------------------------------------
+
+const shadowCoach: Demo = {
+  key: "shadow-coach",
+  title: "Maya’s new coordinator: the first 100 days",
+  standfirst:
+    "Her first call about costs told Mrs Lin something untrue. Six weeks later, a note says “resolved” when it wasn’t. Protect Mrs Lin first, then coach, set a short plan, and check a second piece of work before you decide anything about readiness.",
+  cover: "/images/hero-notes-at-table.webp",
+  audience: ["partner", "staff"],
+  // Read and confirm: each episode is its own activity, completed on the server once its debrief is viewed.
+  completion: "confirm",
+  doc: {
+    schema: 2,
+    // How it browses: for business owners and managers, about quality and getting new people started.
+    tags: { roles: ["owner", "staff"], goals: ["quality", "start"] },
+    pages: [
+      page(
+        "shadow-coach",
+        "The first 100 days",
+        "Recognise what matters in a new coordinator’s work, protect the participant first, tell a skill gap from a workflow defect, coach without humiliation, assign a short plan from existing content, and check a second sample before a scoped readiness decision.",
+        "decide",
+        [
+          section("sc-why", "Not the same quiz as the new hire", [
+            {
+              id: "sc-why-text",
+              type: "text",
+              heading: "Your part is different",
+              body: "A completed induction topic doesn’t show how a new coordinator explains contributions to a worried participant, or what she does when someone says a worker grabbed their arm. Your part as her manager is to notice the problem, protect the participant when needed, work out whether it’s her skill or the system around her, coach so she can hear it, and then **check her next piece of work**: completion alone isn’t evidence.\n\nIn this practice you’re **Maya**, from *Maya’s next coordinator* and *Can we fund the next 90 days?*. Your new coordinator started on 1 February at 0.6 FTE. You’ll meet her twice in her first 100 days: a call on day 17, and a note on day 43.",
+              ...illustrative("Framing copy for First 100 Days: Shadow & Coach, written for this article from the PRD’s sections 1, 4 and 6."),
+            },
+            {
+              id: "sc-why-callout",
+              type: "callout",
+              style: "important",
+              label: "Practice with a fictional coordinator",
+              body: "Maya, Mrs Lin, the new coordinator and every call, note, roster and QA figure here are invented. Nothing here reports an incident, corrects a bill, changes a care plan, assigns real learning or creates an employment or HR record, and nobody is scored or ranked. A real concern goes to the current incident or clinical process straight away.",
+            },
+          ]),
+          section("sc-sim", "Her first 100 days", [{ id: "sc-case", type: "shadowcoach", ...structuredClone(MAYA_SHADOW) }]),
+          section("sc-after", "Before you coach a real new hire", [
+            {
+              id: "sc-after-checklist",
+              type: "checklist",
+              title: "Shadow and coach",
+              items: [
+                "If the work may have put a participant at risk or told them something untrue, I acted on that first, through the approved route",
+                "I named the exact words or omission, and kept facts, allegations and assumptions apart",
+                "I asked what they were working from before deciding it was a skill gap",
+                "I raised a source, form or workload problem with its owner instead of assigning another course",
+                "The plan was short, used existing approved content, and included practice and an observation",
+                "I checked a new piece of work before deciding anything about readiness, and kept the decision to a defined task",
+              ],
+              ...illustrative("Drawn from the simulation’s rubric; check it against the coaching conversation card once it’s approved."),
+            },
+            {
+              id: "sc-after-journal",
+              type: "journal",
+              prompt: "Think of the last time a new person in your team made a mistake. Was it them, or the sheet, form or rush they were working with?",
+              scaffold: "What I saw was… What they were working from was… What I’d check next time is…",
+            },
+          ]),
+        ],
+      ),
+    ],
+  },
+};
+
 export const MAGAZINE_DEMOS: Demo[] = [
   invoices,
   outsideService,
@@ -1679,4 +2106,10 @@ export const MAGAZINE_DEMOS: Demo[] = [
   spotTheHazard,
   dischargePivot,
   contractorVetting,
+  quoteInvoiceXRay,
+  familyCall,
+  networkBench,
+  referralStudio,
+  trustCheck,
+  shadowCoach,
 ];

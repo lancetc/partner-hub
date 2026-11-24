@@ -38,6 +38,7 @@ import type { ReaderNote } from "@/server/magazine";
 import { ReflectBlock } from "./ReflectBlocks";
 import { GuidePlayer } from "./LearningGuide";
 import { Roleplay } from "./Roleplay";
+import { FamilyCall } from "./FamilyCall";
 import { SignalCase } from "./SignalCase";
 import { MissionBoard } from "./MissionBoard";
 import { BalanceScale } from "./BalanceScale";
@@ -65,6 +66,10 @@ import { CashBridgeLab } from "./CashBridgeLab";
 import { BudgetDecisionLab } from "./BudgetDecisionLab";
 import { SpotTheHazard } from "./SpotTheHazard";
 import { DischargePivot } from "./DischargePivot";
+import { NetworkBench } from "./NetworkBench";
+import { TrustCheck } from "./TrustCheck";
+import { ReferralStudioBlockView } from "./ReferralStudioBlock";
+import { ShadowCoach } from "./ShadowCoach";
 import { CaseThread } from "../caseThreads/CaseThread";
 import { caseDataOf } from "@/lib/caseThread";
 import { HubVisual } from "./HubVisual";
@@ -180,7 +185,8 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
     case "auditor":
       return <DocumentAuditor block={b} ctx={ctx} />;
     case "phonecall":
-      return <Roleplay block={b} ctx={ctx} />;
+      // A Tough Family Call runs on its own engine (lib/familyCall); other phone calls on the shared roleplay.
+      return b.family ? <FamilyCall block={{ ...b, family: b.family }} ctx={ctx} /> : <Roleplay block={b} ctx={ctx} />;
     case "sandbox":
       return <BudgetSandbox block={b} ctx={ctx} />;
     case "hiring":
@@ -230,6 +236,58 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       // Completed on the server once the debrief is viewed; the same block renders on a Topic card by reference.
       return (
         <DischargePivot
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ending, score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "network":
+      // Completed on the server once the debrief is viewed (fictional practice, never a contractor approval).
+      return (
+        <NetworkBench
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ending, score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "trustcheck":
+      // Completed on the server once the debrief is viewed (fictional practice: never a real follow-up or a retention figure).
+      return (
+        <TrustCheck
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ending, score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "referralstudio":
+      // Practice with a fictional referrer: completed on the server once the debrief is read. Practice, never a referral.
+      return (
+        <ReferralStudioBlockView
+          block={b}
+          guideId={ctx.guideId}
+          preview={ctx.preview}
+          onFinished={(d) => {
+            if (!ctx.preview) ctx.activity(b.id, { outcome: d.ready ? "ready" : d.critical ? "critical" : "practised", score: d.score, total: d.max });
+            ctx.engaged(b.id);
+          }}
+        />
+      );
+    case "shadowcoach":
+      // Manager practice on a fictional coordinator: each episode completes on the server once its debrief is viewed. Never an HR record.
+      return (
+        <ShadowCoach
           block={b}
           guideId={ctx.guideId}
           preview={ctx.preview}

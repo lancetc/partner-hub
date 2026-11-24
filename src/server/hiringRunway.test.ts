@@ -165,7 +165,7 @@ describe("the attempt", () => {
     );
     expect(done.status).toBe("finished");
     expect(done.debrief?.dims).toHaveLength(6);
-    expect(done.versions).toMatchObject({ story: "maya-1", model: "hiring-model-2", rubric: "hiring-rubric-1" });
+    expect(done.versions).toMatchObject({ story: "maya-2", model: "hiring-model-2", rubric: "hiring-rubric-1", window: "hiring-window-1" });
     const second = retryHiring(db, riley, c.id, { blockId: "hl" }, now);
     expect(second).toMatchObject({ attemptNo: 2, status: "active" });
     expect(second.state.stage).toBe(0);
@@ -194,16 +194,16 @@ describe("the attempt", () => {
     const c = course();
     commitInitial(db, riley, c.id, { blockId: "hl", decision: decision() }, now);
     const v2 = maya();
-    v2.storyVersion = "maya-2";
+    v2.storyVersion = "maya-3";
     v2.inputs.newPerMonth = 4;
     v2.cards[1].figures = v2.cards[1].figures.map((f) => (f.key === "newPerMonth" ? { ...f, value: 4 } : f));
     saveGuideDraft(db, jordan, c.id, { title: "Growing a partner business", completion: "confirm", doc: doc(v2) as never }, now);
     publishGuide(db, jordan, c.id, "", now);
     const fresh = hiringState(db, riley, c.id, "hl");
     expect(fresh.status).toBe("new");
-    expect(fresh.versions.story).toBe("maya-2");
+    expect(fresh.versions.story).toBe("maya-3");
     const old = db.prepare("SELECT story_version FROM hiring_lab_attempts WHERE user_id = 'riley'").all() as { story_version: string }[];
-    expect(old.map((r) => r.story_version)).toEqual(["maya-1"]);
+    expect(old.map((r) => r.story_version)).toEqual(["maya-2"]);
   });
 
   it("keeps real business figures and typed words out of the activity log, and stores only fictional choices", () => {

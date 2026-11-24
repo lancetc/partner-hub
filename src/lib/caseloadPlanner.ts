@@ -11,6 +11,7 @@ import {
   type HiringOption,
   type Month,
 } from "./hiringModel";
+import { breakEvenMonth, decisionWindow, recruitText, WINDOW_VERSION, type DecisionWindow, type WindowInput } from "./hiringWindow";
 
 /*
   Caseload-to-Margin & Hiring Capacity Calculator (docs/caseload-margin-calculator.md): the Work Tool's fields, plans and
@@ -25,7 +26,8 @@ import {
   The answer is a planning window under stated assumptions, never a hiring order or a clients-per-coordinator ratio.
 */
 
-export const PLANNER_VERSION = "caseload-planner-1";
+/** 2: the decision window across the three cases (lib/hiringWindow), contribution margin and the contact-duty guardrail. */
+export const PLANNER_VERSION = "caseload-planner-2";
 export const FICTIONAL_NOTICE =
   "Fictional example: the business, its agreement and every figure are invented. They aren’t Trilogy Care pricing, benchmarks, staffing norms or a hiring recommendation.";
 export const FUNDING_NOTE =
@@ -169,6 +171,11 @@ export type Plan = {
   workflowChecked: boolean;
   /** Participants in each Support at Home classification, 1 to 8: recorded only. */
   classifications: (number | null)[];
+  /**
+    The business's own agreement assigns the monthly direct care-management contact to it. Only then is that contact
+    shown as a coverage guardrail; it's never a claimable-hours figure. Plans saved before planner 2 read as false.
+  */
+  contactDuty: boolean;
 };
 
 const blankValues = () => Object.fromEntries(FIELD_KEYS.map((k) => [k, null])) as Record<FieldKey, number | null>;
@@ -220,6 +227,7 @@ export function fictionalExample(): Plan {
     faster: { newDelta: 1, exitDelta: 0, complexity: 1.1 },
     workflowChecked: false,
     classifications: Array(CLASSIFICATIONS).fill(null),
+    contactDuty: false,
   };
 }
 
@@ -250,6 +258,7 @@ export function blankPlan(): Plan {
     faster: { newDelta: 1, exitDelta: 0, complexity: 1.1 },
     workflowChecked: false,
     classifications: Array(CLASSIFICATIONS).fill(null),
+    contactDuty: false,
   };
 }
 
@@ -306,6 +315,7 @@ export function cleanPlan(raw: unknown): Plan {
       const v = finite(Array.isArray(o.classifications) ? o.classifications[i] : null);
       return v !== null && v >= 0 ? Math.round(v) : null;
     }),
+    contactDuty: o.contactDuty === true,
   };
 }
 
@@ -485,11 +495,35 @@ export type Analysis = {
   moneyMissing: FieldKey[];
   illustrative: boolean;
   workflowChecked: boolean;
+  /** The agreement assigns the monthly direct contact to the business (see Plan). */
+  contactDuty: boolean;
   threshold: number;
   reserve: number;
   lead: number;
   ramp: number;
+  /**
+    The decision window across the slower, expected and faster cases (lib/hiringWindow), timed by the selected hire
+    (or 0.6 FTE when no hire is selected). It never depends on the case being viewed, so switching case can't move it.
+  */
+  range: DecisionWindow;
+  /** What the window was read from: for the sensitivity table. */
+  windowIn: WindowInput;
 };
+
+/** The decision window's inputs for a readable plan: the three cases, every option, and the plan's guardrails. */
+function windowInputOf(p: Plan, r: Extract<Reading, { ok: true }>, optionId: OptionId): WindowInput {
+  return {
+    inputs: r.inputs,
+    options: r.options,
+    growth: growthCases(p),
+    baseId: "expected",
+    revenueKnown: r.revenueKnown,
+    moneyKnown: r.moneyKnown,
+    workflowChecked: p.workflowChecked,
+    contactDuty: p.contactDuty,
+    hireId: optionId === "add-10" ? "add-10" : "add-06",
+  };
+}
 
 export function analyse(p: Plan, growthId: string, optionId: OptionId): Analysis | null {
   const r = readPlan(p);
@@ -538,10 +572,13 @@ export function analyse(p: Plan, growthId: string, optionId: OptionId): Analysis
     moneyMissing: r.moneyMissing,
     illustrative: r.illustrative,
     workflowChecked: p.workflowChecked,
+    contactDuty: p.contactDuty,
     threshold: r.inputs.threshold,
     reserve: r.inputs.reserve,
     lead,
     ramp,
+    range: decisionWindow(windowInputOf(p, r, option.id as OptionId)),
+    windowIn: windowInputOf(p, r, option.id as OptionId),
   };
 }
 
@@ -596,6 +633,11 @@ export function decision(a: Analysis) {
 
   if (a.optionId === "workflow" && !a.workflowChecked)
     warnings.push("The workflow saving is hypothetical. Don’t rely on it until you’ve checked it protects required tasks, contact duties and outcomes.");
+  // The coverage guardrail: shown only when the business's own agreement gives it the monthly contact.
+  if (a.contactDuty && s.monthsAbove > 0)
+    warnings.push(
+      "Your agreement gives your business the monthly direct care-management contact: months above the threshold put it at risk, whatever the margin.",
+    );
 
   if (!a.revenueKnown) warnings.push("Revenue unknown: enter your agreement income to see operating result, cash and affordability.");
   else if (!a.moneyKnown) warnings.push("Costs or cash are incomplete, so cash and the reserve aren’t checked yet.");
@@ -636,6 +678,8 @@ export function whatChanged(before: Analysis | null, after: Analysis | null): Ch
   if (!before || !after) return [];
   const out: Change[] = [];
   const add = (label: string, b: string, a: string) => b !== a && out.push({ label, before: b, after: a });
+  add("Suggestion", before.range.recommendation.label, after.range.recommendation.label);
+  add("Recruitment start window", recruitText(before.range), recruitText(after.range));
   add("No-hire pressure month", monthText(before.noHire.firstPressure), monthText(after.noHire.firstPressure));
   add(`Months above the threshold (${OPTION_LABELS[after.optionId]})`, String(before.selected.monthsAbove), String(after.selected.monthsAbove));
   if (before.revenueKnown && after.revenueKnown) {
@@ -643,6 +687,9 @@ export function whatChanged(before: Analysis | null, after: Analysis | null): Ch
     add("12-month operating result", dollars(before.selected.operating12), dollars(after.selected.operating12));
   }
   if (before.moneyKnown && after.moneyKnown) add("Lowest cash", dollars(before.selected.lowestCash), dollars(after.selected.lowestCash));
+  // Which months' capacity verdict moved: the monthly results that changed, not just the headline.
+  const moved = after.selected.months.filter((m, i) => before.selected.months[i] && m.pressure !== before.selected.months[i].pressure).map((m) => m.month);
+  if (moved.length) out.push({ label: "Months whose capacity verdict changed", before: "", after: moved.map((m) => `Month ${m}`).join(", ") });
   return out;
 }
 
@@ -666,6 +713,9 @@ export const MONTHLY_HEADER = [
   "Operating result",
   "Closing cash",
   "Below reserve",
+  // Added in planner 2, at the end so earlier columns keep their places.
+  "Contribution margin",
+  "Result before owner remuneration",
 ] as const;
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -689,6 +739,8 @@ export function monthlyRows(f: Forecast, a: Pick<Analysis, "revenueKnown" | "mon
     a.revenueKnown ? round2(m.operating) : UNKNOWN,
     a.moneyKnown ? round2(m.closingCash) : UNKNOWN,
     a.moneyKnown ? (m.reserveBreach ? "Yes" : "No") : UNKNOWN,
+    a.revenueKnown ? round2(m.contribution) : UNKNOWN,
+    a.revenueKnown ? round2(m.operatingBeforeOwner) : UNKNOWN,
   ]);
 }
 
@@ -719,7 +771,17 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
         ["12-month operating result (option)", money(a.selected.operating12)],
         ["Lowest cash (option)", cash(a.selected.lowestCash)],
         ["First month below reserve (option)", a.moneyKnown ? (a.selected.firstReserveBreach ?? "None") : UNKNOWN],
-        ["Decision", d.headline],
+        ["Decision window", `${a.range.recommendation.label}: ${a.range.recommendation.headline}`],
+        [
+          "Likely pressure window (current team)",
+          a.range.pressure
+            ? `Month ${a.range.pressure.from} to Month ${a.range.pressure.to} (${a.range.pressure.cases.join(", ")})`
+            : "None within 12 months in any case",
+        ],
+        ["Recruitment start window", `${recruitText(a.range)}${a.range.recruit?.late ? ", interim capacity needed" : ""}`],
+        ...a.range.recommendation.factors.map((f) => ["Window factor", f]),
+        ...a.range.recommendation.alternatives.map((x) => ["Alternative (needs judgement)", x]),
+        ["Decision (selected case)", d.headline],
         ...d.reasons.map((r) => ["Why", r]),
         ...d.warnings.map((w) => ["Warning", w]),
         ["Caveat", d.caveat],
@@ -747,6 +809,7 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
         }),
         ...growthCases(p).map((g) => ["Growth case", g.label, "", g.describe, "", "", ""]),
         ["Hiring", "Workflow saving checked against required work", p.workflowChecked ? "Yes" : "No", "", "", "", ""],
+        ["Work and team", "Agreement assigns the monthly direct contact to this business", p.contactDuty ? "Yes" : "No", "", "", "", ""],
         ...p.classifications.map((c, i) => [
           "Caseload",
           `Support at Home classification ${i + 1} (recorded only)`,
@@ -761,7 +824,7 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
     {
       name: "Monthly forecast",
       header: [...MONTHLY_HEADER].map((h) => (h === "Utilisation" ? "Utilisation (%)" : h)),
-      widths: [8, 12, 12, 12, 12, 14, 10, 14, 14, 12, 12, 12, 14, 14, 10],
+      widths: [8, 12, 12, 12, 12, 14, 10, 14, 14, 12, 12, 12, 14, 14, 10, 14, 16],
       rows: monthlyRows(a.selected, a),
     },
     {
@@ -775,8 +838,11 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
         "Lowest cash month",
         "First month below reserve",
         "Note",
+        "12-month contribution margin",
+        "12-month result before owner remuneration",
+        "Break-even month (monthly operating result stays at or above zero)",
       ],
-      widths: [20, 12, 12, 16, 14, 10, 14, 60],
+      widths: [20, 12, 12, 16, 14, 10, 14, 60, 16, 16, 18],
       rows: OPTION_IDS.map((id) => {
         const f = a.byOption[id];
         return [
@@ -788,6 +854,9 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
           a.moneyKnown ? f.lowestCashMonth : UNKNOWN,
           a.moneyKnown ? (f.firstReserveBreach ?? "None") : UNKNOWN,
           id === "workflow" && !a.workflowChecked ? "Hypothetical: not checked against required work" : "",
+          money(f.months.reduce((n, m) => n + m.contribution, 0)),
+          money(f.months.reduce((n, m) => n + m.operatingBeforeOwner, 0)),
+          a.revenueKnown ? (breakEvenMonth(f) ?? "Not within 12 months") : UNKNOWN,
         ];
       }),
     },
@@ -798,6 +867,7 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
       rows: [
         ["Model version", MODEL_VERSION],
         ["Calculator version", PLANNER_VERSION],
+        ["Decision window rules", WINDOW_VERSION],
         ["Basis", BASIS_NOTE],
         ["Participants", "Active participants each month = last month + new − exits, never below zero. Starts and exits are counted once a month."],
         [
@@ -814,7 +884,13 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
         ["Cash received", "Earned income after the payment lag, plus each opening receivable once, in the month it’s due."],
         ["Staff costs", "Current FTE × loaded cost, plus a hire’s full loaded cost from the month they join (while their capacity ramps)."],
         ["One-off costs", "Recruitment and setup when recruitment starts; workflow setup the month before the saving starts. Each once."],
-        ["Operating result", "Earned income − staff costs − cost per participant − fixed overhead − owner remuneration − one-off costs."],
+        ["Contribution margin", "Earned income − staff costs − one-off recruitment and setup − cost per participant (and any temporary help)."],
+        ["Result before owner remuneration", "Contribution margin − fixed overhead."],
+        [
+          "Operating result",
+          "Earned income − staff costs − cost per participant − fixed overhead − owner remuneration − one-off costs. Owner remuneration is always included.",
+        ],
+        ["Break-even month", "The first month from which every month’s operating result is at least zero, to Month 12."],
         ["Closing cash", "Opening cash + cash received − the same costs. Below reserve when under your minimum reserve."],
         [
           "Growth cases",
@@ -825,6 +901,16 @@ export function workbookSheets(p: Plan, a: Analysis, meta: { name: string; gener
         [
           "Planning window",
           "Heuristic: first no-hire pressure month − lead − ramp + 1. Checked by simulating each recruitment start month for the selected option.",
+        ],
+        [
+          "Decision window",
+          `Each case’s first no-hire pressure month gives a capacity date; each capacity date − lead − ramp + 1 gives a start-by month. The window runs from the earliest start-by less ${a.range.leadSpread} month(s) of recruitment uncertainty to the latest. It is a range under these assumptions, never a client count at which to hire.`,
+        ],
+        [
+          "Contact guardrail",
+          p.contactDuty
+            ? "Your agreement assigns the monthly direct care-management contact to your business: months above the threshold are a service risk."
+            : "Not assigned to this business (or not recorded): not shown as a guardrail.",
         ],
         ["Income", FUNDING_NOTE],
         [

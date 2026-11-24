@@ -164,7 +164,8 @@ describe("events, reporting and Favourites", () => {
     expect(() => recordPlannerEvent(db, riley, { event: "business_simulator_opened", mode: "plan" }, now)).toThrow(/business owner/);
     expect(() => recordPlannerEvent(db, casey, { event: "income_entered", mode: "plan" }, now)).toThrow(/Unknown event/);
     const cols = (db.prepare("PRAGMA table_info(planner_events)").all() as { name: string }[]).map((c) => c.name);
-    expect(cols).toEqual(["id", "event", "mode", "access", "model_version", "user_id", "org_id", "at"]);
+    // Planner 2 adds a fixed-list detail and an idempotency key: still no column that could hold a figure.
+    expect(cols).toEqual(["id", "event", "mode", "access", "model_version", "user_id", "org_id", "at", "detail", "idem"]);
     const r = plannerReport(db, jordan);
     // One business is too few to report as a number.
     expect(r).toMatchObject({ eligibleBusinesses: "fewer than 5", businessesPlanning: "fewer than 5", savedPlans: 0 });
