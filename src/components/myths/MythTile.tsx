@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/format";
-import { CATEGORIES, NOT_SENT, placeholdersIn, SOURCE_TYPES, TILE_NOTICE, type MythEvent } from "@/lib/myths";
+import { CATEGORIES, checkItems, CONTENT_STATUS, copyText, DEMO_LABEL, NOT_SENT, placeholdersIn, SOURCE_TYPES, TILE_NOTICE, type MythEvent } from "@/lib/myths";
 import type { ReaderTile } from "@/server/myths";
 import { Icon } from "../Icon";
 
@@ -15,6 +15,11 @@ import { Icon } from "../Icon";
   exact source, all together, so the caveat is never behind another click. A short turn plays unless reduced
   motion is on; it's decorative. "Send to Client" opens a preview of the approved email to edit locally and copy.
   The Hub never sends it, and says so. A tile under review can't be copied.
+
+  An entry with a myth and a reality (the PRD's card) shows both, "What to say in 30 seconds" with Copy script, the
+  checks to expand, the source, and its status, last review and owner. On the Resources page an approved one can be
+  saved to Favourites and pinned to the dashboard. In an author's preview a draft or demo entry says so on the card
+  ("Demo content · Pending compliance approval"), and anything copied from it starts with a do-not-send line.
 */
 
 export type TileMode = "learning" | "quick";
@@ -36,6 +41,9 @@ export function MythTile({
   guideId,
   preview,
   onOpened,
+  fav,
+  onFavChanged,
+  startOpen,
 }: {
   tile: ReaderTile & { preview?: boolean };
   mode: TileMode;
@@ -45,11 +53,19 @@ export function MythTile({
   /** The editor's preview: nothing is recorded. */
   preview?: boolean;
   onOpened?: (tileId: string) => void;
+  /** On the Resources page: whether it's in the person's Favourites (null: not saved). Leave out to hide Save and Pin. */
+  fav?: { pinned: boolean } | null;
+  onFavChanged?: () => void;
+  /** Opened from a link to this tile (a pin, a favourite or search). */
+  startOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(startOpen));
   const front = useRef<HTMLButtonElement>(null);
   const back = useRef<HTMLHeadingElement>(null);
   const d = t.data;
+  useEffect(() => {
+    if (startOpen) back.current?.closest("article")?.scrollIntoView({ block: "start" });
+  }, [startOpen]);
   const log = (event: MythEvent) => {
     if (!preview && !t.preview) api("/api/myths", { body: { action: "event", event, tileId: t.id, version: t.version, guideId } }).catch(() => undefined);
   };
@@ -74,7 +90,7 @@ export function MythTile({
         <span className="flex items-center justify-between gap-2">
           <span className="rounded-full bg-tealtint px-3 py-1 text-xs font-extrabold uppercase tracking-[0.1em] text-accent">{CATEGORIES[d.category]}</span>
           {t.state === "under-review" && <span className="text-xs font-semibold text-ink-muted">Under review</span>}
-          {t.preview && <span className="text-xs font-semibold text-ink-muted">Draft</span>}
+          {t.preview && <span className="text-xs font-semibold text-ink-muted">{d.demo ? "Demo · pending approval" : "Draft"}</span>}
         </span>
         <span className="mt-3 text-sm font-semibold text-ink-muted">You might hear</span>
         <span className="mt-1 flex gap-2 font-serif text-xl font-semibold leading-snug">
@@ -101,28 +117,61 @@ export function MythTile({
           <Icon name="close" className="size-5" />
         </button>
       </div>
-      {t.preview && <p className={cx(warn, "mt-2")}>Draft, not approved: learners don’t see this, and nothing can be copied.</p>}
+      {t.preview && (
+        <p className={cx(warn, "mt-2")}>
+          {d.demo ? `${DEMO_LABEL}. ` : "Draft, not approved. "}
+          Learners don’t see this. It isn’t an approved Trilogy Care communication, and anything copied from it is marked “do not send”.
+        </p>
+      )}
       {t.state === "under-review" && !t.preview && (
         <p className={cx(warn, "mt-2")}>Under review: this answer is being checked. Its email can’t be copied until it’s approved again.</p>
       )}
+      {(d.myth || d.reality) && (
+        <div className="mt-3 grid gap-2">
+          {d.myth && (
+            <div className="rounded-2xl bg-muted p-3">
+              <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-ink-muted">Myth</p>
+              <p className="mt-0.5">{d.myth}</p>
+            </div>
+          )}
+          {d.reality && (
+            <div className="rounded-2xl bg-tealtint p-3">
+              <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-accent">Reality</p>
+              <p className="mt-0.5">{d.reality}</p>
+            </div>
+          )}
+        </div>
+      )}
       <h4 id={`tile-${t.id}`} ref={back} tabIndex={-1} className="mt-3 font-serif text-lg font-semibold outline-none">
-        Here’s how it works
+        {d.reality ? "What to say in 30 seconds" : "Here’s how it works"}
       </h4>
       <p className="mt-1">{d.answer}</p>
+      {showCopy && <CopyScript t={t} log={log} />}
       {d.exception && (
         <div className="mt-3 rounded-2xl bg-muted p-3">
           <p className="text-sm font-semibold">Important exception</p>
           <p className="mt-0.5">{d.exception}</p>
         </div>
       )}
-      <div className="mt-3">
-        <p className="text-sm font-semibold">Check for this person</p>
-        <ul className="mt-1 list-disc pl-5">
-          {d.checks.filter(Boolean).map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-      </div>
+      {d.reality ? (
+        <details className="mt-3 rounded-2xl bg-muted p-3">
+          <summary className="min-h-6 cursor-pointer text-sm font-semibold">What to check for this participant ({checkItems(d.checks).length})</summary>
+          <ul className="mt-1 list-disc pl-5">
+            {checkItems(d.checks).map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </details>
+      ) : (
+        <div className="mt-3">
+          <p className="text-sm font-semibold">Check for this person</p>
+          <ul className="mt-1 list-disc pl-5">
+            {d.checks.filter(Boolean).map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {d.familyWording && (
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-semibold">If a family member asks</summary>
@@ -142,6 +191,7 @@ export function MythTile({
                 <span className="font-semibold">{a.document}</span>
               )}
               {a.section && <> → {a.section}</>}
+              {a.unverified && <span className="ml-1 rounded-full bg-[#fff1cc] px-2 py-0.5 text-xs font-semibold text-[#4a3400]">Unverified source</span>}
               <span className="block text-ink-muted">
                 {[SOURCE_TYPES[a.type], a.publisher, a.internalId && `Policy ${a.internalId}`, a.verifiedOn && `checked ${showDate(a.verifiedOn)}`]
                   .filter(Boolean)
@@ -160,8 +210,122 @@ export function MythTile({
       <p className="mt-3 text-xs text-ink-muted">{TILE_NOTICE}</p>
 
       {showCopy && <Reply t={t} mode={mode} practice={practice} log={log} />}
-      <Flags t={t} disabled={Boolean(preview || t.preview)} />
+      {fav !== undefined && !preview && !t.preview && t.state === "approved" && <SaveAndPin t={t} fav={fav} onChanged={onFavChanged} />}
+      <Flags t={t} disabled={Boolean(preview)} draft={Boolean(t.preview)} />
+      <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
+        {[
+          t.preview ? CONTENT_STATUS.draft : t.state === "under-review" ? CONTENT_STATUS["under-review"] : CONTENT_STATUS.approved,
+          d.lastReviewed && `Last reviewed ${showDate(d.lastReviewed)}`,
+          d.contentOwner && `Owner: ${d.contentOwner}`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+      {t.preview && d.demo && <p className="mt-1 text-xs font-extrabold uppercase tracking-[0.1em] text-[#8a5a00] dark:text-[#ffd97a]">{DEMO_LABEL}</p>}
     </article>
+  );
+}
+
+/**
+  Copy the 30-second script, to say or paste into notes. From a draft or demo entry it carries the do-not-send line.
+  If the clipboard refuses, the text is shown selected to copy by hand.
+*/
+function CopyScript({ t, log }: { t: ReaderTile & { preview?: boolean }; log: (e: MythEvent) => void }) {
+  const [state, setState] = useState<"" | "copied" | "failed">("");
+  const fallback = useRef<HTMLTextAreaElement>(null);
+  const draft = Boolean(t.preview);
+  const text = copyText("script", t.data, draft);
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(text);
+      setState("copied");
+      log("script-copied");
+    } catch {
+      setState("failed");
+      log("copy-failed");
+      requestAnimationFrame(() => fallback.current?.select());
+    }
+  };
+  if (!t.copyable && !draft) return null;
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={cx(secondary, "min-h-10 px-3 text-sm")} onClick={() => void copy()}>
+          <Icon name="copy" className="size-4" /> {draft ? "Copy script (marked demo)" : "Copy script"}
+        </button>
+        <span role="status" className="text-sm font-semibold">
+          {state === "copied" ? (draft ? "Copied, with the demo line at the top." : "Copied.") : ""}
+        </span>
+      </div>
+      {state === "failed" && (
+        <textarea
+          ref={fallback}
+          readOnly
+          aria-label="Script to copy"
+          className="mt-2 min-h-28 w-full rounded-xl border border-line-strong bg-bg px-3 py-2 text-sm"
+          value={text}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Save to Favourites and Pin to dashboard: the same Favourites list and pins as Work Tools (docs/pocket-playbook.md). */
+function SaveAndPin({ t, fav, onChanged }: { t: ReaderTile; fav: { pinned: boolean } | null; onChanged?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [problem, setProblem] = useState("");
+  const act = async (body: Record<string, unknown>, done: string) => {
+    setBusy(true);
+    setProblem("");
+    try {
+      await api("/api/pocket", { body: { kind: "myth", id: t.id, ...body } });
+      setNote(done);
+      onChanged?.();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That didn’t work. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggle = (on: boolean) => cx(secondary, "min-h-10 px-3 text-sm", on && "border-action bg-tealtint");
+  return (
+    <div className="mt-4 border-t border-line pt-3 text-sm">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          aria-pressed={Boolean(fav)}
+          disabled={busy}
+          className={toggle(Boolean(fav))}
+          onClick={() => void act({ action: "save", on: !fav }, fav ? "Removed from your Favourites." : "Saved to Favourites.")}
+        >
+          <Icon name={fav ? "bookmark-filled" : "bookmark"} className="size-4" /> {fav ? "In your Favourites" : "Save to Favourites"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={Boolean(fav?.pinned)}
+          disabled={busy}
+          className={toggle(Boolean(fav?.pinned))}
+          onClick={() =>
+            void act(
+              { action: "pin", on: !fav?.pinned },
+              fav?.pinned ? "Unpinned. It’s still in your Favourites." : "Pinned to your dashboard: it’s on your Hub home and at the top of Favourites.",
+            )
+          }
+        >
+          <Icon name="pin" className="size-4" /> {fav?.pinned ? "Pinned to dashboard" : "Pin to dashboard"}
+        </button>
+      </div>
+      <p role="status" className="mt-1 min-h-5">
+        {note}
+      </p>
+      {problem && (
+        <p role="alert" className={warn}>
+          {problem}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -175,9 +339,11 @@ function Reply({ t, mode, practice, log }: { t: ReaderTile & { preview?: boolean
   const panel = useRef<HTMLHeadingElement>(null);
   const fallback = useRef<HTMLTextAreaElement>(null);
   const practiceBox = useRef<HTMLTextAreaElement>(null);
-  const text = `Subject: ${subject}\n\n${body}`;
+  const draft = Boolean(t.preview);
+  // From a draft or demo entry the copied text starts with the do-not-send line, so it can't pass as approved wording.
+  const text = copyText("email", t.data, draft, { subject, body });
   const left = placeholdersIn(`${subject}\n${body}`);
-  const blocked = !t.copyable || Boolean(t.preview);
+  const blocked = !t.copyable && !draft;
   const show = (s: typeof stage) => {
     setStage(s);
     // Practice goes straight to the box to type in; the preview starts at its heading.
@@ -205,7 +371,7 @@ function Reply({ t, mode, practice, log }: { t: ReaderTile & { preview?: boolean
           </button>
         ) : null}
         <button type="button" className={secondary} onClick={() => show("preview")}>
-          <Icon name="mail" className="size-4" /> Send to Client
+          <Icon name="mail" className="size-4" /> {draft ? "Email reply (demo)" : "Send to Client"}
         </button>
       </div>
     );
@@ -244,23 +410,26 @@ function Reply({ t, mode, practice, log }: { t: ReaderTile & { preview?: boolean
   return (
     <div className="mt-4 border-t border-line pt-4">
       <h5 ref={panel} tabIndex={-1} className="font-semibold outline-none">
-        Send to Client: review before you copy
+        {draft ? "Email reply (demo): not an approved Trilogy Care communication" : "Send to Client: review before you copy"}
       </h5>
+      {draft && (
+        <p className={cx(warn, "mt-2")}>
+          {DEMO_LABEL}. Practice wording only: don’t send it. What you copy starts with a do-not-send line, and nothing is recorded.
+        </p>
+      )}
       {said.trim() && (
         <p className="mt-1 rounded-xl bg-muted p-2 text-sm">
           <span className="font-semibold">You said:</span> {said}
         </p>
       )}
       {blocked ? (
-        <p className={cx(warn, "mt-2")}>
-          {t.preview ? "This is a draft, so it can’t be copied." : "This tile is under review, so its email can’t be copied until it’s approved again."}
-        </p>
+        <p className={cx(warn, "mt-2")}>This tile is under review, so its email can’t be copied until it’s approved again.</p>
       ) : (
         <>
           <div className="mt-2 rounded-xl bg-muted p-3 text-sm">
             <p className="font-semibold">Before you use it, check for this person:</p>
             <ul className="mt-1 list-disc pl-5">
-              {t.data.checks.filter(Boolean).map((c) => (
+              {(t.data.reality ? checkItems(t.data.checks) : t.data.checks.filter(Boolean)).map((c) => (
                 <li key={c}>{c}</li>
               ))}
             </ul>
@@ -282,10 +451,14 @@ function Reply({ t, mode, practice, log }: { t: ReaderTile & { preview?: boolean
           {left.length > 0 && <p className={cx(warn, "mt-2")}>Replace {left.join(" and ")} before you use this outside the Hub.</p>}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button type="button" className={primary} onClick={() => void doCopy()}>
-              <Icon name="copy" className="size-4" /> Copy email text
+              <Icon name="copy" className="size-4" /> {draft ? "Copy email (marked demo)" : "Copy email text"}
             </button>
             <span role="status" className="text-sm font-semibold">
-              {copy === "copied" ? `${NOT_SENT}. Paste it into your email to send it yourself.` : ""}
+              {copy === "copied"
+                ? draft
+                  ? "Copied, with the do-not-send line at the top."
+                  : `${NOT_SENT}. Paste it into your email to send it yourself.`
+                : ""}
             </span>
           </div>
           {copy === "failed" && (
@@ -312,8 +485,8 @@ function Reply({ t, mode, practice, log }: { t: ReaderTile & { preview?: boolean
   );
 }
 
-/** "Useful", or "Wording looks out of date" with a note for the library's review queue. */
-function Flags({ t, disabled }: { t: ReaderTile; disabled: boolean }) {
+/** "Useful", or "Inaccurate or out of date" with a note for the library's review queue. A reviewer can flag a draft too. */
+function Flags({ t, disabled, draft }: { t: ReaderTile; disabled: boolean; draft: boolean }) {
   const [useful, setUseful] = useState(false);
   const [outdated, setOutdated] = useState<"" | "writing" | "sent">("");
   const [note, setNote] = useState("");
@@ -326,12 +499,14 @@ function Flags({ t, disabled }: { t: ReaderTile; disabled: boolean }) {
   return (
     <div className="mt-4 flex flex-col gap-2 border-t border-line pt-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={cx(secondary, "min-h-10 px-3 text-sm")} disabled={useful} onClick={() => void send("useful")}>
-          <Icon name="heart" className="size-4" /> {useful ? "Marked useful" : "Useful"}
-        </button>
+        {!draft && (
+          <button type="button" className={cx(secondary, "min-h-10 px-3 text-sm")} disabled={useful} onClick={() => void send("useful")}>
+            <Icon name="heart" className="size-4" /> {useful ? "Marked useful" : "Useful"}
+          </button>
+        )}
         {outdated === "" && (
           <button type="button" className={cx(secondary, "min-h-10 px-3 text-sm")} onClick={() => setOutdated("writing")}>
-            <Icon name="flag" className="size-4" /> Wording looks out of date
+            <Icon name="flag" className="size-4" /> Inaccurate or out of date
           </button>
         )}
         {outdated === "sent" && <span role="status">Thanks: it’s with the content owner to check.</span>}
@@ -345,7 +520,7 @@ function Flags({ t, disabled }: { t: ReaderTile; disabled: boolean }) {
           }}
         >
           <label className="flex flex-col gap-1">
-            <span className="font-semibold">What looks out of date?</span>
+            <span className="font-semibold">What looks inaccurate or out of date?</span>
             <textarea
               className="min-h-16 rounded-xl border border-line-strong bg-bg px-3 py-2"
               maxLength={600}

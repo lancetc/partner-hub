@@ -212,8 +212,9 @@ const HOME_COVER = {
 
 /**
   The three parts: each one a Discovery Path of short Topics, and a chapter of the long-form Magazine course.
-  `description`: a line on what the part covers, the Magazine chapter's introduction. `intro`: the Discovery Path's
-  introduction, written to be heard: Ava says it on the path page, where it's also shown (under 500 characters).
+  `description`: a line on what the part covers: the Magazine chapter's introduction, and the Discovery Path's
+  description. `intro`: the Discovery Path's Discovery Exciter (docs/discovery-exciter.md), written to be heard, 70 to
+  130 words; the builder seeds it as a draft for an author to approve and record.
 */
 export const ALIS_PARTS = [
   {
@@ -222,7 +223,7 @@ export const ALIS_PARTS = [
     short: "Incident management systems",
     description: "The SIRS, what an incident management system (IMS) is, creating and implementing one, and how complaints and feedback connect to it.",
     intro:
-      "Every incident is a chance to keep someone safer. In this path, you’ll learn what the Serious Incident Response Scheme is, and how an incident management system helps you notice, respond to and learn from what goes wrong. Five short topics take you from the SIRS itself to the four components and six elements of a good system, and how complaints fit in. Then a five-question quiz checks it’s all clicked. You’ll need all five right, so take your time.",
+      "When something goes wrong in someone’s care, what happens next? Does it get noticed, dealt with and learned from, or quietly forgotten? Every incident is a chance to keep someone safer, and that’s what an incident management system is for. In this Discovery Path, you’ll find out what the Serious Incident Response Scheme is, and what a good incident management system looks like, from its four components and six elements to the leadership, culture and training that make it work. You’ll also explore when a complaint needs to be managed as an incident too. Five short topics, then a five-question quiz. You’ll need all five right, so take your time.",
     standfirst:
       "Part 1 of ALIS, the Aged Care Learning Information Solution. Why incident management matters, the SIRS, the four components and six elements of an incident management system, and how complaints feed into it.",
     whoFor: "Everyone at Trilogy Care who supports older people at home or in the community, and the people who lead them. Start here.",
@@ -240,7 +241,7 @@ export const ALIS_PARTS = [
     short: "Using your incident management system",
     description: "Follow one incident through the IMS: responding, recording, analysing, implementing actions and closing the loop.",
     intro:
-      "Something has happened. What now? In this path, you’ll follow one incident all the way through, from the first response to closing the loop. Across five short topics, you’ll see how to look after the person first, record what happened, work out why it happened, choose actions that stick, and share the outcome. Then a five-question quiz brings it together. You’ll need all five right to finish, and you can try again if you need to.",
+      "Something has happened. What now? Looking after the person comes first, but that’s only the beginning. In this Discovery Path, you’ll follow one incident all the way through, from the first response to closing the loop. You’ll see how to look after the people affected, with open disclosure, then record what happened so patterns can be spotted, work out why it happened and whether to investigate, and choose actions that actually stick. Finally, you’ll check those actions worked and share the outcome. Five short topics, then a five-question quiz. You’ll need all five right to finish, and you can try again if you need to.",
     standfirst:
       "Part 2 of ALIS, the Aged Care Learning Information Solution. Follow one incident through the incident management system, from the first response to closing the loop.",
     whoFor: "Everyone at Trilogy Care who responds to, records or follows up incidents. Best after SIRS 1.",
@@ -258,7 +259,7 @@ export const ALIS_PARTS = [
     short: "SIRS in Home Services",
     description: "The eight reportable incident types as they apply in home and community settings, Priority 1 and 2, and SIRS in practice.",
     intro:
-      "Would you know a reportable incident if you saw one in someone’s home? This path walks you through all eight types under the SIRS, as they show up in home and community care, from unexplained absence to neglect. For each one, you’ll see what to look for, what to do first, and whether it’s Priority 1 or Priority 2. Nine short topics, then a five-question quiz. You’ll need all five right, because getting this right really matters.",
+      "Would you know a reportable incident if you saw one in someone’s home? It isn’t always obvious, and it doesn’t always look the way you’d expect. This Discovery Path walks you through all eight reportable incident types under the SIRS, as they show up in home and community care, from unexplained absence to neglect. For each one, you’ll see what to look for, what to do first, and whether it’s Priority 1 or Priority 2. Then you’ll bring it all together with the SIRS in practice. Nine short topics, then a five-question quiz. You’ll need all five right, because getting this right really matters.",
     standfirst:
       "Part 3 of ALIS, the Aged Care Learning Information Solution. The eight reportable incident types as they apply in home and community care: what to look for, what to do first, and how each is reported.",
     whoFor: "Everyone at Trilogy Care who supports older people at home or in the community. Best after SIRS 1 and 2.",

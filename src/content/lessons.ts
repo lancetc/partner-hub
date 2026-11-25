@@ -3,6 +3,7 @@ import type { IconName, VisualVariant } from "./stories";
 import type { IconName as AnyIcon } from "@/components/Icon";
 import type { GradientId } from "./gradients";
 import type { ThemeId } from "./themes";
+import type { TopicIntro } from "@/lib/topicIntro";
 
 /*
   Portable lesson format: stable node ids, typed card payloads and explicit transitions
@@ -43,8 +44,8 @@ export type CardVisual =
       synthetic: boolean;
       tone: Tone;
       alt: string;
-      /** Approved photograph shown as the poster instead of the drawn presenter. */
-      photo?: { src: string; width: number; height: number };
+      /** Approved photograph shown as the poster instead of the drawn presenter. `position`: its focus, for a portrait crop. */
+      photo?: { src: string; width: number; height: number; position?: string };
       /** Presenter video; played only when the learner presses play. */
       video?: {
         /**
@@ -184,7 +185,11 @@ export type QuizQuestion = {
 };
 
 export type Card =
-  | (Base & { type: "presenter"; transcript: string; durationSec: number; next: string })
+  /**
+    A presenter video card. Marked with `intro`, it is the Topic's Introduction card (lib/topicIntro.ts): always first,
+    made with every new Topic, and never removed or moved.
+  */
+  | (Base & { type: "presenter"; transcript: string; durationSec: number; next: string; intro?: TopicIntro })
   | (Base & { type: "image"; next: string; cta?: string })
   | (Base & { type: "audio"; script: string; next: string })
   /** A dedicated audio card: the whole card is about listening. Plays when the learner presses Play. */

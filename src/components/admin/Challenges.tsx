@@ -213,6 +213,24 @@ function ChallengeForm({
       on ? "Published. Missions open on schedule, and invitations go out as each one opens." : "Back to a draft.",
     );
 
+  /** A published challenge's dates are fixed, so running it again makes a new draft copy to date and publish. */
+  async function runAgain() {
+    if (
+      !(await confirmAction(
+        `Make a new draft of “${d.name}” to run again? It keeps the story, missions, points, teams and people, and starts next Monday until you change the date. This one keeps its scores.`,
+      ))
+    )
+      return;
+    let made: { id: string } | null = null;
+    if (
+      await run(
+        async () => void (made = await api<{ id: string }>(`/api/admin/challenges/${id}`, { body: { action: "rerun" } })),
+        "New draft made. Set its start date, then publish.",
+      )
+    )
+      if (made) router.push(`/admin/challenges/${(made as { id: string }).id}`);
+  }
+
   async function remove() {
     if (!(await confirmAction(`Delete “${d.name || "this challenge"}”? Its missions go back into the Learning catalogue.`))) return;
     if (await run(() => api(`/api/admin/challenges/${id}`, { method: "DELETE" }), "Deleted.")) router.push("/admin/challenges");
@@ -247,6 +265,11 @@ function ChallengeForm({
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={published ? "good" : "neutral"}>{published ? "Published" : "Draft"}</Badge>
         {published && <span className="text-sm text-ink-muted">Dates, missions and points are fixed while it’s published.</span>}
+        {published && id && (
+          <button type="button" className={cx(btn.secondary, "ml-auto")} disabled={busy} onClick={runAgain}>
+            <Icon name="refresh" className="size-4" /> Run again
+          </button>
+        )}
       </div>
 
       {me?.canAuthor && !published && (

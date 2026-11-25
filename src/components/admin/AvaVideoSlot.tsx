@@ -23,7 +23,7 @@ type Where = "magazine" | "path" | "topic";
 const WHERE: Record<Where, { plays: string; script: string; stale: string }> = {
   magazine: {
     plays:
-      "On the page it plays where the picture goes, then the picture takes over. It replaces the audio introduction; without one, learners get the Audio guide.",
+      "On the page it plays where the picture goes, then the picture takes over. Learners get the audio introduction beneath the heading as well; only one plays at a time.",
     script: "the Audio guide script below",
     stale: "The Audio guide script has changed since this video went in.",
   },

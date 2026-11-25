@@ -6,6 +6,8 @@ import { lessons } from "@/content/lessons";
 import { LessonEditor } from "@/components/admin/LessonEditor";
 import { getDb } from "@/server/db";
 import { editorLesson } from "@/server/authoredLessons";
+import { seededDefaultPresenter } from "@/server/introPresenters";
+import { withIntroCard } from "@/lib/topicIntro";
 
 export const metadata: Metadata = { title: "Edit topic" };
 
@@ -29,5 +31,7 @@ async function Editor({ params, searchParams }: Pick<PageProps<"/admin/lessons/[
   await connection();
   const found = editorLesson(getDb(), slug);
   if (!found) notFound();
-  return <LessonEditor key={slug} initial={found.lesson} status={found.status} isNew={false} card={typeof card === "string" ? card : undefined} />;
+  // Every Topic opens with its Introduction card: shown here before the next save adds it (lib/topicIntro.ts).
+  const lesson = withIntroCard(found.lesson, seededDefaultPresenter(getDb()));
+  return <LessonEditor key={slug} initial={lesson} status={found.status} isNew={false} card={typeof card === "string" ? card : undefined} />;
 }

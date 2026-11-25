@@ -1614,7 +1614,8 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
                 </header>
               )}
 
-              {page.kind === "content" && draft.doc.audio?.levels.pages && (
+              {/* Every content page has an Audio introduction section (docs/magazine-audio-guide.md), unless page introductions are turned off. */}
+              {page.kind === "content" && (draft.doc.audio?.levels.pages ?? true) && (
                 <div className="mt-8">
                   <PageNarrationStrip key={page.id} guideId={id} draft={draft} change={change} page={page} />
                 </div>

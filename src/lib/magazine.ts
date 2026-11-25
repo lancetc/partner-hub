@@ -764,7 +764,7 @@ export type Page = {
   The Audio Guide (docs/magazine-audio-guide.md): a short spoken introduction to the course and to each
   page. Kept in the document, so each edition keeps its own narration.
 */
-export type NarrationLength = "short" | "standard" | "extended";
+export type NarrationLength = "short" | "standard" | "extended" | "editorial";
 /** What the page (or course) said when its script was approved: for noticing it has moved on. */
 export type NarrationSnapshot = { hash: string; key: string; sig: number[] };
 export type NarrationAudio = {
@@ -773,10 +773,20 @@ export type NarrationAudio = {
   seconds: number;
   /** Each word's place in the script and in the recording, for following along. */
   words: { from: number; to: number; start: number; end: number }[] | null;
-  /** The script it was recorded from, and the voice ("topic" for the Topic narrator, else an ElevenLabs voice id). */
+  /** The script it was recorded from, and the voice ("topic" for the Topic narrator, "profile:<id>" for a voice profile, else a voice id). */
   scriptHash: string;
   voice: string;
   at: string;
+  /** Who made it (Audio Introductions, Nov 2026): "openai", "elevenlabs" or "upload". Absent on earlier recordings. */
+  provider?: string;
+  /** The voice profile it was made with ("editorial": the Magazine Editorial Voice), when there was one. */
+  profile?: string;
+  /** The speech model, e.g. gpt-4o-mini-tts. */
+  model?: string;
+  /** What it cost to make, in US dollars, estimated from its characters and the model's price (lib/magazineNarration). */
+  cost?: number;
+  /** Made but not yet approved by the author: learners never hear it. Absent means approved (every earlier recording). */
+  pending?: true;
 };
 export type Narration = {
   script: string;
@@ -785,15 +795,28 @@ export type Narration = {
   audio?: NarrationAudio;
   /** Warnings from the checks when it was written (a figure to confirm, a possible give-away). */
   checks?: string[];
+  /** The script's version: 1 for the first, one more each time a new script replaces it. */
+  version?: number;
+  /** Who approved the introduction for publication, and when. */
+  approvedBy?: string;
+  approvedAt?: string;
+  /** The author turned the published introduction off: learners don't get the player. */
+  hidden?: true;
+  /**
+    A replacement in progress (a new script, new audio or both) while this one stays what learners hear. Approving it
+    for publication puts it in this one's place. Never sent to learners.
+  */
+  next?: Omit<Narration, "next" | "hidden">;
 };
 export type GuideAudio = {
   levels: { course: boolean; pages: boolean; blocks: boolean };
-  /** The hub's Topic narrator, another ElevenLabs voice, or one of OpenAI's voices. */
-  voice: { kind: "topic" } | { kind: "custom"; voiceId: string; name: string } | { kind: "openai"; voice: string };
+  /** A voice profile (the Magazine Editorial Voice), the hub's Topic narrator, another ElevenLabs voice, or one of OpenAI's voices. */
+  voice: { kind: "profile"; id: "editorial" } | { kind: "topic" } | { kind: "custom"; voiceId: string; name: string } | { kind: "openai"; voice: string };
   length: NarrationLength;
   /**
-    "auto": introductions play as learners arrive, with a switch to turn them off (the default).
-    "offer-auto": the same switch, off until the learner turns it on. "press-play": no switch; Play only.
+    Introductions never play by themselves (Audio Introductions, Nov 2026): learners press Play. What's left of this
+    setting is the Audio guide switch, which starts Ava's transmissions without sound when it's off.
+    "press-play": no switch (the default). "auto": the switch, starting on. "offer-auto": the switch, starting off.
   */
   playback: "auto" | "offer-auto" | "press-play";
   /** The course introduction. */
@@ -1971,7 +1994,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     return { id: idOf(s?.id, where), title: str(s?.title, `${where} title`, { required: true, max: 120 }) ?? "", blocks };
   };
   /** A spoken introduction: its script, whether it's approved, and its recording. Never required. */
-  const narration = (v: unknown, where: string): Narration | undefined => {
+  const narration = (v: unknown, where: string, nested = false): Narration | undefined => {
     const o = v as Record<string, unknown> | undefined;
     if (!o || typeof o !== "object") return undefined;
     const script = str(o.script, `${where} narration`, { max: 1200 }) ?? "";
@@ -1999,16 +2022,30 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
           scriptHash: String(a.scriptHash ?? "").slice(0, 40),
           voice: String(a.voice ?? "topic").slice(0, 60),
           at: typeof a.at === "string" && !Number.isNaN(Date.parse(a.at)) ? new Date(a.at).toISOString() : new Date(0).toISOString(),
+          // Where it came from and what it cost (Audio Introductions); absent on earlier recordings.
+          ...(typeof a.provider === "string" && /^[a-z0-9-]{2,30}$/.test(a.provider) && { provider: a.provider }),
+          ...(typeof a.profile === "string" && /^[a-z0-9-]{2,30}$/.test(a.profile) && { profile: a.profile }),
+          ...(typeof a.model === "string" && /^[\w.:-]{2,60}$/.test(a.model) && { model: a.model }),
+          ...(typeof a.cost === "number" && Number.isFinite(a.cost) && a.cost >= 0 && { cost: Math.round(a.cost * 1e5) / 1e5 }),
+          ...(a.pending === true && { pending: true as const }),
         };
       }
     }
     const checks = Array.isArray(o.checks) ? o.checks.slice(0, 10).map((c) => String(c).slice(0, 300)) : [];
+    const version = Math.round(Number(o.version));
+    const approvedAt = typeof o.approvedAt === "string" && !Number.isNaN(Date.parse(o.approvedAt)) ? new Date(o.approvedAt).toISOString() : undefined;
+    const next = nested ? undefined : narration(o.next, where, true);
     return {
       script,
       status: o.status === "approved" ? "approved" : "draft",
       ...(basis && { basis }),
       ...(audio && { audio }),
       ...(checks.length && { checks }),
+      ...(version > 0 && version < 10_000 && { version }),
+      ...(typeof o.approvedBy === "string" && o.approvedBy.trim() && { approvedBy: o.approvedBy.trim().slice(0, 80) }),
+      ...(approvedAt && { approvedAt }),
+      ...(!nested && o.hidden === true && { hidden: true as const }),
+      ...(next && { next }),
     };
   };
   const audioSettings = (v: unknown): GuideAudio | undefined => {
@@ -2020,13 +2057,16 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
     return {
       levels: { course: l.course !== false, pages: l.pages !== false, blocks: l.blocks === true },
       voice:
-        voice?.kind === "custom" && typeof voice.voiceId === "string" && /^[A-Za-z0-9]{8,40}$/.test(voice.voiceId)
-          ? { kind: "custom", voiceId: voice.voiceId, name: String(voice.name ?? "").slice(0, 80) }
-          : voice?.kind === "openai" && typeof voice.voice === "string" && /^[a-z]{2,20}$/.test(voice.voice)
-            ? { kind: "openai", voice: voice.voice }
-            : { kind: "topic" },
-      length: o.length === "short" || o.length === "extended" ? o.length : "standard",
-      playback: o.playback === "offer-auto" || o.playback === "press-play" ? o.playback : "auto",
+        voice?.kind === "profile" && voice.id === "editorial"
+          ? { kind: "profile", id: "editorial" }
+          : voice?.kind === "custom" && typeof voice.voiceId === "string" && /^[A-Za-z0-9]{8,40}$/.test(voice.voiceId)
+            ? { kind: "custom", voiceId: voice.voiceId, name: String(voice.name ?? "").slice(0, 80) }
+            : voice?.kind === "openai" && typeof voice.voice === "string" && /^[a-z]{2,20}$/.test(voice.voice)
+              ? { kind: "openai", voice: voice.voice }
+              : { kind: "topic" },
+      length: o.length === "short" || o.length === "extended" || o.length === "editorial" ? o.length : "standard",
+      // Introductions never play by themselves now; a stored "auto" or "offer-auto" only keeps the Audio guide switch.
+      playback: o.playback === "offer-auto" || o.playback === "auto" ? o.playback : "press-play",
       ...(intro && { intro }),
     };
   };
@@ -2242,6 +2282,10 @@ export function publishChecks(doc: GuideDoc, mode: CompletionMode, signedOff: Se
       if (state === "review") suggestions.push(`${what} may be out of date: the page has changed a lot since it was approved.`);
       if (state === "draft") suggestions.push(`${what}: approve the script (learners don’t hear it until it’s approved and recorded).`);
       if (state === "unrecorded") suggestions.push(`${what}: record the approved script.`);
+      if (state === "pending") suggestions.push(`${what}: listen to the audio and approve it (learners don’t hear it until you do).`);
+      if (state === "revoice") suggestions.push(`${what} was recorded in an earlier voice. Learners still hear it; make replacement audio when you’re ready.`);
+      if (p.narration.next)
+        suggestions.push(`${what}: a replacement is in progress. Learners keep hearing the current introduction until you approve the replacement.`);
     }
     p.sections.forEach((s) =>
       s.blocks.forEach((b, i) => {

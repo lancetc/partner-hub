@@ -23,6 +23,7 @@ import {
 import { CASE_THREAD_CASES } from "@/content/caseThreadCases";
 import { HAZARD_SCENES } from "@/content/hazardScenes";
 import { freshCaseThread } from "@/lib/caseThread";
+import { DEFAULT_PRESENTER, placeholderVisual } from "@/lib/topicIntro";
 
 /*
   The ALIS builders (docs/alis-course.md): one shared course (content/alisCourse.ts) turned into the Hub's two formats.
@@ -131,14 +132,20 @@ export function buildTopic(m: AlisModule, version = "0.1"): Lesson {
   const c = partOf(m).cover;
   const photo = { src: c.src, width: c.width, height: c.height, position: "center" };
   const cards: Draft[] = [
+    // The Topic's Introduction card (docs/topic-video-introductions.md): the module's title, summary and any support note,
+    // over the part's cover as this Topic's placeholder until a presenter video is made.
     {
       id: "intro",
-      type: "image",
+      type: "presenter",
       beat: 0,
       label: `Module ${moduleNumber(m)}`,
       heading: m.title,
       body: `${m.summary}${m.sensitive ? `\n\n*${ALIS_SUPPORT_NOTE}*` : ""}`,
-      visual: { kind: "illustration", variant: "petals", tone: "teal", icon: "shield", alt: c.alt, photo },
+      visual: { ...placeholderVisual(DEFAULT_PRESENTER, photo), alt: c.alt },
+      transcript: "",
+      durationSec: 0,
+      comments: false,
+      intro: { layout: "intro", origin: "new", placeholder: photo },
     },
     // The module in brief; a module not yet given one keeps its reading card.
     ...(m.short

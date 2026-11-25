@@ -9,6 +9,8 @@ import { originalLesson, syncPublishedLessons } from "./lessonRegistry";
 import { recordVersion, versionContent } from "./lessonVersions";
 import { blankLesson } from "@/content/blankLesson";
 import { cleanAudiences } from "@/lib/audiences";
+import { withIntroCard } from "@/lib/topicIntro";
+import { seededDefaultPresenter } from "./introPresenters";
 
 /*
   Saving lessons from the editor. Save draft keeps the author's work without changing what learners
@@ -106,6 +108,9 @@ function validate(input: Lesson, slug: string): Lesson {
   return lesson;
 }
 
+/** Every Topic opens with its Introduction card (lib/topicIntro.ts): added, or an existing first presenter card reused, on every save. */
+const withIntro = (db: Db, l: Lesson) => withIntroCard(l, seededDefaultPresenter(db));
+
 const slugify = (t: string) =>
   t
     .toLowerCase()
@@ -123,7 +128,7 @@ export function createLesson(db: Db, actor: User, input: Lesson, now: Date) {
   const base = slugify(String(input?.title ?? ""));
   let slug = base;
   for (let n = 2; taken(db, slug); n++) slug = `${base}-${n}`;
-  const lesson = validate({ ...input, version: "0.1" }, slug);
+  const lesson = withIntro(db, validate({ ...input, version: "0.1" }, slug));
   const at = now.toISOString();
   db.prepare("INSERT INTO authored_lessons (slug, draft, published, created_by, created_at, updated_by, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?)").run(
     slug,
@@ -157,7 +162,7 @@ export function saveDraft(db: Db, actor: User, slug: string, input: Lesson, now:
       `This topic was saved by ${who} at ${when}, after you opened it here. To avoid overwriting that, your changes here haven’t been saved.`,
     );
   }
-  const lesson = validate(input, slug);
+  const lesson = withIntro(db, validate(input, slug));
   const at = now.toISOString();
   if (existing)
     db.prepare("UPDATE authored_lessons SET draft = ?, updated_by = ?, updated_at = ? WHERE slug = ?").run(JSON.stringify(lesson), actor.id, at, slug);

@@ -3,6 +3,7 @@ import { lessons } from "@/content/lessons";
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, isSuperadmin, requireReporter, type User } from "./auth";
 import { unpublishedLessons } from "./authoredLessons";
+import { seedExciter } from "./pathExciterStore";
 import { thumbnailFor } from "@/lib/pathThumbnail";
 import { cleanQuizSettings, parseQuizSettings, type PathQuizSettings } from "@/lib/pathQuizSettings";
 
@@ -55,6 +56,12 @@ export type PathInput = {
   lessons: string[];
   /** Optional grouping: chapters in order, each with its lessons (topics) in order, and an optional stage heading. */
   chapters?: ChapterInput[];
+  /**
+    A starting Discovery Exciter script (the migration and the ALIS builder; docs/discovery-exciter.md), kept apart from
+    the description as a draft for the author to approve. Never replaces an author's script. The editor doesn't send it:
+    the Exciter has its own section and saves.
+  */
+  exciterSeed?: string;
 };
 export type ChapterInput = { id?: string; title: string; description?: string; stage?: string; lessons: string[] };
 export type Chapter = { id: string; title: string; description: string; stage: string; lessons: string[] };
@@ -377,7 +384,8 @@ export function createLearningPath(db: Db, actor: User, input: PathInput, now: D
     audit(db, { actor: actor.id, event: "learning_path.created", entity: `learning_path:${id}`, next: v, at: now });
     attachDefaultSurvey(db, id, now);
   });
-  return { id };
+  const exciter = typeof input.exciterSeed === "string" ? seedExciter(db, id, input.exciterSeed, actor.id, now) : null;
+  return { id, exciter };
 }
 
 /** The survey every learning path is given, unless an author chooses another in Admin › Surveys. */
@@ -440,6 +448,8 @@ export function updateLearningPath(db: Db, actor: User, id: string, input: PathI
     writeLessons(db, id, v);
     audit(db, { actor: actor.id, event: "learning_path.updated", entity: `learning_path:${id}`, previous, next: v, at: now });
   });
+  const exciter = typeof input.exciterSeed === "string" ? seedExciter(db, id, input.exciterSeed, actor.id, now) : null;
+  return { ok: true as const, exciter };
 }
 
 /** Archiving hides the path; assignments and completions stay on record. */
@@ -537,7 +547,13 @@ export function leavePath(db: Db, user: User, id: string, now: Date) {
   if (!a) return { enrolled: false, selfEnrolled: false };
   if (!a.self) throw new HttpError(409, "This path was assigned to you, so it stays on your list. Ask your administrator if it shouldn’t be.");
   db.prepare("DELETE FROM learning_path_assignments WHERE path_id = ? AND user_id = ? AND self = 1").run(id, user.id);
-  audit(db, { actor: user.id, event: "learning_path.self_unenrolled", entity: `learning_path:${id}`, reason: "Left by the learner; completions are kept.", at: now });
+  audit(db, {
+    actor: user.id,
+    event: "learning_path.self_unenrolled",
+    entity: `learning_path:${id}`,
+    reason: "Left by the learner; completions are kept.",
+    at: now,
+  });
   return { enrolled: false, selfEnrolled: false };
 }
 
@@ -612,35 +628,37 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
   const published = (s: string) => catalogue().some((l) => l.slug === s);
   const opened = new Set((db.prepare("SELECT slug FROM lesson_progress WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug));
   const rows = db.prepare("SELECT * FROM learning_paths WHERE archived = 0 ORDER BY name").all() as PathRow[];
-  return rows
-    .map((p) => ({ p, slugs: slugsFor(db, p.id), a: mine.get(p.id) }))
-    .filter(({ slugs, a }) => slugs.some(published) && (a || !slugs.some((s) => hidden.has(s))))
-    .map(({ p, slugs, a }) => {
-      const { completed, total, done } = progress(db, user.id, slugs, Boolean(p.in_order));
-      const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
-      return {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        audience: p.audience,
-        addedAt: p.created_at,
-        assigned: Boolean(a && !a.self),
-        selfEnrolled: Boolean(a?.self),
-        dueDate: a?.due_date ?? null,
-        topics: slugs.length,
-        minutes: slugs.reduce((n, s) => n + info(s).minutes, 0),
-        completed,
-        total,
-        done,
-        started: completed > 0 || slugs.some((s) => opened.has(s)),
-        thumbnail: first ? thumbnailFor(first) : null,
-      };
-    })
-    // Assigned first, then ones they enrolled in themselves, then the rest.
-    .sort(
-      (a, b) =>
-        Number(b.assigned) - Number(a.assigned) || Number(b.selfEnrolled) - Number(a.selfEnrolled) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"),
-    );
+  return (
+    rows
+      .map((p) => ({ p, slugs: slugsFor(db, p.id), a: mine.get(p.id) }))
+      .filter(({ slugs, a }) => slugs.some(published) && (a || !slugs.some((s) => hidden.has(s))))
+      .map(({ p, slugs, a }) => {
+        const { completed, total, done } = progress(db, user.id, slugs, Boolean(p.in_order));
+        const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          audience: p.audience,
+          addedAt: p.created_at,
+          assigned: Boolean(a && !a.self),
+          selfEnrolled: Boolean(a?.self),
+          dueDate: a?.due_date ?? null,
+          topics: slugs.length,
+          minutes: slugs.reduce((n, s) => n + info(s).minutes, 0),
+          completed,
+          total,
+          done,
+          started: completed > 0 || slugs.some((s) => opened.has(s)),
+          thumbnail: first ? thumbnailFor(first) : null,
+        };
+      })
+      // Assigned first, then ones they enrolled in themselves, then the rest.
+      .sort(
+        (a, b) =>
+          Number(b.assigned) - Number(a.assigned) || Number(b.selfEnrolled) - Number(a.selfEnrolled) || (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"),
+      )
+  );
 }
 
 /**

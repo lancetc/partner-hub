@@ -2,6 +2,8 @@
 
 **Status:** Draft for review · **Area:** Magazine (courses and guides) · **Builds on:** Topic narration (ElevenLabs), Draft with AI (Claude), the Magazine sign-off process
 
+> **Superseded in part (25 Nov 2026) by Magazine Audio Introductions, section 15.** Introductions no longer play by themselves, a page with Ava's video shows the introduction player as well, the default voice is the Magazine Editorial Voice (OpenAI Alloy), audio is made in the background and approved before learners hear it, and a published introduction keeps playing until its replacement is approved. Where sections 1 to 14 disagree with section 15, section 15 is current.
+
 ## 1. Summary
 
 A voice that works as a learning companion across a Magazine course. It doesn't read the page aloud. At the start of the course and of each page it gives a short spoken introduction: it raises a question, sets up a challenge or links to what came before. Then the learner reads and does the page.
@@ -311,5 +313,128 @@ Audit events: `magazine.narration_drafted` (model, usage, scope), `magazine.narr
 
 1. Should approving a narration script need a reviewer, or is it the author's call, with the course's normal sign-off covering it? *Proposed:* the author approves; sign-off covers it.
 2. Is a 20% word change the right "substantially changed" threshold? *Proposed:* start there and tune from author feedback.
-3. ~~Should the Audio Guide switch default to **On**?~~ *Decided (19 Nov 2026):* yes. **Play automatically** is the default: introductions play as learners arrive, and they can turn the Audio Guide off with the switch (remembered per course) or pause and mute on the card. Opt-in is still available as an option.
+3. ~~Should the Audio Guide switch default to **On**?~~ *Decided (19 Nov 2026):* yes. **Play automatically** is the default: introductions play as learners arrive, and they can turn the Audio Guide off with the switch (remembered per course) or pause and mute on the card. Opt-in is still available as an option. *Superseded (25 Nov 2026):* Magazine Audio Introductions (section 15) says audio must never autoplay, so introductions now always wait for Play; what's left of the setting is the Audio guide switch, which starts Ava's transmissions without sound when it's off.
 4. Should course introductions also play on the course's landing card in the Magazine list? *Proposed:* not in Phase 1.
+
+## 15. Magazine Audio Introductions (25 Nov 2026)
+
+This extends the Audio Guide above to the *Partner Hub: Magazine Audio Introductions* PRD. It reuses the Audio Guide's scripts, checks, freshness snapshots, recording and storage rather than building a second system. Section 15 is current wherever it differs from sections 1 to 14.
+
+### 15.1 What was reused and what was added
+
+| PRD need | Reused | Added |
+| --- | --- | --- |
+| Per-page introduction in the document | `Page.narration`, `GuideAudio`, `readGuideDoc` | Optional fields on `Narration` and `NarrationAudio` (15.10). Old guides parse unchanged |
+| Script generation | `draftNarration`, `narrationPrompt`, `narrationIssues`, the `askForJson` / `openaiJson` repair loop, `scriptWarnings`, `spoilerIn` | The five-part structure, the author's brief, position, Ava Relay purpose and named people in the prompt; the `editorial` length (70 to 130 words); formulaic-opening, repeated-opening and claim checks |
+| Alloy voice | `tts.ts` `narration()` and its disk cache, `openaiSpeech` with `style` (from Family Call) | The **Magazine Editorial Voice** profile (`VOICE_PROFILES.editorial`), `openaiSpeechModel()`, `fresh` takes |
+| Storage | `saveUpload` (hub uploads in `data/uploads`) | Nothing new |
+| Background generation | The characters portrait queue (in-process, one at a time) and Ava's video jobs (status rows) | `server/narrationJobs.ts`, table `magazine_narration_jobs` |
+| Change detection | `pageSnapshot`, `introSnapshot`, `substantiallyChanged`, `narrationState` | States `pending` and `revoice`; the PRD's notice word for word |
+| Learner player | (The old `AudioGuideCard` stays only for the Audio guide switch) | `components/magazine/IntroPlayer.tsx` |
+| One sound at a time | `STOP_AUDIO` (kept) | `lib/onePlayer.ts` |
+| Manager | `NarrationReview` | Rebuilt as the **Audio Introduction Manager**, with a Listening tab |
+| Analytics | `magazine_events` via `send("events", …)` | `intro_audio.*` events, `server/narrationStats.ts` |
+
+Routes: `POST /api/admin/magazine/[id]/narration/draft` (unchanged), `GET/POST /api/admin/magazine/[id]/narration/jobs` (replaces `/narration/record`), `GET /api/admin/magazine/[id]/narration/stats`, `GET /api/admin/magazine/voices/preview?voice=`.
+
+### 15.2 The learner player: "Listen to the introduction"
+
+- A page-level feature, not a block. `GuideReader` draws it in the header's text column, beneath the heading, the description and the reading-time line, and before the page's content, on every content page whose introduction is `listenable`: approved, its audio approved (not `pending`), recorded from these exact words, and not turned off (`hidden`).
+- A round teal Play/Pause; a waveform that fills as it plays (bars shaped by where the words fall, from the word timings; the same on server and browser, with no randomness); the time and length; seek (press or drag the waveform, a `role="slider"` with arrow keys for 5 seconds, Page Up and Page Down for 15, Home and End); speed (0.75×, 1×, 1.25×, 1.5×, 2×, remembered in this browser); Replay; an expandable transcript that marks the word being spoken (following the learner's "follow word by word" preference); and a quiet "Narrated by an AI voice · Magazine Editorial Voice" ("Recorded narration" for an uploaded file).
+- It never autoplays (`preload="none"`, no autoplay, whatever `playback` says) and is never part of finishing a page.
+- Moving to another page pauses it, and what was heard is counted.
+
+### 15.3 Ava and the introduction on the same page (decision)
+
+- **Ava's transmission is unchanged.** With a video for the page she still plays where the page's picture goes, starting by herself as before (muted until the page has been used, or with the Audio guide switch off), and the picture takes over when she's done. The course cover's Ava introduction (`audio.intro`, spoken live) is unchanged.
+- **The introduction player is shown as well**, in the text column under the description. On a phone the header stacks: heading, description, the player, then Ava's window, then the content. They read as two voices with two jobs: Alloy is the Magazine's editorial voice introducing the page; Ava is the field correspondent with her own transmission. (In "Ready for Your First Shift", Ava's videos have their own words, so nothing is said twice.) An author whose Ava video speaks the page's introduction script word for word may want to give Ava her own line, or keep only one of them; the editor says both appear.
+- **Never at the same time** (`lib/onePlayer.ts`, installed by the reader and the player). When the learner presses Play on anything (the introduction, Ava, a video block), everything else that's playing pauses. When something starts *by itself* (Ava arriving on screen) while something else is playing, it waits instead (it's paused), so a start nobody asked for never interrupts one the learner chose. "The learner's" means a real click inside that player in the last five seconds. Muted, looping pictures are left alone. Ava's code isn't changed: the rule works on the page's media events.
+- The page header's grid now has one bounded column on a phone. Ava's window caption made the header wider than the screen on pages with her video (it was like this before), and the player would otherwise have sat under it.
+
+### 15.4 The Magazine Editorial Voice, and speech from any provider
+
+- `VOICE_PROFILES.editorial` (lib/magazineNarration): OpenAI Alloy with delivery notes (warm, approachable, calm and professionally confident, conversational Australian English, natural pacing with intentional pauses, not promotional, respectful of an experienced adult audience, no corporate-training delivery). It's the default voice for new courses (`{ kind: "profile", id: "editorial" }`, recorded as `voice: "profile:editorial"`).
+- The model is configurable: `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`, which supports Alloy and delivery instructions). `openaiSpeech` now leaves `instructions` out for `tts-1` models, which don't take them.
+- `SpeechEngine` (server/magazineNarration) is one shape for any provider: text and a voice in; audio, word timings, provider, model and profile out. `hubSpeech` is the real one (OpenAI or ElevenLabs through `tts.ts`); tests pass a stand-in. Another provider or voice is a new profile or engine, and the player and editor don't change. All calls are made on the server with the server's keys.
+- Existing courses keep their chosen voice (most say "topic", the Hub narrator, which is now Alloy; "Ready for Your First Shift" says `openai:alloy`). Switching a course to the Editorial Voice marks its recordings **Earlier voice**: a suggestion, not a block, and they keep playing until replaced. (Before, a voice change blocked publishing and silenced them.)
+
+### 15.5 Scripts
+
+The prompt gives the course title, the learning outcomes (standfirst), the audience, the author's brief from Draft with AI (the behaviour change and background), the course outline, and for each page: its position (between which pages), description, Ava Relay purpose where set, the people its cases name, its full content and activities as JSON, and the answers it mustn't give away. Claude also gets the course's source documents; the OpenAI fallback doesn't (as before). Each introduction follows the PRD's five parts as one piece of speech, 70 to 130 words (the `editorial` length, now the default; shorter is fine where it suits), with the PRD's example for tone only. Checks that send the reply back once: length (well outside the range), give-aways, formulaic openings ("Welcome to this module", "In today's lesson" and the like), and two introductions starting with the same three words. Warnings for the author: figures and dates, and words that usually carry a regulatory, financial or clinical claim.
+
+### 15.6 Authoring
+
+Each content page has an **Audio introduction** section at the top (even before the audio settings exist; using it sets them up with the defaults): generate or regenerate the script (with an optional note), edit it (with its word count and estimated length), approve the script, generate or regenerate the audio, preview it, upload replacement audio (an MP3, timed from its length), preview the voice profile, **Approve for publication**, **Show to learners** (on or off), and Remove. Editing a script never makes audio: every paid action is a button the author presses. The sidebar panel keeps the settings (introductions on or off, voice, length, the Audio guide switch).
+
+### 15.7 Background generation, and the published introduction staying put
+
+- Generate audio queues a job for each script (`queued`, `running`, then `done` or `failed`), recorded one at a time in this server. The editor checks every few seconds while any is waiting or running, and attaches each finished recording to the script it was made from, marked `pending` for the author to listen to and approve. A recording of words that have changed since isn't attached. If the editor was closed, the recording is attached the next time it's opened. Once attached, a recording isn't offered again (so discarding a replacement sticks) unless the same words are asked for again.
+- The same words in the same voice reuse the recording already made (no new charge); **Regenerate audio** asks for a fresh take. A failed job keeps its error and offers **Try again**. A job stopped part-way by a restart is marked failed after ten minutes. Recording is limited to 60 an hour per author.
+- **A failure never touches a course**: jobs don't write to drafts or editions, and published editions can't change anyway.
+- **Replacements.** Once an introduction is what learners hear, any change (a new script, an edit, new or uploaded audio) goes into `narration.next`. Learners keep hearing the published one until the replacement is approved for publication *and* the course is published. **Discard the replacement** drops it. `next`, and audio awaiting approval, are never sent to learners (`narrationForReaders`).
+
+### 15.8 The Audio Introduction Manager
+
+Opened from the sidebar, it lists every introduction in the course with its page, script status and version, audio status (none, queued, generating, failed with Retry, to approve, generated, uploaded, earlier voice, doesn't match the script), approval (by whom, when), duration (estimated from the words before there's audio), last generated date and a review flag. Bulk actions: **Generate missing scripts**, **Approve all scripts**, **Generate audio for approved scripts**, **Approve audio**, and for selected rows **Regenerate scripts** and **Regenerate audio**; each row has Preview and Edit; **Outdated only** finds what needs review. Every paid bulk run asks first, and audio shows an estimated cost where the price is reliable: characters × the configured model's price from `SPEECH_PRICES_TO_VERIFY` (US$15 per million characters for gpt-4o-mini-tts and tts-1, US$30 for tts-1-hd), marked to verify. ElevenLabs bills plan credits, and AI script writing has no reliable per-request price here, so those say there's no estimate. The server also refuses several recordings at once without `confirmed`. The **Listening** tab shows the figures in 15.11.
+
+### 15.9 The outdated notice
+
+When a page changes materially after its introduction was approved (the same test as before: the title, purpose or a question changed, or about a fifth of the words), the section shows, word for word: "This page has changed since its audio introduction was generated. Review the introduction to ensure it still reflects the learning experience." It offers **It's still appropriate** (takes a new snapshot), **Update the script**, **Regenerate the script** and **Generate replacement audio**. Nothing is removed or replaced automatically; publishing lists it as a suggestion.
+
+### 15.10 Data (in the guide document, plus one jobs table)
+
+| PRD field | Where |
+| --- | --- |
+| Introduction script | `narration.script` |
+| Script version | `narration.version` (1, then one more for each new script) |
+| Audio asset reference, duration | `narration.audio.src` (a hub upload), `.seconds`, `.words` |
+| Voice provider, voice profile, generation model | `audio.provider` (`openai`, `elevenlabs`, `upload`), `audio.profile` (`editorial`), `audio.model`; `audio.voice` as before |
+| Generation status | `magazine_narration_jobs.status`, then `audio.pending` once made |
+| Approval status, approved by | `narration.status` (the script), no `audio.pending` (the audio), `narration.approvedBy`, `narration.approvedAt` |
+| Generation timestamp | `audio.at` |
+| Content version and hash | `narration.basis` (`hash`, `key` and a MinHash signature of the page when the script was approved). The edition number is the version learners see |
+| Estimated and actual cost | `magazine_narration_jobs.est_cost` (when queued) and `audio.cost` (when made). OpenAI's speech API doesn't report a charge, so "actual" is the same estimate, from the characters and the model that made it |
+| Visibility | `narration.hidden` |
+| Replacement in progress | `narration.next` |
+
+Old guides parse: every new field is optional, and a recording without `pending` counts as approved (each earlier recording was made from an approved script).
+
+### 15.11 Analytics
+
+`send("events", { event: "introAudio", pageId, detail: { action, seconds?, percent?, speed? } })` records `intro_audio.play`, `.complete`, `.replay`, `.transcript`, `.speed` and `.listened` in `magazine_events`, with the page id and numbers only; anything else in `detail` is dropped. The Manager's Listening tab totals them by page: plays, unique listeners, time listened, average reached, finished, replays, transcript opens, speeds chosen, and the share who finished the page among listeners and among people who didn't listen (only when both groups have five people or more). Totals only, never who. Listening is never a completion requirement and isn't treated as evidence of learning. Ava's transmissions keep their `narration.*` events. The Excel decision register isn't extended: it's for decision-practice blocks, and these are engagement figures.
+
+### 15.12 Deviations and limitations
+
+- **No autoplay at all**, replacing the decision in 14.3. The `playback` setting now only controls the Audio guide switch (Ava's muted start). New courses default to `press-play`. The course overview has no player: its introduction is Ava's, on the cover.
+- **Script generation isn't a background job.** It's one streamed request for the whole course (or one page), as before, so the scripts form one arc and the author sees progress. Audio generation is the background job.
+- **Two approvals**: the script, then the audio for publication. Uploading audio approves the script it reads.
+- **Costs** are estimates from a price table marked to verify, not billing data.
+- **Embedded videos** (YouTube or Vimeo in an iframe) can't be paused by the one-sound rule. Uploaded videos, Ava and the introduction can.
+- **Word timings** for OpenAI voices are estimated from the recording's length, as before; uploaded audio is timed the same way.
+- **Jobs run in the server process.** They survive a page closing, not a server restart (a job stopped part-way is marked failed and can be tried again). On a serverless host this would need a queue; the job table is where one would plug in, and where a future Partner Hub Media Studio could take over.
+- Unchanged: the course introduction on the cover is spoken live by Ava (`/api/tts`), not the recorded file.
+
+### 15.13 Generating introductions for existing courses
+
+For each course, as an author:
+
+1. Open the course in the editor. In the sidebar's **Audio introductions** panel, choose **Magazine Editorial Voice (Alloy, recommended)** and **Editorial introduction · 30–60 seconds**. (For a course without audio settings, open any page's **Audio introduction** section, or press **Set up audio introductions**.)
+2. Open the **Audio Introduction Manager**. Press **Generate missing scripts** (or select pages and **Regenerate scripts** to replace existing ones with the new five-part style), and confirm. This needs Claude (`ANTHROPIC_API_KEY`) or, failing that, OpenAI (`OPENAI_API_KEY`, which is set on this machine).
+3. Read and edit each script (**Edit** on its row), then **Approve all scripts** or approve them one by one.
+4. Press **Generate audio for approved scripts** (or **Regenerate audio** for selected pages, such as those in an **Earlier voice**), check the estimated cost, and confirm. Keep working; recordings arrive as they're made.
+5. Listen to each one (the row's Play), then **Approve audio** (or **Approve for publication** page by page).
+6. **Review and publish** the course. Learners hear nothing new until then, and published introductions keep playing meanwhile.
+
+Estimated cost at US$15 per million characters (gpt-4o-mini-tts, to verify): an introduction of 70 to 130 words is about 400 to 800 characters, so roughly US$0.006 to US$0.012 each. A 9-page course is about 6,000 characters (about US$0.09), the 22-page ALIS course about US$0.25, and all 54 content pages in the 26 published courses roughly US$0.32 to US$0.65 (about US$0.50 at 600 characters each). Script writing is extra (one AI request per course, not estimated here). Re-recording unchanged words costs nothing.
+
+### 15.14 Shared with Discovery Paths (25 Nov 2026)
+
+The Discovery Exciter (docs/discovery-exciter.md) reuses this machinery for Discovery Paths, generalised without changing the Magazine:
+
+- Recording jobs have an owner (`guide_id` holds a course id or `learning_path:<id>`) and an optional `delivery` note.
+- `SpeechEngine` takes that delivery note (`DELIVERY_NOTES.curious`).
+- `textSnapshot` is the generic snapshot.
+- `introListening` is the shared listening count.
+- `IntroPlayer` takes a `label` ("Listen to your introduction" on paths).
+
+Magazine recordings and Exciter recordings share the 60-an-hour cap per author.

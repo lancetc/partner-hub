@@ -9,7 +9,7 @@ import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { cx, formatHoursMinutes } from "@/lib/format";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
-import { AvaVideoSlot } from "./AvaVideoSlot";
+import { PathExciterSection } from "./PathExciter";
 import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
 import { Icon } from "../Icon";
 import { confirmAction } from "@/lib/confirm";
@@ -174,9 +174,16 @@ export function LearningPathList() {
       <AdminListHeader
         title="Learning paths"
         action={
-          <Link href="/admin/learning-paths/new" className={btn.primary}>
-            <Icon name="plus" className="size-4" /> New learning path
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {me?.canAuthor && (
+              <Link href="/admin/learning-paths/introductions" className={btn.secondary}>
+                <Icon name="volume" className="size-4" /> Path introductions
+              </Link>
+            )}
+            <Link href="/admin/learning-paths/new" className={btn.primary}>
+              <Icon name="plus" className="size-4" /> New learning path
+            </Link>
+          </div>
         }
       >
         A learning path is a named set of topics in order. Build one, then assign it to the people who need it. They’ll see it on their Discovery Paths page
@@ -382,6 +389,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   const picked = chapters ? chapters.flatMap((c) => c.lessons) : flat;
   const allLessons = [...catalogue, ...created.filter((c) => !catalogue.some((l) => l.slug === c.slug))];
   const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -435,6 +443,8 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
       });
       setDirty(false);
       setNotice("Saved. People already assigned see the updated topics straight away.");
+      // The Discovery Exciter checks itself against the saved path again.
+      setSavedAt((n) => n + 1);
       reload();
     } catch (e) {
       setError((e as Error).message);
@@ -488,7 +498,10 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <Field label="Audience label" hint="A short tag on the path, for example: Care Coordinators, or All staff and partners.">
                 <input className={input} value={audience} onChange={(e) => change(() => setAudience(e.target.value))} maxLength={120} />
               </Field>
-              <Field label="What it covers" hint="Two or three sentences at the top of the path page. Say what it's about and why it matters.">
+              <Field
+                label="What it covers"
+                hint="Two or three sentences at the top of the path page. Say what it's about and why it matters. It's shown as text, never read aloud: the spoken introduction is the Discovery Exciter."
+              >
                 <textarea
                   rows={3}
                   className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
@@ -555,18 +568,8 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
             </fieldset>
           </section>
 
-          {/* Ava introduces the path at the top of its page: her video (made in ElevenLabs) and what it says. */}
-          {id && canEdit && (
-            <section aria-labelledby="path-ava" className="rounded-3xl border border-line bg-surface p-5">
-              <h2 id="path-ava" className="mb-1 font-serif text-xl font-semibold">
-                Ava’s introduction
-              </h2>
-              <p className="mb-4 text-sm text-ink-muted">
-                Ava, the AI Learning Guide, introduces the path at the top of its page. Upload her video and its script here.
-              </p>
-              <AvaVideoSlot lineKey={`path:${id}`} script={detail?.description ?? ""} where="path" />
-            </section>
-          )}
+          {/* The Discovery Exciter: the path's own spoken introduction (docs/discovery-exciter.md). Ava no longer introduces paths. */}
+          {id && canEdit && me?.canAuthor && <PathExciterSection id={id} name={detail?.name ?? name} dirty={dirty} savedAt={savedAt} />}
 
           {canEdit && (
             <LessonPicker

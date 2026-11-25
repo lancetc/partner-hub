@@ -1,5 +1,17 @@
 import "server-only";
-import { canCopy, cleanTile, EVENTS, tileProblems, tileState, type MythEvent, type MythTileData, type Tile, type TileStatus } from "@/lib/myths";
+import {
+  canCopy,
+  CATEGORIES,
+  cleanTile,
+  contentStatus,
+  EVENTS,
+  tileProblems,
+  tileState,
+  type MythEvent,
+  type MythTileData,
+  type Tile,
+  type TileStatus,
+} from "@/lib/myths";
 import { SEED_TILES } from "@/content/mythTiles";
 import { audit, ensureMyths as ensureTables, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
@@ -65,19 +77,141 @@ export type ReaderTile = ReturnType<typeof forReader>;
 
 /**
   Tiles for a course block or the Resources page: the current approved version of each, in order. Drafts are
-  never shown to learners. An author previewing gets the latest version, drafts included, clearly marked.
+  never shown to learners. An author previewing gets the latest version, drafts included, clearly marked; a
+  retired tile isn't in the preview either.
+
+  The Resources library (no ids) is the live production library: only tiles whose approved version is current. One
+  under review (paused, or past its review date) leaves it until it's approved again. A course block asks for its
+  own ids and still shows such a tile as "Under review", with copying off, so the course doesn't lose a step.
 */
 export function tilesFor(db: Db, user: User, wanted: string[] | null, now: Date, { preview = false } = {}) {
   ensureMyths(db, now);
   const list = wanted ?? ids(db);
   const out: (ReaderTile & { preview?: boolean })[] = [];
   const missing: string[] = [];
+  const asAuthor = preview && canAuthor(user);
   for (const id of list) {
-    const t = preview && canAuthor(user) ? latest(db, id) : current(db, id);
-    if (t) out.push({ ...forReader(t, now), preview: preview && t.status !== "approved" });
+    const top = asAuthor ? latest(db, id) : undefined;
+    const t = top && top.status !== "retired" ? top : current(db, id);
+    const shown = t && (asAuthor || wanted || tileState(t, today(now)) === "approved");
+    if (t && shown) out.push({ ...forReader(t, now), preview: asAuthor && t.status !== "approved" });
     else missing.push(id);
   }
-  return { tiles: out, missing, today: today(now) };
+  return { tiles: out, missing, today: today(now), canPreview: canAuthor(user), favs: mythFavs(db, user) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Favourites and pins (server/favourites, server/pocketPlaybook): a Favourites row of kind "tool", target "myth:<id>"
+// ---------------------------------------------------------------------------------------------
+
+export const MYTH_PREFIX = "myth:";
+export const isMythTarget = (id: unknown): id is string => typeof id === "string" && id.startsWith(MYTH_PREFIX);
+export const mythHref = (id: string) => `/resources/myths?tile=${encodeURIComponent(id)}`;
+
+/** Which tiles this person has saved, and which are pinned. Only their own. */
+function mythFavs(db: Db, user: User): Record<string, { pinned: boolean }> {
+  try {
+    const rows = db.prepare("SELECT target_id, pinned FROM favourites WHERE user_id = ? AND kind = 'tool' AND target_id LIKE 'myth:%'").all(user.id) as {
+      target_id: string;
+      pinned: number;
+    }[];
+    return Object.fromEntries(rows.map((r) => [r.target_id.slice(MYTH_PREFIX.length), { pinned: r.pinned > 0 }]));
+  } catch {
+    // A database made before Favourites could hold a tool: nothing is saved yet.
+    return {};
+  }
+}
+
+/** A tile that can be saved or pinned: its approved version, current (not under review). Drafts and demo entries can't be. */
+export function liveMyth(db: Db, id: string, now: Date) {
+  ensureMyths(db, now);
+  const t = current(db, id);
+  return t && tileState(t, today(now)) === "approved" ? t : null;
+}
+
+/** A saved tile's standing, for Favourites and the pinned row: never a stale "approved", and nothing of a draft. */
+export function mythStanding(db: Db, targetId: string, seen: string, now: Date) {
+  ensureMyths(db, now);
+  const id = targetId.slice(MYTH_PREFIX.length);
+  const t = current(db, id);
+  if (!t)
+    return {
+      title: "A Myth vs Reality entry that’s no longer in use",
+      detail: "",
+      label: "Myth vs Reality",
+      state: "unavailable" as const,
+      note: "It has been retired. Look in Myth vs Reality for what applies now.",
+      href: "/resources/myths",
+    };
+  const underReview = tileState(t, today(now)) !== "approved";
+  const updated = !underReview && Number(seen || 0) > 0 && Number(seen) < t.version;
+  return {
+    title: t.data.quote,
+    detail: t.data.reality ? `Reality: ${t.data.reality}` : CATEGORIES[t.data.category],
+    label: "Myth vs Reality",
+    state: underReview ? ("changed" as const) : updated ? ("updated" as const) : ("current" as const),
+    note: underReview
+      ? "Under review: it’s being checked, and its email can’t be copied."
+      : updated
+        ? `Updated: version ${t.version} is the current one.`
+        : `Approved version ${t.version}`,
+    href: mythHref(id),
+  };
+}
+
+/** Approved Myth vs Reality tiles as site search sees them, found by people's own words as well as the terms. */
+export function mythSearchDocs(db: Db, now = new Date()) {
+  ensureMyths(db, now);
+  return ids(db).flatMap((id) => {
+    const t = current(db, id);
+    if (!t || tileState(t, today(now)) !== "approved") return [];
+    const d = t.data;
+    return [
+      {
+        id: `myth:${id}`,
+        href: mythHref(id),
+        title: d.quote,
+        meta: `Myth vs Reality · ${CATEGORIES[d.category]}`,
+        head: `${d.quote} ${(d.searchPhrases ?? []).join(" ")}`.replace(/[‘’]/g, "'"),
+        summary: `${d.myth ?? ""} ${d.reality ?? ""} ${CATEGORIES[d.category]}`.replace(/[‘’]/g, "'"),
+        body: `${d.answer} ${d.exception} ${d.checks.join(" ")}`.replace(/[‘’]/g, "'"),
+      },
+    ];
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// The demonstration entries (content/mythDemoTiles, scripts/seed-myth-demo.ts)
+// ---------------------------------------------------------------------------------------------
+
+/**
+  Adds each entry whose id isn't in the library yet, as a version 1 draft. An id that is there is left exactly as it
+  is, whatever has happened to it since (edited, approved, retired), so running it again creates nothing and never
+  overwrites an author's work. Nothing is approved.
+*/
+export function seedMythTiles(db: Db, tiles: { id: string; data: MythTileData }[], now: Date, by = "seed-demo") {
+  ensureMyths(db, now);
+  const at = now.toISOString();
+  const created: string[] = [];
+  const kept: { id: string; edited: boolean }[] = [];
+  tx(db, () => {
+    for (const t of tiles) {
+      const had = versions(db, t.id);
+      if (had.length) {
+        kept.push({ id: t.id, edited: had.length > 1 || JSON.stringify(had[0].data) !== JSON.stringify(cleanTile(t.data)) });
+        continue;
+      }
+      db.prepare("INSERT INTO myth_tiles (id, version, status, paused, data, created_by, created_at, updated_at) VALUES (?, 1, 'draft', 0, ?, ?, ?, ?)").run(
+        t.id,
+        JSON.stringify(cleanTile(t.data)),
+        by,
+        at,
+        at,
+      );
+      created.push(t.id);
+    }
+  });
+  return { created, kept };
 }
 
 /** Which tiles in a block can't be published: any without a current approved version, or one under review. */
@@ -112,6 +246,7 @@ export function library(db: Db, actor: User, now: Date) {
       const draft = all[0].status === "draft" ? all[0] : null;
       return {
         id,
+        status: contentStatus(all, today(now)),
         latest: all[0],
         live: live ? forReader(live, now) : null,
         draft,
@@ -197,6 +332,25 @@ export function pauseTile(db: Db, actor: User, id: string, paused: boolean, reas
   return current(db, id);
 }
 
+/**
+  Retires a tile: its approved version and any draft stop being used. Nothing is deleted, and the history keeps
+  every version. Saved and pinned copies show it as no longer in use. Editing it again starts a new draft version.
+*/
+export function retireTile(db: Db, actor: User, id: string, reason: unknown, now: Date) {
+  requireAuthor(actor);
+  ensureMyths(db, now);
+  const all = versions(db, id);
+  if (!all.length) throw new HttpError(404, "That tile isn’t in the library.");
+  if (contentStatus(all, today(now)) === "retired") throw new HttpError(400, "It’s already retired.");
+  const why = typeof reason === "string" ? reason.trim().slice(0, 300) : "";
+  if (why.length < 3) throw new HttpError(400, "Say briefly why it’s being retired.");
+  tx(db, () => {
+    db.prepare("UPDATE myth_tiles SET status = 'retired', updated_at = ? WHERE id = ? AND status IN ('approved', 'draft')").run(now.toISOString(), id);
+    audit(db, { actor: actor.id, event: "myth.retired", entity: `myth:${id}`, reason: why, at: now });
+  });
+  return latest(db, id);
+}
+
 // ---------------------------------------------------------------------------------------------
 // What learners do
 // ---------------------------------------------------------------------------------------------
@@ -208,7 +362,8 @@ export function logMyth(db: Db, user: User, input: Record<string, unknown>, now:
   if (!event) throw new HttpError(400, "Unknown event.");
   const t = typeof input.tileId === "string" ? versions(db, input.tileId).find((x) => x.version === input.version) : undefined;
   if (!t) throw new HttpError(404, "That tile isn’t in the library.");
-  if (event === "copied" && !canCopy(t, today(now))) throw new HttpError(400, "This tile is under review, so its email can’t be copied.");
+  if ((event === "copied" || event === "script-copied") && !canCopy(t, today(now)))
+    throw new HttpError(400, "This tile is under review or not approved, so its wording can’t be copied.");
   db.prepare("INSERT INTO myth_events (at, user_id, tile_id, version, event, guide_id) VALUES (?, ?, ?, ?, ?, ?)").run(
     now.toISOString(),
     user.id,

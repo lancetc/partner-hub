@@ -20,6 +20,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         description: spacedLearningOn() ? "Write, edit and publish topics, and their spaced follow ups." : "Write, edit and publish topics.",
       },
       {
+        href: "/admin/topic-intros",
+        label: "Topic introductions",
+        icon: "play",
+        description: "Every topic’s video introduction: scripts, presenters, placeholders and video status, with bulk actions.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/approvals",
         label: "Approvals",
         icon: "circle-check",
@@ -28,6 +35,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/news", label: "News", icon: "news", description: "The stories on the homepage, with their pictures.", authorOnly: true },
       { href: "/admin/learning-paths", label: "Discovery Paths", icon: "route", description: "Learning paths: sets of topics in order, assigned to people." },
+      {
+        href: "/admin/learning-paths/introductions",
+        label: "Path introductions",
+        icon: "volume",
+        description: "Every Discovery Path’s spoken introduction (the Discovery Exciter): scripts, audio, approval and listening, with bulk actions.",
+        authorOnly: true,
+      },
       {
         href: "/admin/discovery",
         label: "Discovery gaps",

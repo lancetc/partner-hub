@@ -8,7 +8,7 @@ import { CardBookmark } from "./CardBookmark";
 import { ReviewButton, useReview } from "./ReviewPanel";
 import { ordered } from "@/lib/lessonGraph";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { panelledOnColour, toneClasses, useTextTone } from "@/lib/imageTone";
 import { cardSurface } from "@/content/themes";
@@ -44,6 +44,8 @@ const REVIEW_COMMENTS_IN_FOOTER = true;
 */
 const FOOTER_SPEECH_BUTTON = false;
 import { CardVisual, PhotoCredit, isAvaPresenter } from "./CardVisual";
+import { IntroCard, sendIntroEvent, type IntroWatch } from "./IntroCard";
+import { isIntroCard, playableVideo, usesIntroLayout } from "@/lib/topicIntro";
 import { WrittenAnswer } from "./WrittenAnswer";
 import { Hotspots } from "./Hotspots";
 import { Resources } from "./Resources";
@@ -157,6 +159,9 @@ export function LessonPlayer({
   const reviewing = useReview(FOOTER_SPEECH_BUTTON && REVIEW_COMMENTS_IN_FOOTER && !personal ? lesson.slug : undefined);
   const seq = useRef(0);
   const pending = useRef<LessonAttempt | null>(null);
+  // The Introduction card (lib/topicIntro.ts): whether its video was played and how far, and where its engagement is counted.
+  const introWatch = useRef<IntroWatch>({ played: false, percent: 0 });
+  const introTrack = useMemo(() => (preview || review ? null : { slug: lesson.slug, version: lesson.version }), [preview, review, lesson.slug, lesson.version]);
 
   const node = attempt ? lesson.nodes[attempt.nodeId] : undefined;
   // "Required completion": cards whose audio, video or activity is done (or that were already passed).
@@ -296,6 +301,20 @@ export function LessonPlayer({
   function go(next: string, answers?: LessonAttempt["answers"]) {
     if (!attempt) return;
     const leaving = attempt.nodeId;
+    const watched = introWatch.current;
+    introWatch.current = { played: false, percent: 0 };
+    // Moving on from the Introduction card: into the Topic, having watched the video, or skipping it.
+    const was = lesson.nodes[leaving];
+    if (introTrack && usesIntroLayout(was)) {
+      const video = playableVideo(was.visual);
+      sendIntroEvent({
+        ...introTrack,
+        card: leaving,
+        event: video && watched.percent < 100 ? "skip" : "continue",
+        media: video ? "video" : "placeholder",
+        ...(video && { percent: watched.percent }),
+      });
+    }
     const a = {
       ...attempt,
       nodeId: next,
@@ -487,13 +506,16 @@ export function LessonPlayer({
     pendingNext,
   });
 
+  // The Topic's Introduction card, as the opening screen (an adopted card keeps its own look until the author switches it).
+  const introLayout = usesIntroLayout(node);
   // Ava, the AI Learning Guide, presenting: her transmission window sits in the card above the words (Ava 2.0).
-  const avaCard = node.type === "presenter" && node.visual.kind === "presenter" && isAvaPresenter(node.visual);
+  const avaCard = !introLayout && node.type === "presenter" && node.visual.kind === "presenter" && isAvaPresenter(node.visual);
   // Ava presenting in a portrait video: her window takes the whole card, like any vertical video.
   const avaFull = avaCard && node.visual.kind === "presenter" && node.visual.video?.orientation === "portrait";
   // A vertical presenter video takes the whole card: no label, heading or body on screen.
   const fullVideo =
     !avaCard &&
+    !introLayout &&
     node.visual.kind === "presenter" &&
     node.visual.video?.orientation === "portrait" &&
     (Boolean(node.visual.video.src) || node.visual.video.provider === "youtube");
@@ -514,8 +536,10 @@ export function LessonPlayer({
   const cardSaveable = canHighlight && !speaksFirst(node.type) && plainText(`${node.heading} ${node.body}`).trim().length >= 12;
 
   // Card audio lives in the footer so it never pushes the card content down.
-  const dock =
-    node.type === "presenter"
+  // The Introduction card plays its own sound when it opens (its video, or its spoken introduction): see IntroCard.
+  const dock = introLayout
+    ? null
+    : node.type === "presenter"
       ? {
           text: node.transcript,
           label: "Introduction",
@@ -547,7 +571,8 @@ export function LessonPlayer({
   const gate = completionGate(node, {
     answers: attempt.answers,
     finished,
-    exempt: review || preview || skipHolds,
+    // The Introduction card never holds anyone: learners can always go on without watching.
+    exempt: review || preview || skipHolds || isIntroCard(node),
     narration: narration ? { playable: narration.playable, state: narration.state } : null,
     speaks: Boolean(dock && dock.speech !== false),
     holdForAudio: lesson.holdForAudio,
@@ -653,7 +678,7 @@ export function LessonPlayer({
       progress={{ beat: node.beat, done: false }}
       aside={aside({ beat: node.beat, done: false })}
       review={review}
-      fill={fullVideo || avaFull || Boolean(bgPhoto) || listen}
+      fill={fullVideo || avaFull || Boolean(bgPhoto) || listen || introLayout}
       deck={{
         id: node.id,
         behind: lesson.beats.length - 1 - node.beat,
@@ -662,98 +687,115 @@ export function LessonPlayer({
         onBack: attempt.route.length > 1 ? back : undefined,
         surface: gradient ? { style: { backgroundImage: gradient.css }, className: toneClasses(gradient.text).text } : undefined,
       }}
+      // The Introduction card carries its own "Let's get started" over its picture, so it has no footer.
       footer={
-        <div className="flex flex-col gap-2">
-          {completing === "error" && (
-            <p role="alert" className="flex items-start gap-2 rounded-2xl border border-danger/60 px-3 py-2 text-sm">
-              <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" />
-              We couldn’t save your result, so the topic isn’t marked complete yet. Check your connection and try again.
-            </p>
-          )}
-          {/* How much of the card's audio has played: a line across the top of the footer. */}
-          {narration && narration.playable && (
-            <div
-              role="progressbar"
-              aria-label="Audio played"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(narration.progress * 100)}
-              className="absolute inset-x-0 top-0 h-1 bg-line"
-            >
-              <div
-                className={cx("h-full transition-[width] duration-300 ease-linear", narration.state === "ended" ? "bg-success" : "bg-[var(--action)]")}
-                style={{ width: `${Math.min(100, narration.progress * 100)}%` }}
-              />
-            </div>
-          )}
-          <div id="card-caption" />
-          {/* Waiting for audio: the line across the top of the footer shows it, so only screen readers get the words. */}
-          {locked &&
-            (gate === LISTEN_GATE ? (
-              <p role="status" className="sr-only">
-                {gate}
+        introLayout ? undefined : (
+          <div className="flex flex-col gap-2">
+            {completing === "error" && (
+              <p role="alert" className="flex items-start gap-2 rounded-2xl border border-danger/60 px-3 py-2 text-sm">
+                <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" />
+                We couldn’t save your result, so the topic isn’t marked complete yet. Check your connection and try again.
               </p>
-            ) : (
-              <p role="status" className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-ink-muted">
-                <Icon name="lock" className="size-3.5" /> {gate}
-              </p>
-            ))}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
-              {FOOTER_SPEECH_BUTTON &&
-                !personal &&
-                (REVIEW_COMMENTS_IN_FOOTER ? (
-                  <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
-                ) : (
-                  <TopicChat slug={lesson.slug} title={lesson.title} card={{ id: node.id, heading: node.heading }} preview={preview} />
-                ))}
-              {attempt.route.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={back}
-                  aria-label="Back"
-                  className="inline-flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-line-strong px-3 font-medium hover:bg-muted min-[400px]:px-4"
-                >
-                  <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
-                </button>
-              ) : (
-                // With nothing on the left, a space keeps the audio control in the middle.
-                dock && !FOOTER_SPEECH_BUTTON && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
-              )}
-            </div>
-            {dock && (
-              <Narration
-                key={node.id}
-                {...dock}
-                audioSrc={node.audioSrc}
-                // The dedicated audio card shows its own caption and play button.
-                captionTarget={node.type === "listen" ? undefined : "card-caption"}
-                controls={node.type !== "listen"}
-                // Every card's audio starts by itself when the learner's audio is on, audio cards included.
-                autoPlay
-                ttsKey={`lesson:${lesson.slug}:${node.id}`}
-              />
             )}
-            <button
-              type="button"
-              onClick={onPrimary}
-              disabled={primary.disabled || locked || completing === "saving"}
-              className={cx(
-                "fx-press inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45 sm:px-6 sm:text-lg",
-                dock ? "" : "ml-auto flex-1 text-lg sm:flex-none",
-                // The audio has finished and Continue has just unlocked: one pulse to draw the eye.
-                narration?.state === "ended" && !locked && !primary.disabled && "fx-ready",
+            {/* How much of the card's audio has played: a line across the top of the footer. */}
+            {narration && narration.playable && (
+              <div
+                role="progressbar"
+                aria-label="Audio played"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(narration.progress * 100)}
+                className="absolute inset-x-0 top-0 h-1 bg-line"
+              >
+                <div
+                  className={cx("h-full transition-[width] duration-300 ease-linear", narration.state === "ended" ? "bg-success" : "bg-[var(--action)]")}
+                  style={{ width: `${Math.min(100, narration.progress * 100)}%` }}
+                />
+              </div>
+            )}
+            <div id="card-caption" />
+            {/* Waiting for audio: the line across the top of the footer shows it, so only screen readers get the words. */}
+            {locked &&
+              (gate === LISTEN_GATE ? (
+                <p role="status" className="sr-only">
+                  {gate}
+                </p>
+              ) : (
+                <p role="status" className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-ink-muted">
+                  <Icon name="lock" className="size-3.5" /> {gate}
+                </p>
+              ))}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {/* The topic assistant, on the left. Not for outside reviewers, who aren't signed in to the hub. */}
+                {FOOTER_SPEECH_BUTTON &&
+                  !personal &&
+                  (REVIEW_COMMENTS_IN_FOOTER ? (
+                    <ReviewButton review={reviewing} card={node} cards={ordered(lesson)} onJump={(id) => go(id)} footer />
+                  ) : (
+                    <TopicChat slug={lesson.slug} title={lesson.title} card={{ id: node.id, heading: node.heading }} preview={preview} />
+                  ))}
+                {attempt.route.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={back}
+                    aria-label="Back"
+                    className="inline-flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-line-strong px-3 font-medium hover:bg-muted min-[400px]:px-4"
+                  >
+                    <Icon name="arrow-left" className="size-4" /> <span className="hidden min-[400px]:inline">Back</span>
+                  </button>
+                ) : (
+                  // With nothing on the left, a space keeps the audio control in the middle.
+                  dock && !FOOTER_SPEECH_BUTTON && <span aria-hidden className="w-12 min-[400px]:w-[5.75rem]" />
+                )}
+              </div>
+              {dock && (
+                <Narration
+                  key={node.id}
+                  {...dock}
+                  audioSrc={node.audioSrc}
+                  // The dedicated audio card shows its own caption and play button.
+                  captionTarget={node.type === "listen" ? undefined : "card-caption"}
+                  controls={node.type !== "listen"}
+                  // Every card's audio starts by itself when the learner's audio is on, audio cards included.
+                  autoPlay
+                  ttsKey={`lesson:${lesson.slug}:${node.id}`}
+                />
               )}
-            >
-              {completing === "saving" ? "Saving your result…" : completing === "error" && primary.completes ? "Try again" : primary.label}
-              {!primary.completes && completing !== "saving" && <Icon name="arrow-right" className="size-5" />}
-            </button>
+              <button
+                type="button"
+                onClick={onPrimary}
+                disabled={primary.disabled || locked || completing === "saving"}
+                className={cx(
+                  "fx-press inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45 sm:px-6 sm:text-lg",
+                  dock ? "" : "ml-auto flex-1 text-lg sm:flex-none",
+                  // The audio has finished and Continue has just unlocked: one pulse to draw the eye.
+                  narration?.state === "ended" && !locked && !primary.disabled && "fx-ready",
+                )}
+              >
+                {completing === "saving" ? "Saving your result…" : completing === "error" && primary.completes ? "Try again" : primary.label}
+                {!primary.completes && completing !== "saving" && <Icon name="arrow-right" className="size-5" />}
+              </button>
+            </div>
           </div>
-        </div>
+        )
       }
     >
-      {fullVideo ? (
+      {introLayout ? (
+        <div key={node.id} className="animate-card-in h-full">
+          <IntroCard
+            card={node}
+            title={lesson.title}
+            summary={lesson.summary}
+            headingRef={headingRef}
+            track={introTrack}
+            ttsKey={`lesson:${lesson.slug}:${node.id}`}
+            onWatch={(w) => (introWatch.current = w)}
+            onWatched={() => markDone(node.id)}
+            onStart={onPrimary}
+          />
+        </div>
+      ) : fullVideo ? (
         <div key={node.id} className="animate-card-in h-full">
           {/* The heading stays for screen readers and focus, but isn't shown. */}
           <h2 ref={headingRef} tabIndex={-1} className="sr-only">
@@ -1045,6 +1087,8 @@ function primaryAction(
   disabled?: boolean;
   completes?: boolean;
 } {
+  // The Topic's Introduction card: one clear way in.
+  if (isIntroCard(node)) return { label: "Let’s get started", kind: "next" };
   switch (node.type) {
     case "decision":
       return ctx.pendingNext ? { label: "Continue", kind: "choose" } : { label: "Choose", kind: "choose", disabled: !ctx.choice };

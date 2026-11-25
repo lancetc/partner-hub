@@ -50,7 +50,8 @@ const raw = (audio?: object) => ({
   ],
 });
 const doc = readGuideDoc(raw(), { draft: true });
-const words = (n: number) => Array.from({ length: n }, (_, i) => (i % 7 === 0 ? "you" : "word")).join(" ");
+/** n words, opening with its own first word so two scripts never start alike. */
+const words = (n: number, first = "Here") => [first, ...Array.from({ length: n - 1 }, (_, i) => (i % 7 === 0 ? "you" : "word"))].join(" ");
 
 describe("what Claude is asked for", () => {
   it("narrates the course introduction and every content page, never the assessment, as the settings say", () => {
@@ -65,7 +66,15 @@ describe("what Claude is asked for", () => {
   });
 
   it("gives Claude the course, the pages in full, the answers it mustn't give away, and the rules", () => {
-    const p = narrationPrompt({ title: "Induction", standfirst: "Be shift-ready", audience: "Care Partners", doc, targets: ["intro", "p2"], length: "standard", note: "Warmer" });
+    const p = narrationPrompt({
+      title: "Induction",
+      standfirst: "Be shift-ready",
+      audience: "Care Partners",
+      doc,
+      targets: ["intro", "p2"],
+      length: "standard",
+      note: "Warmer",
+    });
     expect(p).toContain("2. [id p2] When someone says no");
     expect(p).toContain('<page id="p2" number="2" of="3">');
     expect(p).not.toContain('<page id="p1"');
@@ -80,7 +89,7 @@ describe("what Claude is asked for", () => {
 describe("checking Claude's reply", () => {
   const check = narrationIssues(doc, ["intro", "p2"], "standard");
   it("accepts scripts of the right length", () => {
-    expect(check({ intro: words(60), pages: [{ id: "p2", script: words(60) }] })).toEqual([]);
+    expect(check({ intro: words(60), pages: [{ id: "p2", script: words(60, "Mr") }] })).toEqual([]);
   });
   it("sends back a missing, extra, far too long or give-away script", () => {
     const issues = check({ intro: words(200), pages: [{ id: "p1", script: words(60) }] }).join(" ");
@@ -110,24 +119,27 @@ describe("listening, for learners", () => {
     expect(readGuide(db, coordinator, c.slug).progress.answers).toMatchObject({ "audio:guide": "on" });
     recordGuideEvent(db, coordinator, g.id, { event: "narration", revisionId: g.revisionId, pageId: "intro", detail: { outcome: "started" } }, now);
     recordGuideEvent(db, coordinator, g.id, { event: "narration", revisionId: g.revisionId, pageId: "p2", detail: { outcome: "finished" } }, now);
-    const events = db.prepare("SELECT event, page_id FROM magazine_events WHERE guide_id = ? AND event LIKE '%audio%' OR event LIKE 'narration.%' ORDER BY rowid").all(g.id);
+    const events = db
+      .prepare("SELECT event, page_id FROM magazine_events WHERE guide_id = ? AND event LIKE '%audio%' OR event LIKE 'narration.%' ORDER BY rowid")
+      .all(g.id);
     expect(events).toEqual([
       { event: "audio_guide.on", page_id: null },
       { event: "narration.started", page_id: null },
       { event: "narration.finished", page_id: "p2" },
     ]);
-    expect(() => recordGuideEvent(db, coordinator, g.id, { event: "narration", revisionId: g.revisionId, pageId: "p2", detail: { outcome: "skipped" } }, now)).toThrow(
-      /Unknown narration event/,
-    );
+    expect(() =>
+      recordGuideEvent(db, coordinator, g.id, { event: "narration", revisionId: g.revisionId, pageId: "p2", detail: { outcome: "skipped" } }, now),
+    ).toThrow(/Unknown narration event/);
     // Listening never counts as working through the page.
     expect(readGuide(db, coordinator, c.slug).progress.answers).not.toHaveProperty("done:p2");
   });
 });
 
 describe("playback settings", () => {
-  it("plays automatically by default, and keeps the author's other choices", () => {
+  it("waits for the learner to press Play by default, and keeps the author's Audio guide switch", () => {
     const withAudio = (playback?: string) => readGuideDoc({ ...raw({ ...(playback && { playback }) }) }, { draft: true }).audio?.playback;
-    expect(withAudio()).toBe("auto");
+    expect(withAudio()).toBe("press-play");
+    expect(withAudio("auto")).toBe("auto");
     expect(withAudio("press-play")).toBe("press-play");
     expect(withAudio("offer-auto")).toBe("offer-auto");
   });

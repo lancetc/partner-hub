@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publishChecks, readGuideDoc, type GuideDoc, type Narration, type Page } from "./magazine";
+import { publishChecks, readGuideDoc, type GuideAudio, type GuideDoc, type Narration, type Page } from "./magazine";
 import {
   answersOn,
   DEFAULT_AUDIO,
@@ -41,7 +41,12 @@ const page = (o: Partial<Page> = {}): Page =>
                   type: "decision",
                   prompt: "Mr Ellis says “not today”. What do you do?",
                   choices: [
-                    { id: "c1", text: "Respect his decision, note it, and let your Trilogy Care contact know as agreed", verdict: "best", feedback: "It’s his choice." },
+                    {
+                      id: "c1",
+                      text: "Respect his decision, note it, and let your Trilogy Care contact know as agreed",
+                      verdict: "best",
+                      feedback: "It’s his choice.",
+                    },
                     { id: "c2", text: "Encourage him firmly", verdict: "risky", feedback: "That ignores his choice." },
                   ],
                 },
@@ -57,7 +62,16 @@ const page = (o: Partial<Page> = {}): Page =>
 const SCRIPT =
   "Mr Ellis has had a long week, and today he’d rather skip his shower. What would you do? Before you answer, think about whose choice it really is, and what your Trilogy Care contact would want to know.";
 const approved = (p: Page, extra: Partial<Narration> = {}): Narration => ({ script: SCRIPT, status: "approved", basis: pageSnapshot(p), ...extra });
-const recording = { src: "/api/uploads/0f0e0d0c-0b0a-4908-8706-050403020100.mp3", seconds: 18, words: null, scriptHash: textHash(SCRIPT), voice: "topic", at: "2026-11-19T00:00:00.000Z" };
+/** Recordings made before Audio Introductions were in the Topic narrator's voice; these tests keep that voice. */
+const TOPIC: GuideAudio = { ...DEFAULT_AUDIO, voice: { kind: "topic" } };
+const recording = {
+  src: "/api/uploads/0f0e0d0c-0b0a-4908-8706-050403020100.mp3",
+  seconds: 18,
+  words: null,
+  scriptHash: textHash(SCRIPT),
+  voice: "topic",
+  at: "2026-11-19T00:00:00.000Z",
+};
 
 describe("checking a script", () => {
   it("counts words and warns when it's far off the length chosen", () => {
@@ -69,7 +83,9 @@ describe("checking a script", () => {
   it("catches a give-away: eight or more words in a row from a best answer", () => {
     const answers = answersOn(page());
     expect(answers).toContain("Respect his decision, note it, and let your Trilogy Care contact know as agreed");
-    expect(spoilerIn("The answer: respect his decision, note it, and let your Trilogy Care contact know.", answers)).toBe("respect his decision note it and let your");
+    expect(spoilerIn("The answer: respect his decision, note it, and let your Trilogy Care contact know.", answers)).toBe(
+      "respect his decision note it and let your",
+    );
     expect(spoilerIn(SCRIPT, answers)).toBeNull();
   });
 
@@ -82,13 +98,32 @@ describe("checking a script", () => {
 describe("keeping narration current", () => {
   it("ignores small edits, but asks for a look when a question or much of the page changes", () => {
     const before = page();
-    const typo = page({ sections: [{ ...before.sections[0], blocks: [{ id: "t1", type: "text", body: PARAGRAPH.replace("shift", "shift today") }, before.sections[0].blocks[1]] }] });
+    const typo = page({
+      sections: [
+        { ...before.sections[0], blocks: [{ id: "t1", type: "text", body: PARAGRAPH.replace("shift", "shift today") }, before.sections[0].blocks[1]] },
+      ],
+    });
     expect(substantiallyChanged(pageSnapshot(before), pageSnapshot(typo))).toBe(false);
     const question = page({
-      sections: [{ ...before.sections[0], blocks: [before.sections[0].blocks[0], { ...before.sections[0].blocks[1], prompt: "Mrs Russo is upset. What first?" } as Page["sections"][0]["blocks"][0]] }],
+      sections: [
+        {
+          ...before.sections[0],
+          blocks: [
+            before.sections[0].blocks[0],
+            { ...before.sections[0].blocks[1], prompt: "Mrs Russo is upset. What first?" } as Page["sections"][0]["blocks"][0],
+          ],
+        },
+      ],
     });
     expect(substantiallyChanged(pageSnapshot(before), pageSnapshot(question))).toBe(true);
-    const rewritten = page({ sections: [{ ...before.sections[0], blocks: [{ id: "t1", type: "text", body: "Completely different words about invoices and approvals and money." }, before.sections[0].blocks[1]] }] });
+    const rewritten = page({
+      sections: [
+        {
+          ...before.sections[0],
+          blocks: [{ id: "t1", type: "text", body: "Completely different words about invoices and approvals and money." }, before.sections[0].blocks[1]],
+        },
+      ],
+    });
     expect(substantiallyChanged(pageSnapshot(before), pageSnapshot(rewritten))).toBe(true);
     expect(substantiallyChanged(pageSnapshot(before), pageSnapshot(page({ title: "Getting ready" })))).toBe(true);
   });
@@ -96,13 +131,15 @@ describe("keeping narration current", () => {
   it("names each state: draft, approved to record, recorded, record again, may be out of date", () => {
     const p = page();
     const now = pageSnapshot(p);
-    expect(narrationState(undefined, now, DEFAULT_AUDIO)).toBe("none");
-    expect(narrationState({ script: SCRIPT, status: "draft" }, now, DEFAULT_AUDIO)).toBe("draft");
-    expect(narrationState(approved(p), now, DEFAULT_AUDIO)).toBe("unrecorded");
-    expect(narrationState(approved(p, { audio: recording }), now, DEFAULT_AUDIO)).toBe("current");
-    expect(narrationState(approved(p, { script: `${SCRIPT} Let’s go.`, audio: recording }), now, DEFAULT_AUDIO)).toBe("rerecord");
-    expect(narrationState(approved(p, { audio: recording }), now, { ...DEFAULT_AUDIO, voice: { kind: "custom", voiceId: "abcdefgh12", name: "Ava" } })).toBe("rerecord");
-    expect(narrationState(approved(p, { audio: recording }), pageSnapshot(page({ title: "New title" })), DEFAULT_AUDIO)).toBe("review");
+    expect(narrationState(undefined, now, TOPIC)).toBe("none");
+    expect(narrationState({ script: SCRIPT, status: "draft" }, now, TOPIC)).toBe("draft");
+    expect(narrationState(approved(p), now, TOPIC)).toBe("unrecorded");
+    expect(narrationState(approved(p, { audio: recording }), now, TOPIC)).toBe("current");
+    expect(narrationState(approved(p, { script: `${SCRIPT} Let’s go.`, audio: recording }), now, TOPIC)).toBe("rerecord");
+    // Another voice chosen since: it asks for new audio, and the recording keeps playing until it's replaced (Audio Introductions).
+    expect(narrationState(approved(p, { audio: recording }), now, { ...TOPIC, voice: { kind: "custom", voiceId: "abcdefgh12", name: "Ava" } })).toBe("revoice");
+    expect(playable(approved(p, { audio: recording }), { ...TOPIC, voice: { kind: "profile", id: "editorial" } })).toBe(true);
+    expect(narrationState(approved(p, { audio: recording }), pageSnapshot(page({ title: "New title" })), TOPIC)).toBe("review");
   });
 
   it("lets learners hear only approved narration recorded from its exact words, even while it awaits review", () => {
@@ -121,13 +158,20 @@ describe("keeping narration current", () => {
 });
 
 describe("narration in the course document", () => {
-  const withAudio = (p: object, audio: object = {}) => ({ schema: 2, pages: [{ ...page(), ...p }], audio: { ...DEFAULT_AUDIO, ...audio } });
+  const withAudio = (p: object, audio: object = {}) => ({ schema: 2, pages: [{ ...page(), ...p }], audio: { ...TOPIC, ...audio } });
 
   it("keeps the settings, scripts and recordings, and drops a recording that isn't on the hub", () => {
     const doc = readGuideDoc(withAudio({ narration: approved(page(), { audio: recording }) }, { length: "short", playback: "offer-auto" }));
-    expect(doc.audio).toMatchObject({ length: "short", playback: "offer-auto", voice: { kind: "topic" }, levels: { course: true, pages: true, blocks: false } });
+    expect(doc.audio).toMatchObject({
+      length: "short",
+      playback: "offer-auto",
+      voice: { kind: "topic" },
+      levels: { course: true, pages: true, blocks: false },
+    });
     expect(doc.pages[0].narration).toMatchObject({ script: SCRIPT, status: "approved", audio: { src: recording.src, seconds: 18 } });
-    expect(() => readGuideDoc(withAudio({ narration: approved(page(), { audio: { ...recording, src: "https://example.com/a.mp3" } }) }))).toThrow(/recorded on the Hub/);
+    expect(() => readGuideDoc(withAudio({ narration: approved(page(), { audio: { ...recording, src: "https://example.com/a.mp3" } }) }))).toThrow(
+      /recorded on the Hub/,
+    );
   });
 
   it("holds publishing for a recording that no longer matches its script, and reminds about the rest", () => {

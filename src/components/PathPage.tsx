@@ -12,10 +12,19 @@ import { StoryVisual } from "./StoryVisual";
 import type { Thumbnail } from "@/lib/pathThumbnail";
 import type { QuizOffer } from "./PathQuiz";
 import { minutesLabel } from "@/lib/pathQuizSettings";
-import { AvaPlaceholder, AvaTransmission, avaLineMedia } from "./ava/AvaTransmission";
-import { useAva } from "./ava/useAva";
+import { EXCITER_LABEL, type LearnerExciter } from "@/lib/pathExciter";
+import { IntroPlayer, type IntroEvent } from "./magazine/IntroPlayer";
 
-type PathData = MyPath & { assigned: boolean; selfEnrolled: boolean; minutes: number; done: boolean; quiz: QuizOffer | null; thumbnail: Thumbnail | null };
+type PathData = MyPath & {
+  assigned: boolean;
+  selfEnrolled: boolean;
+  minutes: number;
+  done: boolean;
+  quiz: QuizOffer | null;
+  thumbnail: Thumbnail | null;
+  /** The approved Discovery Exciter, or null: then there's no player (the description is never read aloud). */
+  exciter?: LearnerExciter | null;
+};
 
 /* One learning path on its own page, opened from its QR code or link: what it is, how it works, and the topics. */
 export function PathPage({ id, preview = false }: { id: string; preview?: boolean }) {
@@ -39,7 +48,7 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
               <strong>Path preview.</strong> Every topic opens, drafts included, so you can check the whole path. Nothing is recorded.
             </p>
           )}
-          <Overview path={data} />
+          <PathOverview path={data} preview={preview} />
           {!preview && !data.assigned && (
             <section className="mt-5 rounded-2xl border border-line bg-surface p-4">
               <p className="text-ink-muted">
@@ -60,28 +69,27 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
   );
 }
 
-/** Ava's transmission at the start of the path: its description, read in her voice (cached after the first play). */
-function PathIntro({ id, name, script }: { id: string; name: string; script: string }) {
-  const key = `path:${id}`;
-  const ava = useAva(key);
-  if (!ava.loaded) return <AvaPlaceholder layout="intro" className="mt-4" />;
-  return (
-    <AvaTransmission
-      layout="intro"
-      className="mt-4"
-      media={avaLineMedia(key, ava.video)}
-      portrait={ava.portrait}
-      name={ava.name}
-      script={ava.video?.transcript || script}
-      title={`Introduction to ${name}`}
-      // She starts as the page opens (muted, words on screen, until the page has been used).
-      autoPlay
-    />
-  );
+/**
+  The path's Discovery Exciter (docs/discovery-exciter.md): its own approved script, recorded in the Magazine Editorial
+  Voice, in the Magazine's player. It waits for Play, plays one sound at a time, and listening is never needed to finish
+  anything. With no approved recording there's nothing here: the description is never read aloud instead.
+*/
+function PathExciter({ id, exciter, preview }: { id: string; exciter: LearnerExciter; preview: boolean }) {
+  // Listening totals for the path's authors: the action and numbers only. Nothing is recorded in a preview.
+  const onEvent: IntroEvent = (action, detail) => {
+    if (preview) return;
+    void fetch(`/api/paths/${encodeURIComponent(id)}/exciter-events`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, detail }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+  return <IntroPlayer script={exciter.script} audio={exciter.audio} onEvent={onEvent} label={EXCITER_LABEL} className="mt-4" />;
 }
 
-/** The top of the page: name, time it takes, who it's for, what they'll be able to do, and how it works. */
-function Overview({ path: p }: { path: PathData }) {
+/** The top of the page: name, its introduction, time it takes, who it's for, what they'll be able to do, and how it works. */
+export function PathOverview({ path: p, preview = false }: { path: PathData; preview?: boolean }) {
   const lengths = p.steps.map((s) => s.minutes).filter((m) => m > 0);
   const shortest = Math.min(...lengths);
   const longest = Math.max(...lengths);
@@ -132,8 +140,8 @@ function Overview({ path: p }: { path: PathData }) {
     <header className="mt-2">
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Discovery Path</p>
       <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight sm:text-4xl">{p.name}</h1>
-      {/* Ava introduces the path, reading its description (Ava 2.0, docs/ai-learning-guide.md). */}
-      {p.description && <PathIntro id={p.id} name={p.name} script={p.description} />}
+      {/* The Discovery Exciter, when one is approved; otherwise nothing (Ava no longer introduces paths, Nov 2026). */}
+      {p.exciter && <PathExciter id={p.id} exciter={p.exciter} preview={preview} />}
       {p.description && <p className="mt-3 text-lg text-ink-muted">{p.description}</p>}
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-3">

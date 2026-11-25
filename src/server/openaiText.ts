@@ -106,20 +106,27 @@ export const OPENAI_VOICES: { id: string; label: string }[] = [
   { id: "onyx", label: "Onyx: deep" },
 ];
 
+/** The speech model, configurable (OPENAI_TTS_MODEL); gpt-4o-mini-tts by default. */
+export const openaiSpeechModel = () => process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
+
 /** Reads a script aloud with OpenAI's speech model, as an MP3. */
 export async function openaiSpeech(text: string, voice: string, style?: string) {
   if (!openaiReady()) throw new HttpError(503, "OpenAI isn’t connected. Add OPENAI_API_KEY to .env.local and restart the server.");
   if (!OPENAI_VOICES.some((v) => v.id === voice)) throw new HttpError(400, "Choose one of OpenAI’s voices.");
+  const model = openaiSpeechModel();
   const r = await openai(
     "audio/speech",
     {
-      model: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
+      model,
       voice,
       input: text,
-      // A fictional character (a Tough Family Call's caller) brings its own reviewed delivery notes; otherwise the Hub's companion manner.
-      instructions:
-        style ||
-        "A warm, friendly learning companion with a natural Australian manner, speaking to a support worker. Conversational and unhurried, never salesy. Pause briefly before a question.",
+      // A fictional character (a Tough Family Call's caller) or a voice profile (the Magazine Editorial Voice) brings its own
+      // reviewed delivery notes; otherwise the Hub's companion manner. Only the gpt-4o speech models take instructions.
+      ...(!/^tts-1/.test(model) && {
+        instructions:
+          style ||
+          "A warm, friendly learning companion with a natural Australian manner, speaking to a support worker. Conversational and unhurried, never salesy. Pause briefly before a question.",
+      }),
       response_format: "mp3",
     },
     90_000,

@@ -1,9 +1,12 @@
-import type { CardVisual as Visual, Lesson } from "./lessons";
+import type { Lesson } from "./lessons";
+import { DEFAULT_PRESENTER, newIntroCard, type PresenterLite } from "@/lib/topicIntro";
 
-/** Starting point for a new lesson: an introduction, a quick check and a summary. */
-export function blankLesson(): Lesson {
-  const v: Visual = { kind: "illustration", variant: "petals", tone: "teal", icon: "spark", alt: "" };
-  return {
+/**
+  Starting point for a new lesson: its Introduction card (lib/topicIntro.ts: structural, always first, with the default
+  presenter's placeholder until the server's default is known), a quick check and a summary.
+*/
+export function blankLesson(presenter: PresenterLite = DEFAULT_PRESENTER): Lesson {
+  const l: Lesson = {
     slug: "new-lesson",
     version: "0.1",
     // The house style; authors can pick another on the Details tab.
@@ -16,7 +19,6 @@ export function blankLesson(): Lesson {
     beats: ["Introduction", "Practise", "Summary"],
     start: "intro",
     nodes: {
-      intro: { id: "intro", beat: 0, label: "Introduction", type: "image", heading: "", body: "", visual: v, next: "check" },
       check: {
         id: "check",
         beat: 1,
@@ -57,4 +59,7 @@ export function blankLesson(): Lesson {
     reviewDate: "2027-04-30",
     visual: { variant: "petals", tone: "teal", icon: "spark" },
   };
+  // The heading and description start empty: learners see the Topic's title and summary until the author writes their own.
+  l.nodes.intro = { ...newIntroCard(l, presenter, "check", "new", "intro"), heading: "", body: "" };
+  return l;
 }

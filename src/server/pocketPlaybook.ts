@@ -20,6 +20,7 @@ import { favouritesList, setFavouritePinned, type FavouriteItem } from "./favour
 import { ensurePlaybooks, playbookList, recordAidEvent, resolveSnippet, toggleSaved } from "./playbooks";
 import { ensurePocketTables, isPocketTool, pocketTool, pocketTools, toolState, type ToolView } from "./pocketTools";
 import { search as siteSearch } from "./search";
+import { isMythTarget, liveMyth, MYTH_PREFIX, mythStanding } from "./myths";
 
 /*
   The Live Call Pocket Playbook (docs/pocket-playbook.md): the Companion Drawer's data, pins, task search, use events,
@@ -116,6 +117,25 @@ function aidItem(db: Db, user: User, id: string, fav: FavRow | undefined, now: D
   };
 }
 
+/** A pinned Myth vs Reality entry (docs/myth-vs-reality.md): it opens on the Resources page, never inside the drawer. */
+function mythItem(db: Db, targetId: string, fav: FavRow | undefined, now: Date): DrawerItem {
+  const m = mythStanding(db, targetId, fav?.seen ?? "", now);
+  return {
+    kind: "tool",
+    id: targetId,
+    favId: fav?.id ?? "",
+    title: m.title,
+    task: m.detail,
+    label: m.label,
+    href: m.href,
+    state: m.state === "changed" ? "review_due" : m.state,
+    note: m.note,
+    pinned: Boolean(fav && fav.pinned > 0),
+    saved: Boolean(fav),
+    inDrawer: false,
+  };
+}
+
 /**
   The drawer's first view: pinned tools in the person's order, recently opened tools, every Pocket tool they may use,
   and the start of their Favourites. Only their own, and only what their role may see now.
@@ -126,6 +146,7 @@ export function drawerData(db: Db, user: User, now: Date) {
   const fav = (kind: "job_aid" | "tool", id: string) => rows.find((r) => r.kind === kind && r.target_id === id);
   const tools = pocketTools(db, user, now);
   const item = (kind: "job_aid" | "tool", id: string): DrawerItem | null => {
+    if (kind === "tool" && isMythTarget(id)) return mythItem(db, id, fav("tool", id), now);
     if (kind === "tool") {
       const t = tools.find((x) => x.id === id);
       return t ? toolItem(t, fav("tool", id)) : null;
@@ -133,7 +154,7 @@ export function drawerData(db: Db, user: User, now: Date) {
     return aidItem(db, user, id, fav("job_aid", id), now);
   };
   const pinned = rows
-    .filter((r) => r.pinned > 0 && (r.kind === "job_aid" || isPocketTool(r.target_id)))
+    .filter((r) => r.pinned > 0 && (r.kind === "job_aid" || isPocketTool(r.target_id) || isMythTarget(r.target_id)))
     .sort((a, b) => a.pinned - b.pinned || a.saved_at.localeCompare(b.saved_at))
     .map((r) => item(r.kind as "job_aid" | "tool", r.target_id))
     .filter((x): x is DrawerItem => Boolean(x));
@@ -176,9 +197,17 @@ export function homePins(db: Db, user: User, now: Date) {
 // Saving and pinning: one Favourites list
 // ---------------------------------------------------------------------------------------------
 
-/** What may be saved or pinned: a Pocket tool or a Job Aid this person may see, and not a withdrawn tool. */
+/**
+  What may be saved or pinned: a Pocket tool or a Job Aid this person may see, and not a withdrawn tool; or a Myth vs
+  Reality entry (`kind: "myth"`) whose approved version is current, saved as a tool row with target "myth:<id>".
+*/
 function target(db: Db, user: User, input: Record<string, unknown>, now: Date): { kind: "tool" | "job_aid"; id: string; version: number } {
   const id = str(input.id, 80);
+  if (input.kind === "myth" || isMythTarget(id)) {
+    const t = liveMyth(db, id.startsWith(MYTH_PREFIX) ? id.slice(MYTH_PREFIX.length) : id, now);
+    if (!t) throw new HttpError(409, "Only an approved Myth vs Reality entry can be saved or pinned. Drafts and demo content can’t be.");
+    return { kind: "tool", id: `${MYTH_PREFIX}${t.id}`, version: t.version };
+  }
   if (input.kind === "job_aid") {
     const r = resolveSnippet(db, user, id, now);
     if (!r.permitted) throw new HttpError(403, "This Job Aid isn’t shared with your role.");
@@ -213,8 +242,15 @@ function ensureSaved(db: Db, user: User, t: { kind: "tool" | "job_aid"; id: stri
 */
 export function pinTool(db: Db, user: User, input: Record<string, unknown>, now: Date) {
   ensurePocket(db, now);
-  const t = target(db, user, input, now);
   const on = input.on !== false;
+  // A Myth vs Reality pin can always come off, even once the entry is under review or retired.
+  if (!on && (input.kind === "myth" || isMythTarget(input.id))) {
+    const raw = str(input.id, 80);
+    const had = favRow(db, user, "tool", raw.startsWith(MYTH_PREFIX) ? raw : `${MYTH_PREFIX}${raw}`);
+    if (had) setFavouritePinned(db, user, had, false, now);
+    return { pinned: false, saved: Boolean(had), first: false };
+  }
+  const t = target(db, user, input, now);
   if (!on) {
     const had = favRow(db, user, t.kind, t.id);
     if (had) setFavouritePinned(db, user, had, false, now);
@@ -229,12 +265,14 @@ export function pinTool(db: Db, user: User, input: Record<string, unknown>, now:
 /** Save a Pocket tool to Favourites, or remove it (which also removes its pin). Job Aids are saved from the aid itself. */
 export function saveTool(db: Db, user: User, input: Record<string, unknown>, now: Date) {
   ensurePocket(db, now);
+  const myth = input.kind === "myth" || isMythTarget(input.id);
   if (input.on === false) {
-    const id = str(input.id, 80);
+    const raw = str(input.id, 80);
+    const id = myth && !raw.startsWith(MYTH_PREFIX) ? `${MYTH_PREFIX}${raw}` : raw;
     db.prepare("DELETE FROM favourites WHERE user_id = ? AND kind = 'tool' AND target_id = ?").run(user.id, id);
     return { saved: false, pinned: false };
   }
-  const t = target(db, user, { ...input, kind: "tool" }, now);
+  const t = target(db, user, { ...input, kind: myth ? "myth" : "tool" }, now);
   const before = (db.prepare("SELECT COUNT(*) AS n FROM favourites WHERE user_id = ?").get(user.id) as { n: number }).n;
   const { row, fresh } = ensureSaved(db, user, t, now);
   return { saved: true, pinned: row.pinned > 0, first: fresh && before === 0 };

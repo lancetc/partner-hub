@@ -16,6 +16,23 @@ beforeEach(() => {
   vi.unstubAllEnvs();
 });
 
+/**
+  One of Ava's lines for the video tests: a published Magazine page's approved introduction. (These used a Discovery
+  Path's description until Nov 2026, when paths got the Discovery Exciter instead of Ava: docs/discovery-exciter.md.)
+*/
+function avaLine() {
+  const at = new Date().toISOString();
+  const description = "Page one of the line test, said by Ava.";
+  const doc = JSON.stringify({ schema: 2, pages: [{ id: "p1", narration: { status: "approved", script: description } }] });
+  db.prepare(
+    "INSERT INTO magazine_guides (id, slug, title, status, draft, draft_saved_at, revision_id, owner, created_at, updated_by, updated_at) VALUES ('mag-l', 'l', 'L', 'published', ?, ?, 'mag-l-r1', 'jordan', ?, 'jordan', ?)",
+  ).run(doc, at, at, at);
+  db.prepare(
+    "INSERT INTO magazine_revisions (id, guide_id, number, title, standfirst, doc, completion, minutes, published_by, published_at) VALUES ('mag-l-r1', 'mag-l', 1, 'L', '', ?, 'confirm', 1, 'jordan', ?)",
+  ).run(doc, at);
+  return { key: "magazine:mag-l:page:p1", description };
+}
+
 describe("Ava's voice", () => {
   const voices = [
     { id: "aaaaaaaaaaaaaaaaaaaa", name: "Laura - Enthusiast, Quirky Attitude" },
@@ -54,13 +71,14 @@ describe("Ava for learners", () => {
 });
 
 describe("the lines Ava speaks", () => {
-  it("reads a Discovery Path's description as its introduction, and a Topic's presenter card", () => {
+  it("never reads a Discovery Path's description (paths have the Discovery Exciter), and reads a Topic's presenter card", () => {
     const path = db.prepare("SELECT id, description FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as {
       id: string;
       description: string;
     };
-    expect(scriptFor(db, `path:${path.id}`)).toBe(path.description.trim());
-    expect(avaSpeaks(db, `path:${path.id}`)).toBe(true);
+    expect(() => scriptFor(db, `path:${path.id}`)).toThrow(/No narration/);
+    expect(() => scriptFor(db, `path:${path.id}`, true)).toThrow(/No narration/);
+    expect(avaSpeaks(db, `path:${path.id}`)).toBe(false);
     expect(avaSpeaks(db, "lesson:a-little-extra-time:welcome")).toBe(true);
     // Other cards stay with the Hub's narrator.
     expect(avaSpeaks(db, "lesson:a-little-extra-time:check")).toBe(false);
@@ -107,11 +125,8 @@ describe("a Magazine course's introduction", () => {
 describe("Ava's talking videos", () => {
   it("are played only while the script, the voice and the portrait still match", async () => {
     const owner = userById(db, "jordan")!;
-    const path = db.prepare("SELECT id, description FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as {
-      id: string;
-      description: string;
-    };
-    const key = `path:${path.id}`;
+    const path = avaLine();
+    const key = path.key;
     const at = new Date().toISOString();
     const { scriptHash } = await import("./avatar");
     const voice = (await avaVoice(db))!;
@@ -137,8 +152,11 @@ describe("Ava's talking videos", () => {
     const learner = userById(db, "riley")!;
     const author = userById(db, "dana")!;
     await expect(avaLines(db, learner)).rejects.toThrow();
+    const { key } = avaLine();
     const { lines } = await avaLines(db, author);
-    expect(lines.some((l) => l.kind === "path" && l.state === "none")).toBe(true);
+    expect(lines.some((l) => l.key === key && l.kind === "page" && l.state === "none")).toBe(true);
+    // Discovery Paths aren't Ava's lines any more (docs/discovery-exciter.md).
+    expect(lines.some((l) => l.kind === "path")).toBe(false);
     await expect(makeAvaVideo(db, author, "lesson:nope:nope", now)).rejects.toThrow(/isn’t one of Ava’s lines/);
   });
 });
@@ -146,11 +164,8 @@ describe("Ava's talking videos", () => {
 describe("uploaded videos", () => {
   it("need only match the words, show their own first frame, and must be a video in the library", async () => {
     const author = userById(db, "dana")!;
-    const path = db.prepare("SELECT id, description FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as {
-      id: string;
-      description: string;
-    };
-    const key = `path:${path.id}`;
+    const path = avaLine();
+    const key = path.key;
     const { scriptHash } = await import("./avatar");
     const at = new Date().toISOString();
     await expect(attachAvaVideo(db, author, key, "/api/uploads/00000000-0000-0000-0000-000000000000.mp4", now)).rejects.toThrow(/Upload the video/);
@@ -199,8 +214,8 @@ describe("uploaded videos", () => {
 
 describe("an uploaded transmission with its own words", () => {
   it("plays whatever the line's script now says, and its words are the ones learners read", async () => {
-    const path = db.prepare("SELECT id FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as { id: string };
-    const key = `path:${path.id}`;
+    const path = avaLine();
+    const key = path.key;
     const words = "Ava, from a servo outside Dalby. The pie's terrible and the signal's worse, so, quickly —";
     db.prepare(
       "INSERT OR REPLACE INTO ava_videos (key, script_hash, voice, portrait, status, video_src, created_by, created_at, transcript) VALUES (?, 'an-old-script', 'upload', '', 'completed', '/api/uploads/t.mp4', 'dana', ?, ?)",
@@ -243,8 +258,8 @@ describe("Ava's video in the Magazine editor", () => {
 
 describe("the words on screen", () => {
   it("are timed again when an uploaded video's script changes, evenly across its length without ElevenLabs", async () => {
-    const path = db.prepare("SELECT id FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as { id: string };
-    const key = `path:${path.id}`;
+    const path = avaLine();
+    const key = path.key;
     db.prepare(
       "INSERT INTO ava_videos (key, script_hash, voice, portrait, status, video_src, seconds, created_by, created_at, transcript) VALUES (?, '', 'upload', '', 'completed', '/api/uploads/00000000-0000-0000-0000-000000000001.mp4', 12, 'dana', ?, 'Old words —')",
     ).run(key, new Date().toISOString());

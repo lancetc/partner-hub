@@ -20,8 +20,8 @@ let key: string;
 beforeEach(() => {
   db = openDb(":memory:");
   vi.stubEnv("ELEVENLABS_API_KEY", "test-key");
-  const path = db.prepare("SELECT id FROM learning_paths WHERE archived = 0 AND description != '' LIMIT 1").get() as { id: string };
-  key = `path:${path.id}`;
+  // One of Ava's lines: an uploaded video needs only its row here (Discovery Paths aren't hers any more, Nov 2026).
+  key = "magazine:mag-h:page:p1";
   db.prepare(
     "INSERT INTO ava_videos (key, script_hash, voice, portrait, status, video_src, seconds, created_by, created_at) VALUES (?, 'x', 'upload', '', 'completed', ?, 4, 'dana', ?)",
   ).run(key, SRC, now.toISOString());

@@ -9,6 +9,9 @@ import { createLearningPath, slugsFor } from "./learningPaths";
 import { quizOffer, startQuiz, submitQuiz } from "./pathQuiz";
 import { authorGuide, completionGap, publishGuide, readGuide } from "./magazine";
 import { ALIS_GUIDE_SLUG, buildAlis } from "./alisBuild";
+import { storedExciter } from "./pathExciterStore";
+import { exciterAction } from "./pathExciter";
+import { ensureNarrationJobs } from "./narrationJobs";
 
 /* Building the ALIS course into the Hub (docs/alis-course.md): drafts only, idempotent, three paths, one course. */
 
@@ -65,9 +68,12 @@ describe("buildAlis", () => {
       expect(Object.values(e.lesson.nodes).some((c) => c.type === "quiz" && c.assessment)).toBe(false);
     }
     expect(r.paths.map((p) => p.title)).toEqual(ALIS_PARTS.map((p) => p.title));
-    // Each path's description is its spoken introduction, which Ava reads on the path page.
+    // Each path's description is the part's short summary; its spoken introduction is the Discovery Exciter, a draft to approve.
     expect(r.paths.map((p) => (db.prepare("SELECT description FROM learning_paths WHERE id = ?").get(p.id) as { description: string }).description)).toEqual(
-      ALIS_PARTS.map((p) => p.intro),
+      ALIS_PARTS.map((p) => p.description),
+    );
+    expect(r.paths.map((p) => storedExciter(db, p.id))).toEqual(
+      ALIS_PARTS.map((p) => ({ script: p.intro, status: "draft", version: 1, source: "seed", updatedAt: now.toISOString() })),
     );
     r.paths.forEach((p) => {
       expect(slugsFor(db, p.id)).toEqual(slugsOf(p.part));
@@ -79,6 +85,20 @@ describe("buildAlis", () => {
     });
     const g = authorGuide(db, u("jordan"), r.guide.id);
     expect(g).toMatchObject({ slug: ALIS_GUIDE_SLUG, title: ALIS_COURSE.title, status: "draft" });
+  });
+
+  it("writes the Exciter again only while it's an untouched seed: an author's script (or approval) is kept when it's run again", () => {
+    const first = buildAlis(db, u("jordan"), now);
+    const [p1, p2] = first.paths;
+    // An author edits part 1's script and approves part 2's.
+    exciterAction(db, u("jordan"), p1.id, { action: "save", script: "An author’s own Exciter, with its own words." }, now);
+    exciterAction(db, u("jordan"), p2.id, { action: "approve-script" }, now);
+    buildAlis(db, u("jordan"), new Date(now.getTime() + 60_000));
+    expect(storedExciter(db, p1.id)).toMatchObject({ script: "An author’s own Exciter, with its own words.", source: "author" });
+    expect(storedExciter(db, p2.id)).toMatchObject({ script: ALIS_PARTS[1].intro, status: "approved" });
+    // No audio is ever asked for.
+    ensureNarrationJobs(db);
+    expect(count("SELECT COUNT(*) AS n FROM magazine_narration_jobs")).toBe(0);
   });
 
   it("links each chapter's quiz in the Magazine course to its part's path", () => {

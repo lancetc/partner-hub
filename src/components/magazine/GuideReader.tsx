@@ -10,12 +10,14 @@ import { Icon } from "../Icon";
 import { GuideBlock, column, type BlockContext } from "./GuideBlocks";
 import type { ReflectionSaved } from "./InteractiveBlocks";
 import { AudioGuideCard } from "./AudioGuide";
+import { IntroPlayer } from "./IntroPlayer";
 import { CourseCover } from "./CourseCover";
 import { useSelfReview } from "./SelfReview";
 import { useMyNotes } from "./ReflectBlocks";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { MemberCaption } from "../community/MemberCaption";
-import { playable } from "@/lib/magazineNarration";
+import { listenable, playable } from "@/lib/magazineNarration";
+import { useOnePlayer } from "@/lib/onePlayer";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AvaRelay } from "../relay/AvaRelay";
 import { FavouriteBanner } from "../favourites/FavouriteBanner";
@@ -155,6 +157,8 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
   const started = guide.progress.started && !preview;
   const doneHere = completed?.thisRevision ? completed : null;
   const audioGuide = useAudioGuide(guide, send);
+  // One sound at a time: Ava on the cover and anything else here (lib/onePlayer).
+  useOnePlayer();
   // The course's approved introduction, which Ava gives on the cover in her own voice.
   const intro = audioGuide.audio?.intro;
   // Her video for the course's introduction comes with the course (loadGuide), so the cover knows from the start.
@@ -179,7 +183,8 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
       <Link href={preview ? "/admin/magazine" : "/magazine"} className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
         <Icon name="arrow-left" className="size-4" /> {preview ? "Magazine admin" : "Magazine"}
       </Link>
-      <header className="mt-4 grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10">
+      {/* One column on a phone that never grows past the screen (Ava's window has a long caption). */}
+      <header className="mt-4 grid grid-cols-[minmax(0,1fr)] items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10">
         <div>
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
             Course · {pages.length} pages{guide.audience && <> · For {guide.audience}</>}
@@ -198,7 +203,8 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
                 narration={avaIntro !== null ? undefined : audioGuide.audio.intro}
                 audio={audioGuide.audio}
                 level="course"
-                autoplay={audioGuide.on && !doneHere}
+                // Introductions never play by themselves (Audio Introductions): the learner presses Play.
+                autoplay={false}
                 onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
               />
             )}
@@ -357,6 +363,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     useCallback(() => setStale(true), []),
   );
   const audioGuide = useAudioGuide(guide, send);
+  // One sound at a time: the introduction, Ava's transmissions and the video blocks (lib/onePlayer).
+  useOnePlayer();
   // Ava introducing this page, when its introduction has a video (Admin → AI Learning Guide, Ava's talking videos): she
   // plays first where the page's picture goes, and the picture takes over once she's finished.
   // A one-page course has no cover, so Ava gives the course's introduction here instead, as she would on the cover:
@@ -530,7 +538,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
         )}
       </nav>
 
-      <header className="mt-4 grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10">
+      {/* One column on a phone that never grows past the screen (Ava's window has a long caption). */}
+      <header className="mt-4 grid grid-cols-[minmax(0,1fr)] items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10">
         <div className={cx("mag-hero-text relative z-30", !hero?.src && "lg:col-span-2 lg:max-w-3xl")}>
           <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
             {course ? (
@@ -561,17 +570,17 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />
               </span>
             )}
-            {page.kind === "content" && audioGuide.audio && (audioGuide.offered || playable(page.narration, audioGuide.audio)) && (
+            {/* The Audio guide switch, where the author offers it: off, Ava's transmissions start without sound. The introduction itself is below. */}
+            {page.kind === "content" && audioGuide.audio && audioGuide.offered && (
               <AudioGuideCard
                 key={page.id}
                 variant="inline"
-                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
-                // With Ava's video introducing the page, this keeps only the Audio guide switch.
-                narration={pageIntro !== null ? undefined : page.narration}
+                toggle={{ on: audioGuide.on, onChange: audioGuide.change }}
+                narration={undefined}
                 audio={audioGuide.audio}
                 level={course ? "page" : "course"}
-                autoplay={audioGuide.on && !finished.includes(page.id)}
-                onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
+                autoplay={false}
+                onEvent={() => {}}
               />
             )}
             {!course && (
@@ -590,6 +599,19 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
               </span>
             )}
           </div>
+          {/*
+            Listen to the introduction (docs/magazine-audio-guide.md): beneath the heading and description, before the content,
+            whenever the page has an approved, recorded introduction the author hasn't turned off. With Ava's transmission in
+            the picture's place, both are here; only one ever plays (lib/onePlayer). Never needed to finish the page.
+          */}
+          {page.kind === "content" && listenable(page.narration, audioGuide.audio) && (
+            <IntroPlayer
+              key={page.id}
+              script={page.narration.script}
+              audio={page.narration.audio}
+              onEvent={(action, detail) => void send("events", { event: "introAudio", pageId: page.id, detail: { action, ...detail } }).catch(() => {})}
+            />
+          )}
           {resume && (
             <a
               href={`#section-${resume.id}`}

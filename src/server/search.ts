@@ -12,6 +12,7 @@ import { keywords } from "@/lib/keywords";
 import { aidDocs } from "./favourites";
 import { businessSearchDocs } from "./businessNotes";
 import { pocketSearchDocs } from "./pocketTools";
+import { mythSearchDocs } from "./myths";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -106,11 +107,13 @@ function documents(db: Db, user: User): Doc[] {
   // Work Tools (docs/job-aids.md): Job Aids this person's role may open, found by the task they're for.
   // Business Field Notes: principals only, published cards only (server/businessNotes).
   // Live Call Pocket Playbook tools (docs/pocket-playbook.md): by role, never a withdrawn one.
+  // Myth vs Reality (docs/myth-vs-reality.md): approved, current tiles only, found by people's own words too.
   return [
     ...places,
     ...pocketSearchDocs(db, user),
     ...aidDocs(db, user),
     ...businessSearchDocs(db, user),
+    ...mythSearchDocs(db),
     ...topics,
     ...paths,
     ...webinars,

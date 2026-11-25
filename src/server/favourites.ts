@@ -20,6 +20,7 @@ import { ensurePlaybooks as ensurePlaybookSeed, markViewed, playbookList, record
 import { plannerEligible, TOOL_HREF, TOOL_ID, TOOL_TITLE } from "./caseloadPlanner";
 import { isPocketTool, pocketFavourite } from "./pocketTools";
 import { CARD_PREFIX, referralCardFavourite } from "./referralStudio";
+import { isMythTarget, mythStanding } from "./myths";
 
 /*
   Favourites and highlights (docs/job-aids.md). One private list per person: whole Job Aids and passages they
@@ -374,6 +375,8 @@ function itemOf(db: Db, user: User, f: FavRow, now: Date): FavouriteItem {
   if (f.kind === "tool" && isPocketTool(f.target_id)) return { ...base, ...pocketFavourite(db, user, f.target_id, f.seen, now), quote: "" };
   // A Local Referral Studio pitch card (docs/local-referral-studio.md): its standing now, and only within its business.
   if (f.kind === "tool" && f.target_id.startsWith(CARD_PREFIX)) return { ...base, ...referralCardFavourite(db, user, f.target_id, now), quote: "" };
+  // A Myth vs Reality entry (docs/myth-vs-reality.md): its approved version's standing now, never a draft's words.
+  if (f.kind === "tool" && isMythTarget(f.target_id)) return { ...base, ...mythStanding(db, f.target_id, f.seen, now), quote: "" };
   if (f.kind === "tool") {
     // A whole Work Tool (the Caseload-to-Margin calculator): it holds no content of its own, so it's current or unavailable.
     const open = f.target_id === TOOL_ID && plannerEligible(db, user);

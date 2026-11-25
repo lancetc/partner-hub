@@ -602,6 +602,42 @@ export function publishChallenge(db: Db, actor: User, id: string, publish: boole
   return { status: publish ? "published" : "draft" };
 }
 
+/** The Monday after `now`, as a date: when a re-run challenge starts unless the author picks another day. */
+export function nextMonday(now: Date) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+  Run a challenge again: a new draft with the same story, missions, points, teams and people, starting on the next
+  Monday (the author can change the date, then publish). A published challenge's dates are fixed and one that has
+  started can't be unpublished, so this is how a finished week runs again. The original keeps its scores and history.
+*/
+export function runChallengeAgain(db: Db, actor: User, id: string, now: Date) {
+  requireAuthor(actor);
+  const { challenge: c } = challengeDetail(db, actor, id);
+  const made = createChallenge(
+    db,
+    actor,
+    {
+      name: c.name,
+      tagline: c.tagline,
+      story: c.story,
+      startsOn: nextMonday(now),
+      unlockTime: c.unlockTime,
+      reminderTime: c.reminderTime,
+      timezone: c.timezone,
+      points: c.points,
+      missions: c.missions,
+      teams: c.teams.map((t) => ({ name: t.name, colour: t.colour, members: t.members })),
+    },
+    now,
+  );
+  audit(db, { actor: actor.id, event: "challenge.rerun", entity: `challenge:${made.id}`, previous: { from: id }, at: now });
+  return made;
+}
+
 export function archiveChallenge(db: Db, actor: User, id: string, now: Date) {
   requireAuthor(actor);
   if (!rowOf(db, id)) throw new HttpError(404, "Challenge not found.");

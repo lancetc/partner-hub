@@ -62,7 +62,9 @@ export function diffLessons(before: Lesson | null, after: Lesson): LessonDiff {
     }
     const keys = new Set([...Object.keys(prev), ...Object.keys(card)]);
     const parts = new Set<string>();
-    for (const k of keys) if (!same((prev as Record<string, unknown>)[k], (card as Record<string, unknown>)[k])) parts.add(PART[k] ?? "settings");
+    // `intro` is an Introduction card's working copy (lib/topicIntro.ts): what learners see of it shows as its narration, picture or text.
+    for (const k of keys)
+      if (k !== "intro" && !same((prev as Record<string, unknown>)[k], (card as Record<string, unknown>)[k])) parts.add(PART[k] ?? "settings");
     if (parts.size) cards.push({ id, title: titleOf(card), change: "changed", parts: [...parts] });
   }
   for (const [id, card] of Object.entries(old)) if (!after.nodes[id]) cards.push({ id, title: titleOf(card), change: "removed", parts: [] });

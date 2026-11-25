@@ -330,7 +330,7 @@ function LessonGrid({ lessons, paths, children }: { lessons: LessonRow[]; paths:
           </section>
         ))
       ) : shown.length ? (
-        <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map(children)}</ul>
+        <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{shown.map(children)}</ul>
       ) : (
         <p className="mt-4 rounded-3xl border border-dashed border-line-strong p-6 text-center text-ink-muted">
           No topics match.{" "}

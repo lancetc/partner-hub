@@ -73,8 +73,11 @@ export function buildAlis(db: Db, actor: User, now: Date) {
       actor,
       {
         name: p.title,
-        // Ava's spoken introduction on the path page (and its text there).
-        description: p.intro,
+        // The short summary on the path page, shown as text (never read aloud).
+        description: p.description,
+        // The path's Discovery Exciter, its spoken introduction: a draft for an author to approve and record. It never
+        // replaces a script an author has worked on (docs/discovery-exciter.md).
+        exciterSeed: p.intro,
         audience: "Everyone supporting older people at home",
         inOrder: true,
         whoFor: p.whoFor,

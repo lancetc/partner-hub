@@ -45,6 +45,8 @@ import { LessonLabField } from "./LessonLabField";
 import { LessonSceneField } from "./LessonSceneField";
 import { LessonDischargeField } from "./LessonDischargeField";
 import { spacedLearningOn } from "@/lib/features";
+import { carryIntro, DEFAULT_PRESENTER, introCardOf, isIntroCard } from "@/lib/topicIntro";
+import { TopicIntroSection } from "./TopicIntroEditor";
 
 /*
   Lesson authoring. Cards are edited in place on a canvas (like 7taps); details, media, spaced
@@ -53,6 +55,7 @@ import { spacedLearningOn } from "@/lib/features";
 
 const STEPS = [
   { id: "cards", label: "Cards", hint: "Edit the cards in place", icon: "list" },
+  { id: "intro", label: "Video introduction", hint: "The topic’s opening card", icon: "play" },
   { id: "brief", label: "Details", hint: "Who it’s for and what changes", icon: "doc" },
   { id: "media", label: "Media and voice", hint: "Poster, images and narration", icon: "camera" },
   { id: "spaced", label: "Spaced learning", hint: "Follow ups written by Claude", icon: "route" },
@@ -807,8 +810,15 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
   const [showDraft, setShowDraft] = useState(isNew);
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [round, setRound] = useState(0);
-  function applyDraft(draft: Lesson, source: string | null) {
-    setLesson(structuredClone(draft));
+  function applyDraft(fresh: Lesson, source: string | null) {
+    // The Introduction card stays first, with its script and media (lib/topicIntro.ts).
+    const v = introCardOf(lesson)?.visual;
+    const draft = carryIntro(
+      lesson,
+      structuredClone(fresh),
+      v?.kind === "presenter" && v.photo ? { id: "", name: v.name, portrait: v.photo } : DEFAULT_PRESENTER,
+    );
+    setLesson(draft);
     setSelected(draft.start);
     setDirty(true);
     setRound((r) => r + 1);
@@ -1008,6 +1018,7 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
             }
           />
         )}
+        {step === "intro" && <TopicIntroSection lesson={lesson} update={update} />}
         {step === "brief" && <Brief lesson={lesson} update={update} isNew={isNew} />}
         {step === "media" && <Media lesson={lesson} update={update} isNew={isNew} />}
         {step === "spaced" && spacedLearningOn() && <Spaced lesson={lesson} isNew={isNew} />}
@@ -1376,7 +1387,9 @@ const INTERACTIVE: Card["type"][] = ["quiz", "decision", "poll", "rating", "wall
 
 /** A tab on the card's top edge naming its type, so it's clear what kind of card you're editing. */
 function TypeTag({ card: c }: { card: Card }) {
-  const p = PALETTE.find((x) => x.type === c.type) ?? { label: typeInfo(c.type).label, icon: typeInfo(c.type).icon };
+  const p = isIntroCard(c)
+    ? { label: "Introduction", icon: "play" as IconName }
+    : (PALETTE.find((x) => x.type === c.type) ?? { label: typeInfo(c.type).label, icon: typeInfo(c.type).icon });
   const tone = c.type === "summary" ? "bg-gold text-[#0a1a2e]" : INTERACTIVE.includes(c.type) ? "bg-action text-on-action" : "bg-[#102a43] text-white";
   return (
     <span
@@ -1620,6 +1633,8 @@ function Cards({
   }
 
   function duplicate() {
+    // A topic has one Introduction card.
+    if (isIntroCard(card)) return;
     const id = newId(card.type);
     update((d) => insertAfterCard(d, { ...structuredClone(d.nodes[card.id]), id }, card.id));
     setSelected(id);
@@ -1627,7 +1642,8 @@ function Cards({
   }
 
   async function remove() {
-    if (cards.length <= 1) return;
+    // The Introduction card is part of every topic: edit it, but it can't be deleted.
+    if (cards.length <= 1 || isIntroCard(card)) return;
     if (
       !(await confirmAction("The card is removed from this topic. Save or publish to keep the change.", {
         title: `Delete “${card.heading || typeInfo(card.type).label}”?`,
@@ -1821,9 +1837,11 @@ function Cards({
                     title={
                       canDrag || drag
                         ? "Drag to move this card"
-                        : c.type === "summary"
-                          ? "The summary stays at the end"
-                          : "Cards inside a branch move with their decision"
+                        : isIntroCard(c)
+                          ? "The introduction stays first"
+                          : c.type === "summary"
+                            ? "The summary stays at the end"
+                            : "Cards inside a branch move with their decision"
                     }
                     disabled={!canDrag && drag?.id !== c.id}
                     onPointerDown={(e) => {
@@ -1903,7 +1921,13 @@ function Cards({
                     label={card?.requireComplete ? "Required completion is on: turn off" : "Make this card required"}
                     pressed={Boolean(card?.requireComplete)}
                     // Greyed out (with the reason on hover) where it would make no difference; always available to turn off.
-                    disabled={on && !card?.requireComplete && card ? requiredWhyNot(card, l.holdForAudio) : null}
+                    disabled={
+                      on && card && isIntroCard(card) && !card.requireComplete
+                        ? "Learners can always go on from the introduction"
+                        : on && !card?.requireComplete && card
+                          ? requiredWhyNot(card, l.holdForAudio)
+                          : null
+                    }
                     onClick={() => update((d) => void (d.nodes[card.id].requireComplete = !d.nodes[card.id].requireComplete))}
                   />
                   <ToolButton
@@ -1924,8 +1948,19 @@ function Cards({
                       className="bg-surface text-ink shadow-sm ring-1 ring-line"
                     />
                   )}
-                  <ToolButton icon="copy" label="Duplicate" onClick={duplicate} />
-                  <ToolButton icon="trash" label="Delete" onClick={remove} disabled={cards.length <= 1 ? "A topic needs at least one card." : null} />
+                  <ToolButton icon="copy" label="Duplicate" onClick={duplicate} disabled={isIntroCard(c) ? "A topic has one introduction" : null} />
+                  <ToolButton
+                    icon="trash"
+                    label="Delete"
+                    onClick={remove}
+                    disabled={
+                      isIntroCard(c)
+                        ? "The introduction is part of every topic: edit it instead"
+                        : cards.length <= 1
+                          ? "A topic needs at least one card."
+                          : null
+                    }
+                  />
                 </div>
               </li>
             );

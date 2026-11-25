@@ -1,4 +1,5 @@
 import type { Card, Lesson } from "@/content/lessons";
+import { isIntroCard } from "./topicIntro";
 
 /*
   The shape of a lesson: cards linked by `next`, with decisions that branch and rejoin.
@@ -64,10 +65,10 @@ export function mainLine(l: Lesson) {
   return ids;
 }
 
-/** A card that can move: a straight-run card, or a decision whose choices all lead to the same next card. */
+/** A card that can move: a straight-run card, or a decision whose choices all lead to the same next card. The Introduction card never moves. */
 export function movable(l: Lesson, id: string) {
   const c = l.nodes[id];
-  if (!c || !mainLine(l).includes(id)) return false;
+  if (!c || isIntroCard(c) || !mainLine(l).includes(id)) return false;
   if (isLinear(c)) return true;
   return c.type === "decision" && new Set(c.options.filter((o) => !o.stay && o.next).map((o) => o.next)).size <= 1;
 }
@@ -113,11 +114,17 @@ function placeBefore(d: Lesson, id: string, beforeId: string | null, lastId?: st
 
 /** Moves a main-line card one block earlier (-1) or later (1). Returns why not, if it can't. */
 export function moveBlock(d: Lesson, id: string, dir: -1 | 1): string | null {
-  if (!movable(d, id)) return d.nodes[id]?.type === "summary" ? "The summary stays at the end." : "Cards inside a branch move with their decision.";
+  if (!movable(d, id))
+    return isIntroCard(d.nodes[id])
+      ? "The introduction stays first."
+      : d.nodes[id]?.type === "summary"
+        ? "The summary stays at the end."
+        : "Cards inside a branch move with their decision.";
   const line = mainLine(d);
   const i = line.indexOf(id);
   const neighbour = line[i + dir];
   if (!neighbour) return dir === 1 ? "Already at the end." : "Already first.";
+  if (dir === -1 && isIntroCard(d.nodes[neighbour])) return "The introduction stays first.";
   if (dir === 1 && d.nodes[neighbour].type === "summary") return "The summary stays at the end.";
   const after = exitOf(d, id);
   // Take the card out: whatever led to it now leads to whatever came after it.

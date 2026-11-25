@@ -35,6 +35,7 @@ import { questionsInGuide } from "@/lib/questionPool";
 import { afterPublish, publishGate } from "./questionPool";
 import { guideForReaders, guideIdentity } from "./learningGuide";
 import { relayForReaders } from "@/lib/relayConfig";
+import { INTRO_AUDIO_ACTIONS, INTRO_AUDIO_SPEEDS, narrationForReaders } from "@/lib/magazineNarration";
 import { reviewRequired } from "./topicApproval";
 import { signalApproved, signalForReaders } from "@/lib/signal";
 import { missionApproved, missionForReaders } from "@/lib/mission";
@@ -599,7 +600,8 @@ export function readGuide(db: Db, user: User, slug: string) {
     demo: Boolean(demoEditionOf(db, r.id)),
     completion: r.completion,
     // Guide recordings only when they're cleared to play (and not withdrawn); never the self-review answers.
-    doc: relayForReaders(withoutScenes(withoutPractice(guideForReaders(db, doc)))),
+    // Audio introductions: what learners hear, never a replacement in progress or audio awaiting approval.
+    doc: narrationForReaders(relayForReaders(withoutScenes(withoutPractice(guideForReaders(db, doc))))),
     /** The Hub's AI Learning Guide: its name, introduction and portrait. */
     guide: guideIdentity(db),
     /** Self-review: on, and how many questions each page has (null when it's off). */
@@ -920,6 +922,27 @@ export function recordGuideEvent(
         event: `narration.${outcome}`,
         ...(page && { page: page.id }),
         detail: { target: page ? "page" : "intro" },
+        at: now,
+      });
+      return { ok: true };
+    }
+    if (input.event === "introAudio") {
+      // "Listen to the introduction" (docs/magazine-audio-guide.md): ids and numbers only. Never an activity, never a completion.
+      const d = (input.detail ?? {}) as Record<string, unknown>;
+      const action = String(d.action);
+      if (!INTRO_AUDIO_ACTIONS.includes(action as (typeof INTRO_AUDIO_ACTIONS)[number])) throw new HttpError(400, "Unknown introduction event.");
+      const page = pageOf(doc, input.pageId);
+      const num = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(0, Math.round(v * 10) / 10)) : undefined);
+      const speed = INTRO_AUDIO_SPEEDS.includes(d.speed as (typeof INTRO_AUDIO_SPEEDS)[number]) ? (d.speed as number) : undefined;
+      const seconds = num(d.seconds, 600);
+      const percent = num(d.percent, 100);
+      event(db, {
+        user: user.id,
+        guide: g.id,
+        revision: r.id,
+        event: `intro_audio.${action}`,
+        page: page.id,
+        detail: { ...(seconds !== undefined && { seconds }), ...(percent !== undefined && { percent }), ...(speed !== undefined && { speed }) },
         at: now,
       });
       return { ok: true };

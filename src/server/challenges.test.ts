@@ -6,6 +6,7 @@ import { syncPublishedLessons } from "./lessonRegistry";
 import { saveProgress } from "./progress";
 import { recordLessonCompletion } from "./learning";
 import {
+  challengeDetail,
   challengeReport,
   challengeView,
   createChallenge,
@@ -13,8 +14,10 @@ import {
   missionQuestions,
   missionSlugs,
   myChallenges,
+  nextMonday,
   publishChallenge,
   queueChallengeEmails,
+  runChallengeAgain,
   setMyPreferences,
   timeline,
   updateChallenge,
@@ -237,5 +240,30 @@ describe("daily emails", () => {
 
   it("doesn't back-fill a day that has passed", () => {
     expect(queueChallengeEmails(db, at("2026-11-02T15:00:00Z"), "https://hub.test")).toBe(0);
+  });
+});
+
+describe("running a challenge again", () => {
+  it("makes a new draft copy starting next Monday, after a finished week drops off the learner's list", () => {
+    const later = at("2026-11-25T03:00:00Z");
+    // Finished weeks show for a fortnight, then drop off.
+    expect(myChallenges(db, u("riley"), later).some((c) => c.id === id)).toBe(false);
+    const original = challengeDetail(db, u("jordan"), id).challenge;
+    const copy = runChallengeAgain(db, u("jordan"), id, later);
+    expect(copy.id).not.toBe(id);
+    const c = challengeDetail(db, u("jordan"), copy.id).challenge;
+    expect(c).toMatchObject({ status: "draft", name: original.name, story: original.story, startsOn: "2026-11-30", points: original.points });
+    expect(c.missions).toEqual(original.missions);
+    expect(c.teams.map((t) => [t.name, t.members])).toEqual(original.teams.map((t) => [t.name, t.members]));
+    // The original is untouched, and the copy runs once it's published.
+    expect(challengeDetail(db, u("jordan"), id).challenge).toEqual(original);
+    publishChallenge(db, u("jordan"), copy.id, true, later);
+    expect(myChallenges(db, u("riley"), later).find((x) => x.id === copy.id)?.state).toBe("upcoming");
+    expect(() => runChallengeAgain(db, u("riley"), id, later)).toThrow();
+  });
+
+  it("starts on the Monday after today, never today", () => {
+    expect(nextMonday(at("2026-11-25T03:00:00Z"))).toBe("2026-11-30");
+    expect(nextMonday(at("2026-11-30T03:00:00Z"))).toBe("2026-12-07");
   });
 });

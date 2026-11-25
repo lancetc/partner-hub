@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Card } from "@/content/lessons";
-import { ALIS_MODULES, ALIS_PARTS, ALIS_PATH_QUIZ, ALIS_TOPIC_CUT, isActivity, isTopicActivity, moduleKey } from "@/content/alisCourse";
+import { ALIS_MODULES, ALIS_PARTS, ALIS_PATH_QUIZ, ALIS_SUPPORT_NOTE, ALIS_TOPIC_CUT, isActivity, isTopicActivity, moduleKey } from "@/content/alisCourse";
+import { wordCount } from "./magazineNarration";
+import { exciterWarnings } from "./pathExciter";
 import { publishChecks, readGuideDoc } from "./magazine";
 import { cleanQuizSettings } from "./pathQuizSettings";
 import { chaptersOf } from "./magazineChapters";
 import { MAGAZINE_BLOCK_FOR, buildGuideDoc, buildPage, buildTopic, moduleActivities, pageActivities, topicActivities } from "./alisBuild";
+import { isIntroCard, planIntro } from "./topicIntro";
 
 /* The ALIS course (docs/alis-course.md): one shared source; short Topics, a long Magazine course, the same activities. */
 
@@ -90,14 +93,18 @@ describe("the shared ALIS course", () => {
     }
   });
 
-  it("gives each path a spoken introduction for Ava: under 500 characters, not the chapter's one-line summary", () => {
+  it("gives each path a Discovery Exciter: 70 to 130 words, a question first, not the one-line description, no warnings", () => {
     for (const p of ALIS_PARTS) {
-      expect(p.intro.length, p.title).toBeLessThanOrEqual(500);
-      expect(p.intro.length, p.title).toBeGreaterThan(250);
+      const words = wordCount(p.intro);
+      expect(words, p.title).toBeGreaterThanOrEqual(70);
+      expect(words, p.title).toBeLessThanOrEqual(130);
+      expect(p.intro.length, p.title).toBeLessThanOrEqual(1200);
       expect(p.intro, p.title).not.toBe(p.description);
-      // Written to be heard: to the learner, and saying how the path ends.
+      // Written to be heard: to the learner, opening a question, and saying how the path ends.
       expect(p.intro, p.title).toMatch(/\byou\b/i);
+      expect(p.intro.slice(0, 120), p.title).toContain("?");
       expect(p.intro, p.title).toMatch(/five-question quiz/);
+      expect(exciterWarnings(p.intro, p.description), p.title).toEqual([]);
     }
   });
 
@@ -128,6 +135,28 @@ describe("short-form Topics", () => {
       ).toBe(true);
       expect(l.nodes.brief?.type, m.slug).toBe("image");
       expect(l.nodes.confidence, m.slug).toMatchObject({ type: "rating", prompt: m.short!.confidence });
+    }
+  });
+
+  it("open with one Introduction card: the module's title, summary and support note, over the part's cover", () => {
+    for (const m of ALIS_MODULES) {
+      const l = buildTopic(m);
+      const intro = l.nodes[l.start];
+      if (!isIntroCard(intro)) throw new Error(m.slug);
+      expect(Object.values(l.nodes).filter(isIntroCard), m.slug).toHaveLength(1);
+      // No picture title card after it, so a rebuild never brings one back.
+      expect(
+        Object.values(l.nodes).filter((c) => c.type === "image" && c.heading === m.title),
+        m.slug,
+      ).toEqual([]);
+      expect(intro.heading).toBe(m.title);
+      expect(intro.body.startsWith(m.summary), m.slug).toBe(true);
+      expect(intro.body.includes(ALIS_SUPPORT_NOTE), m.slug).toBe(Boolean(m.sensitive));
+      const cover = ALIS_PARTS.find((p) => p.n === m.part)!.cover;
+      expect(intro.intro.placeholder?.src, m.slug).toBe(cover.src);
+      expect(intro.visual.kind === "presenter" && intro.visual.photo?.src, m.slug).toBe(cover.src);
+      // The server adds nothing when it's saved: it's already there.
+      expect(planIntro(l).action, m.slug).toBe("none");
     }
   });
 

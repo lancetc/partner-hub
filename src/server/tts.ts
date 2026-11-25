@@ -10,9 +10,10 @@ import { editorLesson } from "./authoredLessons";
 import { factValues } from "./facts";
 import { applyFacts } from "@/lib/facts";
 import { estimateWords, wordsFromAlignment, type Alignment, type WordTiming } from "@/lib/wordTimings";
-import { mp3Seconds, openaiReady, openaiSpeech } from "./openaiText";
+import { mp3Seconds, openaiReady, openaiSpeech, openaiSpeechModel } from "./openaiText";
 import { answerScript, cardScript } from "@/lib/coordinatorsDay";
 import { coordinatorsDay } from "@/content/coordinatorsDay";
+import { introSpokenText, usesIntroLayout } from "@/lib/topicIntro";
 
 /*
   Live narration: the Topics' script read aloud. The hub's narrator is OpenAI's Alloy voice when OpenAI is
@@ -58,7 +59,16 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const lesson = lessonWith(db, a, b, drafts);
     // With shared facts filled in, exactly as learners see the text.
     const node = lesson && applyFacts(lesson, factValues(db)).nodes[b];
-    const text = node && (node.type === "presenter" ? node.transcript : node.type === "audio" || node.type === "listen" ? node.script : node.narration);
+    // A Topic's Introduction card says its approved script, or its title and description (lib/topicIntro introSpokenText).
+    const text =
+      node &&
+      (usesIntroLayout(node)
+        ? introSpokenText(node, lesson)
+        : node.type === "presenter"
+          ? node.transcript
+          : node.type === "audio" || node.type === "listen"
+            ? node.script
+            : node.narration);
     if (text) return text;
   }
   if (kind === "cday" && a === "answer") {
@@ -114,20 +124,22 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
     const text = find(row?.doc ?? null) ?? (drafts ? find(row?.draft ?? null) : null);
     if (text) return text;
   }
-  // A Discovery Path's introduction, as Ava says it: the path's own description (`path:<id>`).
-  if (kind === "path") {
-    const row = db.prepare("SELECT description FROM learning_paths WHERE id = ? AND archived = 0").get(a) as { description: string | null } | undefined;
-    if (row?.description?.trim()) return row.description.trim();
-  }
+  // A Discovery Path (`path:<id>`) is no longer spoken from here: its description is never read aloud, and Ava doesn't
+  // introduce it. Its introduction is the Discovery Exciter, recorded in the Magazine Editorial Voice (docs/discovery-exciter.md).
   throw new HttpError(404, "No narration for this card.");
 }
 
-/** Lines Ava speaks, in her own voice (server/ava.ts): a path's introduction, a Magazine course's introduction, and a Topic's presenter card. */
+/**
+  Lines Ava speaks, in her own voice (server/ava.ts): a Magazine course's introduction, a Family Call's, and a Topic's
+  presenter card. Not a Discovery Path's any more (Nov 2026): her `path:` videos are kept but not shown or added to.
+*/
 export function avaSpeaks(db: Db, key: string, drafts = false) {
   const [kind, a, b] = key.split(":");
-  if (kind === "path" || kind === "magazine" || kind === "familycall") return true;
+  if (kind === "magazine" || kind === "familycall") return true;
   if (kind !== "lesson") return false;
-  return lessonWith(db, a, b, drafts)?.nodes[b]?.type === "presenter";
+  const node = lessonWith(db, a, b, drafts)?.nodes[b];
+  // A Topic's Introduction card is spoken by the Hub's narrator, not as Ava (docs/topic-video-introductions.md).
+  return node?.type === "presenter" && !usesIntroLayout(node);
 }
 
 /**
@@ -142,7 +154,7 @@ function lessonWith(db: Db, slug: string, card: string, drafts: boolean) {
 const cacheDir = () => path.join(process.cwd(), "data", "tts");
 
 const hashOf = (text: string, voiceId: string, style = "") => {
-  const modelId = voiceId.startsWith("openai:") ? process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts" : ttsConfig().modelId;
+  const modelId = voiceId.startsWith("openai:") ? openaiSpeechModel() : ttsConfig().modelId;
   // A character's delivery notes change the recording, so they're part of its key (and absent for every existing voice).
   return crypto
     .createHash("sha256")
@@ -158,7 +170,13 @@ const inFlight = new Map<string, Promise<{ audio: Buffer; words: WordTiming[] | 
   The narration and its word timings, from the disk cache or ElevenLabs. Both are made in one call
   so they always match. A recording cached before timings were kept is made again once.
 */
-export async function narration(text: string, voice?: string, style?: string): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
+export async function narration(
+  text: string,
+  voice?: string,
+  style?: string,
+  /** fresh: make a new take even when one is kept (a Magazine introduction's "Regenerate audio"); it replaces the kept one. */
+  opts: { fresh?: boolean } = {},
+): Promise<{ audio: Buffer; words: WordTiming[] | null }> {
   const { apiKey, modelId } = ttsConfig();
   // The hub's narrator unless another voice is asked for (a Magazine Audio Guide may choose one).
   const voiceId = voice ?? ttsConfig().voiceId;
@@ -167,7 +185,7 @@ export async function narration(text: string, voice?: string, style?: string): P
   const hash = hashOf(text, voiceId, openai ? style : "");
   const mp3 = path.join(cacheDir(), `${hash}.mp3`);
   const json = path.join(cacheDir(), `${hash}.json`);
-  if (fs.existsSync(mp3) && fs.existsSync(json)) {
+  if (!opts.fresh && fs.existsSync(mp3) && fs.existsSync(json)) {
     const kept = JSON.parse(fs.readFileSync(json, "utf8")) as { alignment?: Alignment | null; seconds?: number | null };
     const audio = fs.readFileSync(mp3);
     return { audio, words: openai ? estimateWords(text, kept.seconds ?? mp3Seconds(audio) ?? 0) : wordsFromAlignment(text, kept.alignment) };

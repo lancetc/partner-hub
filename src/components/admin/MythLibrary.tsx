@@ -7,6 +7,9 @@ import {
   APPLICABILITY,
   CATEGORIES,
   cleanTile,
+  CONTENT_STATUS,
+  DEMO_LABEL,
+  type ContentStatus,
   placeholdersIn,
   secondsToSay,
   SOURCE_TYPES,
@@ -27,8 +30,17 @@ import { Icon } from "../Icon";
   The Myth vs Reality tile library (docs/myth-vs-reality.md). Every course block and the Resources page show a
   tile's current approved version. Editing an approved tile starts a new draft version; approving it retires the
   old one, which stays in the history. Approval needs exact sources, a review date and the right reviewers.
-  "Out of date" flags from learners land here.
+  "Inaccurate or out of date" flags from learners land here.
+
+  Statuses are read from the versions: Draft – pending compliance approval, Under review (paused or past its review
+  date), Approved, Retired. Demonstration entries are labelled, and open in the Resources page's preview.
 */
+const STATUS_TONE: Record<ContentStatus, "info" | "warn" | "good" | "neutral"> = {
+  draft: "info",
+  "under-review": "warn",
+  approved: "good",
+  retired: "neutral",
+};
 
 type Loaded = ReturnType<typeof library> & { flags: ReturnType<typeof openMythFlags>; stats: ReturnType<typeof mythStats> };
 const area = cx(input, "min-h-20 py-2");
@@ -42,6 +54,7 @@ export function MythLibrary() {
   const [editing, setEditing] = useState<{ id: string; data: MythTileData } | null>(null);
   const [problem, setProblem] = useState<{ text: string; list: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<ContentStatus | "">("");
   const act = async (body: Record<string, unknown>) => {
     setBusy(true);
     setProblem(null);
@@ -105,6 +118,9 @@ export function MythLibrary() {
         <a href="/resources/myths" className={btn.secondary}>
           See it in Resources
         </a>
+        <a href="/resources/myths?preview=1" className={btn.secondary}>
+          Preview drafts and demo content
+        </a>
       </div>
       {problem && (
         <div role="alert" className="mt-4 rounded-2xl bg-[#fff1cc] p-4 text-[#4a3400] dark:bg-[#3d2f08] dark:text-[#ffd97a]">
@@ -137,19 +153,38 @@ export function MythLibrary() {
 
       <section className="mt-6">
         <h2 className="font-serif text-2xl font-semibold">Tiles</h2>
-        <ul className="mt-2 flex flex-col gap-3">
-          {d.tiles.map((t) => (
-            <TileRow
-              key={t.id}
-              t={t}
-              stats={d.stats[t.id] ?? {}}
-              busy={busy}
-              onEdit={() => setEditing({ id: t.id, data: structuredClone((t.draft ?? t.live ?? t.latest).data) })}
-              onApprove={() => void act({ action: "approve", id: t.id })}
-              onPause={(reason) => void act({ action: "pause", id: t.id, reason })}
-              onResume={() => void act({ action: "resume", id: t.id })}
-            />
+        <div role="group" aria-label="Status" className="mt-2 flex flex-wrap gap-2">
+          {(["", ...Object.keys(CONTENT_STATUS)] as (ContentStatus | "")[]).map((s) => (
+            <button
+              key={s || "all"}
+              type="button"
+              aria-pressed={status === s}
+              className={cx(
+                "min-h-11 rounded-full px-4 text-sm font-semibold ring-1",
+                status === s ? "bg-action text-on-action ring-action" : "bg-surface ring-line-strong hover:bg-muted",
+              )}
+              onClick={() => setStatus(s)}
+            >
+              {s ? CONTENT_STATUS[s] : "All"} ({s ? d.tiles.filter((t) => t.status === s).length : d.tiles.length})
+            </button>
           ))}
+        </div>
+        <ul className="mt-3 flex flex-col gap-3">
+          {d.tiles
+            .filter((t) => !status || t.status === status)
+            .map((t) => (
+              <TileRow
+                key={t.id}
+                t={t}
+                stats={d.stats[t.id] ?? {}}
+                busy={busy}
+                onEdit={() => setEditing({ id: t.id, data: structuredClone((t.draft ?? t.live ?? t.latest).data) })}
+                onApprove={() => void act({ action: "approve", id: t.id })}
+                onPause={(reason) => void act({ action: "pause", id: t.id, reason })}
+                onResume={() => void act({ action: "resume", id: t.id })}
+                onRetire={(reason) => void act({ action: "retire", id: t.id, reason })}
+              />
+            ))}
         </ul>
       </section>
     </AdminShell>
@@ -164,6 +199,7 @@ function TileRow({
   onApprove,
   onPause,
   onResume,
+  onRetire,
 }: {
   t: LibraryTile;
   stats: Record<string, number>;
@@ -172,15 +208,20 @@ function TileRow({
   onApprove: () => void;
   onPause: (reason: string) => void;
   onResume: () => void;
+  onRetire: (reason: string) => void;
 }) {
   const live = t.live;
+  const ld = t.latest.data;
   return (
     <li className="rounded-3xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-serif text-lg font-semibold">“{t.latest.data.quote.replace(/^[“"]|[”"]$/g, "")}”</p>
+          <p className="font-serif text-lg font-semibold">“{ld.quote.replace(/^[“"]|[”"]$/g, "")}”</p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-            <span>{CATEGORIES[t.latest.data.category]}</span>
+            <span>{CATEGORIES[ld.category]}</span>
+            <Badge tone={STATUS_TONE[t.status]}>{CONTENT_STATUS[t.status]}</Badge>
+            {ld.demo && <Badge tone="warn">{DEMO_LABEL}</Badge>}
+            {ld.anchors.some((a) => a.unverified) && <Badge tone="bad">Unverified source</Badge>}
             {live ? (
               live.state === "approved" ? (
                 <Badge tone="good">Live: version {live.version}</Badge>
@@ -191,8 +232,13 @@ function TileRow({
               <Badge>Not live</Badge>
             )}
             {t.draft && <Badge tone="info">Draft version {t.draft.version}</Badge>}
-            {t.openFlags > 0 && <Badge tone="bad">{t.openFlags} flagged out of date</Badge>}
+            {t.openFlags > 0 && <Badge tone="bad">{t.openFlags} flagged inaccurate or out of date</Badge>}
           </p>
+          {(ld.lastReviewed || ld.contentOwner) && (
+            <p className="mt-1 text-xs text-ink-muted">
+              {[ld.lastReviewed && `Last reviewed ${showDate(ld.lastReviewed)}`, ld.contentOwner && `Owner: ${ld.contentOwner}`].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <p className="mt-1 text-xs text-ink-muted">
             {stats.opened ?? 0} opens · {stats.source ?? 0} source opens · {stats.practice ?? 0} practised · {stats.copied ?? 0} copied (not sent) ·{" "}
             {stats.useful ?? 0} useful
@@ -223,6 +269,19 @@ function TileRow({
           {live?.paused && (
             <button type="button" className={btn.secondary} disabled={busy} onClick={onResume}>
               Resume
+            </button>
+          )}
+          {t.status !== "retired" && (
+            <button
+              type="button"
+              className={btn.quiet}
+              disabled={busy}
+              onClick={() => {
+                const reason = window.prompt("Why is it being retired? It leaves Resources and courses; every version stays in the history.");
+                if (reason) onRetire(reason);
+              }}
+            >
+              Retire
             </button>
           )}
         </div>
@@ -348,8 +407,14 @@ function TileEditor({
             </label>
           ))}
         </fieldset>
+        <Field label="Myth" hint="What people believe, in a line.">
+          <textarea className={area} value={v.myth ?? ""} maxLength={300} onChange={(e) => set((d) => void (d.myth = e.target.value))} />
+        </Field>
+        <Field label="Reality" hint="What’s actually so, in a line or two.">
+          <textarea className={area} value={v.reality ?? ""} maxLength={600} onChange={(e) => set((d) => void (d.reality = e.target.value))} />
+        </Field>
         <Field
-          label="Here’s how it works"
+          label="What to say in 30 seconds"
           hint={`${words} words, about ${secondsToSay(v.answer)} seconds to say.${words && (words < 60 || words > 85) ? " Aim for 60 to 85, but keep the exception even if it runs longer." : ""}`}
           className="sm:col-span-2"
         >
@@ -358,8 +423,19 @@ function TileEditor({
         <Field label="Important exception" hint="One line, when the rule depends on program, history or approved services.">
           <textarea className={area} value={v.exception} maxLength={300} onChange={(e) => set((d) => void (d.exception = e.target.value))} />
         </Field>
-        <Field label="Check for this person" hint="One to three, one per line.">
+        <Field label="What to check for this participant" hint="One to three, one per line. A single line written as a list shows as its items.">
           <textarea className={area} value={v.checks.join("\n")} onChange={(e) => set((d) => void (d.checks = e.target.value.split("\n").slice(0, 3)))} />
+        </Field>
+        <Field
+          label="Search phrases"
+          hint="The words people actually use, one per line, such as “lose my money” or “leftover funds”. Search finds the tile by these too."
+          className="sm:col-span-2"
+        >
+          <textarea
+            className={area}
+            value={(v.searchPhrases ?? []).join("\n")}
+            onChange={(e) => set((d) => void (d.searchPhrases = e.target.value.split("\n").slice(0, 24)))}
+          />
         </Field>
         <Field label="If a family member asks (optional)" className="sm:col-span-2">
           <textarea className={area} value={v.familyWording} maxLength={600} onChange={(e) => set((d) => void (d.familyWording = e.target.value))} />
@@ -401,6 +477,15 @@ function TileEditor({
             <Field label="Last checked">
               <input type="date" className={input} value={a.verifiedOn} onChange={(e) => set((d) => void (d.anchors[i].verifiedOn = e.target.value))} />
             </Field>
+            <label className="flex min-h-11 items-center gap-2 text-sm font-semibold sm:col-span-2">
+              <input
+                type="checkbox"
+                className="size-5"
+                checked={Boolean(a.unverified)}
+                onChange={(e) => set((d) => void (d.anchors[i].unverified = e.target.checked))}
+              />
+              Unverified (pending internal verification): blocks approval
+            </label>
             <div className="sm:col-span-2">
               <button type="button" className={btn.quiet} onClick={() => set((d) => void d.anchors.splice(i, 1))}>
                 <Icon name="trash" className="size-4" /> Remove this source
@@ -424,7 +509,10 @@ function TileEditor({
       </div>
 
       <div className={group}>
-        <h3 className="font-semibold">The approved email</h3>
+        <h3 className="font-semibold">The email reply</h3>
+        <p className="text-sm text-ink-muted">
+          Staff can copy it only once the tile is approved. From a draft or demo entry, a copy starts with a do-not-send line.
+        </p>
         <div className="mt-2 grid gap-3">
           <Field label="Subject">
             <input className={input} value={v.message.subject} maxLength={160} onChange={(e) => set((d) => void (d.message.subject = e.target.value))} />
@@ -476,6 +564,18 @@ function TileEditor({
             <input type="checkbox" className="size-5" checked={v.aiDraft} onChange={(e) => set((d) => void (d.aiDraft = e.target.checked))} />
             AI-drafted, not yet checked by a person
           </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" className="size-5" checked={Boolean(v.demo)} onChange={(e) => set((d) => void (d.demo = e.target.checked))} />
+            Demonstration content (labelled “{DEMO_LABEL}”; blocks approval)
+          </label>
+        </div>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <Field label="Content owner" hint="The team that owns the content. Not a sign-off.">
+            <input className={input} value={v.contentOwner ?? ""} maxLength={120} onChange={(e) => set((d) => void (d.contentOwner = e.target.value))} />
+          </Field>
+          <Field label="Last reviewed">
+            <input type="date" className={input} value={v.lastReviewed ?? ""} onChange={(e) => set((d) => void (d.lastReviewed = e.target.value))} />
+          </Field>
         </div>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {(

@@ -49,7 +49,7 @@ export function HomePinnedTools() {
         {d.pinned.map((it) => (
           <li key={`${it.kind}:${it.id}`}>
             <Link
-              href={`${it.href}${it.kind === "tool" ? "?from=home" : ""}`}
+              href={`${it.href}${it.kind === "tool" ? `${it.href.includes("?") ? "&" : "?"}from=home` : ""}`}
               className="flex h-full min-h-16 items-center gap-3 rounded-2xl bg-muted px-4 py-3 hover:ring-1 hover:ring-action"
             >
               <span
