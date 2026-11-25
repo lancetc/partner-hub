@@ -1,7 +1,9 @@
 import "server-only";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
-import { DEFAULT_PRESENTER, type IntroPicture, type PresenterProfile } from "@/lib/topicIntro";
+import { DEFAULT_PRESENTER, introCardOf, placeholderVisual, playableVideo, type IntroPicture, type PresenterProfile } from "@/lib/topicIntro";
+import type { Lesson } from "@/content/lessons";
+import { forgetPublishedLessons } from "./lessonRegistry";
 import type { MediaProvider } from "@/lib/mediaStudio";
 
 /*
@@ -172,5 +174,42 @@ export function savePresenter(db: Db, actor: User, input: Record<string, unknown
     ).run(id, ...Object.values(fields), active ? 1 : 0, isDefault ? 1 : 0, actor.id, at, at);
   }
   audit(db, { actor: actor.id, event: existing ? "intro.presenter_updated" : "intro.presenter_added", entity: `presenter:${id}`, at: now });
-  return presenterById(db, id)!;
+  const saved = presenterById(db, id)!;
+  refreshPresenterPictures(db, saved);
+  return saved;
+}
+
+/**
+  Each Introduction card keeps a copy of its presenter's look. After a presenter's portrait or name changes, every card
+  showing that presenter's placeholder (the default presenter's, for cards with none chosen) takes the new one, in the draft
+  and in what learners see. Cards with their own placeholder, a video, or the old card look keep theirs. Returns the slugs changed.
+*/
+export function refreshPresenterPictures(db: Db, p: PresenterProfile): string[] {
+  const rows = db.prepare("SELECT slug, draft, published FROM authored_lessons WHERE deleted_at IS NULL").all() as {
+    slug: string;
+    draft: string;
+    published: string | null;
+  }[];
+  const fresh = placeholderVisual(p);
+  const refresh = (json: string | null) => {
+    if (!json) return json;
+    const l = JSON.parse(json) as Lesson;
+    const c = introCardOf(l);
+    if (!c || c.intro.layout === "legacy" || c.intro.placeholder || playableVideo(c.visual)) return json;
+    if (c.intro.presenter ? c.intro.presenter !== p.id : !p.isDefault) return json;
+    if (JSON.stringify(c.visual) === JSON.stringify(fresh)) return json;
+    c.visual = structuredClone(fresh);
+    return JSON.stringify(l);
+  };
+  const update = db.prepare("UPDATE authored_lessons SET draft = ?, published = ? WHERE slug = ?");
+  const changed: string[] = [];
+  for (const r of rows) {
+    const draft = refresh(r.draft)!;
+    const published = refresh(r.published);
+    if (draft === r.draft && published === r.published) continue;
+    update.run(draft, published, r.slug);
+    changed.push(r.slug);
+  }
+  if (changed.length) forgetPublishedLessons();
+  return changed;
 }

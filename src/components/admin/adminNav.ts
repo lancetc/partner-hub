@@ -131,6 +131,14 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         authorOnly: true,
       },
       {
+        href: "/admin/lives",
+        label: "Lives in Progress",
+        icon: "heart",
+        description:
+          "The Digital Members’ ongoing stories: Character Bibles, the Story Bank, arcs and scheduled episodes, audio diaries, conversational memory and the report.",
+        authorOnly: true,
+      },
+      {
         href: "/admin/member-chat",
         label: "Digital Member chat",
         icon: "chat",
@@ -240,6 +248,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
       },
       { href: "/admin/signoffs", label: "Sign-offs", icon: "pen", description: "Managers confirming people put learning into practice." },
       { href: "/admin/surveys", label: "Surveys", icon: "chat", description: "Feedback after topics and learning paths, and the results." },
+      {
+        href: "/admin/lives#report",
+        label: "Lives in Progress report",
+        icon: "heart",
+        description: "Voluntary engagement with the Digital Members’ stories: views, listening, follows, conversations and returns. Counts only.",
+        authorOnly: true,
+      },
     ],
   },
   {

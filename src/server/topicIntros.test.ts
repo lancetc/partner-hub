@@ -22,7 +22,7 @@ import { synthesia, videoGenerationEnabled } from "./videoProviders";
 import { avaSpeaks, scriptFor } from "./tts";
 import { DEFAULT_PRESENTER, introCardOf, isIntroCard } from "@/lib/topicIntro";
 import { buildTopic } from "@/lib/alisBuild";
-import { ALIS_MODULES, ALIS_SUPPORT_NOTE } from "@/content/alisCourse";
+import { ALIS_MODULES, ALIS_PARTS, ALIS_SUPPORT_NOTE } from "@/content/alisCourse";
 
 /* Topic Video Introductions on the server: presenters, drafting with an injected fake, bulk actions, the migration and analytics. */
 
@@ -125,6 +125,27 @@ describe("new topics", () => {
     const made = editorLesson(db, createLesson(db, u("jordan"), bare, now).slug)!.lesson;
     expect(isIntroCard(made.nodes[made.start])).toBe(true);
     expect(introCardOf(made)!.next).toBe("check");
+  });
+
+  it("follow a change to the presenter's portrait, in the draft and what learners see, unless they have their own", () => {
+    const a = createLesson(db, u("jordan"), { ...blankLesson(), title: "ZZ Test follows presenter" }, now).slug;
+    const b = createLesson(db, u("jordan"), { ...blankLesson(), title: "ZZ Test own picture" }, now).slug;
+    publishLesson(db, u("jordan"), a, now);
+    const own = editorLesson(db, b)!.lesson;
+    introCardOf(own)!.intro.placeholder = { src: "/api/uploads/own.webp", width: 900, height: 1600 };
+    db.prepare("UPDATE authored_lessons SET draft = ? WHERE slug = ?").run(JSON.stringify(own), b);
+
+    const p = defaultPresenter(db);
+    savePresenter(db, u("jordan"), { id: p.id, portrait: { src: "/api/uploads/new-face.webp", width: 1080, height: 1920, position: "50% 30%" } }, now);
+
+    const card = (slug: string, which: "draft" | "published") => {
+      const r = db.prepare(`SELECT ${which} AS j FROM authored_lessons WHERE slug = ?`).get(slug) as { j: string };
+      const c = introCardOf(JSON.parse(r.j) as Lesson)!;
+      return c.visual.kind === "presenter" ? c.visual.photo?.src : null;
+    };
+    expect(card(a, "draft")).toBe("/api/uploads/new-face.webp");
+    expect(card(a, "published")).toBe("/api/uploads/new-face.webp");
+    expect(card(b, "draft")).not.toBe("/api/uploads/new-face.webp");
   });
 });
 
@@ -328,14 +349,17 @@ describe("the migration", () => {
     const m = ALIS_MODULES.find((x) => x.sensitive) ?? ALIS_MODULES[0];
     const l = { ...buildTopic(m, "1.0"), slug: `zz-${m.slug}` };
     const built = l.nodes.intro as Extract<Lesson["nodes"][string], { type: "presenter" }>;
-    const photo = built.intro!.placeholder!;
+    // The old builder put the part's cover on the title card.
+    const c = ALIS_PARTS.find((p) => p.n === m.part)!.cover;
+    const photo = { src: c.src, width: c.width, height: c.height, position: "center" };
     l.nodes.intro = {
       id: "intro",
       type: "image",
       beat: 0,
       label: built.label,
       heading: built.heading,
-      body: built.body,
+      // The old builder put the support note under the summary.
+      body: `${built.body}\n\n*${ALIS_SUPPORT_NOTE}*`,
       visual: { kind: "illustration", variant: "petals", tone: "teal", icon: "shield", alt: built.visual.kind === "presenter" ? built.visual.alt : "", photo },
       next: built.next,
     };

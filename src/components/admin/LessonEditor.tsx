@@ -2003,7 +2003,7 @@ function Cards({
 
       <aside aria-label="Add a card" className="order-first lg:order-none">
         {/* A row to scroll on a phone; two columns in groups beside the cards on a wide screen. */}
-        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-surface p-2 shadow-sm ring-1 ring-line lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
+        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-tealtint p-2 shadow-sm ring-1 ring-action/20 lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
           {PALETTE_GROUPS.map((g) => (
             <div key={g.title} role="group" aria-label={g.title} className="flex shrink-0 gap-1.5 lg:flex-col lg:gap-1">
               <p className="hidden px-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted lg:block">{g.title}</p>
@@ -2020,7 +2020,7 @@ function Cards({
                       onFocus={(e) => showTip(p.key, e.currentTarget)}
                       onMouseLeave={() => setTip(null)}
                       onBlur={() => setTip(null)}
-                      className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-muted lg:min-h-10 lg:w-full lg:px-2"
+                      className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-surface lg:min-h-10 lg:w-full lg:px-2"
                     >
                       <Icon name={p.icon} className="size-4 shrink-0 text-ink-muted" /> <span className="truncate">{p.label}</span>
                     </button>

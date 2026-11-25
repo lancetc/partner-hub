@@ -12,7 +12,8 @@ export async function GET() {
 */
 export async function POST(req: Request) {
   return handle(async ({ db, user, now }) => {
-    const input = await body<{ memberId?: unknown; messages?: unknown }>(req);
+    // Lives in Progress adds the episode being looked at, a conversation id for its memory, and "start fresh".
+    const input = await body<{ memberId?: unknown; messages?: unknown; episodeId?: unknown; conversationId?: unknown; fresh?: unknown; preview?: unknown }>(req);
     const prepared = prepareMemberChat(db, user, input, now, req.signal);
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

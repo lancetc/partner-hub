@@ -12,7 +12,9 @@ import {
   type MemberChatSettings,
 } from "@/lib/memberChat";
 import { DIGITAL_MEMBERS } from "@/content/digitalMembers";
+import { LIVES_RULES } from "@/lib/livesInProgress";
 import { audit, type Db } from "./db";
+import { livesChatContext, logStoryChat, rememberConversation } from "./livesInProgress";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 import { digitalMember } from "./digitalMembers";
 import { openaiReady, openaiTextModel } from "./openaiText";
@@ -22,9 +24,10 @@ import { relayText, type RelayProvider } from "./relayModel";
   Chatting with a Digital Member (lib/memberChat for the rules, docs/digital-members.md). OpenAI plays the person from
   their approved introduction, under the fixed house rules and the Hub's extra instructions. Replies stream back.
 
-  Nothing anyone writes is stored: the conversation lives in the learner's browser and is sent with each message.
-  The server keeps only that a message was sent to a member, when, and by whom, for the hourly limit and the counts
-  authors see.
+  The conversation lives in the learner's browser and is sent with each message. The server keeps that a message was
+  sent to a member, when, and by whom, for the hourly limit and the counts authors see. For a Lives in Progress
+  character (server/livesInProgress, docs/lives-in-progress.md) it also keeps a short memory for that learner alone:
+  the topics that came up and a few of their own questions, scrubbed, never the transcript or the AI's replies.
 */
 
 const SETTINGS_KEY = "member_chat";
@@ -102,11 +105,17 @@ export function saveMemberChatSettings(db: Db, actor: User, input: unknown, now:
   return memberChatAdmin(db, actor, now);
 }
 
-/** Exactly what the AI would be told for one member: the brief an author can read before switching it on. */
-export function memberChatPreview(db: Db, actor: User, memberId: unknown, now: Date) {
+/**
+  Exactly what the AI would be told for one member: the brief an author can read before switching it on. For a
+  Lives in Progress character, with the story layers as they stand now (or at `episodeId`), and the author's own
+  earlier chats as the relationship memory: nobody else's.
+*/
+export function memberChatPreview(db: Db, actor: User, memberId: unknown, now: Date, episodeId?: string | null) {
   requireAuthor(actor);
   const p = profileFor(db, actor, String(memberId ?? ""), now);
-  return chatBrief(memberChatSettings(db), p);
+  const brief = chatBrief(memberChatSettings(db), p);
+  const story = livesChatContext(db, actor, p.id, { episodeId, preview: true }, now);
+  return story ? { rules: `${brief.rules}\n\n${LIVES_RULES}`, context: `${brief.context}\n\n${story.brief}` } : brief;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -176,7 +185,13 @@ function cleanTurns(input: unknown, max: number): Turn[] {
   Checks a message can be sent (switched on, allowed, within the limits, a member who can chat) and builds the
   request. Records the message (not its words) so the hourly limit counts it.
 */
-export function prepareMemberChat(db: Db, user: User, input: { memberId?: unknown; messages?: unknown }, now: Date, signal?: AbortSignal) {
+export function prepareMemberChat(
+  db: Db,
+  user: User,
+  input: { memberId?: unknown; messages?: unknown; episodeId?: unknown; conversationId?: unknown; fresh?: unknown; preview?: unknown },
+  now: Date,
+  signal?: AbortSignal,
+) {
   const status = memberChatStatus(db, user, now);
   if (!status.available) throw new HttpError(403, status.reason ?? "Chat isn’t available.");
   const s = memberChatSettings(db);
@@ -189,17 +204,25 @@ export function prepareMemberChat(db: Db, user: User, input: { memberId?: unknow
   if (status.leftThisHour <= 0) throw new HttpError(429, "That’s a lot of chatting for one hour. Take a break and come back soon.");
   const provider = memberChatProvider()!;
   const brief = chatBrief(s, p);
+  // Lives in Progress (server/livesInProgress): who they are, what has happened up to the episode the learner is
+  // looking at, and this learner's own earlier chats. Null for a member without a story: the chat is as it was.
+  const story = livesChatContext(db, user, p.id, { episodeId: input.episodeId, fresh: input.fresh, preview: input.preview }, now);
   const at = now.toISOString();
   const add = db.prepare("INSERT INTO member_chat_events (id, user_id, member_id, kind, version, at) VALUES (?, ?, ?, ?, ?, ?)");
   if (learnerTurns === 1) add.run(randomUUID(), user.id, p.id, "started", MEMBER_CHAT_VERSION, at);
   add.run(randomUUID(), user.id, p.id, "message", MEMBER_CHAT_VERSION, at);
+  if (story) {
+    if (learnerTurns === 1) logStoryChat(db, user, p.id, story.viewing?.id ?? null, now);
+    // What this chat is remembered as: topics and the learner's own questions, scrubbed. Never the AI's replies.
+    if (typeof input.conversationId === "string") rememberConversation(db, user, p.id, input.conversationId, story.viewing, turns, now);
+  }
   return {
     provider,
     name: p.name,
     request: {
       // The opening hello is on screen already: the AI is told it said it, so it carries on from there.
-      rules: brief.rules,
-      context: `${brief.context}\n\nYou opened this chat by saying: "${p.hello}"`,
+      rules: story ? `${brief.rules}\n\n${LIVES_RULES}` : brief.rules,
+      context: `${brief.context}${story ? `\n\n${story.brief}` : ""}\n\nYou opened this chat by saying: "${p.hello}"`,
       messages: turns.map((t) => ({ role: t.role, content: t.text })),
       maxTokens: REPLY_LENGTHS[s.replyLength].tokens + FOLLOWUP_TOKENS,
       signal,

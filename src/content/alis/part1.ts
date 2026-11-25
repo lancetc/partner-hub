@@ -37,7 +37,7 @@ export const ALIS_PART_1: AlisModule[] = [
           },
           {
             front: "What is the Serious Incident Response Scheme (SIRS)?",
-            back: "Introduced in 2021, the SIRS made every aged care provider responsible for preventing and managing incidents, learning from incident data, and notifying reportable incidents to the Aged Care Quality and Safety Commission. Under the Aged Care Act 2024 these became provider obligations for incident management and reportable incidents.",
+            back: "Introduced in 2021, the SIRS made every aged care provider responsible for preventing and managing incidents, learning from incident data, and notifying reportable incidents to the Aged Care Quality and Safety Commission. It has covered care at home since December 2022, and under the Aged Care Act 2024 it applies to Support at Home providers like Trilogy Care, as obligations for incident management and reportable incidents.",
           },
           {
             front: "Why do incident management and reportable incidents matter?",
@@ -989,7 +989,7 @@ export const ALIS_PART_1: AlisModule[] = [
           opt("a", "Culture is people's attitudes, understanding and behaviour, owned by everyone and shaped by leaders", "Correct.", true),
           opt("b", "Policies aren't required in an IMS", "No. Policies are one of the four key components."),
           opt("c", "Only the Commission can set a provider's culture", "No. The provider's leaders and people shape it."),
-          opt("d", "Culture only matters in residential care", "No. It matters wherever care is delivered."),
+          opt("d", "Culture only matters for the workers who visit most often", "No. It matters for everyone, in every home we support."),
         ],
         explain:
           "Culture is the attitudes, understanding and behaviour of everyone in the organisation. Policies support it, but it's built through leadership, decisions and everyday behaviour.",

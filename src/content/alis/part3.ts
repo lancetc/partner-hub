@@ -349,7 +349,7 @@ export const ALIS_PART_3: AlisModule[] = [
             id: "c",
             text: "Finish the clean, then report it on your timesheet",
             verdict: "risky",
-            feedback: "No. This needs action now, not at the end of the shift.",
+            feedback: "No. This needs action now, not at the end of the visit.",
           },
         ],
       },
@@ -1077,7 +1077,7 @@ export const ALIS_PART_3: AlisModule[] = [
         id: "visibility",
         style: "tip",
         label: "Why it's narrower at home",
-        body: "At home, providers see much less of a person's life than in residential care. A death may come days after a service, you may not hear about it for some time, and families may choose not to share details.",
+        body: "In Support at Home, providers see only part of a person's life: workers visit for a few hours at a time. A death may come days after a service, you may not hear about it for some time, and families may choose not to share details.",
       },
       {
         kind: "scenario",

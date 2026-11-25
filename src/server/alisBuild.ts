@@ -2,6 +2,7 @@ import "server-only";
 import { lessons } from "@/content/lessons";
 import { ALIS_COURSE, ALIS_MODULES, ALIS_PARTS, ALIS_PATH_QUIZ, moduleNumber } from "@/content/alisCourse";
 import { buildGuideDoc, buildTopic } from "@/lib/alisBuild";
+import { seededDefaultPresenter } from "./introPresenters";
 import type { Db } from "./db";
 import type { User } from "./auth";
 import { createLesson, editorLesson, restoreLesson, saveDraft } from "./authoredLessons";
@@ -41,18 +42,19 @@ function savePath(db: Db, actor: User, input: PathInput, now: Date) {
 export function buildAlis(db: Db, actor: User, now: Date) {
   // 1. The Topics, at their stable slugs. createLesson takes its address from the title, so a new Topic is created
   // under a title that spells its slug, then saved with its real content.
+  const presenter = seededDefaultPresenter(db);
   const topics = ALIS_MODULES.map((m) => {
     if (lessons.some((l) => l.slug === m.slug && l.track !== "reinforcement") && !editorLesson(db, m.slug))
       throw new Error(`A built-in topic already uses the slug ${m.slug}.`);
     const row = db.prepare("SELECT deleted_at FROM authored_lessons WHERE slug = ?").get(m.slug) as { deleted_at: string | null } | undefined;
     let created = false;
     if (!row) {
-      const made = createLesson(db, actor, { ...buildTopic(m), title: m.slug.replace(/-/g, " ") }, now);
+      const made = createLesson(db, actor, { ...buildTopic(m, "0.1", presenter), title: m.slug.replace(/-/g, " ") }, now);
       if (made.slug !== m.slug) throw new Error(`Expected the topic at ${m.slug}, but it was created at ${made.slug}.`);
       created = true;
     } else if (row.deleted_at) restoreLesson(db, actor, m.slug, now);
     const version = editorLesson(db, m.slug)?.lesson.version ?? "0.1";
-    saveDraft(db, actor, m.slug, buildTopic(m, version), now);
+    saveDraft(db, actor, m.slug, buildTopic(m, version, presenter), now);
     return { slug: m.slug, created };
   });
 
@@ -99,7 +101,15 @@ export function buildAlis(db: Db, actor: User, now: Date) {
     completion: "assessed",
     doc: buildGuideDoc(ALIS_MODULES, Object.fromEntries(paths.map((p) => [p.part, p.id]))),
   };
-  const existing = db.prepare("SELECT id FROM magazine_guides WHERE slug = ? AND status != 'archived'").get(ALIS_GUIDE_SLUG) as { id: string } | undefined;
+  const existing = db.prepare("SELECT id, draft FROM magazine_guides WHERE slug = ? AND status != 'archived'").get(ALIS_GUIDE_SLUG) as
+    | { id: string; draft: string | null }
+    | undefined;
+  // A rebuild replaces the pages, but keeps what authors set on the course itself: its audio (the approved, recorded
+  // introduction), its self-review questions and its browsing tags.
+  if (existing?.draft) {
+    const kept = JSON.parse(existing.draft) as Record<string, unknown>;
+    for (const k of ["audio", "review", "tags"]) if (kept[k] !== undefined) (input.doc as unknown as Record<string, unknown>)[k] = kept[k];
+  }
   const guide = existing ? saveGuideDraft(db, actor, existing.id, input, now) : createGuide(db, actor, input, now);
   if (!existing && guide.slug !== ALIS_GUIDE_SLUG) throw new Error(`Expected the Magazine course at ${ALIS_GUIDE_SLUG}, but it was created at ${guide.slug}.`);
 

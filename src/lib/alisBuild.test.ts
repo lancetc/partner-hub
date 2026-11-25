@@ -6,8 +6,8 @@ import { exciterWarnings } from "./pathExciter";
 import { publishChecks, readGuideDoc } from "./magazine";
 import { cleanQuizSettings } from "./pathQuizSettings";
 import { chaptersOf } from "./magazineChapters";
-import { MAGAZINE_BLOCK_FOR, buildGuideDoc, buildPage, buildTopic, moduleActivities, pageActivities, topicActivities } from "./alisBuild";
-import { isIntroCard, planIntro } from "./topicIntro";
+import { MAGAZINE_BLOCK_FOR, SUPPORT_LEAD, buildGuideDoc, buildPage, buildTopic, moduleActivities, pageActivities, topicActivities } from "./alisBuild";
+import { DEFAULT_PRESENTER, isIntroCard, planIntro } from "./topicIntro";
 
 /* The ALIS course (docs/alis-course.md): one shared source; short Topics, a long Magazine course, the same activities. */
 
@@ -138,7 +138,7 @@ describe("short-form Topics", () => {
     }
   });
 
-  it("open with one Introduction card: the module's title, summary and support note, over the part's cover", () => {
+  it("open with one Introduction card (title and summary, over the default presenter), then the support note where it's needed", () => {
     for (const m of ALIS_MODULES) {
       const l = buildTopic(m);
       const intro = l.nodes[l.start];
@@ -150,11 +150,14 @@ describe("short-form Topics", () => {
         m.slug,
       ).toEqual([]);
       expect(intro.heading).toBe(m.title);
-      expect(intro.body.startsWith(m.summary), m.slug).toBe(true);
-      expect(intro.body.includes(ALIS_SUPPORT_NOTE), m.slug).toBe(Boolean(m.sensitive));
-      const cover = ALIS_PARTS.find((p) => p.n === m.part)!.cover;
-      expect(intro.intro.placeholder?.src, m.slug).toBe(cover.src);
-      expect(intro.visual.kind === "presenter" && intro.visual.photo?.src, m.slug).toBe(cover.src);
+      expect(intro.body, m.slug).toBe(m.summary);
+      // A confronting module's support note leads the first content card, since the Introduction card shows only its title.
+      const first = l.nodes[intro.next!];
+      expect(first.type === "image" && first.body.startsWith(SUPPORT_LEAD), m.slug).toBe(Boolean(m.sensitive));
+      expect(Object.values(l.nodes).filter((c) => JSON.stringify(c).includes(ALIS_SUPPORT_NOTE)), m.slug).toHaveLength(m.sensitive ? 1 : 0);
+      // The default presenter's portrait, not a picture of its own, so a change of presenter reaches it.
+      expect(intro.intro.placeholder, m.slug).toBeUndefined();
+      expect(intro.visual.kind === "presenter" && intro.visual.photo?.src, m.slug).toBe(DEFAULT_PRESENTER.portrait.src);
       // The server adds nothing when it's saved: it's already there.
       expect(planIntro(l).action, m.slug).toBe("none");
     }

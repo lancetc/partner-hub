@@ -211,3 +211,19 @@ export function LearnSheet({ buttonClassName, iconClassName }: { buttonClassName
     </>
   );
 }
+
+/** A way to learn's picture on its coloured tile, as in the Learn menu: for the end of that page's heading line. */
+const PAGE_TILES: Record<string, { emoji: string; tile: string }> = {
+  "/community": { emoji: "🤝", tile: "bg-[#dff3ec] dark:bg-[#1f4a3c]" },
+  "/resources": { emoji: "📚", tile: "bg-[#e4ebf7] dark:bg-[#2a3a5e]" },
+};
+
+export function LearnTile({ href, className }: { href: string; className?: string }) {
+  const item = learnItems.find((x) => x.href === href) ?? PAGE_TILES[href];
+  if (!item) return null;
+  return (
+    <span aria-hidden className={cx("grid h-14 w-20 shrink-0 place-items-center rounded-2xl text-3xl shadow-sm sm:h-[4.5rem] sm:w-24", item.tile, className)}>
+      {item.emoji === "phone" ? <PhoneArt /> : item.emoji}
+    </span>
+  );
+}

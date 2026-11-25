@@ -23,7 +23,7 @@ import {
 import { CASE_THREAD_CASES } from "@/content/caseThreadCases";
 import { HAZARD_SCENES } from "@/content/hazardScenes";
 import { freshCaseThread } from "@/lib/caseThread";
-import { DEFAULT_PRESENTER, placeholderVisual } from "@/lib/topicIntro";
+import { DEFAULT_PRESENTER, placeholderVisual, type PresenterLite } from "@/lib/topicIntro";
 
 /*
   The ALIS builders (docs/alis-course.md): one shared course (content/alisCourse.ts) turned into the Hub's two formats.
@@ -126,32 +126,38 @@ function activityCards(b: AlisTopicActivity, beat: number): Draft[] {
   }
 }
 
+/** The support note, first, on a confronting module's opening content card. */
+export const SUPPORT_LEAD = `**Before you start.** *${ALIS_SUPPORT_NOTE}*`;
+export const withSupportNote = (m: Pick<AlisModule, "sensitive">, body: string) => (m.sensitive ? `${SUPPORT_LEAD}\n\n${body}` : body);
+
 /** The short-form Topic for one module. */
-export function buildTopic(m: AlisModule, version = "0.1"): Lesson {
+export function buildTopic(m: AlisModule, version = "0.1", presenter: PresenterLite = DEFAULT_PRESENTER): Lesson {
   const { text, activity, quick } = topicCut(m);
+  // The Topic's own tile picture: the part's cover.
   const c = partOf(m).cover;
   const photo = { src: c.src, width: c.width, height: c.height, position: "center" };
   const cards: Draft[] = [
-    // The Topic's Introduction card (docs/topic-video-introductions.md): the module's title, summary and any support note,
-    // over the part's cover as this Topic's placeholder until a presenter video is made.
+    // The Topic's Introduction card (docs/topic-video-introductions.md): the module's title and summary,
+    // over the default presenter's placeholder portrait until a presenter video is made.
     {
       id: "intro",
       type: "presenter",
       beat: 0,
       label: `Module ${moduleNumber(m)}`,
       heading: m.title,
-      body: `${m.summary}${m.sensitive ? `\n\n*${ALIS_SUPPORT_NOTE}*` : ""}`,
-      visual: { ...placeholderVisual(DEFAULT_PRESENTER, photo), alt: c.alt },
+      body: m.summary,
+      visual: placeholderVisual(presenter),
       transcript: "",
       durationSec: 0,
       comments: false,
-      intro: { layout: "intro", origin: "new", placeholder: photo },
+      intro: { layout: "intro", origin: "new" },
     },
-    // The module in brief; a module not yet given one keeps its reading card.
+    // The module in brief; a module not yet given one keeps its reading card. A confronting module's support note leads it
+    // (the Introduction card shows only its title).
     ...(m.short
-      ? [{ id: "brief", type: "image" as const, beat: 1, label: "In short", heading: "In short", body: m.short.brief, visual: NONE }]
+      ? [{ id: "brief", type: "image" as const, beat: 1, label: "In short", heading: "In short", body: withSupportNote(m, m.short.brief), visual: NONE }]
       : text
-        ? [{ id: text.id, type: "image" as const, beat: 1, label: "Learn", heading: text.title, body: text.body, visual: NONE, ...check(text.verify) }]
+        ? [{ id: text.id, type: "image" as const, beat: 1, label: "Learn", heading: text.title, body: withSupportNote(m, text.body), visual: NONE, ...check(text.verify) }]
         : []),
     ...activityCards(activity, 2),
     ...(m.short

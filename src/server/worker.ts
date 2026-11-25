@@ -9,6 +9,7 @@ import { tx, type Db } from "./db";
 import { activityInfo, pathVersion, scheduleFor, type EnrolmentRow, type InstanceRow } from "./learning";
 import { adapterFor, type NotificationAdapter } from "./notify";
 import { wants } from "./emailPrefs";
+import { publishDueEpisodes } from "./livesInProgress";
 import type { User } from "./auth";
 
 /*
@@ -291,6 +292,8 @@ export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"em
   await runDueCampaigns(db, now, adapters?.email);
   // Content due for checking: remind learning authors.
   await runContentReminders(db, now, adapters?.email);
+  // Lives in Progress episodes whose time has come, and their followers told (also done on every learner read).
+  publishDueEpisodes(db, now);
   db.prepare("INSERT INTO worker_runs (started_at, clock, released, digests, dispatched, note) VALUES (?, ?, ?, ?, ?, ?)").run(
     new Date().toISOString(),
     iso(now),

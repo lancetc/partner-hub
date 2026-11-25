@@ -22,8 +22,9 @@ export async function PUT(req: Request, ctx: RouteContext<"/api/admin/magazine/[
     try {
       return { guide: saveGuideDraft(db, user, id, await body<GuideInput>(req), now) };
     } catch (e) {
-      // Say exactly what's wrong, so the editor can show it.
+      // Say exactly what's wrong, so the editor can show it (and in the server log, to diagnose without the author's screen).
       const problems = (e as { problems?: string[] }).problems;
+      if (e instanceof HttpError) console.warn(`Magazine save refused (${id}): ${e.message}${problems ? ` ${problems.join(" | ")}` : ""}`);
       if (e instanceof HttpError && problems) return Response.json({ error: e.message, problems }, { status: e.status });
       throw e;
     }

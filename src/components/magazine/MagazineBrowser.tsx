@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { cx, formatDate } from "@/lib/format";
+import { cx, formatDate, hoursAndMinutes } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ShelfRow } from "../ShelfRow";
 import { GUIDE_GOALS, GUIDE_ROLES, type GuideGoal, type GuideRole } from "@/lib/magazine";
@@ -130,13 +130,15 @@ const byNewest = (a: BrowseGuide, b: BrowseGuide) => b.publishedAt.localeCompare
 const byPopular = (a: BrowseGuide, b: BrowseGuide) => b.popularity - a.popularity || byNewest(a, b);
 // Unknown lengths go last.
 const byShortest = (a: BrowseGuide, b: BrowseGuide) => (a.minutes ?? 1e9) - (b.minutes ?? 1e9) || byName(a, b);
+/** " · 3 hr 20 min": a course or simulation's length, in hours and minutes once it's an hour or more. */
+const length = (g: BrowseGuide) => (g.minutes == null ? "" : ` · ${hoursAndMinutes(g.minutes)}`);
 const meta = (g: BrowseGuide) =>
   g.kind === "elearning"
     ? `eLearning course${g.edition ? ` · SCORM ${g.edition}` : ""}`
     : g.format === "course"
-      ? `Course · ${g.pages} pages · ${g.minutes} min`
+      ? `Course · ${g.pages} pages${length(g)}`
       : g.format === "simulation"
-        ? `Simulation · ${g.minutes} min`
+        ? `Simulation${length(g)}`
         : `Guide · ${g.minutes} min read`;
 /** Everything a search looks through: the words, the format and who it's for. */
 const searchText = (g: BrowseGuide) =>
@@ -211,7 +213,6 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   const [status, setStatus] = useState<Status>(fromAddress(params.get("status"), ["any", "new", "started", "completed"], "any"));
   const [length, setLength] = useState<Length>(fromAddress(params.get("length"), ["any", "quick", "medium", "long"], "any"));
   const [sort, setSort] = useState<Sort>(fromAddress(params.get("sort"), ["newest", "popular", "az", "shortest"], "newest"));
-  const [view, setView] = useState<View>(fromAddress(params.get("view"), ["grid", "list"], "grid"));
   const [shown, setShown] = useState(ROW);
   const everyStory = useRef<HTMLHeadingElement>(null);
 
@@ -225,10 +226,9 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
     if (status !== "any") next.set("status", status);
     if (length !== "any") next.set("length", length);
     if (sort !== "newest") next.set("sort", sort);
-    if (view !== "grid") next.set("view", view);
     const qs = next.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [q, goal, role, format, status, length, sort, view]);
+  }, [q, goal, role, format, status, length, sort]);
 
   if (!guides.length)
     return (
@@ -370,21 +370,6 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
               ))}
             </select>
           </label>
-          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
-                title={v === "grid" ? "Tiles" : "List"}
-                onClick={() => setView(v)}
-                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
-              >
-                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
-              </button>
-            ))}
-          </div>
           <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
             {filtering ? `Showing ${filtered.length} of ${guides.length}` : `${guides.length} ${guides.length === 1 ? "story" : "stories"}`}
             {filtering && (
@@ -413,7 +398,7 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
 
         {sorted.length ? (
           <div className="mt-5">
-            <Grid guides={sorted.slice(0, visible)} view={view} canEdit={canEdit} />
+            <Grid guides={sorted.slice(0, visible)} view="grid" canEdit={canEdit} />
             {sorted.length > visible && (
               <div className="mt-8 flex justify-center">
                 <button

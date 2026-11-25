@@ -111,7 +111,11 @@ export function portraitAbout(c: Pick<Character, "name" | "look" | "role">) {
 /** "Mr", "Mrs", "Ms" and "Miss" say something about how a person is described; a first name alone doesn't. */
 export function lookFromName(name: string, age: number | null, about: string, role: CharacterRole) {
   const t = name.trim().split(/\s+/)[0]?.toLowerCase().replace(/\.$/, "");
-  const who = t === "mr" ? "man" : ["mrs", "ms", "miss"].includes(t ?? "") ? "woman" : "person";
+  // A title says it; otherwise the words written about them do (he or she), never a guess from the first name.
+  const titled = t === "mr" ? "man" : ["mrs", "ms", "miss"].includes(t ?? "") ? "woman" : null;
+  const he = (about.match(/\b(he|him|his|himself)\b/gi) ?? []).length;
+  const she = (about.match(/\b(she|her|hers|herself)\b/gi) ?? []).length;
+  const who = titled ?? (he > she ? "man" : she > he ? "woman" : "person");
   const old = age ? `${age}-year-old` : role === "participant" ? "older" : role === "family" ? "middle-aged" : "";
   const base = `${old ? `${old} ` : ""}${who}${role === "family" ? ", a family member" : role === "worker" ? ", a care worker" : role === "coordinator" ? ", a care coordinator" : ""}`;
   return about ? `${base}. ${about}`.slice(0, 600) : base;

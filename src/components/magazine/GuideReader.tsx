@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { cx, formatDate } from "@/lib/format";
+import { cx, formatDate, hoursAndMinutes } from "@/lib/format";
 import { BLOCK_LABELS, openActivities, pageBlocks, pageTitle, type Page } from "@/lib/magazine";
 import type { ReaderGuide, ReaderNote } from "@/server/magazine";
 import { Icon } from "../Icon";
@@ -163,10 +163,13 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
   const intro = audioGuide.audio?.intro;
   // Her video for the course's introduction comes with the course (loadGuide), so the cover knows from the start.
   const introVideo = pages.length > 1 ? (guide.ava?.videos[`magazine:${guide.id}:intro`] ?? null) : null;
-  // Ava on the cover: her video (with its own words, when it has a script), or the approved Audio Guide introduction
-  // spoken in her voice. A video goes on even before its script is written; the words on screen come with the script.
+  // Ava on the cover only when an author has put her video there (a manual upload, never the default, Nov 2026): her video,
+  // with its own words when it has a script. Without one, the cover is its picture and the approved introduction is the
+  // Listen control beside the course's details, in the Hub's narrator voice.
   const introScript = audioGuide.audio?.levels.course && intro?.status === "approved" && intro.script.trim() ? intro.script.trim() : null;
-  const avaIntro = introVideo ? introVideo.transcript || introScript || "" : introScript;
+  const avaIntro = introVideo ? introVideo.transcript || introScript || "" : null;
+  // Without Ava, a recorded introduction goes on the cover itself (the reduced player with the live caption).
+  const coverIntro = avaIntro === null && guide.cover && listenable(intro, audioGuide.audio) && audioGuide.audio?.levels.course ? intro : null;
 
   const acknowledge = async () => {
     setProblem(null);
@@ -193,18 +196,18 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
           {guide.standfirst && <p className="mt-4 text-xl leading-relaxed text-ink-muted">{guide.standfirst}</p>}
           <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
-              <Icon name="clock" className="size-4" /> About {guide.minutes} min in all
+              <Icon name="clock" className="size-4" /> About {hoursAndMinutes(guide.minutes)} in all
             </span>
             {pages.length > 1 && audioGuide.audio?.intro && (
               <AudioGuideCard
                 variant="inline"
                 toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
                 // With Ava giving the introduction on the cover, this keeps only the Audio guide switch.
-                narration={avaIntro !== null ? undefined : audioGuide.audio.intro}
+                narration={avaIntro !== null || coverIntro ? undefined : audioGuide.audio.intro}
                 audio={audioGuide.audio}
                 level="course"
-                // Introductions never play by themselves (Audio Introductions): the learner presses Play.
-                autoplay={false}
+                // Plays by itself when the course opens (the owner, Nov 2026), unless Ava's video is there, which starts itself.
+                autoplay={avaIntro === null}
                 onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
               />
             )}
@@ -237,6 +240,24 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             script={avaIntro}
             startMuted={audioGuide.offered && !audioGuide.on}
             onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
+          />
+        ) : coverIntro && guide.cover ? (
+          // The course's introduction on its cover: a small Play, and the words highlighted as they're said, as on Topics
+          // and Discovery Paths. Plays by itself when the course opens (unless the learner has the Audio guide off).
+          <IntroPlayer
+            script={coverIntro.script}
+            audio={coverIntro.audio}
+            poster={{ src: guide.cover }}
+            label="Listen to the introduction"
+            autoPlay={!audioGuide.offered || audioGuide.on}
+            className="mt-0 rounded-3xl"
+            onEvent={(action) =>
+              void (
+                action === "play" || action === "complete"
+                  ? send("events", { event: "narration", pageId: "intro", detail: { outcome: action === "play" ? "started" : "finished" } })
+                  : Promise.resolve()
+              ).catch(() => {})
+            }
           />
         ) : (
           guide.cover && (
@@ -373,13 +394,12 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
   const courseIntro = audioGuide.audio?.levels.course && audioGuide.audio.intro?.status === "approved" ? audioGuide.audio.intro.script.trim() : "";
   const pageLine = course ? `magazine:${guide.id}:page:${page.id}` : introLine;
   const pageVideo = guide.ava?.videos[pageLine] ?? null;
-  const pageIntro = course
-    ? pageVideo
-      ? pageVideo.transcript || (page.narration?.status === "approved" ? page.narration.script.trim() : "")
-      : null
-    : pageVideo
-      ? pageVideo.transcript || courseIntro
-      : courseIntro || null;
+  // Ava only with a video an author has put there (a manual upload, never the default): otherwise the page's picture, and a
+  // one-page course's introduction is the Listen control in the page's details instead.
+  const pageIntro = pageVideo
+    ? pageVideo.transcript || (course ? (page.narration?.status === "approved" ? page.narration.script.trim() : "") : courseIntro)
+    : null;
+  const listenToCourseIntro = !course && !pageVideo && Boolean(courseIntro);
   // Story moments placed beside this course's pages and blocks (docs/story-plans.md): approved, optional, never counted.
   const story = useStory("guide", guide.id);
   // A return episode: what opens this page if it comes back to an earlier story, with a private line only its learner gets.
@@ -518,6 +538,18 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       : null;
   const title = pageTitle(guide.doc, page, guide.title);
   const hero = course ? page.hero : guide.cover ? { src: guide.cover, alt: "" } : undefined;
+  // The page's recorded introduction (a course page's own, or a one-page course's), on the page's picture as a poster with
+  // the live caption, as on Topics and Discovery Paths. Not where Ava's video is in the picture's place.
+  const pageNarration = page.kind === "content" && listenable(page.narration, audioGuide.audio) ? page.narration : null;
+  const courseNarration = listenToCourseIntro && listenable(audioGuide.audio?.intro, audioGuide.audio) ? audioGuide.audio!.intro! : null;
+  const posterIntro =
+    pageIntro === null && hero?.src
+      ? pageNarration
+        ? { n: pageNarration, intro: false }
+        : courseNarration
+          ? { n: courseNarration, intro: true }
+          : null
+      : null;
   const doneHere = completed?.thisRevision ? completed : null;
 
   return (
@@ -571,16 +603,20 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
               </span>
             )}
             {/* The Audio guide switch, where the author offers it: off, Ava's transmissions start without sound. The introduction itself is below. */}
-            {page.kind === "content" && audioGuide.audio && audioGuide.offered && (
+            {/* A one-page course without Ava's video: its approved introduction is here to listen to (never by itself). */}
+            {page.kind === "content" && audioGuide.audio && (audioGuide.offered || listenToCourseIntro) && (
               <AudioGuideCard
                 key={page.id}
                 variant="inline"
-                toggle={{ on: audioGuide.on, onChange: audioGuide.change }}
-                narration={undefined}
+                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
+                narration={listenToCourseIntro && !posterIntro ? audioGuide.audio.intro : undefined}
                 audio={audioGuide.audio}
                 level={course ? "page" : "course"}
-                autoplay={false}
-                onEvent={() => {}}
+                // A one-page course's introduction plays by itself when the page opens (the owner, Nov 2026).
+                autoplay={listenToCourseIntro && !posterIntro}
+                onEvent={
+                  listenToCourseIntro ? (outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {}) : () => {}
+                }
               />
             )}
             {!course && (
@@ -601,14 +637,17 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           </div>
           {/*
             Listen to the introduction (docs/magazine-audio-guide.md): beneath the heading and description, before the content,
-            whenever the page has an approved, recorded introduction the author hasn't turned off. With Ava's transmission in
-            the picture's place, both are here; only one ever plays (lib/onePlayer). Never needed to finish the page.
+            whenever the page has an approved, recorded introduction the author hasn't turned off. It plays by itself when the
+            page opens; with Ava's transmission in the picture's place, both are here and only she starts (lib/onePlayer).
+            Never needed to finish the page.
           */}
-          {page.kind === "content" && listenable(page.narration, audioGuide.audio) && (
+          {page.kind === "content" && listenable(page.narration, audioGuide.audio) && !posterIntro && (
             <IntroPlayer
               key={page.id}
               script={page.narration.script}
               audio={page.narration.audio}
+              // Plays by itself when the page opens (the owner, Nov 2026), unless Ava's video is in the picture's place.
+              autoPlay={pageIntro === null}
               onEvent={(action, detail) => void send("events", { event: "introAudio", pageId: page.id, detail: { action, ...detail } }).catch(() => {})}
             />
           )}
@@ -631,6 +670,26 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             script={pageIntro}
             startMuted={audioGuide.offered && !audioGuide.on}
             onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
+          />
+        ) : posterIntro && hero?.src ? (
+          // The introduction on the page's picture: a small Play, and the words highlighted as they're said. Plays by itself.
+          <IntroPlayer
+            key={`${page.id}-poster`}
+            script={posterIntro.n.script}
+            audio={posterIntro.n.audio}
+            poster={{ src: hero.src }}
+            label="Listen to the introduction"
+            autoPlay={!audioGuide.offered || audioGuide.on}
+            className="mt-0 rounded-3xl"
+            onEvent={(action, detail) =>
+              void (
+                posterIntro.intro
+                  ? action === "play" || action === "complete"
+                    ? send("events", { event: "narration", pageId: "intro", detail: { outcome: action === "play" ? "started" : "finished" } })
+                    : Promise.resolve()
+                  : send("events", { event: "introAudio", pageId: page.id, detail: { action, ...detail } })
+              ).catch(() => {})
+            }
           />
         ) : (
           hero?.src && (

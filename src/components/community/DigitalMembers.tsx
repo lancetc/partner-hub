@@ -40,13 +40,24 @@ function MemberCard({ m, onClick }: { m: DigitalMemberCard; onClick: (e: React.M
             alt=""
             loading="lazy"
             decoding="async"
-            className="absolute inset-0 size-full object-cover object-[center_18%] transition-transform duration-500 motion-safe:group-hover:scale-[1.03]"
+            className="absolute inset-x-0 bottom-0 h-[116%] w-full object-cover object-[center_30%] transition-transform duration-500 motion-safe:group-hover:scale-[1.03]"
           />
         ) : (
           <Portrait name={m.name} src="" className="absolute left-1/2 top-[18%] size-32 -translate-x-1/2 text-3xl" />
         )}
         {/* A pale fade up from the foot, so the words read over any photo. */}
         <div aria-hidden className={portraitCard.fade} />
+        {m.story && (
+          // Lives in Progress: their story carries on (docs/lives-in-progress.md).
+          <span className="absolute left-3 top-3 flex items-center gap-1.5">
+            <span className="rounded-full bg-[#102a43]/85 px-2.5 py-1 font-mulish text-[0.62rem] font-extrabold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+              Lives in Progress · Ep {String(m.story.number).padStart(2, "0")}
+            </span>
+            {m.story.isNew && (
+              <span className="rounded-full bg-[#fab53d] px-2 py-1 font-mulish text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-[#102a43]">New</span>
+            )}
+          </span>
+        )}
         <div className={portraitCard.foot}>
           <p className={portraitCard.name}>
             <span className="truncate">{m.name}</span>

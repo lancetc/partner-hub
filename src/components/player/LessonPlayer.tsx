@@ -58,6 +58,7 @@ import { EnrolButton } from "../EnrolButton";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { hotspotsNeeded } from "@/lib/hotspots";
 import { Narration, useNarration } from "./Narration";
+import { cardNarration } from "@/lib/cardNarration";
 import { Calculator } from "./Calculator";
 import { Widget } from "./Widget";
 import { TopicChat } from "./TopicChat";
@@ -550,9 +551,10 @@ export function LessonPlayer({
         }
       : node.type === "audio" || node.type === "listen"
         ? { text: node.script, label: node.type === "listen" ? "Audio" : "Explanation" }
-        : node.narration
+        : // Every card has a voice-over: its own script, or one read from what it says on screen (lib/cardNarration).
+          cardNarration(node)
           ? {
-              text: node.narration,
+              text: cardNarration(node),
               // On hands-on cards the script explains the activity, so say so.
               label:
                 node.type === "decision" || node.type === "quiz"

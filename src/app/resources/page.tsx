@@ -6,6 +6,7 @@ import { SaveButton } from "@/components/SaveButton";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDate } from "@/lib/format";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 import { ONBOARDING_MODELS } from "@/content/partnerOnboarding";
 import { FavouriteBanner } from "@/components/favourites/FavouriteBanner";
 import { HighlightArea } from "@/components/favourites/HighlightArea";
@@ -29,6 +30,7 @@ export default function ResourcesPage() {
       <PageHero
         eyebrow="Look it up"
         title="Resources"
+        tile={<LearnTile href="/resources" />}
         // A colleague making notes at her table by the louvres, laptop open, on the right, with the weatherboards behind the words.
         image={{ src: "/images/hero-notes-at-table.webp", width: 1914, height: 822, position: "80% 29%", minHeight: 336 }}
         aside={

@@ -1,25 +1,27 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
-import { autoplayEnabled, STOP_AUDIO } from "@/lib/audioPrefs";
+import { autoplayEnabled, STOP_AUDIO, useFollowWords } from "@/lib/audioPrefs";
+import { estimateWords, wordAt, type WordTiming } from "@/lib/wordTimings";
 import { useOnePlayer } from "@/lib/onePlayer";
 import { formatSeconds } from "@/lib/mediaStudio";
 import { autoStartIntro, introSpokenText, portraitPosition, type IntroCard as IntroCardType, type IntroEventInput } from "@/lib/topicIntro";
 import { Icon } from "../Icon";
 import { CardVisual } from "./CardVisual";
-import { RichText } from "../RichText";
+import { SpokenText, type Span } from "./SpokenText";
 
 /*
   A Topic's Introduction card (docs/topic-video-introductions.md): the opening screen of the Topic. The presenter fills
   the whole card, edge to edge (the approved video, or the placeholder portrait at its saved focal point), with a soft
-  gradient under the Topic's title and a short description; the footer's "Let's get started" moves on.
+  gradient under the Topic's title, the sound controls and "Let's get started". No other words: the presenter is the screen.
 
   Sound starts when the card opens (the owner's override of PRD section 4, Topic introductions only): the video with its
   sound, or, without one, the introduction spoken in the Hub's narrator voice (/api/tts). Once per visit; it stops when the
   learner moves on, follows the card-audio switch, and keeps to one sound at a time (lib/onePlayer). When the browser
-  won't start sound without a tap, the card says "Tap to listen". The transcript, and a video's captions, are always there.
+  won't start sound without a tap, the card says "Tap to listen". While it speaks, a live caption shows the sentence
+  being said with its word highlighted, as on every other card; a video's captions can be switched on.
 */
 
 /** What the player needs to know when the learner moves on: whether the video was played, and how far. */
@@ -79,17 +81,20 @@ export function IntroCard({
   const media: "video" | "placeholder" = video || embed ? "video" : "placeholder";
   const picture = v?.photo ?? null;
   const heading = card.heading.trim() || title;
-  const body = card.body.trim() || summary;
-  const spoken = introSpokenText(card, { title, summary });
   // Without a video, the introduction is spoken: a recorded file when the card has one, otherwise the narrator.
   const speechSrc = !video && !embed ? (card.audioSrc ?? (ttsKey ? `/api/tts?key=${encodeURIComponent(ttsKey)}` : null)) : null;
+  // The live caption, as on every other card: the sentence being said, with its word highlighted as it's spoken.
+  const spoken = speechSrc ? introSpokenText(card, { title, summary }) : "";
+  const spans = useMemo(() => sentenceSpans(spoken), [spoken]);
+  const follow = useFollowWords();
+  const [timings, setTimings] = useState<WordTiming[] | null>(null);
+  const [said, setSaid] = useState<{ sentence: number; word: Span | null }>({ sentence: 0, word: null });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // Waiting for the sound to start when the card opens with sound; otherwise ready to be tapped.
   const [state, setState] = useState<SoundState>(() => (autoPlay && (Boolean(v?.video?.src) || Boolean(card.audioSrc ?? ttsKey)) ? "loading" : "idle"));
   const [captions, setCaptions] = useState(true);
-  const [transcript, setTranscript] = useState(false);
   const quartiles = useRef(new Set<number>());
   const ended = useRef(false);
   const seen = useRef<IntroWatch>({ played: false, percent: 0 });
@@ -107,6 +112,42 @@ export function IntroCard({
     sendIntroEvent({ ...track, card: card.id, event: "view", media });
     return () => sendIntroEvent({ ...track, card: card.id, event: "leave", media, seconds: Math.round((performance.now() - started) / 100) / 10 });
   }, [track, card.id, media]);
+
+  // The narrator's word timings (a recorded file has none: its words are spread over its length instead).
+  const timingsSrc = speechSrc && !card.audioSrc ? `${speechSrc}&timings=1` : null;
+  useEffect(() => {
+    if (!timingsSrc) return;
+    let live = true;
+    fetch(timingsSrc)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { words?: WordTiming[] | null } | null) => live && setTimings(d?.words ?? null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [timingsSrc]);
+
+  // While it plays, which sentence (and word) it's on, checked every frame.
+  useEffect(() => {
+    if (state !== "playing" || !spans.length) return;
+    let frame = 0;
+    let estimated: WordTiming[] | null = null;
+    const tick = () => {
+      const a = audioRef.current;
+      if (a) {
+        if (!timings && !estimated && Number.isFinite(a.duration) && a.duration > 0) estimated = estimateWords(spoken, a.duration);
+        const w = wordAt(timings ?? estimated ?? [], a.currentTime);
+        if (w) {
+          const i = spans.findIndex((s) => w.from >= s.from && w.from < s.to);
+          setSaid((p) => (p.word?.from === w.from && p.sentence === i ? p : { sentence: i < 0 ? p.sentence : i, word: { from: w.from, to: w.to } }));
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [state, timings, spans, spoken]);
+  const caption = speechSrc && (state === "playing" || state === "paused") ? spans[said.sentence] : null;
 
   // Sound when the card opens, once per visit; it stops when the learner moves on.
   useEffect(() => {
@@ -230,7 +271,7 @@ export function IntroCard({
       {/* A soft gradient keeps the words readable, with a hint of Trilogy Care's teal at the top. */}
       {!embed && (
         <>
-          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-[#06141f]/95 via-[#06141f]/40 via-45% to-transparent" />
+          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-[#06141f]/90 via-[#06141f]/30 via-30% to-transparent" />
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-32 bg-gradient-to-b from-[#00585e]/45 to-transparent" />
         </>
       )}
@@ -253,16 +294,14 @@ export function IntroCard({
       )}
 
       <div className={cx("relative p-5 pb-6 transition-opacity duration-300 sm:p-7", videoPlaying && "pointer-events-none opacity-0")}>
-        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.16em] text-[#7fe0e4]">{card.label || "Introduction"}</p>
+        {/* Only the title, the sound controls and the way in: the presenter fills the rest of the screen. */}
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="mt-2 text-balance font-serif text-[2.1rem] font-semibold leading-[1.08] tracking-tight outline-none [text-shadow:0_1px_12px_rgb(0_0_0/0.35)] sm:text-[2.4rem]"
+          className="text-balance font-serif text-[2.1rem] font-semibold leading-[1.08] tracking-tight outline-none [text-shadow:0_1px_12px_rgb(0_0_0/0.35)] sm:text-[2.4rem]"
         >
           {heading}
         </h2>
-        {/* The description may carry emphasis or a link (an ALIS support note, say), as card text does. */}
-        {body && <RichText text={body} className="mt-3 max-w-[34rem] text-lg leading-relaxed text-white/90 [&_a]:text-white [&_a]:underline" />}
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           {speechSrc && state !== "unavailable" && (
             <button
@@ -290,14 +329,15 @@ export function IntroCard({
               {captions ? "Captions on" : "Captions off"}
             </button>
           )}
-          {(video || speechSrc) && spoken && (
-            <button type="button" aria-expanded={transcript} onClick={() => setTranscript((t) => !t)} className={pill}>
-              <Icon name="doc" className="size-4" /> Transcript
-            </button>
-          )}
         </div>
-        {transcript && (
-          <p className="mt-3 rounded-2xl bg-black/45 p-3 text-[0.95rem] leading-relaxed backdrop-blur">{video ? card.transcript || spoken : spoken}</p>
+        {/* The live caption: the sentence being said, its word highlighted (the words to come a little dimmed). */}
+        {caption && (
+          <p aria-live="polite" className="mt-3 max-w-[34rem] text-[1.05rem] italic leading-snug text-white [text-shadow:0_1px_8px_rgb(0_0_0/0.5)]">
+            <span className="sr-only">{spoken.slice(caption.from, caption.to)}</span>
+            <span aria-hidden>
+              <SpokenText text={spoken} range={caption} word={follow ? said.word : null} markClassName="bg-[#fab53d] text-[#102a43] [text-shadow:none]" />
+            </span>
+          </p>
         )}
         <button
           type="button"
@@ -336,4 +376,15 @@ export function IntroCard({
       )}
     </div>
   );
+}
+
+/** Where each sentence of the script sits, for the caption (the same split as the other cards' narration). */
+function sentenceSpans(text: string): Span[] {
+  const out: Span[] = [];
+  for (const m of text.matchAll(/[^.!?]+[.!?]+["”’]?\s*/g)) {
+    const raw = m[0];
+    const lead = raw.length - raw.trimStart().length;
+    out.push({ from: m.index + lead, to: m.index + raw.trimEnd().length });
+  }
+  return out.length ? out : text.trim() ? [{ from: 0, to: text.length }] : [];
 }

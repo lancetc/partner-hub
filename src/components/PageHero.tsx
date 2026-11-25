@@ -29,6 +29,7 @@ export function PageHero({
   aside,
   image,
   back,
+  tile,
 }: {
   eyebrow: string;
   title: string;
@@ -37,6 +38,8 @@ export function PageHero({
   image?: HeroImage;
   /** A way back to the page this one sits under, shown above the label. */
   back?: { href: string; label: string };
+  /** A picture at the right end of the heading line: the page's tile from the Learn menu (LearnTile). */
+  tile?: React.ReactNode;
 }) {
   const backLink = back && (
     <Link
@@ -51,7 +54,10 @@ export function PageHero({
     <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div className="max-w-2xl">
         {eyebrowLine}
-        <h1 className="mt-1 font-serif text-4xl font-semibold tracking-tight sm:text-5xl">{title}</h1>
+        <div className="mt-1 flex items-center justify-between gap-4">
+          <h1 className="font-serif text-4xl font-semibold tracking-tight sm:text-5xl">{title}</h1>
+          {tile}
+        </div>
         {children && <div className="mt-2 text-lg text-white/90">{children}</div>}
       </div>
       {aside}
@@ -79,7 +85,10 @@ export function PageHero({
         <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-9 lg:py-10">
           {backLink}
           {eyebrowLine}
-          <h1 className="mt-1 font-serif text-4xl font-semibold tracking-tight [text-shadow:0_2px_18px_rgb(0_0_0/0.35)] sm:text-5xl">{title}</h1>
+          <div className="mt-1 flex items-center justify-between gap-4">
+            <h1 className="font-serif text-4xl font-semibold tracking-tight [text-shadow:0_2px_18px_rgb(0_0_0/0.35)] sm:text-5xl">{title}</h1>
+            {tile}
+          </div>
           {aside && <div className="mt-3 max-w-3xl [text-shadow:0_1px_10px_rgb(0_0_0/0.4)]">{aside}</div>}
           {children && <div className="mt-3 max-w-2xl text-lg text-white/90 [text-shadow:0_1px_10px_rgb(0_0_0/0.4)]">{children}</div>}
         </div>

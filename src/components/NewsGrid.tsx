@@ -209,7 +209,7 @@ function Lead({ story, className }: { story: Story; className?: string }) {
         <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
       </div>
       <Headline story={story} className="mt-1 text-[2.1rem] leading-[1.02] tracking-tight sm:text-[2.6rem] lg:text-[2.85rem]" />
-      <StoryVisual {...story.visual} className="mt-5 aspect-[16/9]" iconSize="size-12" priority />
+      <StoryVisual {...story.visual} className="mt-5 aspect-[16/9] overflow-hidden rounded-2xl" iconSize="size-12" priority />
       {/* The standfirst, opened with a drop cap. */}
       <p className="mt-4 font-serif text-[1.08rem] leading-relaxed text-ink first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-serif first-letter:text-[3.6rem] first-letter:font-bold first-letter:leading-[0.78] first-letter:text-ink">
         {story.dek}
@@ -272,7 +272,7 @@ function PolicyNotice({ story, className }: { story: Story; className?: string }
 function ColumnStory({ story, className }: { story: Story; className?: string }) {
   return (
     <article className={cx("group relative flex flex-col", className)}>
-      <StoryVisual {...story.visual} className="aspect-[3/2]" iconSize="size-8" />
+      <StoryVisual {...story.visual} className="aspect-[3/2] overflow-hidden rounded-2xl" iconSize="size-8" />
       <div className="mt-3 flex items-start justify-between gap-2">
         <Kicker story={story} />
         <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
@@ -289,7 +289,7 @@ function ColumnStory({ story, className }: { story: Story; className?: string })
 function WideStory({ story, className }: { story: Story; className?: string }) {
   return (
     <article className={cx("group relative grid gap-5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]", className)}>
-      <StoryVisual {...story.visual} className="aspect-[16/10] sm:aspect-auto sm:min-h-60" />
+      <StoryVisual {...story.visual} className="aspect-[16/10] overflow-hidden rounded-2xl sm:aspect-auto sm:min-h-60" />
       <div className="flex flex-col">
         <div className="flex items-start justify-between gap-2">
           <Kicker story={story} />

@@ -12,6 +12,11 @@ import type { Db } from "./db";
 const originals = lessons.slice();
 let signature: string | null = null;
 
+/** Re-reads published lessons next time: for a change made in place, without a new published time. */
+export function forgetPublishedLessons() {
+  signature = null;
+}
+
 export function syncPublishedLessons(db: Db) {
   const rows = db
     .prepare("SELECT slug, published, published_at, deleted_at FROM authored_lessons WHERE published IS NOT NULL OR deleted_at IS NOT NULL ORDER BY created_at")

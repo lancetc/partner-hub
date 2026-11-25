@@ -7,6 +7,7 @@ import { ensureCharacters } from "./characters";
 import { learnerGuides } from "./magazine";
 import { canAuthor, type User } from "./auth";
 import type { Db } from "./db";
+import type { StoryCard } from "./livesInProgress";
 
 /*
   Digital Members (Community → Digital Members): the fictional people learners meet in training, introduced before
@@ -35,6 +36,8 @@ export type DigitalMemberCard = {
   themes: string[];
   /** How many published courses this reader can open name them. */
   courses: number;
+  /** Lives in Progress: their latest episode for this reader, added by the list's route (server/livesInProgress). */
+  story?: StoryCard | null;
 };
 
 const rows = (db: Db) => {

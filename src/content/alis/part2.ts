@@ -235,7 +235,7 @@ export const ALIS_PART_2: AlisModule[] = [
         prompt: "Who might discover an incident or near miss?",
         options: [
           opt("a", "Anyone: a worker who sees it, an older person who tells you, or someone else who lets a worker know", "Correct.", true),
-          opt("b", "Only the worker on shift when it happened", "No. Many incidents come to light later, or from someone else."),
+          opt("b", "Only the worker who was there when it happened", "No. Many incidents come to light later, or from someone else."),
           opt("c", "Only a manager", "No. Anyone can discover an incident."),
           opt("d", "Only the older person it happened to", "No. Witnesses, supporters and workers can all discover one."),
         ],

@@ -8,6 +8,7 @@ import type { DigitalMemberProfile as Profile } from "@/server/digitalMembers";
 import { initials } from "@/content/community";
 import { Icon } from "../Icon";
 import { MemberChatWith } from "./MemberChat";
+import { LivesStory } from "./LivesStory";
 
 /*
   A Digital Member's profile (server/digitalMembers.ts), drawn the same way on its own page and in the modal that
@@ -21,7 +22,6 @@ const Eyebrow = ({ children }: { children: React.ReactNode }) => (
 );
 
 export function DigitalMemberProfile({ m, titleId, onPerson, modal }: { m: Profile; titleId?: string; onPerson?: (id: string) => void; modal?: boolean }) {
-  const first = firstName(m.name);
   const Title = modal ? "h2" : "h1";
   return (
     <>
@@ -62,7 +62,16 @@ export function DigitalMemberProfile({ m, titleId, onPerson, modal }: { m: Profi
           {m.name} is a fictional person made for Trilogy Care training. Any resemblance to real clients or staff is coincidental.
         </p>
       </header>
+      <ProfileBody m={m} onPerson={onPerson} modal={modal} />
+    </>
+  );
+}
 
+/** Who they are, beneath the header: also the "About me" tab of a Lives in Progress story (LivesStory). */
+export function ProfileBody({ m, onPerson, modal }: { m: Profile; onPerson?: (id: string) => void; modal?: boolean }) {
+  const first = firstName(m.name);
+  return (
+    <>
       <div className={cx("grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]", modal ? "p-6 sm:p-7" : "mt-8")}>
         <div className="space-y-8">
           <section>
@@ -178,13 +187,15 @@ export function DigitalMemberProfile({ m, titleId, onPerson, modal }: { m: Profi
 export function useDigitalMemberModal() {
   const dialog = useRef<HTMLDialogElement>(null);
   const [id, setId] = useState<string | null>(null);
-  const [m, setM] = useState<Profile | null>(null);
+  const [m, setM] = useState<(Profile & { lives?: boolean }) | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // Lives in Progress: the episode to open at (from a Life Moment or a notice); none means the latest.
+  const [episode, setEpisode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let live = true;
-    api<Profile>(`/api/community/digital-members/${encodeURIComponent(id)}`).then(
+    api<Profile & { lives?: boolean }>(`/api/community/digital-members/${encodeURIComponent(id)}`).then(
       (p) => {
         if (!live) return;
         setM(p);
@@ -198,8 +209,9 @@ export function useDigitalMemberModal() {
     };
   }, [id]);
 
-  const open = useCallback((next: string) => {
+  const open = useCallback((next: string, atEpisode?: string | null) => {
     setId(next);
+    setEpisode(atEpisode ?? null);
     if (!dialog.current?.open) dialog.current?.showModal();
   }, []);
 
@@ -225,6 +237,7 @@ export function useDigitalMemberModal() {
         setId(null);
         setM(null);
         setProblem(null);
+        setEpisode(null);
       }}
       onClick={(e) => e.target === e.currentTarget && dialog.current?.close()}
       className="pointer-events-auto m-auto max-h-[92vh] w-[min(60rem,calc(100vw-2rem))] max-w-none overflow-y-auto overscroll-contain rounded-3xl bg-bg p-0 text-left text-ink shadow-2xl backdrop:bg-[#0b1626]/70 backdrop:backdrop-blur-sm"
@@ -242,7 +255,12 @@ export function useDigitalMemberModal() {
       </div>
       {shown ? (
         <>
-          <DigitalMemberProfile m={shown} titleId={titleId} onPerson={open} modal />
+          {/* A Lives in Progress character opens on what's happening in their life now (LivesStory); others on their profile. */}
+          {shown.lives ? (
+            <LivesStory key={`${shown.id}:${episode ?? ""}`} profile={shown} titleId={titleId} onPerson={(p) => open(p)} modal initialEpisode={episode} />
+          ) : (
+            <DigitalMemberProfile m={shown} titleId={titleId} onPerson={(p) => open(p)} modal />
+          )}
           <p className="border-t border-line px-6 py-4 text-right sm:px-7">
             <Link href={`/community/digital/${shown.id}`} className="text-sm font-semibold text-[#008282] hover:underline dark:text-[#3cb8b9]">
               Open {firstName(shown.name)}’s page <span aria-hidden>→</span>

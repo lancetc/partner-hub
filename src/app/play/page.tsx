@@ -4,6 +4,7 @@ import { badges, quests } from "@/content/explorer";
 import { cards, themes } from "@/content/conversations";
 import { Icon } from "@/components/Icon";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 
 export const metadata: Metadata = {
   title: "Play",
@@ -22,6 +23,7 @@ export default function PlayPage() {
       <PageHero
         eyebrow="Learn by doing"
         title="Play"
+        tile={<LearnTile href="/play" />}
         // A colleague in headphones working through something at his table by the louvres, on the right, with a sunlit wall behind the words.
         image={{ src: "/images/hero-headphones-notes.webp", width: 1914, height: 822, position: "88% 32%", minHeight: 336 }}
         aside={

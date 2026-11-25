@@ -10,6 +10,7 @@ import { now } from "@/server/clock";
 import { catalogueTopics } from "@/server/catalogue";
 import { HomeLearning } from "@/components/HomeLearning";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 import { MagazineBrowser, type BrowseGuide } from "@/components/magazine/MagazineBrowser";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function MagazinePage() {
       <PageHero
         eyebrow="Take your time"
         title="Magazine"
+        tile={<LearnTile href="/magazine" />}
         // A colleague settled in at her kitchen table with a laptop and a cup of tea, on the right, with a sunlit wall behind the words.
         image={{ src: "/images/magazine-reading.webp", width: 1915, height: 821, position: "80% 23%", minHeight: 336 }}
         aside={

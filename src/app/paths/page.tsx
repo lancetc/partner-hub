@@ -6,6 +6,7 @@ import { getDb } from "@/server/db";
 import { currentUser } from "@/server/auth";
 import { browseLearningPaths, myCertificates, slugsFor } from "@/server/learningPaths";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 import { lessonBySlug } from "@/content/lessons";
 import { PathsBrowser } from "@/components/PathsBrowser";
 import { HomeLearning } from "@/components/HomeLearning";
@@ -26,6 +27,7 @@ export default function LearningPathsPage() {
       <PageHero
         eyebrow="Step by step"
         title="Discovery Paths"
+        tile={<LearnTile href="/paths" />}
         // A colleague on a garden bench working through something on her phone, on the right, with lawn behind the words.
         image={{ src: "/images/hero-bench-reading.webp", width: 1914, height: 822, position: "80% 14%", minHeight: 336 }}
         aside={

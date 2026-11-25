@@ -1,6 +1,7 @@
 "use client";
 
 import { HeroStats, PageHero } from "../PageHero";
+import { LearnTile } from "../LearnMenu";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { useHydrated } from "@/lib/store";
@@ -28,6 +29,7 @@ import { cardOfTheWeek, perspectives, themeOf } from "@/content/conversations";
 import Link from "next/link";
 import { Icon } from "../Icon";
 import { DigitalMembers } from "./DigitalMembers";
+import { LivingCalendar } from "./LivingCalendar";
 import { portraitCard } from "./portraitCard";
 import { CommunityAtlas } from "./CommunityAtlas";
 import { BusinessNotesLink } from "../business/BusinessNotesLink";
@@ -70,6 +72,8 @@ const TABS = [
   { id: "events", label: "Events", icon: "calendar" },
   { id: "members", label: "Members", icon: "people" },
   { id: "digital", label: "Digital Members", icon: "spark" },
+  // Lives in Progress: the Digital Members' lives by the day (docs/lives-in-progress.md).
+  { id: "calendar", label: "Living Calendar", icon: "calendar" },
   { id: "atlas", label: "Atlas", icon: "pin" },
   { id: "leaderboard", label: "Leaderboard", icon: "star" },
 ] as const;
@@ -121,6 +125,7 @@ export function Community() {
       <PageHero
         eyebrow="Together"
         title="Learn from each other"
+        tile={<LearnTile href="/community" />}
         // Colleagues, clients and a gardener at a garden lunch outside a Queenslander, across the middle and right, with lawn behind the words.
         image={{ src: "/images/hero-garden-lunch.webp", width: 1914, height: 822, position: "70% 26%", minHeight: 403 }}
         aside={
@@ -170,6 +175,7 @@ export function Community() {
         {tab === "events" && <Events mine={mine} update={update} hydrated={hydrated} />}
         {tab === "members" && <Members />}
         {tab === "digital" && <DigitalMembers />}
+        {tab === "calendar" && <LivingCalendar />}
         {tab === "atlas" && <CommunityAtlas />}
         {tab === "leaderboard" && <Leaderboard you={you} yourPoints={yourPoints} />}
       </div>
@@ -972,7 +978,7 @@ function MemberPortrait({ m }: { m: Member }) {
         {m.photo ? (
           // Their photo fills the card, as on Digital Members.
           // eslint-disable-next-line @next/next/no-img-element -- a small fixed picture from /public
-          <img src={m.photo} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover object-[center_20%]" />
+          <img src={m.photo} alt="" loading="lazy" decoding="async" className="absolute inset-x-0 bottom-0 h-[116%] w-full object-cover object-[center_30%]" />
         ) : (
           <>
             {/* No photo: their colour, light at the top, with their initials where a face would be. */}

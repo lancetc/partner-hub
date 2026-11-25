@@ -295,7 +295,8 @@ export function charactersAfterPublish(db: Db, actor: User, doc: GuideDoc, now: 
           "INSERT INTO characters (id, name, aliases, role, look, status, origin, created_at, updated_at) VALUES (?, ?, '[]', ?, ?, 'none', 'publish', ?, ?)",
         ).run(id, p.name, p.role, look, at, at);
         roster.push(one(db, id)!);
-        want.add(id);
+        // A paid portrait only once we know who to draw: without a man or a woman in the look, an author adds it first.
+        if (!/\bperson\b/.test(look.split(".")[0])) want.add(id);
       }
     if (want.size && openaiConfigured()) queuePortraits(db, actor, [...want]);
     return [...want];

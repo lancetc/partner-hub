@@ -60,3 +60,13 @@ export function formatDuration(minutes: number) {
   const text = `${whole || ""}${half ? "½" : ""}`;
   return `About ${text} ${halves === 2 ? "hour" : "hours"}`;
 }
+
+/** A length in hours and minutes once it's an hour or more ("3 hr 20 min", to the nearest 5 minutes), else minutes ("25 min"). */
+export function hoursAndMinutes(minutes: number) {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  const rounded = Math.round(m / 5) * 5;
+  const h = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return rest ? `${h} hr ${rest} min` : `${h} hr`;
+}

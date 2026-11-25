@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 import { MyDiscovery } from "@/components/discovery/MyDiscovery";
 
 // Personal to the signed-in person, so kept out of search results.
@@ -13,6 +14,7 @@ export default function MyDiscoveryPage() {
       <PageHero
         eyebrow="Your own path"
         title="My Discovery"
+        tile={<LearnTile href="/discovery" />}
         // A colleague at his table by the louvres, thinking something through at his laptop, on the right, with a sunlit wall behind the words.
         image={{ src: "/images/hero-thinking-laptop.webp", width: 1914, height: 822, position: "80% 25%", minHeight: 420 }}
       >

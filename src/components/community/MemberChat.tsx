@@ -11,8 +11,9 @@ import { Icon } from "../Icon";
 /*
   Chatting with a Digital Member (server/memberChat): pick a person, and they say hello in their own words; a short
   conversation follows, replies arriving as they're written. Under each reply, "Continue the conversation" offers
-  three questions to ask next, written with the reply. Nothing is saved: the chat lives on this page and is gone
-  when the window closes. The limits and the switch are in Admin → Digital Member chat.
+  three questions to ask next, written with the reply. The chat lives on this page and is gone when the window
+  closes; with a Lives in Progress character, the topics and the learner's own questions are remembered for them
+  alone (server/livesInProgress). The limits and the switch are in Admin → Digital Member chat.
 */
 
 type Status = { available: boolean; reason: string | null; excluded: string[]; turnsPerChat: number; leftThisHour: number; notice: string };
@@ -63,8 +64,33 @@ export function MemberChatButton({ members }: { members: DigitalMemberCard[] }) 
   );
 }
 
-/** On a profile: chat with this person straight away. Hidden when chat is off for this reader, or for them. */
-export function MemberChatWith({ member }: { member: ChatPerson }) {
+/**
+  A Lives in Progress chat (docs/lives-in-progress.md): which episode the learner is looking at (an earlier one is an
+  earlier chapter, where the person knows only what had happened by then), and whether they remember earlier chats.
+*/
+export type ChatStory = { episodeId: string; number: number; title: string; historical: boolean; memory: boolean; remembered: number; preview?: boolean };
+
+/**
+  On a profile: chat with this person straight away. Hidden when chat is off for this reader, or for them. From a
+  Lives in Progress episode it carries the episode (`story`) and can start with a question in mind (`opener`).
+*/
+export function MemberChatWith({
+  member,
+  story,
+  opener,
+  label,
+  className,
+  icon = "chat",
+  onStart,
+}: {
+  member: ChatPerson;
+  story?: ChatStory;
+  opener?: string;
+  label?: React.ReactNode;
+  className?: string;
+  icon?: "chat" | "arrow-right" | null;
+  onStart?: () => void;
+}) {
   const { data: status } = useApi<Status>(STATUS_URL);
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
@@ -75,11 +101,15 @@ export function MemberChatWith({ member }: { member: ChatPerson }) {
         type="button"
         onClick={() => {
           setOpen(true);
+          onStart?.();
           dialog.current?.showModal();
         }}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 font-semibold text-[#102a43] shadow-sm hover:bg-[#e8f6f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className={
+          className ??
+          "inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 font-semibold text-[#102a43] shadow-sm hover:bg-[#e8f6f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        }
       >
-        <Icon name="chat" className="size-5" /> Chat with {firstName(member.name)}
+        {icon && <Icon name={icon} className="size-5 shrink-0" />} {label ?? <>Chat with {firstName(member.name)}</>}
       </button>
       <dialog
         ref={dialog}
@@ -88,13 +118,27 @@ export function MemberChatWith({ member }: { member: ChatPerson }) {
         onClick={(e) => e.target === e.currentTarget && dialog.current?.close()}
         className={DIALOG_CLASS}
       >
-        {open && <ChatWindow members={[]} initial={member} status={status} onClose={() => dialog.current?.close()} />}
+        {open && <ChatWindow members={[]} initial={member} status={status} story={story} opener={opener} onClose={() => dialog.current?.close()} />}
       </dialog>
     </>
   );
 }
 
-function ChatWindow({ members, initial, status, onClose }: { members: ChatPerson[]; initial?: ChatPerson; status: Status; onClose: () => void }) {
+function ChatWindow({
+  members,
+  initial,
+  status,
+  story,
+  opener,
+  onClose,
+}: {
+  members: ChatPerson[];
+  initial?: ChatPerson;
+  status: Status;
+  story?: ChatStory;
+  opener?: string;
+  onClose: () => void;
+}) {
   const [who, setWho] = useState<ChatPerson | null>(initial ?? null);
   return (
     <div className="flex h-full flex-col">
@@ -135,7 +179,18 @@ function ChatWindow({ members, initial, status, onClose }: { members: ChatPerson
           <Icon name="close" className="size-5" />
         </button>
       </header>
-      {who ? <Conversation key={who.id} who={who} status={status} canSwitch={members.length > 0} /> : <Picker members={members} onPick={setWho} />}
+      {who ? (
+        <Conversation
+          key={who.id}
+          who={who}
+          status={status}
+          canSwitch={members.length > 0}
+          story={who.id === initial?.id ? story : undefined}
+          opener={who.id === initial?.id ? opener : undefined}
+        />
+      ) : (
+        <Picker members={members} onPick={setWho} />
+      )}
       <p className="flex items-center justify-center gap-2 px-4 pb-4 pt-2 text-center text-sm text-ink-muted sm:px-5">
         <Icon name="shield" className="size-4 shrink-0" />
         {status.notice}
@@ -171,11 +226,14 @@ function Picker({ members, onPick }: { members: ChatPerson[]; onPick: (m: ChatPe
   );
 }
 
-function Conversation({ who, status, canSwitch }: { who: ChatPerson; status: Status; canSwitch: boolean }) {
+function Conversation({ who, status, canSwitch, story, opener }: { who: ChatPerson; status: Status; canSwitch: boolean; story?: ChatStory; opener?: string }) {
   // Their hello opens the chat; it's on screen, and the server tells the AI it was said.
   const [turns, setTurns] = useState<Turn[]>([{ role: "assistant", text: who.hello }]);
-  // What to ask next: openers at first, then the three written with the last reply.
-  const [ideas, setIdeas] = useState<string[]>(STARTERS);
+  // What to ask next: openers at first (an episode's own question first), then the three written with the last reply.
+  const [ideas, setIdeas] = useState<string[]>(opener ? [opener, ...STARTERS.slice(0, 2)] : STARTERS);
+  // Lives in Progress: one id per conversation, for what it's remembered as; "start fresh" leaves earlier chats out.
+  const [conversationId] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `c${Date.now()}${Math.random()}`.replace(".", "")));
+  const [fresh, setFresh] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -209,7 +267,11 @@ function Conversation({ who, status, canSwitch }: { who: ChatPerson; status: Sta
       const res = await fetch(STATUS_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ memberId: who.id, messages: history }),
+        body: JSON.stringify({
+          memberId: who.id,
+          messages: history,
+          ...(story && { episodeId: story.episodeId, conversationId, fresh, preview: story.preview === true }),
+        }),
         signal: abort.current.signal,
       });
       if (!res.ok) {
@@ -248,6 +310,37 @@ function Conversation({ who, status, canSwitch }: { who: ChatPerson; status: Sta
           setAtEnd(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
         }}
       >
+        {story && (
+          // Where in their story this chat is set, and what they remember: said plainly, before anything is sent.
+          <div className="mb-5 space-y-2 text-sm">
+            {story.historical && (
+              <p className="flex items-start gap-2 rounded-2xl bg-[#fff4dc] px-3 py-2 text-[#6b4a00] dark:bg-[#3a2e12] dark:text-[#f5d48a]">
+                <Icon name="clock" className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  An earlier chapter: Episode {String(story.number).padStart(2, "0")}, “{story.title}”. {firstName(who.name)} only knows what had happened by then.
+                </span>
+              </p>
+            )}
+            {story.memory && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl bg-muted px-3 py-2 text-ink-muted">
+                <Icon name="bookmark" className="size-4 shrink-0" />
+                {fresh ? (
+                  <span>Starting fresh: {firstName(who.name)} won’t bring up your earlier chats.</span>
+                ) : story.remembered > 0 ? (
+                  <span>{firstName(who.name)} remembers what you’ve talked about before. Only you can see it.</span>
+                ) : (
+                  <span>{firstName(who.name)} will remember the topics you talk about, just for you.</span>
+                )}
+                {sent === 0 && story.remembered > 0 && (
+                  <button type="button" onClick={() => setFresh(!fresh)} className="font-semibold text-[#007373] underline-offset-2 hover:underline dark:text-[#3cb8b9]">
+                    {fresh ? "Use our earlier chats" : "Start fresh"}
+                  </button>
+                )}
+              </p>
+            )}
+            <p className="text-xs text-ink-muted">A chat is just between you: it never changes what happens in {firstName(who.name)}’s story.</p>
+          </div>
+        )}
         <ol className="flex flex-col gap-5">
           {turns.map((t, i) =>
             t.role === "assistant" ? (

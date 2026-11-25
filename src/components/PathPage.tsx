@@ -71,10 +71,11 @@ export function PathPage({ id, preview = false }: { id: string; preview?: boolea
 
 /**
   The path's Discovery Exciter (docs/discovery-exciter.md): its own approved script, recorded in the Magazine Editorial
-  Voice, in the Magazine's player. It waits for Play, plays one sound at a time, and listening is never needed to finish
-  anything. With no approved recording there's nothing here: the description is never read aloud instead.
+  Voice, in the Magazine's player, as a poster. It starts when the page opens ("Tap to listen" if the browser asks for a
+  tap), plays one sound at a time, and listening is never needed to finish anything. With no approved recording there's
+  nothing here: the description is never read aloud instead.
 */
-function PathExciter({ id, exciter, preview }: { id: string; exciter: LearnerExciter; preview: boolean }) {
+function PathExciter({ id, exciter, preview, poster }: { id: string; exciter: LearnerExciter; preview: boolean; poster: { src: string; position?: string } }) {
   // Listening totals for the path's authors: the action and numbers only. Nothing is recorded in a preview.
   const onEvent: IntroEvent = (action, detail) => {
     if (preview) return;
@@ -85,7 +86,10 @@ function PathExciter({ id, exciter, preview }: { id: string; exciter: LearnerExc
       keepalive: true,
     }).catch(() => {});
   };
-  return <IntroPlayer script={exciter.script} audio={exciter.audio} onEvent={onEvent} label={EXCITER_LABEL} className="mt-4" />;
+  // It starts when the page opens (not in an author's preview).
+  return (
+    <IntroPlayer script={exciter.script} audio={exciter.audio} onEvent={onEvent} label={EXCITER_LABEL} autoPlay={!preview} poster={poster} className="mt-4" />
+  );
 }
 
 /** The top of the page: name, its introduction, time it takes, who it's for, what they'll be able to do, and how it works. */
@@ -141,7 +145,15 @@ export function PathOverview({ path: p, preview = false }: { path: PathData; pre
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">Discovery Path</p>
       <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight sm:text-4xl">{p.name}</h1>
       {/* The Discovery Exciter, when one is approved; otherwise nothing (Ava no longer introduces paths, Nov 2026). */}
-      {p.exciter && <PathExciter id={p.id} exciter={p.exciter} preview={preview} />}
+      {/* Shown as a poster: the path's picture (its first Topic's), else its "Who it's for" picture. */}
+      {p.exciter && (
+        <PathExciter
+          id={p.id}
+          exciter={p.exciter}
+          preview={preview}
+          poster={p.thumbnail?.photo ? { src: p.thumbnail.photo.src, position: p.thumbnail.photo.position } : { src: whoPhotoFor(p.whoPhoto) }}
+        />
+      )}
       {p.description && <p className="mt-3 text-lg text-ink-muted">{p.description}</p>}
 
       <ul className="mt-5 grid gap-2 sm:grid-cols-3">

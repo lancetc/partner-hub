@@ -141,3 +141,13 @@ describe("publishing", () => {
     expect(charactersAfterPublish(db, jordan, { broken: true } as never, now)).toEqual([]);
   });
 });
+
+describe("a new character's look", () => {
+  it("takes a man or a woman from a title or from the words about them, never from a first name", () => {
+    expect(lookFromName("Bill", null, "He offers you $50 and asks to be Facebook friends.", "participant")).toBe(
+      "older man. He offers you $50 and asks to be Facebook friends.",
+    );
+    expect(lookFromName("Joan", null, "Her eyesight is poor, so she asks you to help.", "participant")).toMatch(/^older woman\./);
+    expect(lookFromName("Alan", null, "", "participant")).toBe("older person");
+  });
+});

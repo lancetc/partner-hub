@@ -7,8 +7,9 @@ import { PathOverview } from "./PathPage";
 
 /*
   The top of a Discovery Path page, as the server draws it (docs/discovery-exciter.md): "Listen to your introduction"
-  with the approved Discovery Exciter only, never the description read aloud, no Ava, nothing playing by itself, and
-  one sound at a time. Playing is checked in the browser.
+  with the approved Discovery Exciter only, never the description read aloud, no Ava, and one sound at a time. It's
+  the reduced player: the path's picture as a poster. It starts by itself in the browser (not in the server's drawing,
+  and never with an autoplay attribute, so a browser that blocks sound asks for a tap). Playing is checked in the browser.
 */
 
 const DESCRIPTION = "Everything you need to start coordinating care with Trilogy Care, in short topics built around real situations.";
@@ -51,15 +52,17 @@ const path = (exciter: Data["exciter"]): Data =>
 const html = (exciter: Data["exciter"]) => renderToStaticMarkup(createElement(PathOverview, { path: path(exciter) }));
 
 describe("the path page's introduction", () => {
-  it("plays the Discovery Exciter in the Magazine's player, labelled for the learner, and never by itself", () => {
+  it("plays the Discovery Exciter in the reduced player over the path's picture, labelled for the learner", () => {
     const out = html({ script: SCRIPT, audio });
     expect(out).toContain('aria-label="Listen to your introduction"');
     expect(out).toContain(">Listen to your introduction<");
     expect(out).toContain('preload="none"');
     expect(out).not.toMatch(/autoplay/i);
-    expect(out).toContain("Narrated by an AI voice · Magazine Editorial Voice");
-    // Its transcript is the Exciter's own words; the description is text on the page, once, not in the player.
-    expect(out).toContain(SCRIPT);
+    // Says the voice is AI; the poster is the path's "Who it's for" picture when it has no thumbnail.
+    expect(out).toContain("AI voice");
+    expect(out).toContain('src="/images/path-who-default.webp"');
+    // Its words show as a live caption only while it speaks (as on a Topic's cards); the description is text on the page, once.
+    expect(out).not.toContain(SCRIPT);
     expect(out.split(DESCRIPTION).length - 1).toBe(1);
     expect(out).toContain("data-player");
   });

@@ -54,7 +54,7 @@ export const DEFAULT_PRESENTER: PresenterProfile = {
   id: "learning-presenter",
   name: "Your learning presenter",
   description: "An approachable Trilogy Care learning presenter for Topic introductions. The portrait stands in until presenter videos are made.",
-  portrait: { src: "/api/uploads/57497f37-a3dc-4248-8041-c233d56617ff.webp", width: 2400, height: 1340, position: "72% 40%" },
+  portrait: { src: "/api/uploads/62241661-72ac-4ba6-abed-6c4c6880a839.webp", width: 1080, height: 1920, position: "50% 30%" },
   provider: "synthesia",
   avatarId: "",
   voiceId: "",

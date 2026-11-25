@@ -14,6 +14,7 @@ import { mp3Seconds, openaiReady, openaiSpeech, openaiSpeechModel } from "./open
 import { answerScript, cardScript } from "@/lib/coordinatorsDay";
 import { coordinatorsDay } from "@/content/coordinatorsDay";
 import { introSpokenText, usesIntroLayout } from "@/lib/topicIntro";
+import { cardNarration } from "@/lib/cardNarration";
 
 /*
   Live narration: the Topics' script read aloud. The hub's narrator is OpenAI's Alloy voice when OpenAI is
@@ -68,7 +69,8 @@ export function scriptFor(db: Db, key: string, drafts = false): string {
           ? node.transcript
           : node.type === "audio" || node.type === "listen"
             ? node.script
-            : node.narration);
+            : // Its own script, or the voice-over read from what the card says (lib/cardNarration): every card has one.
+              cardNarration(node));
     if (text) return text;
   }
   if (kind === "cday" && a === "answer") {

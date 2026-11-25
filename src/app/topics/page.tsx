@@ -11,6 +11,7 @@ import { now } from "@/server/clock";
 import { currentUser } from "@/server/auth";
 import { pathTopicOrder } from "@/server/learningPaths";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 import { SUBJECTS } from "@/lib/subjects";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function LearningPage() {
       <PageHero
         eyebrow="Short and practical"
         title="Topics"
+        tile={<LearnTile href="/topics" />}
         // A gardener at his potting-shed table reading a Trilogy Care topic on his phone, on the right, with lawn behind the words.
         image={{ src: "/images/hero-gardener-topic.webp", width: 1914, height: 822, position: "80% 36%", minHeight: 336 }}
         aside={

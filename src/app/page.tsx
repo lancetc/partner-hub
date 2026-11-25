@@ -10,6 +10,7 @@ import { currentUser } from "@/server/auth";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
 import { HomeFavourites } from "@/components/favourites/FavouritesList";
+import { HomeLifeMoments } from "@/components/community/LifeMoments";
 import { HomePinnedTools } from "@/components/pocket/HomePinnedTools";
 import { HomeFieldNotes } from "@/components/living/FieldNotes";
 import { HomeHero } from "@/components/home/HomeHero";
@@ -44,6 +45,8 @@ export default function Home() {
         {/* Pinned tools (docs/pocket-playbook.md): the person's own pins, only when there's one. */}
         <HomePinnedTools />
         <HomeFavourites />
+        {/* "Meanwhile, in their lives…" (docs/lives-in-progress.md): Life Moments, under Favourites at the owner's request. */}
+        <HomeLifeMoments />
       </div>
 
       <section aria-labelledby="latest" data-build-step style={step(6)} className="mt-16">

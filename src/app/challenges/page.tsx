@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { StoryVisual } from "@/components/StoryVisual";
 import { cx } from "@/lib/format";
 import { HeroStats, PageHero } from "@/components/PageHero";
+import { LearnTile } from "@/components/LearnMenu";
 
 export const metadata: Metadata = { title: "Challenges", robots: { index: false } };
 
@@ -18,6 +19,7 @@ export default function ChallengesPage() {
       <PageHero
         eyebrow="Trilogy Challenge"
         title="Challenges"
+        tile={<LearnTile href="/challenges" />}
         // Two colleagues, each at a laptop working through the same scenario, split across the right, with a sunlit wall behind the words.
         image={{ src: "/images/hero-challenge-split.webp", width: 1816, height: 866, position: "85% 51%", minHeight: 491 }}
         aside={
