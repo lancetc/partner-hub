@@ -41,6 +41,9 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
+    // No source maps for the server code in a production build: about 90 MB the live site never reads, which took the
+    // Netlify server bundle past its 250 MB limit (every deploy from 19 Nov 2026 failed at upload).
+    serverSourceMaps: false,
     // The dev server's build cache, kept on disk between restarts, kept coming back in a state where
     // it told every open page to reload over and over (the page never finished loading). Without it
     // the first load after a restart takes a few seconds longer, and the loop doesn't return.
