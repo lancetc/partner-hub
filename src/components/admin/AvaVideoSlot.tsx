@@ -24,9 +24,9 @@ type Where = "magazine" | "content" | "path" | "topic";
 const WHERE: Record<Where, { plays: string; script: string; stale: string }> = {
   magazine: {
     plays:
-      "On the page it plays where the picture goes, then the picture takes over. Learners get the audio introduction beneath the heading as well; only one plays at a time.",
-    script: "the Audio guide script below",
-    stale: "The Audio guide script has changed since this video went in.",
+      "On the page it plays where the picture goes, then the picture takes over. Learners get the voiced introduction beneath the heading as well; only one plays at a time.",
+    script: "the voiced introduction script below",
+    stale: "The voiced introduction script has changed since this video went in.",
   },
   content: {
     plays: "It plays here in the page’s content, in Ava’s window, when the learner presses Play. Until it has a video, learners see nothing here.",
@@ -146,7 +146,7 @@ export function AvaVideoSlot({
     run(async () => {
       if (
         !window.confirm(
-          "Take Ava’s video off? Learners get what they had before it (the picture and Audio guide, or Ava’s voice over her portrait). The file stays in the image library.",
+          "Take Ava’s video off? Learners get what they had before it (the picture and voiced introduction, or the introduction over her portrait). The file stays in the image library.",
         )
       )
         return;

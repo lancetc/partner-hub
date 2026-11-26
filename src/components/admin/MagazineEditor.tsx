@@ -305,7 +305,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   perspectives: "Two or three curated viewpoints to compare, with what the guidance says.",
   pulse: "One tap: confidence or a view, never scored. Pair two to show the change.",
   action: "One concrete thing to try at work, and later whether they did.",
-  guide: "The Hub’s AI Learning Guide: a recorded, scripted video or voice-over, with its script to read.",
+  guide: "A recorded, scripted video or voice-over, with its script to read. Retired: Ava’s videos go in with the Ava video block.",
   ava: "One of Ava’s transmissions in the content: upload a video of her (made in ElevenLabs) with what she says, and it plays in her window here.",
 };
 
@@ -998,7 +998,13 @@ function coursePictureContext(draft: Draft): PictureContext {
     .join(" ")
     .slice(0, 320);
   const about = plainText(draft.standfirst ?? "").trim();
-  const topics = pages.length > 1 ? pages.map((p) => p.title.trim()).filter(Boolean).slice(0, 4) : [];
+  const topics =
+    pages.length > 1
+      ? pages
+          .map((p) => p.title.trim())
+          .filter(Boolean)
+          .slice(0, 4)
+      : [];
   const title = draft.title.trim() || "an untitled course";
   const prompt = [
     `A cover photo for a learning ${pages.length > 1 ? "course" : "guide"} called “${title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1).replace(/\.$/, "")}` : ""}`,

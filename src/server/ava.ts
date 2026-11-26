@@ -414,7 +414,7 @@ export async function attachAvaVideo(db: Db, actor: User, key: string, src: unkn
   }
   // What the video itself says, when it isn't the line's script word for word (an interrupted transmission): learners read this.
   const transcript = typeof said === "string" ? said.trim().slice(0, 3000) : "";
-  if (!script && !transcript) throw new HttpError(400, "Paste what the video says: there’s no Audio guide script for this yet.");
+  if (!script && !transcript) throw new HttpError(400, "Paste what the video says: there’s no voiced introduction script for this yet.");
   // How long it plays (measured in the browser), for timing the words when ElevenLabs can't align them.
   const seconds = typeof length === "number" && length > 0 && length < 3600 ? Math.round(length * 10) / 10 : null;
   const timed = await timeWords(upload.body, upload.mime, transcript || script, seconds);
@@ -458,7 +458,7 @@ export async function saveAvaWords(db: Db, actor: User, key: string, said: unkno
     // No Audio Guide script: the words below have to say it all.
   }
   const transcript = typeof said === "string" ? said.trim().slice(0, 3000) : "";
-  if (!script && !transcript) throw new HttpError(400, "Write what the video says: there’s no Audio guide script for this yet.");
+  if (!script && !transcript) throw new HttpError(400, "Write what the video says: there’s no voiced introduction script for this yet.");
   // Words timed to her voice (heard from the video, or aligned) keep their times through a light edit, such as a spelling
   // fixed after filling the script in from the video; anything bigger is timed again.
   const kept = row.timing === "aligned" && transcript ? retimeWords(wordsOf(row), transcript) : null;

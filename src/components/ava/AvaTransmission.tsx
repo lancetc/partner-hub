@@ -480,7 +480,7 @@ export function AvaTransmission({
         data-phase={phase}
         data-after={afterEnd}
         data-relit={relit}
-        aria-label={`${name}, the AI Learning Guide: a recorded transmission. ${title}`}
+        aria-label={`${name}: an AI video, a recorded transmission. ${title}`}
         className={cx(
           "ava-tx relative overflow-hidden rounded-2xl",
           layout === "card" ? "p-1.5" : "p-2 sm:p-2.5",
@@ -495,7 +495,7 @@ export function AvaTransmission({
           <span className="rounded-[4px] bg-[var(--ava-cyan)] px-1 py-px text-[0.6rem] font-extrabold leading-none text-[var(--ava-navy)]">AI</span>
           {/* On a phone the status needs the room: "Ava · Recorded" beside the AI mark says the same, and screen readers hear it all. */}
           <span className="min-w-0 truncate">
-            {name} · <span className={cx(narrow ? "sr-only" : layout === "card" && "max-sm:sr-only")}>AI Learning Guide · </span>Recorded
+            {name} · <span className={cx(narrow ? "sr-only" : layout === "card" && "max-sm:sr-only")}>AI video · </span>Recorded
           </span>
           <span aria-live="polite" className={cx("ml-auto shrink-0 uppercase tracking-[0.14em]", transmitting ? "text-[var(--ava-cyan)]" : "text-white/60")}>
             {transmitting && <span aria-hidden className="mr-1.5 inline-block size-1.5 rounded-full bg-[var(--ava-cyan)] align-middle" />}

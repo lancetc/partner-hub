@@ -125,7 +125,7 @@ export function CardVisual({
           <img src={visual.video.poster} alt={visual.alt} className="absolute inset-0 size-full object-cover object-[center_15%]" />
         )}
         <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
-          AI Learning Guide · Recorded · {visual.name}
+          AI video · Recorded · {visual.name}
         </span>
       </div>
     );
@@ -583,14 +583,14 @@ function PortraitVideo({
           onComplete?.();
         }}
         onError={() => onComplete?.()}
-        aria-label={`${video.title}${synthetic ? `, presented by ${name}, the AI Learning Guide (recorded)` : ""}`}
+        aria-label={`${video.title}${synthetic ? `, presented by ${name} (an AI video, recorded)` : ""}`}
         // On short screens the frame crops; keep the presenter's face in view.
         className="absolute inset-0 size-full object-cover object-[center_15%]"
       />
       {synthetic && (
         // The same identity as the Magazine's guide: what it is, in words, on every recording.
         <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/40 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
-          AI Learning Guide · Recorded
+          AI video · Recorded
         </span>
       )}
       {video.captions && state !== "idle" && (

@@ -210,7 +210,7 @@ export async function draftNarration(
   // Generate redoes only what's missing or out of date: the rest of the course is still read, for continuity.
   const only = Array.isArray(input.only) ? input.only.map(String) : null;
   const targets = targetsFor(doc, scope).filter((t) => !only || only.includes(t));
-  if (!targets.length) throw new HttpError(400, "Turn on course or page introductions in the Audio guide settings first.");
+  if (!targets.length) throw new HttpError(400, "Turn on course or page introductions in the Voiced introductions settings first.");
   const note = text(input.note).slice(0, MAX_NOTE);
   // Claude reads the course's documents too; OpenAI, when Claude isn't connected, works from the course itself.
   const claude = claudeConfigured();
@@ -329,7 +329,7 @@ export async function makeRecording(
   const saved = await saveUpload(
     db,
     actor,
-    new File([new Uint8Array(out.audio)], `Audio introduction – ${label}.mp3`, { type: "audio/mpeg" }),
+    new File([new Uint8Array(out.audio)], `Voiced introduction – ${label}.mp3`, { type: "audio/mpeg" }),
     { width: 0, height: 0 },
     now,
   );

@@ -155,7 +155,7 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
   guide: {
     kind: "learning_block",
     ai: "human",
-    reason: "Retired from the palette (Nov 2026): Ava's videos go in with the Ava video block. Any existing AI Learning Guide block still shows and edits.",
+    reason: "Retired from the palette (Nov 2026): Ava's videos go in with the Ava video block. Any existing recorded guide block still shows and edits.",
     renderer: "components/magazine/LearningGuide.tsx",
     admin: "/admin/learning-guide",
   },

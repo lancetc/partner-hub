@@ -400,7 +400,9 @@ function Presenters({ presenters, onSaved }: { presenters: PresenterProfile[]; o
           <Icon name="plus" className="size-4" /> Add a presenter
         </button>
       </div>
-      <p className="mt-1 text-sm text-ink-muted">Reusable across topics. Ava, the AI Learning Guide, is a separate character and isn’t a Topic presenter.</p>
+      <p className="mt-1 text-sm text-ink-muted">
+        Reusable across topics. Ava, the care coordinator on the road, is a separate character and isn’t a Topic presenter.
+      </p>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {presenters.map((p) => (
           <li key={p.id} className="flex gap-3 rounded-2xl bg-surface p-3 shadow-sm ring-1 ring-line">

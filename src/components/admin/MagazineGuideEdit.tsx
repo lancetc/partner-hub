@@ -152,7 +152,7 @@ export function GuideEdit({ block: b, update }: { block: GuideBlock; update: Upd
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 rounded-3xl border border-line-strong bg-surface p-5 shadow-sm sm:p-7">
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex items-center gap-2 font-mulish text-sm font-extrabold uppercase tracking-[0.12em] text-accent">
-          <Icon name="play" className="size-5" /> AI Learning Guide · Recorded
+          <Icon name="play" className="size-5" /> Recorded guide
         </p>
         <Badge tone={GUIDE_STATES[state].tone}>{GUIDE_STATES[state].label}</Badge>
       </div>

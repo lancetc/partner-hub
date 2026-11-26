@@ -74,7 +74,7 @@ function Identity({ name, voice, dark = true }: { name: string; voice?: boolean;
       )}
     >
       <span aria-hidden className="size-1.5 rounded-full bg-[#3fc5c0]" />
-      {voice ? "AI narration" : "AI Learning Guide"} · Recorded
+      {voice ? "AI narration" : "AI video"} · Recorded
       {name && <span className={cx("font-sans text-xs font-semibold normal-case tracking-normal", dark ? "text-white/80" : "text-ink-muted")}>{name}</span>}
     </p>
   );
@@ -106,7 +106,7 @@ export function GuidePlayer({ block: b, ctx }: { block: GuideBlock; ctx: Interac
   if (waiting)
     return (
       <p className="mx-auto w-full max-w-[42rem] rounded-2xl border border-dashed border-line-strong px-4 py-3 text-sm text-ink-muted">
-        The AI Learning Guide’s feedback appears here once you’ve answered the question above.
+        The guide’s feedback appears here once you’ve answered the question above.
       </p>
     );
 
@@ -149,7 +149,7 @@ export function GuidePlayer({ block: b, ctx }: { block: GuideBlock; ctx: Interac
     return (
       <div className="mx-auto w-full max-w-[42rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-6">
         <p className="flex items-center gap-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-          <span aria-hidden className="size-1.5 rounded-full bg-action" /> AI Learning Guide · Script
+          <span aria-hidden className="size-1.5 rounded-full bg-action" /> AI guide · Script
           {who.name ? <span className="font-sans font-semibold normal-case tracking-normal text-ink-muted">{who.name}</span> : null}
         </p>
         {b.screenText && <p className="mt-2 font-serif text-xl font-semibold leading-snug">{b.screenText}</p>}
@@ -204,7 +204,7 @@ export function GuidePlayer({ block: b, ctx }: { block: GuideBlock; ctx: Interac
     void el.play().catch(() => setState("broken"));
   };
   const seconds = m.seconds ?? guideSeconds(b.script);
-  const label = `${voice ? "AI narration" : "AI Learning Guide"}${who.name ? `, ${who.name}` : ""}: recorded, ${clock(seconds)}`;
+  const label = `${voice ? "AI narration" : "AI video"}${who.name ? `, ${who.name}` : ""}: recorded, ${clock(seconds)}`;
 
   const controls = (dark: boolean) => (
     <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2 text-sm", dark ? "text-white" : "text-ink")}>

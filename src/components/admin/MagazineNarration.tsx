@@ -57,7 +57,7 @@ type JobsData = { jobs: NarrationJob[]; speech: Speech; perHour: number };
 
 /** The PRD's notice, word for word, when a page has moved on since its introduction was made. */
 export const OUTDATED_NOTICE =
-  "This page has changed since its audio introduction was generated. Review the introduction to ensure it still reflects the learning experience.";
+  "This page has changed since its voiced introduction was generated. Review the introduction to ensure it still reflects the learning experience.";
 
 const getN = (doc: GuideDoc, t: Target) => (t === "intro" ? doc.audio?.intro : doc.pages.find((p) => p.id === t)?.narration);
 function setN(d: Draft, t: Target, n: Narration | undefined) {
@@ -317,7 +317,7 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
   return (
     <section aria-labelledby="audio-guide-h" className="flex flex-col gap-3 rounded-3xl bg-surface p-4 shadow-sm ring-1 ring-line">
       <h2 id="audio-guide-h" className="flex items-center gap-2 font-semibold">
-        <Icon name="volume" className="size-4 text-accent" /> Audio introductions
+        <Icon name="volume" className="size-4 text-accent" /> Voiced introductions
       </h2>
       {!audio ? (
         <>
@@ -326,7 +326,7 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
             drafts the scripts from your content; you approve them, and the audio, before learners hear anything.
           </p>
           <button type="button" className={btn.secondary} onClick={() => set(() => {})}>
-            <Icon name="volume" className="size-4" /> Set up audio introductions
+            <Icon name="volume" className="size-4" /> Set up voiced introductions
           </button>
         </>
       ) : (
@@ -341,7 +341,7 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
                 }`}
           </p>
           <button type="button" className={btn.primary} onClick={onOpenReview} disabled={total === 0}>
-            <Icon name="list" className="size-4" /> Audio Introduction Manager
+            <Icon name="list" className="size-4" /> Voiced Introduction Manager
           </button>
           <fieldset className="flex flex-col gap-1.5 text-sm">
             <legend className="mb-1 font-semibold">Introductions</legend>
@@ -442,7 +442,7 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
             onClick={async () => {
               if (
                 !(await confirmAction("Learners won’t hear any introductions. The scripts and recordings are removed from this draft; Undo brings them back.", {
-                  title: "Turn off audio introductions?",
+                  title: "Turn off voiced introductions?",
                   confirmLabel: "Turn them off",
                 }))
               )
@@ -453,7 +453,7 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
               });
             }}
           >
-            Turn off audio introductions
+            Turn off voiced introductions
           </button>
         </>
       )}
@@ -947,7 +947,7 @@ export function NarrationReview({ guideId, draft, change, onClose }: { guideId: 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="narration-review-h" className="flex items-center gap-2 font-serif text-2xl font-semibold">
-              <Icon name="volume" className="size-6 text-accent" /> Audio Introduction Manager
+              <Icon name="volume" className="size-6 text-accent" /> Voiced Introduction Manager
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-ink-muted">
               Every page’s spoken introduction. AI drafts each script from the page; you edit and approve it; audio is made only when you ask, and waits for
@@ -1308,7 +1308,7 @@ export function CourseIntroStrip({ guideId, draft, change }: { guideId: string; 
           <NarrationRow draft={draft} change={change} target="intro" actions={actions} busy={busy} label="Course introduction" />
         ) : (
           <p className="rounded-2xl bg-surface p-4 text-sm text-ink-muted">
-            The course introduction is off (Audio introductions, in the sidebar). Ava’s video can still go on the cover.
+            The course introduction is off (Voiced introductions, in the sidebar). Ava’s video can still go on the cover.
           </p>
         )}
       </div>
@@ -1334,7 +1334,7 @@ export function PageNarrationStrip({ guideId, draft, change, page }: { guideId: 
     >
       <summary className={cx("flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm", ava && "text-ink-muted")}>
         <Icon name="volume" className={cx("size-4", ava ? "text-ink-muted" : "text-accent")} />
-        <span className="font-semibold">Audio introduction</span>
+        <span className="font-semibold">Voiced introduction</span>
         {ava ? (
           <Badge tone="neutral">Not used: Ava’s video plays instead</Badge>
         ) : (

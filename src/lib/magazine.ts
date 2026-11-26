@@ -1014,7 +1014,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   perspectives: "Compare perspectives",
   pulse: "Pulse check",
   action: "Action note",
-  guide: "AI Learning Guide",
+  guide: "Recorded guide (retired)",
   ava: "Ava video",
   signal: "Spot the Signal",
   mission: "First 30 Days Mission Board",

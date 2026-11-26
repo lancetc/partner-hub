@@ -36,7 +36,7 @@ export const CONTENT_LINKS: AdminLink[] = [
     href: "/admin/learning-paths/introductions",
     label: "Path introductions",
     icon: "volume",
-    description: "Every Discovery Path’s spoken introduction (the Discovery Exciter): scripts, audio, approval and listening, with bulk actions.",
+    description: "Every Discovery Path’s voiced introduction (the Discovery Exciter): scripts, audio, approval and listening, with bulk actions.",
     authorOnly: true,
   },
   {
@@ -122,9 +122,9 @@ export const CONTENT_LINKS: AdminLink[] = [
   },
   {
     href: "/admin/learning-guide",
-    label: "AI Learning Guide",
+    label: "Ava’s videos",
     icon: "play",
-    description: "Ava, the Hub’s one AI guide: who she is, all her videos and where each plays, and withdrawing a recording when guidance changes.",
+    description: "Ava, the care coordinator on the road: who she is, her ElevenLabs videos and where each plays, and withdrawing one when guidance changes.",
     authorOnly: true,
   },
   {
@@ -229,7 +229,7 @@ export const CONTENT_SECTIONS: { title: string; hrefs: string[] }[] = [
     title: "Learning content",
     hrefs: ["/admin/lessons", "/admin/magazine", "/admin/learning-paths", "/admin/challenges", "/admin/webinars", "/admin/elearning", "/admin/news"],
   },
-  { title: "Introductions and Ava", hrefs: ["/admin/topic-intros", "/admin/learning-paths/introductions", "/admin/learning-guide", "/admin/relay"] },
+  { title: "Voiced introductions and Ava", hrefs: ["/admin/topic-intros", "/admin/learning-paths/introductions", "/admin/learning-guide", "/admin/relay"] },
   {
     title: "Practice and tools",
     hrefs: [

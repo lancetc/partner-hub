@@ -25,13 +25,13 @@ export function LearningGuideAdmin() {
   const [filter, setFilter] = useState("");
   if (error)
     return (
-      <AdminShell title="AI Learning Guide">
+      <AdminShell title="Ava’s videos">
         <ErrorNote text={error} />
       </AdminShell>
     );
   if (!data)
     return (
-      <AdminShell title="AI Learning Guide">
+      <AdminShell title="Ava’s videos">
         <p className="text-ink-muted">Loading…</p>
       </AdminShell>
     );
@@ -50,10 +50,11 @@ export function LearningGuideAdmin() {
   const q = filter.trim().toLowerCase();
   const uses = data.uses.filter((u) => !q || [u.course, u.pageTitle, u.script, u.source, u.owner].join(" ").toLowerCase().includes(q));
   return (
-    <AdminShell title="AI Learning Guide">
+    <AdminShell title="Ava’s videos">
       <p className="max-w-3xl text-ink-muted">
-        One recognisable guide across the Hub, always labelled <strong>AI Learning Guide · Recorded</strong>. Every appearance is a recorded, scripted lesson
-        with an accountable owner: the guide presents approved learning, and never speaks for itself.
+        Ava is a care coordinator on the road, checking in on how learners are going and keeping them motivated. Her videos are made in ElevenLabs and uploaded
+        here, always labelled <strong>AI video · Recorded</strong>. Each is a recorded, scripted line with an accountable owner: she presents approved learning
+        and never improvises.
       </p>
       {problem && (
         <div className="mt-3">
@@ -78,7 +79,7 @@ export function LearningGuideAdmin() {
           }}
         >
           <fieldset disabled={!data.canEdit} className="contents">
-            <Field label="Approved name" hint="Shown beside “AI Learning Guide”, never on its own as if a person. Leave empty for no name.">
+            <Field label="Approved name" hint="Shown beside “AI video”, never on its own as if a real person. Leave empty for no name.">
               <input name="name" defaultValue={id.name} className={input} placeholder="Ava" />
             </Field>
             <Field
@@ -95,7 +96,7 @@ export function LearningGuideAdmin() {
             </Field>
             <Field
               label="Voice"
-              hint="The voice Ava reads Topic and Discovery Path introductions in: its name as it appears in ElevenLabs (Addison 2.0), its voice id, or openai:<voice>. A voice has to be added to the ElevenLabs account first; until then the Hub narrator speaks."
+              hint="The voice Topic and Discovery Path voiced introductions are read in (not Ava's: her words come from her videos): its name as it appears in ElevenLabs (Addison 2.0), its voice id, or openai:<voice>. A voice has to be added to the ElevenLabs account first; until then the Hub narrator speaks."
             >
               <input name="voiceRef" defaultValue={id.voiceRef} className={input} />
             </Field>
@@ -150,7 +151,7 @@ export function LearningGuideAdmin() {
         </div>
         {data.uses.length === 0 ? (
           <p className="mt-3 rounded-2xl bg-muted px-4 py-3 text-sm">
-            The guide isn’t in any course yet. Add an AI Learning Guide block to a Magazine page (Add block, Content).
+            No recorded guide segments in any course. That block is retired: Ava’s videos go in with the Ava video block (Add block, Content).
           </p>
         ) : uses.length === 0 ? (
           <p className="mt-3 text-sm">Nothing matches “{filter}”.</p>

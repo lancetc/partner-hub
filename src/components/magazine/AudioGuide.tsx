@@ -53,7 +53,7 @@ export function AudioGuideSwitch({ on, onChange }: { on: boolean; onChange: (on:
         on ? "border-action bg-action text-on-action" : "border-line-strong bg-surface hover:bg-muted",
       )}
     >
-      <Icon name="volume" className="size-4" /> Audio guide: {on ? "On" : "Off"}
+      <Icon name="volume" className="size-4" /> Voiced introductions: {on ? "On" : "Off"}
     </button>
   );
 }
@@ -214,12 +214,12 @@ export function AudioGuideCard({
 
   return (
     <aside
-      aria-label={`Your audio guide: ${what}`}
+      aria-label={`Your voiced introduction: ${what}`}
       className={cx("mx-auto w-full max-w-[42rem] rounded-3xl border border-[#b7dede] bg-tealtint p-5 sm:p-6", "mag-reveal")}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
-          <Icon name="volume" className="size-4" /> Your audio guide
+          <Icon name="volume" className="size-4" /> Your voiced introduction
         </p>
         <p className="text-xs text-ink-muted">
           {level === "course" ? "Course introduction" : "Page introduction"} · {formatSeconds(n.seconds)}
