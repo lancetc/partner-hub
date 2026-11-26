@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { getDb } from "@/server/db";
+import { currentUser, meantFor } from "@/server/auth";
 import Link from "next/link";
 import { glossary } from "@/content/glossary";
 import { resources } from "@/content/resources";
@@ -185,52 +189,68 @@ export default function ResourcesPage() {
       </div>
       {/* Each entry is a place a passage can be highlighted (docs/job-aids.md), anchored to the entry and its date. */}
       <HighlightArea source="resource" id="library" className="mt-4">
-        <ul className="grid gap-4 md:grid-cols-2">
-          {resources.map((r) => (
-            <li
-              key={r.id}
-              id={r.id}
-              data-hl={r.id}
-              className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 target:border-action target:ring-2 target:ring-action/30"
-            >
-              <div className="flex items-start gap-4">
-                <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-tealtint text-accent">
-                  <Icon name={kindIcon[r.kind]} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{r.kind}</p>
-                  <h2 className="mt-1 font-serif text-xl font-semibold leading-snug">{r.title}</h2>
-                  <p className="mt-1 text-ink-muted">{r.description}</p>
-                </div>
-                <SaveButton id={`resource:${r.id}`} title={r.title} className="-mr-2 -mt-2" />
-              </div>
-              <ul className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
-                {r.points.map((p) => (
-                  <li key={p} className="flex gap-2">
-                    <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                <p className="font-mulish text-sm text-ink-muted">
-                  {r.audience.includes("partner") && r.audience.includes("coordinator")
-                    ? "Partners and coordinators"
-                    : r.audience.includes("partner")
-                      ? "Care Partners"
-                      : "Coordinators"}{" "}
-                  · Updated {formatDate(r.updated)}
-                </p>
-                {/* The entry's description and points, saved without selecting anything. */}
-                <span className="print:hidden">
-                  <SaveSection source="resource" id={r.id} sectionId={r.id} label="Save this entry" />
-                </span>
-              </div>
-              <SavedMarkChips blockId={r.id} className="mt-3" />
-            </li>
-          ))}
-        </ul>
+        <Suspense>
+          <Library />
+        </Suspense>
       </HighlightArea>
     </div>
+  );
+}
+
+/**
+  The library, read per request: only the entries meant for this person (auth.meantFor), so a coordinator isn't shown
+  the Care Partners' visit note template and partners aren't shown the coordinators' escalation guide.
+*/
+async function Library() {
+  await connection();
+  const user = await currentUser(getDb());
+  return (
+    <ul className="grid gap-4 md:grid-cols-2">
+      {resources
+        .filter((r) => meantFor(user, r.audience))
+        .map((r) => (
+          <li
+            key={r.id}
+            id={r.id}
+            data-hl={r.id}
+            className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 target:border-action target:ring-2 target:ring-action/30"
+          >
+            <div className="flex items-start gap-4">
+              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-tealtint text-accent">
+                <Icon name={kindIcon[r.kind]} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{r.kind}</p>
+                <h2 className="mt-1 font-serif text-xl font-semibold leading-snug">{r.title}</h2>
+                <p className="mt-1 text-ink-muted">{r.description}</p>
+              </div>
+              <SaveButton id={`resource:${r.id}`} title={r.title} className="-mr-2 -mt-2" />
+            </div>
+            <ul className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+              {r.points.map((p) => (
+                <li key={p} className="flex gap-2">
+                  <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="font-mulish text-sm text-ink-muted">
+                {r.audience.includes("partner") && r.audience.includes("coordinator")
+                  ? "Partners and coordinators"
+                  : r.audience.includes("partner")
+                    ? "Care Partners"
+                    : "Coordinators"}{" "}
+                · Updated {formatDate(r.updated)}
+              </p>
+              {/* The entry's description and points, saved without selecting anything. */}
+              <span className="print:hidden">
+                <SaveSection source="resource" id={r.id} sectionId={r.id} label="Save this entry" />
+              </span>
+            </div>
+            <SavedMarkChips blockId={r.id} className="mt-3" />
+          </li>
+        ))}
+    </ul>
   );
 }

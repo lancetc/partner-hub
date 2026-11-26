@@ -100,7 +100,7 @@ describe("a page with Ava and an introduction", () => {
     return readGuide(db, learner, g.slug);
   }
 
-  it("shows Ava's transmission in the picture's place and the introduction player beneath the heading, neither playing by itself over the other", () => {
+  it("shows Ava's transmission in the picture's place, without the introduction player beneath the heading (she introduces the page)", () => {
     const guide = published((p) => ({ script: SCRIPT, status: "approved", basis: pageSnapshot(p as never), audio }));
     guide.ava = {
       name: "Ava",
@@ -115,16 +115,14 @@ describe("a page with Ava and an introduction", () => {
       },
     };
     const out = inApp(createElement(GuideReader, { guide, pageId: "p1", base: `/magazine/${guide.slug}` }));
-    expect(out).toContain('aria-label="Listen to the introduction"');
     expect(out).toContain("Introduction to Before your visit");
-    // The player comes after the heading and description, before the page's content.
-    const at = (s: string) => out.indexOf(s);
+    expect(out).not.toContain('aria-label="Listen to the introduction"');
+    // A page without her video keeps the introduction player, after the heading and description and before the content.
+    const other = inApp(createElement(GuideReader, { guide, pageId: "p2", base: `/magazine/${guide.slug}` }));
+    const at = (s: string) => other.indexOf(s);
     expect(at("<h1")).toBeLessThan(at("Listen to the introduction"));
-    expect(at("About Before your visit")).toBeLessThan(at("Listen to the introduction"));
-    expect(at("Listen to the introduction")).toBeLessThan(at("The page on Before your visit."));
-    // The introduction itself never starts by itself.
-    const player = out.slice(at('data-player=""'), out.indexOf("</section>", at('data-player=""')));
-    expect(player).not.toMatch(/autoplay/i);
+    expect(at("About When someone says no")).toBeLessThan(at("Listen to the introduction"));
+    expect(at("Listen to the introduction")).toBeLessThan(at("The page on When someone says no."));
   });
 
   it("leaves the player off a page without an approved, recorded introduction, one awaiting approval, or one turned off", () => {

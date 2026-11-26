@@ -249,6 +249,7 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             audio={coverIntro.audio}
             poster={{ src: guide.cover }}
             label="Listen to the introduction"
+            posterTall
             autoPlay={!audioGuide.offered || audioGuide.on}
             className="mt-0 rounded-3xl"
             onEvent={(action) =>
@@ -481,6 +482,8 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
       return saved;
     },
     guide: guide.guide,
+    // Her videos too, for the Ava video blocks in the content.
+    ava: guide.ava,
     // What they did with a guide recording: for the course's analytics only. Nothing waits on it.
     guideEvent: (blockId, outcome) => void send("events", { event: "guide", blockId, detail: { outcome } }).catch(() => {}),
     notes,
@@ -638,16 +641,16 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
           {/*
             Listen to the introduction (docs/magazine-audio-guide.md): beneath the heading and description, before the content,
             whenever the page has an approved, recorded introduction the author hasn't turned off. It plays by itself when the
-            page opens; with Ava's transmission in the picture's place, both are here and only she starts (lib/onePlayer).
-            Never needed to finish the page.
+            page opens. Not when Ava's video is in the picture's place: she introduces the page, with her own words on screen
+            (the owner, Nov 2026). Never needed to finish the page.
           */}
-          {page.kind === "content" && listenable(page.narration, audioGuide.audio) && !posterIntro && (
+          {page.kind === "content" && listenable(page.narration, audioGuide.audio) && !posterIntro && !pageVideo && (
             <IntroPlayer
               key={page.id}
               script={page.narration.script}
               audio={page.narration.audio}
-              // Plays by itself when the page opens (the owner, Nov 2026), unless Ava's video is in the picture's place.
-              autoPlay={pageIntro === null}
+              // Plays by itself when the page opens (the owner, Nov 2026).
+              autoPlay
               onEvent={(action, detail) => void send("events", { event: "introAudio", pageId: page.id, detail: { action, ...detail } }).catch(() => {})}
             />
           )}
@@ -679,6 +682,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             audio={posterIntro.n.audio}
             poster={{ src: hero.src }}
             label="Listen to the introduction"
+            posterTall
             autoPlay={!audioGuide.offered || audioGuide.on}
             className="mt-0 rounded-3xl"
             onEvent={(action, detail) =>

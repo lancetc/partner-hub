@@ -4,10 +4,34 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { readSource, unzipEntry, MAX_FILE_BYTES } from "./lessonDraft";
+import { MAX_SCORM_BYTES } from "@/lib/sourceFiles";
 import { askForJson, keyCounts } from "./claudeJson";
 import { GENERATION_MODEL } from "./generate";
-import { GuideDocError, PAGE_TEMPLATES, blanksOf, isSiteMedia, readGuideDoc, type Page, type PageTemplate } from "@/lib/magazine";
+import {
+  BLOCK_LABELS,
+  GuideDocError,
+  PAGE_TEMPLATES,
+  REFLECT_TYPES,
+  blanksOf,
+  isSiteMedia,
+  readGuideDoc,
+  type BlockType,
+  type BlockWhy,
+  type Page,
+  type PageTemplate,
+} from "@/lib/magazine";
 import { safeHref } from "@/lib/richText";
+import { BLOCK_REGISTRY } from "@/lib/blockRegistry";
+import {
+  AI_CONFIGURABLE_BLOCKS,
+  CATALOGUE_VERSION,
+  candidateLine,
+  catalogueEntry,
+  isTestSlug,
+  magazineAiMode,
+  magazineCandidates,
+  type CatalogueEntry,
+} from "@/lib/activityCatalogue";
 
 /*
   Drafting a Magazine with Claude, as the PRD sets out: the author uploads source documents (PDF, Word,
@@ -57,7 +81,22 @@ export type OutlinePage = {
   sources: string[];
   /** What the sources don't give and the author should supply (an effective date, a real example...). */
   missing: string[];
+  /**
+    The activities Claude recommends for the page, from the Activity Catalogue's candidates, each with its reasons
+    (“Why this block?”). The author accepts, edits, swaps, removes or reorders them; a rejected one is never written.
+  */
+  activities?: PlannedActivity[];
 };
+
+/** One recommended activity in the outline: a catalogue id the builder may use, how, the author's decision, and why. */
+export type PlannedActivity = {
+  type: BlockType;
+  /** From the catalogue, never from the model: "configurable" is written into the page; "recommend" needs specialist setup. */
+  mode: "configurable" | "recommend";
+  decision: "suggested" | "accepted" | "rejected";
+  why: BlockWhy;
+};
+const MAX_ACTIVITIES = 4;
 
 export type DraftProgress =
   | { type: "phase"; phase: "reading" | "writing" | "checking" | "fixing"; issues?: number }
@@ -138,7 +177,14 @@ export async function addSource(db: Db, actor: User, guideId: string, file: File
   };
   let error: string | null = null;
   try {
-    if (file.size > MAX_FILE_BYTES) throw new HttpError(413, "It’s over 15 MB. Try a shorter document, or the part you need.");
+    const zipName = /\.zip$/i.test(name);
+    if (zipName ? file.size > MAX_SCORM_BYTES : file.size > MAX_FILE_BYTES)
+      throw new HttpError(
+        413,
+        zipName
+          ? "It’s over 200 MB. Export the SCORM package without its video, or upload the script instead."
+          : "It’s over 15 MB. Try a shorter document, or the part you need.",
+      );
     const buf = Buffer.from(await file.arrayBuffer());
     if (/\.pptx$/i.test(name) || (buf[0] === 0x50 && buf[1] === 0x4b && unzipEntry(buf, "ppt/presentation.xml") !== null)) {
       const slides = pptxText(buf);
@@ -230,9 +276,18 @@ const cleanBrief = (v: unknown) => {
   return b;
 };
 
-/** Problems with an outline (Claude's or the author's edit), or none. Its times should add up to about the target. */
-export function outlineIssues(value: unknown, target: number | null, sourceNames: string[]): string[] {
-  const o = value as { pages?: unknown };
+/**
+  Problems with an outline (Claude's or the author's edit), or none. Its times should add up to about the target. When
+  the candidates are given, each page's activities must be among them, each with its reasons, and any course offered
+  for reuse must be one that was offered: a made-up id or slug goes back to Claude, and cleanOutline drops it anyway.
+*/
+export function outlineIssues(
+  value: unknown,
+  target: number | null,
+  sourceNames: string[],
+  check: { candidates?: Set<string>; reuse?: Set<string> } = {},
+): string[] {
+  const o = value as { pages?: unknown; reuse?: unknown };
   const pages = Array.isArray(o?.pages) ? (o.pages as Record<string, unknown>[]) : null;
   if (!pages) return ['The reply needs a "pages" list.'];
   const issues: string[] = [];
@@ -247,7 +302,21 @@ export function outlineIssues(value: unknown, target: number | null, sourceNames
     if (typeof p.minutes !== "number" || p.minutes < 1 || p.minutes > 60) issues.push(`${at}: minutes must be a number from 1 to 60.`);
     for (const s of Array.isArray(p.sources) ? p.sources : [])
       if (!sourceNames.includes(String(s))) issues.push(`${at}: “${String(s)}” isn’t one of the documents.`);
+    if (check.candidates) {
+      const acts = Array.isArray(p.activities) ? (p.activities as Record<string, unknown>[]) : [];
+      if (acts.length > MAX_ACTIVITIES) issues.push(`${at}: choose at most ${MAX_ACTIVITIES} activities, the smallest set that does the job.`);
+      acts.forEach((a, j) => {
+        const type = String(a?.type ?? "");
+        if (!check.candidates!.has(type)) issues.push(`${at}, activity ${j + 1}: “${type}” isn’t one of the activities offered. Use only the ids listed.`);
+        const why = (a?.why ?? {}) as Record<string, unknown>;
+        for (const k of ["behaviour", "rationale", "learnerAction", "signal"])
+          if (typeof why[k] !== "string" || !String(why[k]).trim()) issues.push(`${at}, activity ${j + 1} (${type}): its "why" needs "${k}".`);
+      });
+    }
   });
+  if (check.reuse)
+    for (const r of Array.isArray(o.reuse) ? (o.reuse as Record<string, unknown>[]) : [])
+      if (!check.reuse.has(String(r?.slug ?? ""))) issues.push(`Reuse: “${String(r?.slug ?? "")}” isn’t one of the published courses offered.`);
   if (target && pages.length) {
     const total = pages.reduce((n, p) => n + (typeof p.minutes === "number" ? p.minutes : 0), 0);
     if (total < target * 0.75 || total > target * 1.25)
@@ -273,7 +342,47 @@ function cleanOutline(value: unknown): OutlinePage[] {
       .slice(0, 300),
     sources: (Array.isArray(p.sources) ? p.sources : []).map(String).slice(0, MAX_SOURCES),
     missing: (Array.isArray(p.missing) ? p.missing : []).map(String).filter(Boolean).slice(0, 8),
+    activities: cleanActivities(p.activities, (Array.isArray(p.sources) ? p.sources : []).map(String)),
   }));
+}
+
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/**
+  A page's planned activities, kept only when the catalogue says the Magazine builder may use them. The mode always
+  comes from the catalogue, never the model, so a specialist simulator can't be passed off as something Claude may
+  configure; the review owner is the block's own sign-off, and the source is the page's documents.
+*/
+export function cleanActivities(v: unknown, sources: string[] = []): PlannedActivity[] {
+  const seen = new Set<string>();
+  return (Array.isArray(v) ? (v as Record<string, unknown>[]) : [])
+    .flatMap((a) => {
+      const type = text(a?.type, 40);
+      const mode = magazineAiMode(type);
+      if ((mode !== "configurable" && mode !== "recommend") || seen.has(type)) return [];
+      seen.add(type);
+      const w = (a?.why ?? {}) as Record<string, unknown>;
+      const entry = catalogueEntry(type)!;
+      const decision: PlannedActivity["decision"] = a?.decision === "accepted" || a?.decision === "rejected" ? a.decision : "suggested";
+      return [
+        {
+          type: type as BlockType,
+          mode,
+          decision,
+          why: {
+            behaviour: text(w.behaviour, 400),
+            evidence: text(w.evidence, 400),
+            alternative: text(w.alternative, 400),
+            rationale: text(w.rationale, 600),
+            learnerAction: text(w.learnerAction, 400),
+            signal: text(w.signal, 400),
+            owner: text(w.owner, 300) || entry.signoff || "The course's author and reviewer",
+            source: text(w.source, 300) || sources.join(", "),
+          },
+        },
+      ];
+    })
+    .slice(0, MAX_ACTIVITIES);
 }
 
 function savePlan(
@@ -301,7 +410,31 @@ export function updatePlan(db: Db, actor: User, guideId: string, input: { brief?
     questions: current.questions,
   };
   savePlan(db, actor, guideId, plan, now);
+  auditDecisions(db, actor, guideId, current.outline, outline, now);
   return draftPlan(db, actor, guideId);
+}
+
+/**
+  The author's decisions on the recommendations, for the content's audit trail: which were accepted, rejected, or
+  swapped for another activity, page by page. Edits to the reasons themselves are kept in the plan, not logged each time.
+*/
+function auditDecisions(db: Db, actor: User, guideId: string, before: OutlinePage[] | null, after: OutlinePage[] | null, now: Date) {
+  if (!before || !after) return;
+  const key = (p: OutlinePage) => p.title;
+  const was = new Map(before.map((p) => [key(p), new Map((p.activities ?? []).map((a) => [a.type, a.decision]))]));
+  const out: Record<"accepted" | "rejected" | "edited", string[]> = { accepted: [], rejected: [], edited: [] };
+  for (const p of after) {
+    const prev = was.get(key(p));
+    if (!prev) continue;
+    for (const a of p.activities ?? []) {
+      const d = prev.get(a.type);
+      if (d === undefined && prev.size) out.edited.push(a.type);
+      else if (d !== a.decision && (a.decision === "accepted" || a.decision === "rejected")) out[a.decision].push(a.type);
+    }
+  }
+  for (const k of ["accepted", "rejected", "edited"] as const)
+    if (out[k].length)
+      audit(db, { actor: actor.id, event: `activity.recommendation_${k}`, entity: guideId, next: { types: out[k], catalogue: CATALOGUE_VERSION }, at: now });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -347,7 +480,19 @@ const TEMPLATE_GUIDE = Object.entries(PAGE_TEMPLATES)
   .join("\n");
 
 /** The prompt for the course outline. */
-export function outlinePrompt(input: { title: string; standfirst: string; audience: string; brief: string; minutes: number | null; sourceNames: string[] }) {
+export function outlinePrompt(input: {
+  title: string;
+  standfirst: string;
+  audience: string;
+  brief: string;
+  minutes: number | null;
+  sourceNames: string[];
+  /** The Activity Catalogue's shortlist for this course (lib/activityCatalogue magazineCandidates). */
+  candidates?: CatalogueEntry[];
+  /** Published courses that may already cover the same decision. */
+  reuse?: { slug: string; title: string; standfirst: string }[];
+}) {
+  const candidates = input.candidates ?? [];
   return `You are planning a Magazine course for Trilogy Care's Partner Hub, a training site for Australian aged care. A Magazine course is a short series of pages read at a desk. Each page is a substantial article with one clear purpose and its own teaching pattern; it is not a slide.
 
 Working title: ${input.title || "(none yet)"}
@@ -366,7 +511,23 @@ Teaching patterns (choose one per page, for what the learner should be able to d
 ${TEMPLATE_GUIDE}
 
 Move from context to application. Don't repeat the same hook, case or question on every page. Don't invent a page just to fill time: if the material isn't there, say what's missing.
+${
+  candidates.length
+    ? `
+Choosing activities. First understand the problem: who it's for, what they should do differently at work, and what evidence points to it. A complaint or error pattern can be a process or product problem rather than a training gap: if so, say so in "questions" instead of adding practice. Then choose, for each page, the smallest set of activities (at most ${MAX_ACTIVITIES}) that each serve a distinct purpose, moving the learner from recognising the problem, to practising the decision, to applying it at work. A simple knowledge need can use a simple block. Recommend a specialist simulator only when the page's decision is what it was built for; it needs specialist setup from a reviewed case, so never describe its rules, figures, thresholds, approvals or answers. Don't fill a page with impressive blocks.
 
+These are the only activities you may use, from the Hub's Activity Catalogue (id, name, whether you write it, time, what the learner does):
+${candidates.map(candidateLine).join("\n")}
+`
+    : ""
+}${
+    input.reuse?.length
+      ? `
+Published courses that may already cover this. If one addresses the same decision, recommend linking or adapting it rather than writing a duplicate, in "reuse":
+${input.reuse.map((r) => `- ${r.slug}: "${r.title}"${r.standfirst ? `: ${r.standfirst}` : ""}`).join("\n")}
+`
+      : ""
+  }
 ${RULES}
 
 Reply with only a JSON object, no other text:
@@ -380,52 +541,120 @@ Reply with only a JSON object, no other text:
       "required": true,
       "interaction": "The practice on the page (e.g. a decision about a mismatched invoice), or an empty string",
       "sources": ["exact document name"],
-      "missing": ["what the documents don't give that this page needs"]
+      "missing": ["what the documents don't give that this page needs"]${
+        candidates.length
+          ? `,
+      "activities": [
+        {
+          "type": "an id from the list",
+          "why": {
+            "behaviour": "the observable behaviour it practises",
+            "evidence": "what in the brief or documents points to this need",
+            "alternative": "the other activity you considered, and why not",
+            "rationale": "why this activity fits this page",
+            "learnerAction": "what the learner does in it",
+            "signal": "what will be measured or observed"
+          }
+        }
+      ]`
+          : ""
+      }
     }
-  ],
+  ],${
+    input.reuse?.length
+      ? `
+  "reuse": [{"slug": "a slug from the list", "why": "what it already covers"}],`
+      : ""
+  }
   "questions": ["anything you need the author to answer"]
 }`;
 }
 
-export const BLOCK_SHAPES = `Blocks you may use (JSON shapes):
-- {"type":"text","heading":"optional","body":"Rich text: **bold**, *italic*, [words](/resources), lines starting '- ' or '1. ' for lists, blank line between paragraphs"}
-- {"type":"accordion","heading":"optional","items":[{"title":"What the reader opens","body":"Rich text"}]}  (for detail some readers need and others can skip, like definitions or edge cases)
-- {"type":"callout","style":"important"|"example"|"tip","label":"Short label","body":"Rich text"}
-- {"type":"decision","prompt":"What would you do?","context":"optional","choices":[{"text":"...","verdict":"best"|"acceptable"|"risky","feedback":"Why it works or doesn't"}],"source":{"label":"Where this comes from"}}  (2 to 4 choices, at least one best, specific feedback for each)
-- {"type":"checklist","title":"...","items":["plain-language step", "..."]}
-- {"type":"image","media":{"src":"","alt":"What the picture should show","caption":"Why it matters"},"width":"column"|"wide","enlarge":true}  (only when a picture or document excerpt is essential; leave src empty: the author adds the picture)
-- {"type":"textMedia","heading":"optional","body":"Rich text","media":{"src":"","alt":"What the picture should show"},"layout":"media-right"}  (the text flows around the picture)
-- {"type":"tabs","tabs":[{"label":"Short name","body":"Rich text"}]}  (2 to 6 tabs, to compare options side by side, like Self Managed and Fully Coordinated)
-- {"type":"timeline","events":[{"when":"Day 1","title":"What happens","body":"Rich text, optional"}]}  (3 to 10 events in order, like a client's path from referral to services)
-- {"type":"process","steps":[{"title":"The step","body":"Rich text: what to do and why"}]}  (3 to 10 steps of a workflow, like reporting an incident)
-- {"type":"flashcards","cards":[{"front":"Term, question or situation","back":"Rich text answer"}]}  (4 to 12 cards, to recognise categories or terms)
-- {"type":"branching","title":"optional","scenes":[{"id":"s1","text":"Rich text: what happens","choices":[{"text":"What you do","next":"s2"}]},{"id":"s2","text":"...","ending":{"outcome":"good"|"mixed"|"poor","summary":"Rich text: what this ending teaches"}}]}  (scene s1 is the start; 2 or 3 choices per scene; every choice's "next" names another scene's id; an ending has no choices; at least one good and one poor ending; 4 to 10 scenes)
-- {"type":"conversation","person":"Their first name","role":"Who they are","setting":"The situation","turns":[{"line":"What they say","responses":[{"text":"What the learner could say","verdict":"best"|"acceptable"|"risky","feedback":"Coaching: why it lands or doesn't","reply":"How they react"}]}]}  (2 to 5 turns; 2 or 3 responses a turn, one best)
-- {"type":"sorting","prompt":"What to sort","groups":[{"id":"g1","label":"Group name"}],"items":[{"text":"An item","group":"g1","feedback":"Why it belongs there"}]}  (2 to 4 groups, 4 to 12 items; each item's "group" names a group's id)
-- {"type":"sequencing","prompt":"What to put in order","steps":[{"text":"A step"}],"feedback":"Why this order matters"}  (3 to 8 steps, written in the right order; learners get them shuffled)
-- {"type":"matching","prompt":"What to match","pairs":[{"left":"Term","right":"What it means"}],"feedback":"What ties them together"}  (3 to 6 pairs)
-- {"type":"fillblank","prompt":"optional","text":"A sentence with [[the answer|another accepted answer]] in double brackets","feedback":"Why"}  (1 to 4 gaps; only for terms and figures in the documents)
-- {"type":"poll","question":"A quick question colleagues answer, like 'How often do you review a client's budget?'","options":[{"text":"Monthly"},{"text":"Quarterly"}]}  (2 to 5 options; for opinions and practice, never a test with a right answer)
-- {"type":"wall","prompt":"A question everyone answers and shares, like 'What's one thing that helps a worried family member feel heard?'"}  (colleagues' answers open once they post; use at most one per course, for shared practice wisdom, never for anything personal or about clients)
-- {"type":"reflection","prompt":"An open question","guidance":"What a good answer covers, for the AI feedback; learners don't see it","minWords":30}
-- {"type":"confidence","statement":"How confident are you…?","low":"Not confident","high":"Very confident"}  (one near the start and one at the end of a course; the later one may add "compareWith":"the earlier one's id" only if you gave it an "id")
-- {"type":"budget","title":"Whose budget","budget":6000,"weeks":13,"services":[{"name":"Personal care","unit":"hour","cost":75,"perWeek":3,"max":10}]}  (a made-up quarterly budget to plan services against; always flag it illustrative)
-Reflect and apply blocks (unscored and private to the learner; for courses about judgement, conversations or changing practice, not for a plain procedure). Use at most one or two of these on a page, only where they serve the page's purpose, and give each a "note" saying why it belongs here:
-- {"type":"journal","prompt":"A short, specific prompt about the case just read","scaffold":"optional: a way in, like 'What would you ask first?'"}  (a private note; never ask for a real client's name or details; a later page may add "revisits":"the earlier journal's id" to look back at it, only if you gave that journal an "id")
-- {"type":"perspectives","prompt":"What's being compared","views":[{"title":"A viewpoint in plain words","reasoning":"Why someone would see it this way","misses":"What it might miss"}],"guidance":{"body":"What the approved source says","source":{"label":"exact document name and section"}}}  (2 or 3 defensible viewpoints, none of them 'the answer'; include "guidance" only when the documents state a rule or safety step, and then flag the block "verify"; may add "after":"the id of the journal or decision just before it")
-- {"type":"pulse","kind":"confidence","question":"How confident are you that you could…?","options":[{"label":"Not confident"},{"label":"Unsure"},{"label":"Somewhat confident"},{"label":"Confident"}]}  (one tap, never a test; a matched pair uses the very same question and labels, the later one adding "compareWith":"the earlier one's id")
-- {"type":"action","prompt":"Choose one thing to try…","timing":"optional: when it's worth trying","suggestions":[{"text":"On my next…, I will…"}]}  (2 to 4 concrete actions drawn from the documents; near the end of a course)
-Never write a learner's private response, a made-up first-person client account presented as real, or a policy the documents don't state.
+/**
+  The JSON shape Claude writes for each block it may configure. Which of these it's offered comes from the Activity
+  Catalogue (lib/activityCatalogue): only blocks the catalogue marks "AI configurable", and the catalogue test holds this
+  map's keys to exactly that list, so a shape can't be offered for a block the catalogue hasn't cleared, nor a cleared
+  block go without one.
+*/
+export const AI_SHAPES: Partial<Record<BlockType, string>> = {
+  text: `{"type":"text","heading":"optional","body":"Rich text: **bold**, *italic*, [words](/resources), lines starting '- ' or '1. ' for lists, blank line between paragraphs"}`,
+  accordion: `{"type":"accordion","heading":"optional","items":[{"title":"What the reader opens","body":"Rich text"}]}  (for detail some readers need and others can skip, like definitions or edge cases)`,
+  callout: `{"type":"callout","style":"important"|"example"|"tip","label":"Short label","body":"Rich text"}`,
+  decision: `{"type":"decision","prompt":"What would you do?","context":"optional","choices":[{"text":"...","verdict":"best"|"acceptable"|"risky","feedback":"Why it works or doesn't"}],"source":{"label":"Where this comes from"}}  (2 to 4 choices, at least one best, specific feedback for each)`,
+  checklist: `{"type":"checklist","title":"...","items":["plain-language step", "..."]}`,
+  image: `{"type":"image","media":{"src":"","alt":"What the picture should show","caption":"Why it matters"},"width":"column"|"wide","enlarge":true}  (only when a picture or document excerpt is essential; leave src empty: the author adds the picture)`,
+  textMedia: `{"type":"textMedia","heading":"optional","body":"Rich text","media":{"src":"","alt":"What the picture should show"},"layout":"media-right"}  (the text flows around the picture)`,
+  tabs: `{"type":"tabs","tabs":[{"label":"Short name","body":"Rich text"}]}  (2 to 6 tabs, to compare options side by side, like Self Managed and Fully Coordinated)`,
+  timeline: `{"type":"timeline","events":[{"when":"Day 1","title":"What happens","body":"Rich text, optional"}]}  (3 to 10 events in order, like a client's path from referral to services)`,
+  process: `{"type":"process","steps":[{"title":"The step","body":"Rich text: what to do and why"}]}  (3 to 10 steps of a workflow, like reporting an incident)`,
+  flashcards: `{"type":"flashcards","cards":[{"front":"Term, question or situation","back":"Rich text answer"}]}  (4 to 12 cards, to recognise categories or terms)`,
+  branching: `{"type":"branching","title":"optional","scenes":[{"id":"s1","text":"Rich text: what happens","choices":[{"text":"What you do","next":"s2"}]},{"id":"s2","text":"...","ending":{"outcome":"good"|"mixed"|"poor","summary":"Rich text: what this ending teaches"}}]}  (scene s1 is the start; 2 or 3 choices per scene; every choice's "next" names another scene's id; an ending has no choices; at least one good and one poor ending; 4 to 10 scenes)`,
+  conversation: `{"type":"conversation","person":"Their first name","role":"Who they are","setting":"The situation","turns":[{"line":"What they say","responses":[{"text":"What the learner could say","verdict":"best"|"acceptable"|"risky","feedback":"Coaching: why it lands or doesn't","reply":"How they react"}]}]}  (2 to 5 turns; 2 or 3 responses a turn, one best)`,
+  sorting: `{"type":"sorting","prompt":"What to sort","groups":[{"id":"g1","label":"Group name"}],"items":[{"text":"An item","group":"g1","feedback":"Why it belongs there"}]}  (2 to 4 groups, 4 to 12 items; each item's "group" names a group's id)`,
+  sequencing: `{"type":"sequencing","prompt":"What to put in order","steps":[{"text":"A step"}],"feedback":"Why this order matters"}  (3 to 8 steps, written in the right order; learners get them shuffled)`,
+  matching: `{"type":"matching","prompt":"What to match","pairs":[{"left":"Term","right":"What it means"}],"feedback":"What ties them together"}  (3 to 6 pairs)`,
+  fillblank: `{"type":"fillblank","prompt":"optional","text":"A sentence with [[the answer|another accepted answer]] in double brackets","feedback":"Why"}  (1 to 4 gaps; only for terms and figures in the documents)`,
+  poll: `{"type":"poll","question":"A quick question colleagues answer, like 'How often do you review a client's budget?'","options":[{"text":"Monthly"},{"text":"Quarterly"}]}  (2 to 5 options; for opinions and practice, never a test with a right answer)`,
+  wall: `{"type":"wall","prompt":"A question everyone answers and shares, like 'What's one thing that helps a worried family member feel heard?'"}  (colleagues' answers open once they post; use at most one per course, for shared practice wisdom, never for anything personal or about clients)`,
+  reflection: `{"type":"reflection","prompt":"An open question","guidance":"What a good answer covers, for the AI feedback; learners don't see it","minWords":30}`,
+  confidence: `{"type":"confidence","statement":"How confident are you…?","low":"Not confident","high":"Very confident"}  (one near the start and one at the end of a course; the later one may add "compareWith":"the earlier one's id" only if you gave it an "id")`,
+  budget: `{"type":"budget","title":"Whose budget","budget":6000,"weeks":13,"services":[{"name":"Personal care","unit":"hour","cost":75,"perWeek":3,"max":10}]}  (a made-up quarterly budget to plan services against; always flag it illustrative)`,
+  journal: `{"type":"journal","prompt":"A short, specific prompt about the case just read","scaffold":"optional: a way in, like 'What would you ask first?'"}  (a private note; never ask for a real client's name or details; a later page may add "revisits":"the earlier journal's id" to look back at it, only if you gave that journal an "id")`,
+  perspectives: `{"type":"perspectives","prompt":"What's being compared","views":[{"title":"A viewpoint in plain words","reasoning":"Why someone would see it this way","misses":"What it might miss"}],"guidance":{"body":"What the approved source says","source":{"label":"exact document name and section"}}}  (2 or 3 defensible viewpoints, none of them 'the answer'; include "guidance" only when the documents state a rule or safety step, and then flag the block "verify"; may add "after":"the id of the journal or decision just before it")`,
+  pulse: `{"type":"pulse","kind":"confidence","question":"How confident are you that you could…?","options":[{"label":"Not confident"},{"label":"Unsure"},{"label":"Somewhat confident"},{"label":"Confident"}]}  (one tap, never a test; a matched pair uses the very same question and labels, the later one adding "compareWith":"the earlier one's id")`,
+  action: `{"type":"action","prompt":"Choose one thing to try…","timing":"optional: when it's worth trying","suggestions":[{"text":"On my next…, I will…"}]}  (2 to 4 concrete actions drawn from the documents; near the end of a course)`,
+  hubvisual: `{"type":"hubvisual","visual":"client-journey"|"onboarding-p1"|"onboarding-brokered"|"onboarding-coordinator","caption":"What to look for in it"}  (one of the Hub's own diagrams, shown as it is; only when the page is about the client journey or a partner model's onboarding)`,
+};
+const REFLECT_SHAPES = new Set<string>(["journal", "perspectives", "pulse", "action"]);
+const REFLECT_INTRO = `Reflect and apply blocks (unscored and private to the learner; for courses about judgement, conversations or changing practice, not for a plain procedure). Use at most one or two of these on a page, only where they serve the page's purpose, and give each a "note" saying why it belongs here:`;
+const SHAPE_RULES = `Never write a learner's private response, a made-up first-person client account presented as real, or a policy the documents don't state.
 
 On every block you may add:
 - "evidence": [{"source":"exact document name","ref":"page, slide or section","quote":"the short passage it relies on"}]  — required on any block that states a fact, rule or process from the documents
 - "flag": {"kind":"illustrative","note":"what's made up"}  — on any made-up case, person, invoice or message
 - "flag": {"kind":"verify","note":"what needs checking"}  — on any claim with weak, missing, conflicting or outdated support
-- "note": "a note for the author or reviewer"`;
+- "note": "a note for the author or reviewer"
+- "why": {"behaviour":"...","rationale":"...","evidence":"...","alternative":"...","learnerAction":"...","signal":"..."}  — on every block that asks the learner to do something (not plain text, callouts or pictures): “Why this block?” for the author`;
+
+/**
+  Plain content: blocks that only show something (nothing to answer, tick or record), which any page may use. The
+  reflection blocks are read-only too, but a learner responds to them, so they count as activities.
+*/
+export const PLAIN_BLOCKS = BLOCK_REGISTRY.filter((b) => b.evidence === "accessed" && !(REFLECT_TYPES as readonly string[]).includes(b.type)).map(
+  (b) => b.type,
+) as BlockType[];
+
+/** What a page may use: from the blocks allowed for the course, plain content and the activities the author accepted. */
+export function pageAllowed(courseAllowed: readonly string[], page: Pick<OutlinePage, "activities">) {
+  const accepted = new Set((page.activities ?? []).filter((a) => a.decision === "accepted" && a.mode === "configurable").map((a) => a.type as string));
+  return courseAllowed.filter((t) => (PLAIN_BLOCKS as string[]).includes(t) || accepted.has(t));
+}
+
+/** The block shapes for a page prompt: the blocks the catalogue lets Claude configure, narrowed to `allowed` when given. */
+export function blockShapes(allowed: readonly string[] = AI_CONFIGURABLE_BLOCKS) {
+  const ok = allowed.filter((t) => AI_SHAPES[t as BlockType] && magazineAiMode(t) === "configurable");
+  const plain = ok.filter((t) => !REFLECT_SHAPES.has(t)).map((t) => `- ${AI_SHAPES[t as BlockType]}`);
+  const reflect = ok.filter((t) => REFLECT_SHAPES.has(t)).map((t) => `- ${AI_SHAPES[t as BlockType]}`);
+  return ["Blocks you may use (JSON shapes):", ...plain, ...(reflect.length ? [REFLECT_INTRO, ...reflect] : []), SHAPE_RULES].join("\n");
+}
+export const BLOCK_SHAPES = blockShapes();
 
 /** The prompt for one page of an approved outline. */
-export function pagePrompt(input: { title: string; standfirst: string; audience: string; brief: string; outline: OutlinePage[]; index: number }) {
+export function pagePrompt(input: {
+  title: string;
+  standfirst: string;
+  audience: string;
+  brief: string;
+  outline: OutlinePage[];
+  index: number;
+  /** The blocks the catalogue lets Claude configure for this course; every configurable block when not given. */
+  allowed?: string[];
+}) {
   const p = input.outline[input.index];
+  const planned = (p.activities ?? []).filter((a) => a.decision !== "rejected");
+  // Only the activities the author accepted are written (the owner, Nov 2026): a suggestion they didn't accept isn't.
+  const write = planned.filter((a) => a.mode === "configurable" && a.decision === "accepted");
+  const specialist = planned.filter((a) => a.mode === "recommend");
   const t = PAGE_TEMPLATES[p.template];
   const others = input.outline.map((x, i) => `${i + 1}. ${x.title} (${x.template}): ${x.purpose}${i === input.index ? "   <- this page" : ""}`).join("\n");
   return `You are writing one page of a Magazine course for Trilogy Care's Partner Hub, a training site for Australian aged care.
@@ -444,13 +673,29 @@ ${others}
 Write page ${input.index + 1}: "${p.title}"
 Purpose: ${p.purpose}
 Teaching pattern: ${p.template}, ${t.title}. ${t.action} Follow this pattern as the page's sections: ${t.pattern}.
-Interaction: ${p.interaction || "only if it genuinely helps the learner practise the purpose"}
+Interaction: ${write.length ? p.interaction || "the activities below" : "none: the author accepted no activities for this page"}
 Time: about ${p.minutes} minutes to read and do. That's roughly ${p.minutes * 130} to ${p.minutes * 170} words of text in all, plus any questions. Don't pad it out or cut it short.
 ${p.sources.length ? `Use these documents: ${p.sources.map((s) => `"${s}"`).join(", ")}.` : ""}
 ${p.missing.length ? `The outline noted these are missing from the documents; don't invent them, flag where they'd go: ${p.missing.join("; ")}.` : ""}
 Don't repeat what other pages cover.
-
-${BLOCK_SHAPES}
+${
+  write.length
+    ? `
+The activities the author accepted for this page (include each, for the purpose given, with its "why"):
+${write.map((a) => `- ${a.type} (${BLOCK_LABELS[a.type]}): practises ${a.why.behaviour || "the page's purpose"}. ${a.why.rationale}`).join("\n")}
+Add no other activity (no other question, quiz, checklist, sorting, cards or the like): the author chose these. Everything else on the page is plain content.
+`
+    : `
+The author accepted no activities for this page: write it with plain content only (text, callouts, accordions, tabs, a timeline), no questions or other activities.
+`
+}${
+    specialist.length
+      ? `
+The author will add ${specialist.map((a) => `the ${BLOCK_LABELS[a.type]}`).join(" and ")} to this page after specialist setup from a reviewed case. Don't write it, and don't describe its rules, figures or answers: write the page around it, and a short text block saying where it goes is enough.
+`
+      : ""
+  }
+${blockShapes(input.allowed)}
 
 ${RULES}
 
@@ -469,6 +714,11 @@ export function withIds(raw: unknown) {
     blocks: ((s.blocks as Record<string, unknown>[] | undefined) ?? []).map((b) => {
       const type = typeof b.type === "string" ? b.type : "text";
       const out: Record<string, unknown> = { ...b, id: rid(type.toLowerCase()) };
+      // Claude writes its “Why this block?” as "why"; the block keeps it as `aiWhy` (a Job Aid block's `why` is its own text).
+      if (b.why && typeof b.why === "object") {
+        out.aiWhy = b.why;
+        delete out.why;
+      }
       if (typeof b.id === "string") blockIds.set(b.id, out.id as string);
       if (Array.isArray(b.choices)) out.choices = (b.choices as Record<string, unknown>[]).map((c) => ({ ...c, id: rid("c") }));
       if (Array.isArray(b.items) && type === "accordion") out.items = (b.items as Record<string, unknown>[]).map((it) => ({ ...it, id: rid("item") }));
@@ -541,7 +791,7 @@ export function tidy(sections: ReturnType<typeof withIds>) {
 }
 
 /** Problems with a generated page, or none: it must fit the schema, and its questions must be complete. */
-export function pageIssues(value: unknown): string[] {
+export function pageIssues(value: unknown, allowed?: readonly string[]): string[] {
   const sections = (value as { sections?: unknown })?.sections;
   if (!Array.isArray(sections) || !sections.length) return ['The reply needs a "sections" list with at least one section.'];
   const issues: string[] = [];
@@ -565,8 +815,12 @@ export function pageIssues(value: unknown): string[] {
         if (b.type === "checklist" && !b.items.some(Boolean)) issues.push(`${at} needs its items.`);
         if (b.type === "accordion" && (!b.items.length || b.items.some((it) => !it.title || !it.body)))
           issues.push(`${at}: every accordion item needs a title and text.`);
-        if (b.type === "carousel") issues.push(`${at}: don’t use carousel blocks.`);
-        if (b.type === "quiz" || b.type === "video" || b.type === "spot") issues.push(`${at}: don’t use ${b.type} blocks.`);
+        // Only blocks the Activity Catalogue lets Claude configure (and, for a course, the ones offered for it) reach the editor.
+        if (magazineAiMode(b.type) !== "configurable") issues.push(`${at}: don’t use ${b.type} blocks. ${catalogueEntry(b.type)?.ai.reason ?? ""}`.trim());
+        else if (allowed && !allowed.includes(b.type))
+          issues.push(`${at}: don’t use ${b.type} blocks in this course: it isn’t among the activities offered for it.`);
+        if (b.type === "budget" && b.flag?.kind !== "illustrative")
+          issues.push(`${at}: flag the budget "illustrative": it’s made up, never real rates or fees.`);
         if (b.type === "tabs" && (b.tabs.length < 2 || b.tabs.some((t) => !t.label || !t.body)))
           issues.push(`${at}: give at least 2 tabs, each with a label and text.`);
         if (b.type === "timeline" && (b.events.length < 2 || b.events.some((e) => !e.when || !e.title)))
@@ -597,7 +851,6 @@ export function pageIssues(value: unknown): string[] {
         if (b.type === "matching" && (b.pairs.length < 2 || b.pairs.some((p) => !p.left || !p.right)))
           issues.push(`${at}: give at least 2 pairs, each with both sides.`);
         if (b.type === "fillblank" && !blanksOf(b.text).some((p) => "answers" in p)) issues.push(`${at}: put at least one answer in [[double brackets]].`);
-        if (b.type === "hotspots") issues.push(`${at}: don’t use hotspots blocks (they need a picture).`);
         if (b.type === "poll" && (!b.question || b.options.length < 2 || b.options.some((op) => !op.text)))
           issues.push(`${at} needs its question and at least 2 options.`);
         if (b.type === "wall" && !b.prompt) issues.push(`${at} needs its question.`);
@@ -621,6 +874,68 @@ export function pageIssues(value: unknown): string[] {
   return issues;
 }
 
+/** The catalogue's shortlist for a course: its audience and its words decide which specialist activities are offered. */
+function courseCandidates(g: { title: string; standfirst: string; audience: string }, brief: string) {
+  return magazineCandidates({ text: `${g.title} ${g.standfirst} ${brief}`, audience: JSON.parse(g.audience) as string[] });
+}
+
+/**
+  Published courses that may already address the same decision: the closest few by shared words in their title and
+  standfirst. Test courses are never offered. Deterministic, so the same brief offers the same courses.
+*/
+export function reuseCandidates(db: Db, guideId: string, text: string) {
+  const stem = (w: string) => w.toLowerCase().replace(/(ing|ed|es|s)$/, "");
+  const want = new Set(
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length > 3)
+      .map(stem),
+  );
+  const rows = db
+    .prepare(
+      "SELECT g.id, g.slug, r.title, r.standfirst FROM magazine_guides g JOIN magazine_revisions r ON r.id = g.revision_id WHERE g.status = 'published' AND g.id != ?",
+    )
+    .all(guideId) as { id: string; slug: string; title: string; standfirst: string }[];
+  return rows
+    .filter((r) => !isTestSlug(r.slug))
+    .map((r) => ({
+      ...r,
+      score: `${r.title} ${r.standfirst}`
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((w) => w.length > 3 && want.has(stem(w))).length,
+    }))
+    .filter((r) => r.score >= 2)
+    .sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug))
+    .slice(0, 5)
+    .map(({ slug, title, standfirst }) => ({ slug, title, standfirst }));
+}
+
+/**
+  Puts the outline's reasons on the generated blocks: each planned activity's “Why this block?” goes on the first block of
+  its type, and any reason Claude wrote on another block gets the review owner and source filled in. Returns the planned
+  activity types that made it into the page.
+*/
+export function attachSelection(page: Page, p: OutlinePage) {
+  const blocks = page.sections.flatMap((s) => s.blocks);
+  const added: string[] = [];
+  for (const a of (p.activities ?? []).filter((x) => x.mode === "configurable" && x.decision !== "rejected")) {
+    const b = blocks.find((x) => x.type === a.type);
+    if (!b) continue;
+    added.push(a.type);
+    b.aiWhy = { ...a.why, ...(b.aiWhy?.rationale && { rationale: b.aiWhy.rationale }) };
+  }
+  for (const b of blocks)
+    if (b.aiWhy)
+      b.aiWhy = {
+        ...b.aiWhy,
+        owner: b.aiWhy.owner || catalogueEntry(b.type)?.signoff || "The course's author and reviewer",
+        source: b.aiWhy.source || p.sources.join(", "),
+      };
+  return added;
+}
+
 /**
   Claude proposes the course outline from the brief, the time target and the documents. Saved with the
   draft; the author edits it before any page is written.
@@ -642,23 +957,61 @@ export async function proposeOutline(
   savePlan(db, actor, guideId, { ...draftPlan(db, actor, guideId), brief, minutes }, now);
   if (sources.length) send({ type: "phase", phase: "reading" });
   const names = sources.map((s) => s.name);
+  // The live catalogue's shortlist for this course, and published courses that may already cover it (never a memorised list).
+  const candidates = courseCandidates(g, brief);
+  const reuse = reuseCandidates(db, g.id, `${g.title} ${g.standfirst} ${brief}`);
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...documents(sources),
-    { type: "text", text: outlinePrompt({ title: g.title, standfirst: g.standfirst, audience: audienceText(g.audience), brief, minutes, sourceNames: names }) },
+    {
+      type: "text",
+      text: outlinePrompt({
+        title: g.title,
+        standfirst: g.standfirst,
+        audience: audienceText(g.audience),
+        brief,
+        minutes,
+        sourceNames: names,
+        candidates,
+        reuse,
+      }),
+    },
   ];
   send({ type: "phase", phase: "writing" });
-  const { value, usage } = await askForJson<{ pages: unknown[]; questions?: unknown[] }>(content, (v) => outlineIssues(v, minutes, names), {
-    onText: (soFar) => send({ type: "count", what: "pages", n: keyCounts(soFar, ["purpose"]).purpose }),
-    onPhase: (phase, issues) => send({ type: "phase", phase, issues }),
+  const check = { candidates: new Set(candidates.map((c) => c.id)), reuse: new Set(reuse.map((r) => r.slug)) };
+  const { value, usage } = await askForJson<{ pages: unknown[]; questions?: unknown[]; reuse?: unknown[] }>(
+    content,
+    (v) => outlineIssues(v, minutes, names, check),
+    {
+      onText: (soFar) => send({ type: "count", what: "pages", n: keyCounts(soFar, ["purpose"]).purpose }),
+      onPhase: (phase, issues) => send({ type: "phase", phase, issues }),
+    },
+  );
+  const offered = new Set(candidates.map((c) => c.id));
+  const outline = cleanOutline(value).map((p) => ({ ...p, activities: (p.activities ?? []).filter((a) => offered.has(a.type)) }));
+  // A course that already covers the decision is offered to the author first, as a question they can act on.
+  const reused = (Array.isArray(value.reuse) ? (value.reuse as Record<string, unknown>[]) : []).flatMap((r) => {
+    const c = reuse.find((x) => x.slug === r?.slug);
+    return c
+      ? [
+          `“${c.title}” (/magazine/${c.slug}) may already cover this${r.why ? `: ${String(r.why).slice(0, 200)}` : ""}. Link or adapt it rather than writing a duplicate?`,
+        ]
+      : [];
   });
-  const outline = cleanOutline(value);
-  const questions = (Array.isArray(value.questions) ? value.questions : []).map(String).filter(Boolean).slice(0, 10);
+  const questions = [...reused, ...(Array.isArray(value.questions) ? value.questions : []).map(String).filter(Boolean)].slice(0, 10);
   savePlan(db, actor, guideId, { brief, minutes, outline, questions }, now);
   audit(db, {
     actor: actor.id,
     event: "magazine.outline_drafted",
     entity: guideId,
     next: { model: GENERATION_MODEL, pages: outline.length, minutes, sources: names, usage },
+    at: now,
+  });
+  const recommended = outline.flatMap((p) => (p.activities ?? []).map((a) => a.type));
+  audit(db, {
+    actor: actor.id,
+    event: "activity.recommended",
+    entity: guideId,
+    next: { types: recommended, offered: [...offered], reuse: reuse.map((r) => r.slug), catalogue: CATALOGUE_VERSION },
     at: now,
   });
   return { outline, questions };
@@ -677,17 +1030,33 @@ export async function generatePage(db: Db, actor: User, guideId: string, input: 
   if (!Number.isInteger(index) || !p) throw new HttpError(400, "That page isn’t in the outline.");
   if (p.template === "blank") throw new HttpError(400, "Choose a teaching pattern for this page first.");
   const sources = sourcesOf(db, guideId).filter((s) => s.status === "ready");
+  // The blocks Claude may write for this page: plain content, and only the activities the author accepted for it, from
+  // the catalogue's configurable ones that suit the course's audience.
+  const allowed = pageAllowed(
+    courseCandidates(g, plan.brief)
+      .filter((c) => c.ai.mode === "configurable")
+      .map((c) => c.id),
+    p,
+  );
   const used = sources.filter((s) => !p.sources.length || p.sources.includes(s.name));
   if (used.length) send({ type: "phase", phase: "reading" });
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...documents(sources),
     {
       type: "text",
-      text: pagePrompt({ title: g.title, standfirst: g.standfirst, audience: audienceText(g.audience), brief: plan.brief, outline: plan.outline, index }),
+      text: pagePrompt({
+        title: g.title,
+        standfirst: g.standfirst,
+        audience: audienceText(g.audience),
+        brief: plan.brief,
+        outline: plan.outline,
+        index,
+        allowed,
+      }),
     },
   ];
   send({ type: "phase", phase: "writing" });
-  const { value, usage } = await askForJson<{ sections: unknown[] }>(content, pageIssues, {
+  const { value, usage } = await askForJson<{ sections: unknown[] }>(content, (v) => pageIssues(v, allowed), {
     onText: (soFar) => send({ type: "count", what: "sections", n: keyCounts(soFar, ["blocks"]).blocks }),
     onPhase: (phase, issues) => send({ type: "phase", phase, issues }),
   });
@@ -703,6 +1072,7 @@ export async function generatePage(db: Db, actor: User, guideId: string, input: 
       { draft: true },
     ).pages[0].sections,
   };
+  const added = attachSelection(page, p);
   audit(db, {
     actor: actor.id,
     event: "magazine.page_drafted",
@@ -710,5 +1080,17 @@ export async function generatePage(db: Db, actor: User, guideId: string, input: 
     next: { model: GENERATION_MODEL, page: p.title, minutes: p.minutes, usage },
     at: now,
   });
-  return { page, index };
+  if (added.length)
+    audit(db, {
+      actor: actor.id,
+      event: "activity.added_to_draft",
+      entity: guideId,
+      next: { types: added, page: p.title, catalogue: CATALOGUE_VERSION },
+      at: now,
+    });
+  // Specialist activities the outline kept: the author adds each from the palette and sets it up from its reviewed case.
+  const specialist = (p.activities ?? [])
+    .filter((a) => a.mode === "recommend" && a.decision !== "rejected")
+    .map((a) => ({ type: a.type, label: BLOCK_LABELS[a.type], why: a.why, signoff: catalogueEntry(a.type)?.signoff ?? "" }));
+  return { page, index, specialist };
 }

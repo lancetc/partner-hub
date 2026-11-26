@@ -13,7 +13,8 @@ import { RichInline, RichText } from "@/components/RichText";
 import { formatDate } from "@/lib/format";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { currentUser, meantFor } from "@/server/auth";
+import { canOpenTopic } from "@/server/catalogue";
 import { storyPreview } from "@/server/stories";
 import { HighlightArea } from "@/components/favourites/HighlightArea";
 import { SaveSection } from "@/components/favourites/Highlighter";
@@ -144,13 +145,17 @@ async function StoryArticle({
   // Stories can be edited in admin at any time, so read them fresh; authors can preview a draft with ?preview=1.
   await connection();
   const db = getDb();
-  const draft = (await searchParams).preview === "1" ? storyPreview(db, await currentUser(db), slug) : null;
+  const user = await currentUser(db);
+  const draft = (await searchParams).preview === "1" ? storyPreview(db, user, slug) : null;
   const story = draft ?? storyBySlug(slug);
   if (!story) notFound();
+  // A story tagged for the other audience (a partner spotlight, to a coordinator) isn't theirs by its link either (auth.meantFor).
+  if (!draft && !meantFor(user, story.audience)) notFound();
 
-  const lesson = story.relatedLesson ? lessonBySlug(story.relatedLesson) : undefined;
-  const related = resources.filter((r) => story.relatedResources?.includes(r.id));
-  const more = stories.filter((s) => s.slug !== story.slug && s.category === story.category).slice(0, 2);
+  // The related topic, resources and "more like this" only when they're for this person too.
+  const lesson = story.relatedLesson && canOpenTopic(db, user, story.relatedLesson) ? lessonBySlug(story.relatedLesson) : undefined;
+  const related = resources.filter((r) => story.relatedResources?.includes(r.id) && meantFor(user, r.audience));
+  const more = stories.filter((s) => s.slug !== story.slug && s.category === story.category && meantFor(user, s.audience)).slice(0, 2);
   const p = story.policy;
   // Highlights (docs/job-aids.md): anchored to the story, the paragraph and this edition. Not in an author's preview.
   const edition = story.updated ?? story.date;

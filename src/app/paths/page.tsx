@@ -13,6 +13,7 @@ import { HomeLearning } from "@/components/HomeLearning";
 import { catalogueTopics, topicPopularity } from "@/server/catalogue";
 import { now } from "@/server/clock";
 import { missionSlugs } from "@/server/challenges";
+import { featuredTags } from "@/server/magazineFeatured";
 
 export const metadata: Metadata = {
   title: "Discovery Paths",
@@ -113,6 +114,7 @@ async function Paths() {
   if (!paths.length) return <p className="mt-10 text-ink-muted">There are no learning paths yet. New ones will appear here.</p>;
   // Popular paths: how often colleagues have finished the topics in each lately (the same figures as Topics).
   const popular = topicPopularity(db, now(db));
+  const tagged = featuredTags(db, "path");
   return (
     <PathsBrowser
       audience={user.audience}
@@ -120,6 +122,7 @@ async function Paths() {
         const slugs = slugsFor(db, p.id);
         return {
           ...p,
+          featured: tagged.has(p.id),
           popularity: slugs.reduce((n, s) => n + (popular[s] ?? 0), 0),
           // Each path's topic titles, so searching for a topic finds the path it's in.
           topicTitles: slugs.map((s) => lessonBySlug(s)?.title ?? "").filter(Boolean),

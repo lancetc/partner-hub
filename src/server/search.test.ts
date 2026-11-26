@@ -47,7 +47,9 @@ describe("site search", () => {
   });
 
   it("finds learning paths, news and resources too", () => {
-    expect(search(db, u("sam"), "care coordination").some((r) => r.id === "path:lp-care-coordination")).toBe(true);
+    expect(search(db, u("riley"), "care coordination").some((r) => r.id === "path:lp-care-coordination")).toBe(true);
+    // The coordinators' path isn't found by a Care Partner.
+    expect(search(db, u("sam"), "care coordination").some((r) => r.id === "path:lp-care-coordination")).toBe(false);
     expect(search(db, u("sam"), "extra visit time").some((r) => r.id.startsWith("story:"))).toBe(true);
     expect(search(db, u("sam"), "   ")).toEqual([]);
   });

@@ -24,6 +24,7 @@ import { Portrait } from "../community/DigitalMemberProfile";
 import { Icon } from "../Icon";
 import { ArcsTab, AssistantTab } from "./LivesArcs";
 import { MomentsTab } from "./LivesMomentsAdmin";
+import { LivesOverview } from "./LivesOverview";
 
 /*
   Admin → Lives in Progress (server/livesAuthoring, docs/lives-in-progress.md): the Digital Members' ongoing stories.
@@ -87,10 +88,12 @@ export function LivesAdmin() {
         {data?.demo.enabled && (
           <p className="flex items-start gap-2 rounded-2xl bg-[#fff4dc] p-3 text-sm text-[#6b4a00] dark:bg-[#3a2e12] dark:text-[#f5d48a]">
             <Icon name="info" className="mt-0.5 size-4 shrink-0" />
-            Demo Hub: the stories of Mrs Alvarez, Margaret Alder and Mr Okafor are demonstration content, marked “Demo”, with placeholder pictures and no
-            recordings. They’re seeded only where HUB_LIVES_DEMO=1 or on a local development server.
+            Demo Hub: the stories of Mrs Alvarez, Margaret Alder and Mr Okafor are demonstration content, marked “Demo”, with placeholder pictures. The seed
+            records nothing: any recordings here were made by an author. They’re seeded only where HUB_LIVES_DEMO=1 or on a local development server.
           </p>
         )}
+        {/* The six parts as one flow, with live counts and what needs attention (LivesOverview). */}
+        <LivesOverview onTab={(t) => TABS.some(([k]) => k === t) && choose(t as Tab)} />
         <div role="tablist" aria-label="Lives in Progress" className="-mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
           {TABS.map(([k, label]) => (
             <button
@@ -852,6 +855,21 @@ function MemoryTab({ admin, reload }: { admin: Admin; reload: () => void }) {
             onChange={(e) => setS({ ...s, notifyByDefault: e.target.checked })}
           />
           Following someone sends new episodes to the learner’s Inbox, unless they turn it off
+        </label>
+        <label className="flex items-start gap-3 text-sm sm:col-span-2">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-[var(--color-action)]"
+            checked={s.checkInVoice}
+            onChange={(e) => setS({ ...s, checkInVoice: e.target.checked })}
+          />
+          <span>
+            Check in: learners can hear a character’s replies spoken, in their approved voice.
+            <span className="block text-xs text-ink-muted">
+              Each reply is a live, paid speech request: about US$0.005 for a 300-character reply with OpenAI gpt-4o-mini-tts (price to verify), up to 30 an
+              hour per learner. The same words are never paid for twice. Off by default.
+            </span>
+          </span>
         </label>
         <div className="flex items-center gap-3 sm:col-span-2">
           <button

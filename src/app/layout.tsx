@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteTranslator } from "@/components/SiteTranslator";
 import { SyncManager } from "@/components/SyncManager";
 import { PressSounds } from "@/components/PressSounds";
+import { HiddenMediaGuard } from "@/components/HiddenMediaGuard";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { ConfirmHost } from "@/components/ConfirmHost";
 import { BackdropLayer } from "@/components/BackdropLayer";
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SiteTranslator />
         <SyncManager />
         <PressSounds />
+        <HiddenMediaGuard />
         <ConfirmHost />
       </body>
     </html>

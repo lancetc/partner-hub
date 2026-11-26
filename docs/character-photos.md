@@ -79,9 +79,46 @@ After a Magazine course is published, the Hub reads the people its scenarios nam
 
 This never blocks or slows a publish. Generic labels such as "Trilogy Care Coordinator" or "Independent provider" aren't treated as characters.
 
+## People in your content
+
+Topics name people in ordinary text ("Bruce Harding is a Care Partner in Trilogy's Bowen Hills office", "Mrs Kowalski asks…"), and Magazine courses name them in their prose as well as in scenario fields. The Hub reads every live Topic (draft and published) and every Magazine course that isn't archived (draft and published edition), and lists the people they name (`src/lib/peopleInText.ts`, `src/server/peopleInContent.ts`).
+
+It aims to be precise rather than catch everyone. A name counts when:
+
+- it has a title: Mr, Mrs, Ms, Miss or Dr and a surname;
+- the text treats it as a person: a verb follows ("Bruce types"), it's possessive ("Bruce's phone"), "is a…" follows, an age is given ("Dot, 84,"), a relationship names it ("her daughter Asha", "Care Partner Bruce Harding"), or it's a role-play speaker ("Leila: Morning!");
+- or it appears in two or more places in the same Topic or course.
+
+It leaves out places, months, days, brands, organisations and programmes (Bowen Hills, Microsoft Teams, Medicare, My Aged Care), generic labels ("Worker A"), pets, real public figures, and the Hub's own users. An ordinary word that opens a sentence or a heading ("Remember", "Shouting") isn't a name. "Bruce Harding" and "Bruce" in the same Topic are one person, listed under the fuller name.
+
+**Man or woman comes only from the content, never from the name.** A title (Mr is a man; Mrs, Ms and Miss a woman; Dr says nothing), a relationship ("her son Daniel"), or he or she that can only be them ("Bruce opens his laptop", "Fiona said she…"). Otherwise it's "Man or woman not said".
+
+### On the Character photos page
+
+**People in your content** lists everyone found who isn't in the library, or is in it without a portrait. Each shows where they appear (with links), a quote, a role, and a suggested look written only from what the content says. For each person, an author can:
+
+- **Add to the library**, which is free;
+- **Add and make portrait** (or **Make portrait**), which shows the cost (about US$0.04, OpenAI, medium quality) and asks first. It's only offered once the look says man or woman, so edit the look first for anyone the content doesn't describe;
+- **Same person** joins a first name to the one character with that first name ("Hana" to Hana Mitchell), as another spelling;
+- **Not a person** dismisses a false find (a place or a product). Dismissed names are kept in the `character_dismissals` table and can be brought back.
+
+**Add all** adds everyone, free. **Make all missing portraits (US$x.xx)** shows the total and asks first; anyone whose content doesn't say man or woman is added without a portrait.
+
+### When a Topic is published, or first saved from an AI draft
+
+As for a Magazine course: anyone new the Topic names is added to the library as "Added on publish", with a look written from the content. A portrait is queued only when the content says man or woman. The rest wait on the Character photos page for a description. If OpenAI isn't connected, nobody is queued. It never blocks or slows a publish.
+
+The Topic editor's **Review and publish** step shows a note: "This Topic introduces Bruce Harding. Their character photo is made when it's published", "…is being made", or that someone needs a description first. It doesn't block publishing.
+
+### The audit script
+
+`npx vite-node --config vitest.config.ts scripts/character-audit.ts` prints the same audit: counts, everyone not in the library or without a portrait, and the estimated cost. It opens the database read-only, so it never adds, changes or generates anything. `--all` also lists people who already have a portrait; `--json file` writes the full result.
+
 ## Not yet
 
 - **Background generation needs a long-running server.** It runs inside the server process, which works with `next dev` and a normal Node server. On a serverless host, work that continues after the response may be stopped. A portrait still queued when the server stops is cleared back to "No portrait yet" the next time the roster is read, once it has been stuck for ten minutes, so **Generate** can send it again.
 - **No real people.** Every character is fictional, and the look descriptions are respectful and ordinary. Don't add or upload a real person's photo here.
-- **Only these scenario types.** Topics, News and Red Pen (whose people appear only in its text) don't show portraits.
+- **Only these scenario types.** Topics, News and Red Pen (whose people appear only in its text) don't show portraits. Topics' people are in the library (see "People in your content") and are offered as references when a card picture is made.
+- **First names are shared.** The audit can't tell two different people with the same first name apart: "Priya" in one Topic and "Priya" in another are listed as one person. Give recurring people a surname.
+- **The finder can still be wrong.** It reads English text with rules, not understanding: it can miss a person (a name that's also an ordinary word, like "Will", needs a title or "is a…") or take an organisation for one. Dismiss false finds; a man or a woman is never guessed.
 - **No other image slots.** An empty image block isn't filled automatically.

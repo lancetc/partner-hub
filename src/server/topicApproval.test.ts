@@ -50,7 +50,7 @@ describe("submitting a topic for review", () => {
 
     const s = submitForReview(db, u("jordan"), slug, { reviewer: "dana", note: "Check the falls advice" }, t(1));
     expect(s.stage).toBe("review");
-    expect(s.submission).toMatchObject({ by: "Jordan Lee", reviewer: { name: "Dana Okafor", area: "Clinical" }, compliance: false });
+    expect(s.submission).toMatchObject({ by: "Lance Elliott", reviewer: { name: "Dana Okafor", area: "Clinical" }, compliance: false });
     expect(() => submitForReview(db, u("jordan"), slug, { reviewer: "hamish" }, t(2))).toThrow(/already with a reviewer/);
   });
 
@@ -123,7 +123,7 @@ describe("the AI pre-review", () => {
     expect(() => skipAiReview(db, u("hamish"), slug, "", t(2))).toThrow(/Only the author/);
 
     const skipped = skipAiReview(db, u("jordan"), slug, "Claude isn’t connected here.", t(2));
-    expect(skipped.aiReview).toMatchObject({ status: "skipped", summary: "Claude isn’t connected here.", by: "Jordan Lee" });
+    expect(skipped.aiReview).toMatchObject({ status: "skipped", summary: "Claude isn’t connected here.", by: "Lance Elliott" });
     expect(skipped.history[0]).toMatchObject({ action: "ai_skipped", label: "AI pre-review skipped" });
     expect(() => skipAiReview(db, u("jordan"), slug, "", t(3))).toThrow(/already done/);
     expect(approvalFor(db, u("dana"), slug, t(3)).you.canReview).toBe(true);

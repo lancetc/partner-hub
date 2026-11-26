@@ -35,7 +35,7 @@ import type { IntroPageStats } from "@/server/narrationStats";
 import { Badge, btn, ErrorNote, input } from "./ui";
 import { stream } from "./MagazineAi";
 import { Icon } from "../Icon";
-import { AvaVideoSlot } from "./AvaVideoSlot";
+import { AvaVideoBadge, AvaVideoSlot } from "./AvaVideoSlot";
 
 /*
   Audio Introductions in the editor (docs/magazine-audio-guide.md): the settings in the sidebar, an Audio introduction
@@ -1318,8 +1318,9 @@ export function CourseIntroStrip({ guideId, draft, change }: { guideId: string; 
     <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="group rounded-2xl border border-action/25 bg-tealtint">
       <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm">
         <Icon name="volume" className="size-4 text-accent" />
-        <span className="font-semibold">Course introduction: Ava on the cover</span>
+        <span className="font-semibold">Course introduction and Ava’s video</span>
         {narrated && <Badge tone={NARRATION_STATES[state].tone}>{NARRATION_STATES[state].label}</Badge>}
+        <AvaVideoBadge lineKey={`magazine:${guideId}:intro`} />
         {intro && !open && <span className="min-w-0 flex-1 truncate text-ink-muted">“{intro.script}”</span>}
         <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
       </summary>
@@ -1362,19 +1363,7 @@ export function PageNarrationStrip({ guideId, draft, change, page }: { guideId: 
           busy={busy}
           label={draft.doc.pages.length > 1 ? "Page introduction" : "Introduction"}
         />
-        {/*
-          Ava's video for the page plays where the picture goes; learners get the introduction player as well, beneath the
-          heading, and only one ever plays at a time.
-        */}
-        {draft.doc.pages.length > 1 && open && (
-          <>
-            <p className="px-1 text-sm text-ink-muted">
-              Ava’s transmission (optional): she plays where the page’s picture goes, and the audio introduction is offered beneath the heading as well. Only
-              one plays at a time.
-            </p>
-            <AvaVideoSlot lineKey={`magazine:${guideId}:page:${page.id}`} script={page.narration?.script} />
-          </>
-        )}
+        {/* Ava's video for the page is set beside its picture, in the page's header ("Ava in the header"). */}
       </div>
     </details>
   );

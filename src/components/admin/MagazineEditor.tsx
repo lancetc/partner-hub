@@ -41,15 +41,19 @@ import {
   type Page,
   type PageTemplate,
   type Verdict,
+  WHY_FIELDS,
 } from "@/lib/magazine";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
-import { DescribeButton, ImageDropZone, PictureButtons } from "./ImagePicker";
+import { DescribeButton, ImageDropZone, PictureButtons, type PictureContext } from "./ImagePicker";
+import { namesIn } from "./PeopleReferences";
+import { plainText } from "@/lib/richText";
 import { ImageCropper } from "./ImageCropper";
 import { RichEditable } from "./RichEditable";
 import { statusBadge } from "./MagazineAdmin";
 import { TemplatePicker, type TemplateChoice } from "./MagazineTemplates";
 import { MagazineAi } from "./MagazineAi";
 import { AudioGuidePanel, CourseIntroStrip, NarrationReview, PageNarrationStrip } from "./MagazineNarration";
+import { AvaVideoBadge, AvaVideoSlot } from "./AvaVideoSlot";
 import { canConvert, convertBlock, convertLoses, CONVERTIBLE, type ConvertibleType } from "@/lib/magazineConvert";
 import { DEFAULT_AUDIO } from "@/lib/magazineNarration";
 import { MagazineRevise, type RevisionChange } from "./MagazineRevise";
@@ -213,6 +217,7 @@ const BLOCK_ICONS: Record<BlockType, IconName> = {
   pulse: "gauge",
   action: "target",
   guide: "play",
+  ava: "monitor",
 };
 const BLOCK_HINTS: Record<BlockType, string> = {
   text: "Paragraphs, lists and links, with an optional heading.",
@@ -300,6 +305,7 @@ const BLOCK_HINTS: Record<BlockType, string> = {
   pulse: "One tap: confidence or a view, never scored. Pair two to show the change.",
   action: "One concrete thing to try at work, and later whether they did.",
   guide: "The Hub’s AI Learning Guide: a recorded, scripted video or voice-over, with its script to read.",
+  ava: "One of Ava’s transmissions in the content: upload a video of her (made in ElevenLabs) with what she says, and it plays in her window here.",
 };
 
 /**
@@ -319,7 +325,8 @@ const openStudioFor = new Set<string>();
 
 /** The palette's categories, so the longer list stays easy to scan. Each block is in one. */
 const BLOCK_CATEGORIES: { title: string; types: PaletteItem[] }[] = [
-  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "guide", "callout", "playbook", "ack"] },
+  // Ava's videos go in with "ava" (the AI Learning Guide block is retired from the palette: lib/activityCatalogue RETIRED_FROM_PALETTE).
+  { title: "Content", types: ["text", "image", "textMedia", "video", "webcam", "ava", "callout", "playbook", "ack"] },
   { title: "Explore", types: ["accordion", "tabs", "carousel", "timeline", "journey", "hubvisual", "reset", "process", "hotspots", "myths"] },
   {
     title: "Practise",
@@ -362,6 +369,8 @@ function newBlock(item: PaletteItem): Block {
       return { id, type, media: { src: "", alt: "" }, width: "column" };
     case "video":
       return { id, type, title: "", src: "", transcript: "" };
+    case "ava":
+      return { id, type };
     case "textMedia":
       // The text flows around the picture unless the author turns it off.
       return { id, type, body: "", media: { src: "", alt: "" }, layout: "media-right" };
@@ -740,6 +749,29 @@ function findSection(doc: GuideDoc, id: string) {
   return null;
 }
 
+/**
+  Ava at the top of a page, beside its picture: whether she's there, and her video's upload and words when opened. She
+  plays where the picture goes; the picture takes over when she signs off.
+*/
+function PageHeaderAva({ lineKey, script }: { lineKey: string; script?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-line bg-surface">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm">
+        <Icon name="monitor" className="size-4 text-accent" />
+        <span className="font-semibold">Ava in the header</span>
+        <AvaVideoBadge lineKey={lineKey} />
+        <span className="ml-auto text-sm font-semibold text-accent">{open ? "Close" : "Add or change"}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3">
+          <AvaVideoSlot lineKey={lineKey} script={script} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The untouched starting page of a new course: nothing written in it yet, so a drafted page can take its place. */
 function isStarter(doc: GuideDoc) {
   if (doc.pages.length !== 1 || doc.pages[0].title || doc.pages[0].purpose) return false;
@@ -786,6 +818,8 @@ function isBlank(b: Block): boolean {
       return !b.statement;
     case "guide":
       return !b.script && !b.media;
+    case "ava":
+      return true;
     case "journal":
       return !b.prompt;
     case "perspectives":
@@ -931,6 +965,23 @@ async function uploadFile(file: File, kind: "video" | "captions" | "image") {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "The upload didn’t work.");
   return data.src as string;
+}
+
+/** "Start from this page": a description for its top picture from its title, purpose and opening text, and the people it names. */
+function pagePictureContext(page: Page): PictureContext {
+  const texts = page.sections.flatMap((sec) => sec.blocks.flatMap((b) => (b.type === "text" ? [b.body] : [])));
+  const opening = plainText(texts[0] ?? "")
+    .split(/(?<=[.!?])\s+/)
+    .slice(0, 2)
+    .join(" ")
+    .slice(0, 320);
+  const purpose = plainText(page.purpose ?? "").trim();
+  const prompt =
+    `A photo for the top of a learning page called “${page.title}”${purpose ? `, about ${purpose[0].toLowerCase()}${purpose.slice(1).replace(/\.$/, "")}` : ""}${opening ? `. The scene: ${opening}` : ""}`.replace(
+      /[.\s]*$/,
+      ".",
+    );
+  return { label: "Start from this page", prompt, names: namesIn(page.purpose ?? "", ...texts.slice(0, 3)), noun: "page" };
 }
 
 export function MagazineEditor({ id }: { id: string }) {
@@ -1604,13 +1655,22 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
                       <Icon name="clock" className="size-4" /> About {pageMinutes(page)} min
                     </p>
                   </div>
-                  <ImageDropZone
-                    picture={page.hero?.src ? { src: page.hero.src, width: 1600, height: 900 } : undefined}
-                    onChange={(p) => updatePage(page.id, (x) => void (x.hero = p ? { src: p.src, alt: "", decorative: true } : undefined))}
-                    label="Drag a picture for the top of this page (optional)"
-                    addLabel="Add page picture"
-                    aspect="aspect-[16/9]"
-                  />
+                  <div className="flex flex-col gap-3">
+                    <ImageDropZone
+                      picture={page.hero?.src ? { src: page.hero.src, width: 1600, height: 900 } : undefined}
+                      onChange={(p) => updatePage(page.id, (x) => void (x.hero = p ? { src: p.src, alt: "", decorative: true } : undefined))}
+                      label="Drag a picture for the top of this page (optional)"
+                      addLabel="Add page picture"
+                      aspect="aspect-[16/9]"
+                      context={pagePictureContext(page)}
+                    />
+                    {/* Ava's transmission at the top of the page: it plays where the picture goes (a one-page guide's is the course's own). */}
+                    <PageHeaderAva
+                      key={page.id}
+                      lineKey={pages.length > 1 ? `magazine:${id}:page:${page.id}` : `magazine:${id}:intro`}
+                      script={pages.length > 1 ? page.narration?.script : draft.doc.audio?.intro?.script}
+                    />
+                  </div>
                 </header>
               )}
 
@@ -1677,7 +1737,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
                           onDragStart={() => setDragging(b.id)}
                           onDragEnd={() => setDragging(null)}
                         >
-                          <BlockEdit key={`${b.id}:${round}`} block={b} update={updateBlock} paths={paths} />
+                          <BlockEdit key={`${b.id}:${round}`} block={b} update={updateBlock} paths={paths} guideId={id} />
                         </BlockFrame>
                         <InsertPoint onAdd={(t) => addBlock(s.id, bi + 1, t)} dragging={dragging} onDrop={() => dropAt(s.id, bi + 1)} />
                       </div>
@@ -2128,6 +2188,8 @@ function BlockFrame({
     b.flag?.kind === "illustrative" && { text: "Illustrative", tone: "warn" as const },
     b.evidence?.length && { text: `${b.evidence.length} ${b.evidence.length === 1 ? "source" : "sources"}`, tone: "info" as const },
     b.note && { text: "Note", tone: "neutral" as const },
+    // Chosen by the AI builder from the Activity Catalogue: its reasons are under “Why this block?” in the settings.
+    b.aiWhy && { text: "Why this block?", tone: "info" as const },
   ].filter((x): x is { text: string; tone: "bad" | "warn" | "info" | "neutral" } => Boolean(x));
   return (
     <div
@@ -2341,7 +2403,7 @@ function InsertPoint({ onAdd, dragging, onDrop }: { onAdd: (t: PaletteItem) => v
 const textStyle = "text-[1.08rem] leading-relaxed";
 
 /** Each block drawn as learners see it, with its words editable in place. */
-function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; paths: PathOption[] }) {
+function BlockEdit({ block: b, update, paths, guideId }: { block: Block; update: Update; paths: PathOption[]; guideId: string }) {
   switch (b.type) {
     case "text":
       return (
@@ -2394,6 +2456,22 @@ function BlockEdit({ block: b, update, paths }: { block: Block; update: Update; 
       return <VideoEdit block={b} update={update} />;
     case "guide":
       return <GuideEdit block={b} update={update} />;
+    case "ava":
+      return (
+        <div className={cx(column, "flex flex-col gap-3")}>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            What it’s about (optional)
+            <input
+              className={input}
+              value={b.title ?? ""}
+              placeholder="For example: Why the first visit matters"
+              onChange={(e) => update<Extract<Block, { type: "ava" }>>(b.id, (x) => void (x.title = e.target.value))}
+            />
+            <span className="font-normal text-ink-muted">Names her window for screen readers. Learners see her video, not this.</span>
+          </label>
+          <AvaVideoSlot lineKey={`magazine:${guideId}:block:${b.id}`} where="content" />
+        </div>
+      );
     case "textMedia":
       if (b.wrap !== false)
         return (
@@ -3751,6 +3829,29 @@ function BlockSettings({
           <Icon name="plus" className="size-4" /> Add source
         </button>
       </div>
+      {b.aiWhy && (
+        /* “Why this block?”: the AI builder's reasons (lib/activityCatalogue), for the author to check, change or remove. */
+        <details open className="rounded-2xl border border-line p-3">
+          <summary className="cursor-pointer font-semibold">Why this block?</summary>
+          <p className="mt-1 text-sm text-ink-muted">
+            The AI chose it from the Activity Catalogue for these reasons. Its eligibility and settings were checked by the Hub, not by the AI.
+          </p>
+          <div className="mt-2 flex flex-col gap-2">
+            {WHY_FIELDS.map(([k, label]) => (
+              <Field key={k} label={label}>
+                <textarea
+                  className={cx(input, "min-h-12 py-2")}
+                  value={b.aiWhy?.[k] ?? ""}
+                  onChange={(e) => update<Block>(b.id, (x) => void (x.aiWhy && (x.aiWhy[k] = e.target.value)), `${b.id}:why-${k}`)}
+                />
+              </Field>
+            ))}
+            <button type="button" className={cx(btn.quiet, "self-start")} onClick={() => update<Block>(b.id, (x) => void delete x.aiWhy)}>
+              <Icon name="trash" className="size-4" /> Remove the reasons
+            </button>
+          </div>
+        </details>
+      )}
       <Field label="Note for reviewers">
         <textarea
           className={cx(input, "min-h-16 py-2")}
@@ -3903,6 +4004,66 @@ function BrowseTags({ draft, change }: { draft: Draft; change: (fn: (d: Draft) =
   );
 }
 
+/**
+  The homepage's featured course: shown large at the front of "Practise the decisions you make every day", like Lives in
+  Progress's spotlight. One at a time, so ticking this takes over from the course featured before. Saved straight away:
+  it's the homepage's setting, not part of the course.
+*/
+function HomepageFeature({ guideId }: { guideId: string }) {
+  const url = `/api/admin/magazine/${guideId}/featured`;
+  const { data, setData } = useApi<{ featured: boolean; other: string | null; eligible: boolean; why: string | null; tagged: boolean }>(url);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const toggle = async (change: { featured: boolean } | { tag: boolean }) => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      setData(await api(url, { method: "PUT", body: change }));
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That didn’t save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <fieldset className="border-t border-line pt-4">
+      <legend className="text-sm font-semibold">Featured</legend>
+      <label className="mt-2 flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-1 size-4 accent-[var(--color-action)]"
+          checked={Boolean(data?.tagged)}
+          disabled={!data || busy}
+          onChange={(e) => void toggle({ tag: e.target.checked })}
+        />
+        <span>
+          Featured tag in the Magazine
+          <span className="block text-xs text-ink-muted">
+            A yellow “Featured” tag over its picture on the Magazine’s cards. Any number of courses can have it.
+          </span>
+        </span>
+      </label>
+      <label className="mt-3 flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-1 size-4 accent-[var(--color-action)]"
+          checked={Boolean(data?.featured)}
+          disabled={!data || busy || (!data.eligible && !data.featured)}
+          onChange={(e) => void toggle({ featured: e.target.checked })}
+        />
+        <span>
+          Spotlight on the homepage
+          <span className="block text-xs text-ink-muted">
+            Shown large at the front of “Practise the decisions you make every day”, for people it’s for.{" "}
+            {data?.why ?? (data?.other && !data.featured ? `Ticking it replaces “${data.other}”.` : "One course is featured at a time.")}
+          </span>
+        </span>
+      </label>
+      {problem && <p className="mt-1 text-sm font-semibold text-danger">{problem}</p>}
+    </fieldset>
+  );
+}
+
 /** With nothing selected: who it's for, how it's completed, what stands in the way of publishing, and its editions. */
 function GuideSettings({
   guide,
@@ -3949,6 +4110,8 @@ function GuideSettings({
           ))}
         </select>
       </Field>
+
+      <HomepageFeature guideId={guide.id} />
 
       <div className="border-t border-line pt-4">
         <h3 className="font-semibold">Before publishing</h3>

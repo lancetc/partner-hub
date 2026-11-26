@@ -6,6 +6,7 @@ import { HttpError, requireAuthor, userById, type User } from "./auth";
 import { editorLesson, lessonStatus, publishLesson } from "./authoredLessons";
 import { daysUntil, statusOf } from "./contentReview";
 import { openReports } from "./contentReports";
+import { charactersAfterTopic } from "./peopleInContent";
 
 /*
   How a topic gets from draft to learners, with a person in the loop:
@@ -212,7 +213,10 @@ function publishNow(db: Db, actor: User, slug: string, now: Date, opts: { notes?
   const result = publishLesson(db, actor, slug, now, opts);
   db.prepare("DELETE FROM topic_approvals WHERE slug = ?").run(slug);
   record(db, slug, "published", actor, now, { note: opts.notes?.trim() ?? "", version: result.version });
-  return { ...result, approval: approvalFor(db, actor, slug, now) };
+  // Anyone new the Topic names joins the character library, with a portrait on its way when the content says man or woman.
+  const live = editorLesson(db, slug)?.lesson;
+  const people = live ? charactersAfterTopic(db, actor, live, now) : { added: [], queued: [], needsDescription: [] };
+  return { ...result, approval: approvalFor(db, actor, slug, now), people };
 }
 
 /** When a draft is discarded or the topic deleted, any submission for it goes too (its history stays on record). */

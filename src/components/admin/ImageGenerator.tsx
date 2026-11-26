@@ -27,15 +27,22 @@ export function ImageGenerator({
   onMade,
   useLabel = "Use as poster",
   defaultAspect = "16:9",
+  start,
+  references = [],
 }: {
   lesson?: Lesson;
+  /** Pictures of the people in it, to keep how they look (GPT Image only): sent with the description. */
+  references?: string[];
+  /** A starting description from somewhere else (a card: "Start from this card"), offered beside the box. */
+  start?: { label: string; prompt: string };
   onUse: (p: Photo, alt: string) => void;
   onMade?: () => void;
   useLabel?: string;
   defaultAspect?: string;
 }) {
   const options = useApi<{ configured: boolean; models: ImageModel[]; defaultModel?: string }>("/api/admin/image-gen").data;
-  const [prompt, setPrompt] = useState("");
+  // Opened from a card, the description starts written from it ("Start from this card" puts it back after edits).
+  const [prompt, setPrompt] = useState(start?.prompt ?? "");
   // Empty until the author picks one: the hub's default is used (OpenAI when its key is set).
   const [modelId, setModelId] = useState("");
   const [aspect, setAspect] = useState(defaultAspect);
@@ -88,6 +95,7 @@ export function ImageGenerator({
           quality: model.qualities ? quality : undefined,
           houseStyle,
           lesson: l?.slug,
+          ...(references.length && model.id === "openai" && { references }),
         },
       });
       // OpenAI answers in one go; ElevenLabs is checked every few seconds until it's finished.
@@ -135,17 +143,23 @@ export function ImageGenerator({
       <label className={choice}>
         <span className="flex flex-wrap items-center justify-between gap-2">
           Describe the picture
-          {l && (
-            <button
-              type="button"
-              className="text-xs font-semibold text-accent hover:underline"
-              onClick={() => {
-                const about = l.summary.trim().replace(/\.$/, "");
-                setPrompt(`A poster photo for a topic called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
-              }}
-            >
-              Start from the topic
+          {start ? (
+            <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={() => setPrompt(start.prompt)}>
+              {start.label}
             </button>
+          ) : (
+            l && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-accent hover:underline"
+                onClick={() => {
+                  const about = l.summary.trim().replace(/\.$/, "");
+                  setPrompt(`A poster photo for a topic called “${l.title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1)}` : ""}.`);
+                }}
+              >
+                Start from the topic
+              </button>
+            )
           )}
         </span>
         <textarea
@@ -221,6 +235,13 @@ export function ImageGenerator({
           <span className="block text-xs text-ink-muted">Adds: {HOUSE_STYLE}</span>
         </span>
       </label>
+      {references.length > 0 && (
+        <p className={cx("rounded-xl px-3 py-2 text-sm", model?.id === "openai" ? "bg-tealtint" : "bg-[#fab53d]/15")}>
+          {model?.id === "openai"
+            ? `Keeping people looking the same: ${references.length} reference ${references.length === 1 ? "picture" : "pictures"} sent with the description.`
+            : "Reference pictures work with GPT Image (your OpenAI key). Choose it above to keep people looking the same."}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className={btn.primary} onClick={generate} disabled={Boolean(working) || prompt.trim().length < 3}>

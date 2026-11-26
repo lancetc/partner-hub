@@ -8,6 +8,7 @@ import { CHARACTER_ROLES, PORTRAIT_STATUS, type Character, type CharacterRole } 
 import type { characterLibrary } from "@/server/characters";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { ImageLibraryDialog } from "./ImagePicker";
+import { PeopleInContent } from "./PeopleInContent";
 import { Icon } from "../Icon";
 
 /*
@@ -76,8 +77,8 @@ export function CharacterLibraryAdmin() {
     <div className="flex flex-col gap-5">
       <p className="max-w-3xl text-ink-muted">
         The fictional people in training scenarios, each with one portrait. When a scenario names someone here (by name or another way of writing it), their
-        portrait appears beside them automatically. When a course is published, anyone its scenarios name who isn’t here is added, and a portrait is made for
-        anyone without one.
+        portrait appears beside them automatically. When a course or a Topic is published, anyone it names who isn’t here is added, and a portrait is made for
+        anyone without one whose content says they’re a man or a woman.
       </p>
       {!openai && (
         <p className="rounded-2xl bg-muted p-3">OpenAI isn’t connected, so portraits can’t be generated. You can still choose one from the image library.</p>
@@ -169,6 +170,7 @@ export function CharacterLibraryAdmin() {
           </li>
         ))}
       </ul>
+      <PeopleInContent onChanged={reload} />
       <ImageLibraryDialog
         open={Boolean(picking)}
         current={picking?.portrait}

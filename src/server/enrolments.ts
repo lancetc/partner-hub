@@ -2,6 +2,7 @@ import "server-only";
 import { lessons } from "@/content/lessons";
 import { audit, type Db } from "./db";
 import { HttpError, type User } from "./auth";
+import { canOpenTopic } from "./catalogue";
 import { missionSlugs } from "./challenges";
 import { enrolInPath, leavePath } from "./learningPaths";
 
@@ -21,6 +22,8 @@ function enrollable(db: Db, slug: string) {
 
 export function enrolInTopic(db: Db, user: User, slug: string, now: Date) {
   enrollable(db, slug);
+  // Only a topic this person may open (catalogue.canOpenTopic): another audience's topic can't be added by its slug.
+  if (!canOpenTopic(db, user, slug)) throw new HttpError(404, "Topic not found.");
   const r = db.prepare("INSERT OR IGNORE INTO topic_enrolments (user_id, lesson_slug, enrolled_at) VALUES (?, ?, ?)").run(user.id, slug, now.toISOString());
   if (r.changes) audit(db, { actor: user.id, event: "topic.self_enrolled", entity: `lesson:${slug}`, at: now });
   return { enrolled: true };
@@ -28,7 +31,8 @@ export function enrolInTopic(db: Db, user: User, slug: string, now: Date) {
 
 export function leaveTopic(db: Db, user: User, slug: string, now: Date) {
   const r = db.prepare("DELETE FROM topic_enrolments WHERE user_id = ? AND lesson_slug = ?").run(user.id, slug);
-  if (r.changes) audit(db, { actor: user.id, event: "topic.self_unenrolled", entity: `lesson:${slug}`, reason: "Left by the learner; progress is kept.", at: now });
+  if (r.changes)
+    audit(db, { actor: user.id, event: "topic.self_unenrolled", entity: `lesson:${slug}`, reason: "Left by the learner; progress is kept.", at: now });
   return { enrolled: false };
 }
 
@@ -41,7 +45,7 @@ export function myTopicEnrolments(db: Db, user: User) {
       enrolled_at: string;
     }[]
   )
-    .filter((r) => live.has(r.lesson_slug))
+    .filter((r) => live.has(r.lesson_slug) && canOpenTopic(db, user, r.lesson_slug))
     .map((r) => ({ slug: r.lesson_slug, enrolledAt: r.enrolled_at }));
 }
 

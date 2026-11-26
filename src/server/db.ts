@@ -735,7 +735,7 @@ export const demoUsers = [
     audience: "partner",
     service_role: "cleaning",
     timezone: "Australia/Brisbane",
-    label: "Cleaning partner · Brisbane",
+    label: "Supplier · Taylor Cleaning, Brisbane",
   },
   {
     id: "ash",
@@ -757,7 +757,7 @@ export const demoUsers = [
     audience: "coordinator",
     service_role: "coordinator",
     timezone: null,
-    label: "External coordinator · Sydney",
+    label: "Care Coordinator · Northside Coordination, Sydney",
   },
   {
     id: "casey",
@@ -768,20 +768,32 @@ export const demoUsers = [
     audience: "partner",
     service_role: null,
     timezone: "Australia/Brisbane",
-    label: "Organisation administrator · Taylor Cleaning",
+    label: "Care Partner · Taylor Cleaning",
   },
   {
     id: "jordan",
-    name: "Jordan Lee",
+    name: "Lance Elliott",
     email: "jordan@example.test",
     org_id: "trilogy",
     role: "author",
     audience: "staff",
     service_role: null,
     timezone: "Australia/Brisbane",
-    label: "Learning author and Hub owner · Trilogy",
+    label: "Trilogy administrator",
     review_role: "publisher",
     review_area: "Partner Hub",
+  },
+  // A Trilogy Care staff member who isn't an author or an administrator: the Hub as Trilogy's own people see it.
+  {
+    id: "avery",
+    name: "Avery Bennett",
+    email: "avery@example.test",
+    org_id: "trilogy",
+    role: "learner",
+    audience: "staff",
+    service_role: null,
+    timezone: "Australia/Brisbane",
+    label: "Trilogy staff",
   },
   // Trilogy staff who review topics before they're published (see server/topicApproval). They open
   // admin like authors do, so they can read the draft and comment on its cards.
@@ -825,6 +837,13 @@ export const demoUsers = [
     review_area: "Quality and Compliance",
   },
 ] as const;
+
+/**
+  The profiles offered in the account menu's switcher, in this order: one for each stakeholder (the owner, Nov 2026), to
+  see the Hub from each one's side. The other demo accounts stay (reviews and sign-offs are recorded under them) but
+  aren't offered.
+*/
+export const SWITCHER_USERS = ["sam", "riley", "casey", "avery", "jordan"] as const;
 
 /** Adds demo accounts that arrived after a database was first created, with their approval roles the first time. */
 export function seedStaff(db: Db) {

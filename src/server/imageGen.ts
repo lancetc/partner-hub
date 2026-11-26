@@ -2,7 +2,9 @@ import "server-only";
 import type { Db } from "./db";
 import { audit } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
-import { saveUpload } from "./uploads";
+import { readUpload, saveUpload } from "./uploads";
+import fs from "node:fs";
+import path from "node:path";
 import { jpegSize } from "./pexels";
 import { DEFAULT_IMAGE_MODEL, HOUSE_STYLE, imageModel, IMAGE_MODELS, OPENAI_DIRECT } from "@/lib/imageModels";
 import { randomUUID } from "node:crypto";
@@ -149,24 +151,44 @@ async function openaiRefusal(res: Response) {
 async function generateWithOpenAI(
   db: Db,
   actor: User,
-  input: { prompt: string; aspect: string; quality: string; lesson: string | null; about?: { title?: string; alt?: string } },
+  input: {
+    prompt: string;
+    aspect: string;
+    quality: string;
+    lesson: string | null;
+    about?: { title?: string; alt?: string };
+    references?: { bytes: Uint8Array; mime: string; name: string }[];
+  },
   now: Date,
 ) {
   let res: Response;
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+  const sizeAsked = OPENAI_SIZES[input.aspect] ?? "1536x1024";
   try {
-    res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
-        prompt: input.prompt,
-        size: OPENAI_SIZES[input.aspect] ?? "1536x1024",
-        quality: input.quality,
-        n: 1,
-      }),
-      signal: AbortSignal.timeout(180_000),
-      cache: "no-store",
-    });
+    if (input.references?.length) {
+      // Reference pictures: the same people, drawn in a new scene (OpenAI's image edits take several input images).
+      const form = new FormData();
+      form.append("model", model);
+      form.append("prompt", `${input.prompt}\n\n${REFERENCE_NOTE}`);
+      form.append("size", sizeAsked);
+      form.append("quality", input.quality);
+      form.append("n", "1");
+      for (const r of input.references) form.append("image[]", new Blob([r.bytes as BlobPart], { type: r.mime }), r.name);
+      res = await fetch("https://api.openai.com/v1/images/edits", {
+        method: "POST",
+        headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: form,
+        signal: AbortSignal.timeout(180_000),
+        cache: "no-store",
+      });
+    } else
+      res = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ model, prompt: input.prompt, size: sizeAsked, quality: input.quality, n: 1 }),
+        signal: AbortSignal.timeout(180_000),
+        cache: "no-store",
+      });
   } catch {
     throw new HttpError(502, "Couldn’t reach OpenAI, or it took too long. Check the connection and try again.");
   }
@@ -193,7 +215,7 @@ async function generateWithOpenAI(
     input.lesson,
     OPENAI_DIRECT.id,
     input.prompt,
-    JSON.stringify({ aspect: input.aspect, quality: input.quality }),
+    JSON.stringify({ aspect: input.aspect, quality: input.quality, ...(input.references?.length && { references: input.references.map((r) => r.name) }) }),
     actor.id,
     at,
     saved.src,
@@ -211,16 +233,45 @@ async function generateWithOpenAI(
   return { id, status: "completed" as const, photo: { src: saved.src, width: size.width, height: size.height }, prompt: input.prompt };
 }
 
+/** What a reference picture is for, said to the model alongside the description. */
+const REFERENCE_NOTE =
+  "The attached pictures are reference photos of the people in this scene. Keep each person looking exactly the same: the same face, age, skin tone, hair, build and style of clothing. Draw a new photo of the scene described, not a copy of the reference.";
+
+/** Up to four reference pictures from the image library (an upload or a built-in picture), read from disk. */
+export function referenceFiles(db: Db, value: unknown) {
+  const list = (Array.isArray(value) ? value : []).filter((v): v is string => typeof v === "string").slice(0, 4);
+  return list.flatMap((src) => {
+    const upload = /^\/api\/uploads\/([\w.-]+\.(?:webp|png|jpe?g))$/i.exec(src);
+    if (upload) {
+      const f = readUpload(db, upload[1]);
+      return f ? [{ bytes: new Uint8Array(f.body), mime: f.mime, name: upload[1] }] : [];
+    }
+    const builtIn = /^\/images\/([\w.-]+\.(webp|png|jpe?g))$/i.exec(src);
+    if (builtIn) {
+      try {
+        const bytes = new Uint8Array(fs.readFileSync(path.join(process.cwd(), "public", "images", builtIn[1])));
+        const ext = builtIn[2].toLowerCase();
+        return [{ bytes, mime: ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg", name: builtIn[1] }];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+}
+
 /** Starts a picture. Returns its id, to check on with checkGeneration. */
 /** `about`: a title and description for the library when the caller knows what it asked for (a character portrait, say). */
 export async function startGeneration(
   db: Db,
   actor: User,
-  input: Parameters<typeof requestFor>[0] & { lesson?: unknown; about?: { title?: string; alt?: string } },
+  input: Parameters<typeof requestFor>[0] & { lesson?: unknown; about?: { title?: string; alt?: string }; references?: unknown },
   now: Date,
 ) {
   requireAuthor(actor);
   const { model, prompt, body } = requestFor(input);
+  const references = referenceFiles(db, input.references);
+  if (references.length && model.id !== OPENAI_DIRECT.id) throw new HttpError(400, "Reference pictures work with GPT Image (your OpenAI key). Choose it as the model.");
   const since = new Date(now.getTime() - 3600_000).toISOString();
   const recent = db.prepare("SELECT COUNT(*) AS n FROM image_generations WHERE created_by = ? AND created_at > ?").get(actor.id, since) as { n: number };
   if (recent.n >= PER_HOUR) throw new HttpError(429, "That’s a lot of pictures in an hour. Take a short break, then try again.");
@@ -230,7 +281,7 @@ export async function startGeneration(
     return generateWithOpenAI(
       db,
       actor,
-      { prompt: body.prompt, aspect: body.aspect_ratio, quality: body.quality ?? "medium", lesson: lessonSlug, about: input.about },
+      { prompt: body.prompt, aspect: body.aspect_ratio, quality: body.quality ?? "medium", lesson: lessonSlug, about: input.about, references },
       now,
     );
   }

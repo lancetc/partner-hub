@@ -39,6 +39,7 @@ import { allBlocks, type Block, type GuideDoc } from "@/lib/magazine";
 import { cellText, suppress } from "@/lib/businessNotes";
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
+import { canRead } from "./magazine";
 
 /*
   "What Would You Do?" Community Case Threads (docs/case-threads.md): the one canonical thread per case.
@@ -390,8 +391,11 @@ function visibleThread(db: Db, user: User, id: unknown): ThreadRow {
   if (!t) throw new HttpError(404, NOT_FOUND);
   const aud = audienceOf(t);
   if (!canAuthor(user) && aud.length && !aud.includes(user.audience as CaseAudience)) throw new HttpError(404, NOT_FOUND);
+  const g = db.prepare("SELECT status, audience FROM magazine_guides WHERE id = ?").get(t.guide_id) as { status: string; audience: string } | undefined;
+  // The thread's audience was copied from its course when the course was published; an author can narrow the course's
+  // audience before republishing, and that applies at once (magazine.canRead), so the thread follows the course too.
+  if (g && !canRead(user, g)) throw new HttpError(404, NOT_FOUND);
   // The course that holds the case was archived: the thread stays readable, closed to new contributions.
-  const g = db.prepare("SELECT status FROM magazine_guides WHERE id = ?").get(t.guide_id) as { status: string } | undefined;
   if (g?.status === "archived" && t.status !== "archived")
     return { ...t, status: "archived", status_reason: "The course that holds this case has been archived." };
   return t;

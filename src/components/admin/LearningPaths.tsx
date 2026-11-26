@@ -359,6 +359,49 @@ export function LearningPathEditor({ id }: { id?: string }) {
   return <PathForm id={id} catalogue={source.catalogue} detail={detail.data} reload={detail.reload} />;
 }
 
+/**
+  The Featured tag on the path's card on Discovery Paths (server/magazineFeatured): saved straight away, not with the
+  form, like a Magazine course's. Any number of paths can carry it.
+*/
+function PathFeaturedTag({ id }: { id: string }) {
+  const url = `/api/admin/learning-paths/${id}/featured`;
+  const { data, setData } = useApi<{ tagged: boolean }>(url);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="text-sm font-semibold">Featured</legend>
+      <label className="flex min-h-11 items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-5 accent-[var(--action)]"
+          checked={Boolean(data?.tagged)}
+          disabled={!data || busy}
+          onChange={async (e) => {
+            setBusy(true);
+            setProblem(null);
+            try {
+              setData(await api<{ tagged: boolean }>(url, { method: "PUT", body: { tag: e.target.checked } }));
+            } catch (err) {
+              setProblem(err instanceof Error ? err.message : "That didn’t save. Try again.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        <span>
+          <span className="font-semibold">Featured tag</span>
+          <span className="block text-sm text-ink-muted">A yellow “Featured” tag over its picture on Discovery Paths. Saved straight away.</span>
+        </span>
+      </label>
+      {problem && <p className="text-sm font-semibold text-danger">{problem}</p>}
+    </fieldset>
+  );
+}
+
+/** The certificate reward, worded from the path's name: "A certificate of completion in SIRS 1: …". */
+const certificateText = (name: string) => `A certificate of completion in ${name.trim()}`;
+
 function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: LessonInfo[]; detail: Detail | null; reload: () => void }) {
   const router = useRouter();
   const isNew = !id;
@@ -373,6 +416,9 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   // One outcome per line while editing.
   const [outcomes, setOutcomes] = useState((detail?.outcomes ?? []).join("\n"));
   const [reward, setReward] = useState(detail?.reward ?? "");
+  // "What you get at the end" as a tick: the wording is written for them from the path's name, and follows it when the
+  // name changes. On for a new path; on for an existing one whose reward already reads that way.
+  const [certificate, setCertificate] = useState(() => (detail ? (detail.reward ?? "").trim() === certificateText(detail.name ?? "") : true));
   const [whoPhoto, setWhoPhoto] = useState(detail?.whoPhoto ?? "");
   const [flat, setPicked] = useState<string[]>(detail?.lessons ?? []);
   // Chapters (with optional stages); null for a path that's a plain list of lessons.
@@ -426,7 +472,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
           .split("\n")
           .map((o) => o.replace(/^\s*[-•*]\s*/, "").trim())
           .filter(Boolean),
-        reward,
+        reward: certificate ? certificateText(name) : reward,
         lessons: picked,
         ...(chapters ? { chapters } : {}),
       };
@@ -528,9 +574,37 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   onChange={(e) => change(() => setOutcomes(e.target.value))}
                 />
               </Field>
-              <Field label="What you get at the end" hint="For example: A certificate of completion you can download and keep.">
-                <input className={input} value={reward} onChange={(e) => change(() => setReward(e.target.value))} maxLength={300} />
-              </Field>
+              {id && <PathFeaturedTag id={id} />}
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="text-sm font-semibold">What you get at the end</legend>
+                <label className="flex min-h-11 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-5 accent-[var(--action)]"
+                    checked={certificate}
+                    onChange={(e) => change(() => setCertificate(e.target.checked))}
+                  />
+                  <span>
+                    <span className="font-semibold">A certificate of completion</span>
+                    <span className="block text-sm text-ink-muted">
+                      Shows as: <span className="text-ink">{certificateText(name.trim() ? name : "[path name]")}</span>
+                    </span>
+                  </span>
+                </label>
+                {!certificate && (
+                  <>
+                    <input
+                      className={input}
+                      value={reward}
+                      onChange={(e) => change(() => setReward(e.target.value))}
+                      maxLength={300}
+                      aria-label="What you get at the end"
+                      placeholder="Something else, or leave empty"
+                    />
+                    <span className="text-xs text-ink-muted">Untick the certificate to write your own, for example a badge or a reflection to keep.</span>
+                  </>
+                )}
+              </fieldset>
               <label className="flex min-h-11 items-start gap-3">
                 <input
                   type="checkbox"

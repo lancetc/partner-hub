@@ -500,7 +500,8 @@ describe("the marker for an earlier highlight", () => {
 const CARD = "A supplier invoice is checked line by line against the agreement that applied on the day.";
 /** A published Topic (a throwaway, as an author would make one) whose first card has a passage worth saving. */
 function topic(body = CARD) {
-  const input = { ...blankLesson(), title: "ZZ Test invoice topic" } as Lesson;
+  // For everyone (core), so Riley (a coordinator) can open it.
+  const input = { ...blankLesson(), title: "ZZ Test invoice topic", track: "core" } as Lesson;
   input.nodes = { ...input.nodes, intro: { ...input.nodes.intro, heading: "Check each line", body } as Lesson["nodes"][string] };
   const { slug } = createLesson(db, jordan, input, now);
   return { slug, version: publishLesson(db, jordan, slug, now).version };

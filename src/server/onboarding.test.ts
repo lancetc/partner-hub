@@ -49,7 +49,8 @@ const TASKS = [
   { id: "police", kind: "document", title: "Police check", audiences: ["partner", "coordinator"], required: true, expiryMonths: 12 },
   { id: "insurance", kind: "document", scope: "organisation", title: "Public liability insurance", audiences: ["partner"], required: true, expiryMonths: 12 },
   { id: "start", kind: "diagnostic", title: "Check your starting point", required: false },
-  { id: "first", kind: "learning", title: "Your first Topic", asset: "topic:noticing-a-change", required: false },
+  // A core-track Topic, so every role can open it (each role's own first course is a starting course: server/onboardingCourses).
+  { id: "first", kind: "learning", title: "Your first Topic", asset: "topic:legislative-framework", required: false },
   { id: "photo", kind: "document", title: "A photo for your profile", required: false },
 ];
 function release(tasks: unknown[] = TASKS, existing: string[] = []) {
@@ -85,14 +86,15 @@ describe("the requirements matrix", () => {
     expect(view.changes?.added).toHaveLength(7);
     // A draft changes nothing for anyone.
     expect(mySetup(db, riley, now).configured).toBe(false);
-    expect(activateConfig(db, jordan, {}, now).active).toMatchObject({ version: 1, approvedBy: "Jordan Lee" });
+    expect(activateConfig(db, jordan, {}, now).active).toMatchObject({ version: 1, approvedBy: "Lance Elliott" });
   });
 
   it("gives each person only the tasks for who they are", () => {
     release();
     // A coordinator: their own police check, and nothing for their organisation.
     expect(mySetup(db, riley, now).tasks.map((t) => t.id)).toEqual(["details", "code", "police", "first", "photo"]);
-    // A Care Partner also waits on their organisation's insurance, which isn't theirs to do.
+    // A Care Partner also waits on their organisation's insurance, which isn't theirs to do. "Your first Topic" is a
+    // core Topic, so a Care Partner gets it too.
     expect(mySetup(db, sam, now).tasks.map((t) => [t.id, t.mine])).toEqual([
       ["details", true],
       ["code", true],
@@ -250,7 +252,7 @@ describe("a person's setup", () => {
       /three months/,
     );
     grantOverride(db, jordan, { userId: "riley", reason: "Starting Monday, check in the post.", expiresOn: "2026-12-01" }, now);
-    expect(mySetup(db, riley, now)).toMatchObject({ canStart: true, override: { until: "2026-12-01", by: "Jordan Lee" } });
+    expect(mySetup(db, riley, now)).toMatchObject({ canStart: true, override: { until: "2026-12-01", by: "Lance Elliott" } });
     expect(accessFor(db, riley, now)).toMatchObject({ full: true, override: true });
     startUsing(db, riley, now);
     // When the exception ends, the requirement is still outstanding.

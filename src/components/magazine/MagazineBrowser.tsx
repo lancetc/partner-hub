@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { cx, formatDate, hoursAndMinutes } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ShelfRow } from "../ShelfRow";
-import { GUIDE_GOALS, GUIDE_ROLES, type GuideGoal, type GuideRole } from "@/lib/magazine";
+import { FeaturedTag } from "../FeaturedTag";
+import { GUIDE_GOALS, GUIDE_ROLES, browsingRole, type GuideGoal, type GuideRole } from "@/lib/magazine";
+import { useApi, type Me } from "@/lib/api";
 
 /*
   Magazine, laid out like Topics and Discovery Paths: "Browse the Magazine" with a toolbar, the rows to browse, then
@@ -16,8 +18,8 @@ import { GUIDE_GOALS, GUIDE_ROLES, type GuideGoal, type GuideRole } from "@/lib/
   the business, Trilogy Care's and the partners':
   - Goals, as a row of chips with counts, "Grow the business" first: what a story helps someone do (lib/magazine
     GUIDE_GOALS). Only the goals there are show.
-  - Your role: Care Partners and their workers, care coordinators, business owners and managers, or Trilogy Care
-    teams (GUIDE_ROLES). A story tagged for no role is for everyone. Shown when there's more than one role to choose.
+  - Your role: Suppliers, Care Coordinators, Care Partners or Trilogy Care staff, as the demo profiles are named
+    (GUIDE_ROLES). A story tagged for no role is for everyone. Shown when there's more than one role to choose.
   - Format: guides to read (field guides, expert guidance, explainers), simulations and decision labs (lib/magazine
     SIMULATION_BLOCKS), courses of several pages, and eLearning.
   - Your progress, length (a quick read, 10 to 30 minutes, longer) and sort.
@@ -53,6 +55,8 @@ export type BrowseGuide = {
   state: "new" | "started" | "completed";
   /** Where authors edit it. */
   editHref?: string;
+  /** Tagged Featured in its settings (server/magazineFeatured): a yellow tag over its picture. */
+  featured?: boolean;
 };
 
 type Sort = "newest" | "popular" | "az" | "shortest";
@@ -215,6 +219,17 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   const [sort, setSort] = useState<Sort>(fromAddress(params.get("sort"), ["newest", "popular", "az", "shortest"], "newest"));
   const [shown, setShown] = useState(ROW);
   const everyStory = useRef<HTMLHeadingElement>(null);
+  // Starts on the reader's own role (a Care Coordinator sees Care Coordinators first), unless the address chose one or
+  // they've picked one since. Only when the Magazine has stories tagged for it.
+  const me = useApi<Me>("/api/me").data;
+  const roleChosen = useRef(params.has("role"));
+  useEffect(() => {
+    if (roleChosen.current || !me) return;
+    roleChosen.current = true;
+    const mine = browsingRole({ audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- once, when we know who's reading
+    if (mine && guides.some((g) => g.roles.includes(mine))) setRole(mine);
+  }, [me, guides]);
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
   useEffect(() => {
@@ -257,6 +272,7 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   const formats = FORMATS.filter((f) => guides.some((g) => g.format === f.value));
   const roles = GUIDE_ROLES.filter((x) => guides.some((g) => g.roles.includes(x.value)));
   const reset = () => {
+    roleChosen.current = true;
     setShown(ROW);
     setQ("");
     setGoal("any");
@@ -318,7 +334,14 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
           {roles.length > 1 && (
             <label className="flex flex-col gap-1 text-sm font-semibold">
               Your role
-              <select className={cx(field, "w-auto")} value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <select
+                className={cx(field, "w-auto")}
+                value={role}
+                onChange={(e) => {
+                  roleChosen.current = true;
+                  setRole(e.target.value as Role);
+                }}
+              >
                 <option value="any">Any role</option>
                 {roles.map((x) => (
                   <option key={x.value} value={x.value}>
@@ -463,7 +486,10 @@ function State({ guide }: { guide: BrowseGuide }) {
 function Tile({ guide: g, canEdit, className }: { guide: BrowseGuide; canEdit: boolean; className?: string }) {
   return (
     <li className={cx("group relative flex flex-col gap-3", className)}>
-      <Cover guide={g} className="aspect-[16/10] w-full rounded-2xl" />
+      <div className="relative">
+        <Cover guide={g} className="aspect-[16/10] w-full rounded-2xl" />
+        {g.featured && <FeaturedTag />}
+      </div>
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{meta(g)}</p>
       <h3 className="font-serif text-xl font-semibold leading-snug">
         <Link href={g.href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">

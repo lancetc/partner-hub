@@ -219,6 +219,7 @@ export type FeedCard = {
   featured: boolean;
 };
 export type FeedChat = { episodeId: string; number: number; title: string; remembered: number; memory: boolean };
+export type FeedPerson = { circumstances: string; location: string; tagline: string };
 
 const firstName = (name: string) => (/^(mr|mrs|ms)\b/i.test(name) ? name : name.split(" ")[0]);
 
@@ -407,7 +408,18 @@ export function momentFeed(db: Db, user: User, now: Date, opts: { all?: boolean 
         memory: settings.memory,
       };
   }
-  return { cards: out.map(({ score: _s, ...c }) => (void _s, c)), chat };
+  // Who each person is, for the homepage's featured profile: "82 · Lives alone at home", where, and their card's tagline.
+  const people: Record<string, FeedPerson> = {};
+  for (const id of new Set(out.map((c) => c.memberId))) {
+    const b = bible(id);
+    const intro = DIGITAL_MEMBERS.find((m) => m.id === id);
+    people[id] = {
+      circumstances: [b?.identity.age, b?.identity.living || intro?.role].filter(Boolean).join(" · "),
+      location: b?.identity.location ?? "",
+      tagline: intro?.tagline ?? "",
+    };
+  }
+  return { cards: out.map(({ score: _s, ...c }) => (void _s, c)), chat, people };
 }
 
 /**

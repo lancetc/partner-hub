@@ -21,7 +21,7 @@ describe("insight walls", () => {
     expect(before.mine).toBeNull();
     const after = postToWall(db, u("sam"), "legislative-framework", "share", "I ask what matters most to them today.", now);
     expect(after.mine?.text).toBe("I ask what matters most to them today.");
-    expect(after.posts.map((p) => p.by)).toEqual(["Jordan · Trilogy Care", "Riley · Coordinator", "Ash · Gardening partner"]);
+    expect(after.posts.map((p) => p.by)).toEqual(["Lance · Trilogy Care", "Riley · Coordinator", "Ash · Gardening partner"]);
     expect(after.posts.every((p) => !p.mine)).toBe(true);
   });
 

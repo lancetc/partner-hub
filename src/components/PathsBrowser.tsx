@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { cx, formatDate, formatHoursMinutes } from "@/lib/format";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
+import { FeaturedTag } from "./FeaturedTag";
 import { ShelfRow } from "./ShelfRow";
 import { byPathNewest, byPathPopularity, pathForRole, pathShelves, type PathSeeAll } from "@/lib/pathShelves";
 
@@ -25,6 +26,8 @@ export type BrowsePath = {
   topics: number;
   minutes: number;
   thumbnail: Parameters<typeof StoryVisual>[0] | null;
+  /** Tagged Featured in its settings (server/magazineFeatured): a yellow tag over its picture. */
+  featured?: boolean;
   assigned: boolean;
   selfEnrolled: boolean;
   started: boolean;
@@ -353,7 +356,14 @@ function PathTile({ path: p, className }: { path: BrowsePath; className?: string
   const cta = p.done ? "Revisit path" : p.started ? "Continue" : "Start path";
   return (
     <li className={cx("group relative flex flex-col gap-3", className)}>
-      {p.thumbnail ? <StoryVisual {...p.thumbnail} alt="" className="aspect-[16/10] rounded-2xl" /> : <div className="aspect-[16/10] rounded-2xl bg-tealtint" aria-hidden />}
+      <div className="relative">
+        {p.thumbnail ? (
+          <StoryVisual {...p.thumbnail} alt="" className="aspect-[16/10] rounded-2xl" />
+        ) : (
+          <div className="aspect-[16/10] rounded-2xl bg-tealtint" aria-hidden />
+        )}
+        {p.featured && <FeaturedTag />}
+      </div>
       <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
         {p.topics} {p.topics === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
         {p.audience && ` · ${p.audience}`}

@@ -3,7 +3,18 @@ import { zipSync, strToU8 } from "fflate";
 import { openDb, type Db } from "./db";
 import { userById, type User } from "./auth";
 import { createGuide } from "./magazine";
-import { addSource, draftPlan, outlineIssues, outlinePrompt, pageIssues, pagePrompt, removeSource, updatePlan, updateSource, type OutlinePage } from "./magazineDraft";
+import {
+  addSource,
+  draftPlan,
+  outlineIssues,
+  outlinePrompt,
+  pageIssues,
+  pagePrompt,
+  removeSource,
+  updatePlan,
+  updateSource,
+  type OutlinePage,
+} from "./magazineDraft";
 
 /* Drafting a Magazine with Claude: reading the documents, the time target, and checking what Claude sends back. (No calls to Claude here.) */
 
@@ -42,7 +53,9 @@ describe("source documents", () => {
     const pptx = zipSync({
       "ppt/presentation.xml": strToU8("<p:presentation/>"),
       "ppt/slides/slide1.xml": strToU8(`<p:sld><a:t>Check the client’s name and period on every invoice line</a:t></p:sld>`),
-      "ppt/slides/slide2.xml": strToU8(`<p:sld><a:t>Match each line to an agreed service, then check dates hours and the price &amp; query anything that doesn’t match</a:t></p:sld>`),
+      "ppt/slides/slide2.xml": strToU8(
+        `<p:sld><a:t>Match each line to an agreed service, then check dates hours and the price &amp; query anything that doesn’t match</a:t></p:sld>`,
+      ),
     });
     const slides = await addSource(db, author, guideId, file("training.pptx", pptx), now);
     expect(slides).toMatchObject({ status: "ready", slides: 2 });
@@ -57,6 +70,18 @@ describe("source documents", () => {
     expect(draftPlan(db, author, guideId).sources.map((s) => s.status)).toEqual(["ready", "ready", "error", "error"]);
   });
 
+  it("reads a SCORM package's words, and says why one can't be read", async () => {
+    const manifest = `<manifest identifier="m"><organizations default="o"><organization identifier="o"><title>Invoices</title><item identifier="i" identifierref="r"><title>Invoices</title></item></organization></organizations><resources><resource identifier="r" type="webcontent" href="index.html"/></resources></manifest>`;
+    const scorm = zipSync({ "imsmanifest.xml": strToU8(manifest), "index.html": strToU8(`<html><body><p>${longText}</p></body></html>`) });
+    const s = await addSource(db, author, guideId, file("invoices-scorm.zip", scorm, "application/zip"), now);
+    expect(s).toMatchObject({ status: "ready", kind: "text", slides: null });
+    expect(s.words).toBeGreaterThan(100);
+
+    const notScorm = await addSource(db, author, guideId, file("photos.zip", zipSync({ "a.txt": strToU8(longText) })), now);
+    expect(notScorm).toMatchObject({ status: "error" });
+    expect(notScorm.error).toMatch(/isn’t a SCORM package/);
+  });
+
   it("marks a document background, removes one, and is for authors only", async () => {
     const s = await addSource(db, author, guideId, file("notes.txt", longText, "text/plain"), now);
     expect(updateSource(db, author, guideId, s.id, { authority: "background" }).authority).toBe("background");
@@ -69,7 +94,13 @@ describe("source documents", () => {
 
 describe("the brief, time and outline", () => {
   it("keeps the brief, time target and the author's outline edits", () => {
-    const p = updatePlan(db, author, guideId, { brief: "Teach invoice checks.", minutes: 30, outline: [page({ minutes: 99, template: "nope" as never })] }, now);
+    const p = updatePlan(
+      db,
+      author,
+      guideId,
+      { brief: "Teach invoice checks.", minutes: 30, outline: [page({ minutes: 99, template: "nope" as never })] },
+      now,
+    );
     expect(p).toMatchObject({ brief: "Teach invoice checks.", minutes: 30 });
     expect(p.outline![0]).toMatchObject({ minutes: 60, template: "blank" });
     expect(() => updatePlan(db, author, guideId, { minutes: 1 }, now)).toThrow(/between 2 and 240/);

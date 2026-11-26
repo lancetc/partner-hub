@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
-import { PAGE_TEMPLATES, type Page, type PageTemplate } from "@/lib/magazine";
+import { BLOCK_LABELS, PAGE_TEMPLATES, SOURCE_FILE_TYPES, WHY_FIELDS, type BlockType, type BlockWhy, type Page, type PageTemplate } from "@/lib/magazine";
+import { AI_MODES, CATALOGUE, catalogueEntry } from "@/lib/activityCatalogue";
 import { btn, ErrorNote, Field, input } from "./ui";
 import { readEvents } from "./BuildProgress";
 import { Icon } from "../Icon";
@@ -36,17 +37,23 @@ type OutlinePage = {
   interaction: string;
   sources: string[];
   missing: string[];
+  activities?: Planned[];
 };
+/** A recommended activity in the outline (server/magazineDraft PlannedActivity). */
+type Planned = { type: BlockType; mode: "configurable" | "recommend"; decision: "suggested" | "accepted" | "rejected"; why: BlockWhy };
+type Specialist = { type: BlockType; label: string; why: BlockWhy; signoff: string };
 type Plan = { sources: Source[]; brief: string; minutes: number | null; outline: OutlinePage[] | null; questions: string[] };
 type Event =
   | { type: "phase"; phase: "reading" | "writing" | "checking" | "fixing"; issues?: number }
   | { type: "count"; what: string; n: number }
   | { type: "error"; error: string }
   | ({ type: "done" } & Record<string, unknown>);
-type Job = { state: "idle" } | { state: "running"; text: string } | { state: "done" } | { state: "failed"; error: string };
+type Job = { state: "idle" } | { state: "running"; text: string } | { state: "done"; specialist?: Specialist[] } | { state: "failed"; error: string };
+
+/** What the author can swap a recommendation for: every activity the catalogue lets the Magazine builder use. */
+const SWAPPABLE = CATALOGUE.filter((e) => e.builder === "magazine" && (e.ai.mode === "configurable" || e.ai.mode === "recommend"));
 
 const TIMES = [10, 20, 30, 45, 60];
-const ACCEPT = ".pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain";
 const TEMPLATES = (Object.keys(PAGE_TEMPLATES) as PageTemplate[]).filter((t) => t !== "blank");
 
 const sizeOf = (s: Source) =>
@@ -198,9 +205,14 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
   const generate = async (index: number) => {
     setJobs((j) => ({ ...j, [index]: { state: "running", text: "Starting…" } }));
     try {
-      const out = await stream<{ page: Page }>(`${base}/page`, { index }, (text) => setJobs((j) => ({ ...j, [index]: { state: "running", text } })), "page");
+      const out = await stream<{ page: Page; specialist?: Specialist[] }>(
+        `${base}/page`,
+        { index },
+        (text) => setJobs((j) => ({ ...j, [index]: { state: "running", text } })),
+        "page",
+      );
       onAddPage(out.page);
-      setJobs((j) => ({ ...j, [index]: { state: "done" } }));
+      setJobs((j) => ({ ...j, [index]: { state: "done", specialist: out.specialist ?? [] } }));
       return true;
     } catch (e) {
       setJobs((j) => ({ ...j, [index]: { state: "failed", error: e instanceof Error ? e.message : "That didn’t work." } }));
@@ -234,8 +246,8 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
           1. Source documents
         </h3>
         <p className="text-sm text-ink-muted">
-          PDF, Word, PowerPoint or text, up to 15 MB each. Mark approved guidance as authoritative; anything else as background, so Claude doesn’t rest a claim
-          on it alone. Learners never see these files.
+          PDF, Word, PowerPoint or text, up to 15 MB each, or an eLearning course as a SCORM package (.zip, up to 200 MB) to read its words from. Mark approved
+          guidance as authoritative; anything else as background, so Claude doesn’t rest a claim on it alone. Learners never see these files.
         </p>
         <label
           onDragOver={(e) => e.preventDefault()}
@@ -248,7 +260,15 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
           <Icon name="upload" className="size-6 text-accent" />
           <span className="font-semibold">{uploading ? "Reading…" : "Upload documents"}</span>
           <span className="text-sm text-ink-muted">Drag files here or choose them</span>
-          <input ref={fileInput} type="file" multiple accept={ACCEPT} className="sr-only" disabled={busy} onChange={(e) => void upload(e.target.files)} />
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept={SOURCE_FILE_TYPES}
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => void upload(e.target.files)}
+          />
         </label>
         {sources.length > 0 && (
           <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line">
@@ -441,6 +461,20 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
                           Missing from the documents: {p.missing.join("; ")}
                         </p>
                       )}
+                      <ActivityPlan page={i + 1} activities={p.activities ?? []} disabled={busy} onChange={(activities) => editPage(i, { activities })} />
+                      {job.state === "done" && (job.specialist ?? []).length > 0 && (
+                        <div className="rounded-xl bg-gold/15 p-3 text-sm">
+                          <p className="font-semibold">Specialist setup still to do on this page</p>
+                          <ul className="mt-1 list-disc pl-5">
+                            {job.specialist!.map((s) => (
+                              <li key={s.type}>
+                                Add the <span className="font-semibold">{s.label}</span> from Add block, then set it up from its reviewed case.
+                                {s.signoff ? ` Sign-off: ${s.signoff}.` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5">
                       <button
@@ -523,6 +557,131 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
         </section>
       )}
       {problem && <ErrorNote text={problem} />}
+    </div>
+  );
+}
+
+/**
+  A page's recommended activities, as the build plan the author reviews: each with “Why this block?” (the behaviour,
+  evidence, the option considered instead, what the learner does and what's measured, the review owner and source).
+  The author accepts or rejects each, edits the reasons, swaps it for another catalogue activity, reorders or removes
+  it. A rejected one is never written into the page; a specialist one is added by hand after its reviewed setup.
+*/
+function ActivityPlan({ page, activities, disabled, onChange }: { page: number; activities: Planned[]; disabled: boolean; onChange: (a: Planned[]) => void }) {
+  if (!activities.length) return null;
+  const set = (i: number, patch: Partial<Planned>) => onChange(activities.map((a, j) => (j === i ? { ...a, ...patch } : a)));
+  const move = (i: number, dir: -1 | 1) => {
+    if (i + dir < 0 || i + dir >= activities.length) return;
+    const next = [...activities];
+    [next[i], next[i + dir]] = [next[i + dir], next[i]];
+    onChange(next);
+  };
+  return (
+    <div className="rounded-xl border border-line bg-surface p-3">
+      <p className="text-sm font-semibold">Recommended activities</p>
+      <p className="text-xs text-ink-muted">
+        Chosen from the Activity Catalogue. Accept, change or reject each before generating; a rejected activity isn’t written.
+      </p>
+      <ol className="mt-2 flex flex-col gap-2">
+        {activities.map((a, i) => {
+          const e = catalogueEntry(a.type);
+          return (
+            <li key={`${a.type}-${i}`} className={cx("rounded-lg border border-line p-2", a.decision === "rejected" && "opacity-60")}>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold">{BLOCK_LABELS[a.type]}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {a.mode === "configurable" ? "AI writes a draft" : "Specialist setup required"}
+                </span>
+                <span className="text-xs text-ink-muted">{a.decision === "suggested" ? "Suggested" : a.decision === "accepted" ? "Accepted" : "Rejected"}</span>
+                <span className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    className={btn.quiet}
+                    disabled={disabled}
+                    aria-pressed={a.decision === "accepted"}
+                    onClick={() => set(i, { decision: "accepted" })}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    className={btn.quiet}
+                    disabled={disabled}
+                    aria-pressed={a.decision === "rejected"}
+                    onClick={() => set(i, { decision: "rejected" })}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Move ${BLOCK_LABELS[a.type]} up on page ${page}`}
+                    className="grid size-8 place-items-center rounded-full hover:bg-muted disabled:opacity-30"
+                    disabled={disabled || i === 0}
+                    onClick={() => move(i, -1)}
+                  >
+                    <Icon name="arrow-left" className="size-4 rotate-90" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Move ${BLOCK_LABELS[a.type]} down on page ${page}`}
+                    className="grid size-8 place-items-center rounded-full hover:bg-muted disabled:opacity-30"
+                    disabled={disabled || i === activities.length - 1}
+                    onClick={() => move(i, 1)}
+                  >
+                    <Icon name="arrow-right" className="size-4 rotate-90" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${BLOCK_LABELS[a.type]} from page ${page}`}
+                    className="grid size-8 place-items-center rounded-full hover:bg-muted disabled:opacity-30"
+                    disabled={disabled}
+                    onClick={() => onChange(activities.filter((_, j) => j !== i))}
+                  >
+                    <Icon name="trash" className="size-4" />
+                  </button>
+                </span>
+              </div>
+              {a.why.rationale && <p className="mt-1 text-sm">{a.why.rationale}</p>}
+              <details className="mt-1 text-sm">
+                <summary className="cursor-pointer font-semibold text-accent">Why this block?</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold">Swap for another activity</span>
+                    <select
+                      className="min-h-9 rounded-lg border border-line-strong bg-surface px-2"
+                      value={a.type}
+                      disabled={disabled}
+                      onChange={(ev) => {
+                        const to = catalogueEntry(ev.target.value);
+                        if (!to || to.ai.mode === "human" || to.ai.mode === "unavailable") return;
+                        set(i, { type: to.id as BlockType, mode: to.ai.mode, decision: "accepted", why: { ...a.why, owner: to.signoff || a.why.owner } });
+                      }}
+                    >
+                      {SWAPPABLE.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({AI_MODES[s.ai.mode].label})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {WHY_FIELDS.map(([k, label]) => (
+                    <label key={k} className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold">{label}</span>
+                      <textarea
+                        className={cx(input, "min-h-10 py-1.5 text-sm")}
+                        value={a.why[k] ?? ""}
+                        disabled={disabled}
+                        onChange={(ev) => set(i, { why: { ...a.why, [k]: ev.target.value } })}
+                      />
+                    </label>
+                  ))}
+                  {e && <p className="text-xs text-ink-muted">Catalogue: {e.ai.reason}</p>}
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

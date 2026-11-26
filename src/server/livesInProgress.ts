@@ -34,6 +34,8 @@ import { DIGITAL_MEMBERS } from "@/content/digitalMembers";
 import { DEMO_ARCS, DEMO_BIBLES, DEMO_CAST, LIFE_EVENTS } from "@/content/livesInProgress";
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
+import { canOpenTopic } from "./catalogue";
+import { pathFor } from "./learningPaths";
 import { ensureCharacters } from "./characters";
 import { digitalMember } from "./digitalMembers";
 import { learnerGuides } from "./magazine";
@@ -494,9 +496,14 @@ function openable(db: Db, user: User, now: Date, guides: () => Set<string>, r: R
   if (kind === "magazine") return guides().has(ref);
   if (kind === "topics") {
     const l = getLesson(db, ref); // A spaced-learning variation counts only once approved; a Topic an author deleted isn't in the list at all.
-    return Boolean(l) && (!("generated" in l! && l!.generated) || l!.generated.status === "approved");
+    if (!l) return false;
+    // A catalogue Topic only when it's for this reader (catalogue.canOpenTopic): no partner topic under a coordinator's story.
+    return "generated" in l && l.generated ? l.generated.status === "approved" : canOpenTopic(db, user, ref);
   }
-  if (kind === "discovery") return Boolean(db.prepare("SELECT 1 FROM learning_paths WHERE id = ? AND archived = 0").get(ref));
+  if (kind === "discovery") {
+    const p = db.prepare("SELECT id, audience FROM learning_paths WHERE id = ? AND archived = 0").get(ref) as { id: string; audience: string } | undefined;
+    return Boolean(p) && pathFor(db, user, p!);
+  }
   return true;
 }
 

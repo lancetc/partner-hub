@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useApi, type Me } from "@/lib/api";
 import { useHub, useHydrated } from "@/lib/store";
 import { cx, formatDate } from "@/lib/format";
@@ -10,6 +11,7 @@ import type { TopicSummary } from "@/lib/topicSummary";
 import { AskTrilogy } from "./AskTrilogy";
 import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
+import { CountUp } from "./CountUp";
 import type { MyPath } from "./MyLearningPaths";
 
 /*
@@ -54,6 +56,9 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
 
   const all = box ? [...box.action, ...box.updates, ...box.activity] : [];
   const summary = box ? sinceLastVisit(all, last, now) : null;
+  // The cover picture's slot for that note (home/HomeHero): it's on the page by the time this has its inbox.
+  const hydrated = useHydrated();
+  const noteSlot = hydrated && typeof document !== "undefined" ? document.getElementById("home-hero-note") : null;
   const todo = box?.action.filter((a) => !a.done) ?? [];
   const important = box?.updates.find((u) => !u.read) ?? box?.updates[0];
 
@@ -71,15 +76,22 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
   return (
     // The greeting is in the homepage's cover (home/HomeHero), straight above this.
     <section aria-label="Your workspace" className="flex flex-col gap-5">
-      {summary && (
-        <p data-build-step style={step(2)} className="flex items-start gap-3 rounded-2xl bg-tealtint px-4 py-3">
-          <Icon name="spark" className="mt-0.5 size-5 shrink-0 text-[#008282] dark:text-[#3cb8b9]" />
-          <span>
-            <span className="font-semibold">{last ? "Since your last visit. " : ""}</span>
-            {summary}
-          </span>
-        </p>
-      )}
+      {/* A small note at the bottom left of the homepage's cover picture (its slot is in home/HomeHero). */}
+      {summary &&
+        noteSlot &&
+        createPortal(
+          <p
+            role="status"
+            className="hub-note-in flex items-start gap-2 rounded-2xl bg-white/85 px-3 py-1.5 text-sm text-ink shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:bg-[#0b1f33]/80 dark:ring-white/10"
+          >
+            <Icon name="spark" className="mt-0.5 size-4 shrink-0 text-[#008282] dark:text-[#3cb8b9]" />
+            <span>
+              <span className="font-semibold">{last ? "Since your last visit: " : ""}</span>
+              {summary}
+            </span>
+          </p>,
+          noteSlot,
+        )}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
@@ -109,7 +121,10 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
                   const days = a.dueAt ? Math.ceil((Date.parse(a.dueAt) - now.getTime()) / 86_400_000) : null;
                   return (
                     <li key={a.id}>
-                      <Link href="/inbox" className="group flex items-center gap-3 rounded-2xl bg-surface px-3 py-3 shadow-sm ring-1 ring-black/5 hover:ring-[#fab53d]">
+                      <Link
+                        href="/inbox"
+                        className="group flex items-center gap-3 rounded-2xl bg-surface px-3 py-3 shadow-sm ring-1 ring-black/5 hover:ring-[#fab53d]"
+                      >
                         <span
                           aria-hidden
                           className={cx(
@@ -124,7 +139,9 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
                           <span className="block text-sm text-ink-muted">
                             {a.ackRequired ? "Read and acknowledge" : a.category}
                             {a.dueAt && ` · due ${formatDate(a.dueAt)}`}
-                            {days !== null && days <= 7 && days >= 0 && <span className="font-semibold text-[#c7393e] dark:text-[#ff9ea2]"> · {days} days left</span>}
+                            {days !== null && days <= 7 && days >= 0 && (
+                              <span className="font-semibold text-[#c7393e] dark:text-[#ff9ea2]"> · {days} days left</span>
+                            )}
                           </span>
                         </span>
                         {a.priority === "critical" && <span className="rounded-full bg-[#c7393e] px-2 py-0.5 text-xs font-bold text-white">Critical</span>}
@@ -147,7 +164,9 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
               className="rounded-3xl border border-[#c7393e]/25 bg-[#c7393e]/10 p-4 hover:border-[#c7393e]/60 sm:p-5"
             >
               <span className="block text-sm font-semibold text-ink-muted">My actions</span>
-              <span className={cx("mt-1 block font-serif text-4xl font-semibold", todo.length ? "text-[#c7393e] dark:text-[#ff9ea2]" : "")}>{box ? todo.length : "–"}</span>
+              <span className={cx("mt-1 block font-serif text-4xl font-semibold", todo.length ? "text-[#c7393e] dark:text-[#ff9ea2]" : "")}>
+                {box ? <CountUp value={todo.length} step={2} /> : "–"}
+              </span>
               <span className="block text-sm text-ink-muted">{todo.length === 1 ? "item needs attention" : "items need attention"}</span>
             </Link>
             <Link
@@ -157,7 +176,9 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
               className="rounded-3xl border border-[#3cb8b9]/40 bg-[#3cb8b9]/15 p-4 hover:border-[#008282] sm:p-5"
             >
               <span className="block text-sm font-semibold text-ink-muted">My learning</span>
-              <span className="mt-1 block font-serif text-4xl font-semibold text-[#008282] dark:text-[#3cb8b9]">{percent === null ? "–" : `${percent}%`}</span>
+              <span className="mt-1 block font-serif text-4xl font-semibold text-[#008282] dark:text-[#3cb8b9]">
+                {percent === null ? "–" : <CountUp value={percent} step={3} format={(n) => `${n}%`} />}
+              </span>
               <span className="block truncate text-sm text-ink-muted">{path ? path.name : "Start a Discovery Path"}</span>
             </Link>
           </div>
@@ -187,7 +208,9 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
               style={step(5)}
               className="group block rounded-3xl bg-[#1d2b4f] p-5 text-white hover:bg-[#24365f]"
             >
-              <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#9fe3e3]">Latest from Trilogy Care · {important.category}</span>
+              <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#9fe3e3]">
+                Latest from Trilogy Care · {important.category}
+              </span>
               <span className="mt-1 block font-serif text-xl font-semibold leading-snug group-hover:underline">{important.title}</span>
               {important.body && <span className="mt-1 block text-sm text-white/85">{important.body}</span>}
             </Link>

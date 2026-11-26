@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { zipSync, strToU8 } from "fflate";
 import { openDb } from "./db";
 import { userById } from "./auth";
 import { draftPrompt, generateLessonDraft, readSource, shapeDraft } from "./lessonDraft";
@@ -27,6 +28,18 @@ describe("reading source documents", () => {
     expect(await readSource(file("Plain notes", "notes.txt", "text/plain"))).toMatchObject({ kind: "text", text: "Plain notes" });
     await expect(readSource(file(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 0]), "old.doc"))).rejects.toThrow(/older Word file/);
     await expect(readSource(file(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), "photo.jpg", "image/jpeg"))).rejects.toThrow(/PDF, Word/);
+  });
+
+  it("reads the words out of an eLearning course's SCORM package, for Topics, Challenges and Paths alike", async () => {
+    const manifest = `<manifest identifier="m"><organizations default="o"><organization identifier="o"><title>Visit changes</title><item identifier="i" identifierref="r"><title>Visit changes</title></item></organization></organizations><resources><resource identifier="r" type="webcontent" href="index.html"/></resources></manifest>`;
+    const scorm = zipSync({
+      "imsmanifest.xml": strToU8(manifest),
+      "index.html": strToU8("<html><body><h1>Changes to a visit</h1><p>Check with the coordinator first.</p></body></html>"),
+    });
+    const s = await readSource(file(Buffer.from(scorm), "visit-changes.zip", "application/zip"));
+    expect(s.kind).toBe("text");
+    expect(s.kind === "text" && s.text).toMatch(/^An eLearning course \(SCORM package\): Visit changes[\s\S]*Check with the coordinator first\./);
+    await expect(readSource(file(Buffer.from(zipSync({ "a.txt": strToU8("x") })), "photos.zip"))).rejects.toThrow(/isn’t a SCORM package/);
   });
 });
 

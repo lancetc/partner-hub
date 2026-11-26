@@ -55,11 +55,11 @@ export function ensureCharacters(db: Db, now = new Date()) {
       "INSERT OR IGNORE INTO characters (id, name, aliases, role, look, portrait, alt, status, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seed', ?, ?)",
     ).run(c.id, c.name, JSON.stringify(c.aliases), c.role, c.look, c.portrait ?? "", c.alt ?? "", c.portrait ? "ready" : "none", at, at);
   // Anything still "generating" well past OpenAI's three-minute limit was stopped part-way (a restart): let it be sent again.
-  // Only stale ones, so a code reload in development never cancels a batch that's still running.
+  // Only stale ones, and never one still waiting its turn in this server's queue: a long batch queues people for an hour.
   const stale = new Date(now.getTime() - 10 * 60_000).toISOString();
-  db.prepare(
-    "UPDATE characters SET status = CASE WHEN portrait != '' THEN 'ready' ELSE 'none' END, updated_at = ? WHERE status = 'generating' AND updated_at < ?",
-  ).run(at, stale);
+  const stuck = db.prepare("SELECT id FROM characters WHERE status = 'generating' AND updated_at < ?").all(stale) as { id: string }[];
+  for (const { id } of stuck.filter((r) => !portraitQueue().queued.has(r.id)))
+    db.prepare("UPDATE characters SET status = CASE WHEN portrait != '' THEN 'ready' ELSE 'none' END, updated_at = ? WHERE id = ?").run(at, id);
   seeded.add(db);
 }
 
@@ -115,7 +115,7 @@ export function characterLibrary(db: Db, actor: User) {
   });
   return {
     openai: openaiConfigured(),
-    working: [...queued],
+    working: [...portraitQueue().queued],
     characters: all(db).map((c) => ({
       ...c,
       usedIn: named.filter((g) => [c.name, ...c.aliases].some((n) => g.names.has(normaliseName(n)))).map((g) => ({ id: g.id, title: g.title })),
@@ -193,10 +193,15 @@ function newId(db: Db, name: string) {
 // Portraits, made in the background
 // ---------------------------------------------------------------------------------------------
 
-/** Characters being generated now or waiting their turn, in this server. */
-const queued = new Set<string>();
-let running = false;
-const waiting: { db: Db; actor: User; id: string }[] = [];
+/**
+  Characters being generated now or waiting their turn, in this server. Kept on globalThis so a code reload in
+  development shares the same queue instead of starting an empty one beside a batch that's still running.
+*/
+type PortraitQueue = { queued: Set<string>; waiting: { db: Db; actor: User; id: string }[]; running: boolean };
+function portraitQueue(): PortraitQueue {
+  const g = globalThis as { __characterPortraits?: PortraitQueue };
+  return (g.__characterPortraits ??= { queued: new Set(), waiting: [], running: false });
+}
 
 /** Queue portraits for these characters. Returns at once; each portrait is made in turn. */
 export function queuePortraits(db: Db, actor: User, ids: string[]) {
@@ -206,9 +211,10 @@ export function queuePortraits(db: Db, actor: User, ids: string[]) {
   const added: string[] = [];
   for (const id of ids) {
     const c = one(db, id);
-    if (!c || queued.has(id)) continue;
-    queued.add(id);
-    waiting.push({ db, actor, id });
+    const q = portraitQueue();
+    if (!c || q.queued.has(id)) continue;
+    q.queued.add(id);
+    q.waiting.push({ db, actor, id });
     db.prepare("UPDATE characters SET status = 'generating', error = '', updated_at = ? WHERE id = ?").run(at, id);
     added.push(id);
   }
@@ -217,23 +223,48 @@ export function queuePortraits(db: Db, actor: User, ids: string[]) {
 }
 
 async function drain() {
-  if (running) return;
-  running = true;
+  const q = portraitQueue();
+  if (q.running) return;
+  q.running = true;
   try {
-    for (let job = waiting.shift(); job; job = waiting.shift()) {
-      await makePortrait(job.db, job.actor, job.id).catch(() => undefined);
-      queued.delete(job.id);
+    for (let job = q.waiting.shift(); job; job = q.waiting.shift()) {
+      try {
+        await makePortrait(job.db, job.actor, job.id);
+      } catch (e) {
+        // The hourly picture limit (server/imageGen): a long batch waits its turn instead of failing everyone left.
+        if (e instanceof HttpError && e.status === 429) {
+          q.waiting.unshift(job);
+          await new Promise((r) => setTimeout(r, limitClearsIn(job.db, job.actor)));
+          continue;
+        }
+      }
+      q.queued.delete(job.id);
     }
   } finally {
-    running = false;
+    q.running = false;
   }
 }
 
-/** Makes one portrait with OpenAI, keeps it in the image library, and gives it to the character. */
+/** How long until the oldest of this author's pictures in the last hour drops out of the hourly limit (at least a minute). */
+function limitClearsIn(db: Db, actor: User) {
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const oldest = db.prepare("SELECT MIN(created_at) AS at FROM image_generations WHERE created_by = ? AND created_at > ?").get(actor.id, since) as {
+    at: string | null;
+  };
+  return Math.max(60_000, oldest.at ? Date.parse(oldest.at) + 3600_000 + 5_000 - Date.now() : 60_000);
+}
+
+/**
+  Makes one portrait with OpenAI, keeps it in the image library, and gives it to the character. Over the hourly
+  picture limit it throws (HttpError 429) without marking anyone failed, so the queue can wait and carry on.
+*/
 export async function makePortrait(db: Db, actor: User, id: string) {
   const c = one(db, id);
-  if (!c) return;
+  // Nothing is spent on someone no longer waiting for a portrait (one chosen by hand meanwhile, or the queue was reset).
+  if (!c || c.status !== "generating") return;
   const now = new Date();
+  // Its turn has come: the time it started, so a long queue never looks stuck.
+  db.prepare("UPDATE characters SET updated_at = ? WHERE id = ?").run(now.toISOString(), id);
   try {
     // Named and described for the library from the start: "Maya, character portrait", with alt text from her look.
     const out = await startGeneration(
@@ -256,6 +287,11 @@ export async function makePortrait(db: Db, actor: User, id: string) {
     );
     audit(db, { actor: actor.id, event: "character.portrait_generated", entity: `character:${id}`, next: { src }, at: new Date() });
   } catch (e) {
+    if (e instanceof HttpError && e.status === 429) {
+      // Still waiting: keep the time fresh so nothing mistakes it for a stuck job.
+      db.prepare("UPDATE characters SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+      throw e;
+    }
     db.prepare("UPDATE characters SET status = 'failed', error = ?, updated_at = ? WHERE id = ?").run(
       (e instanceof Error ? e.message : "It didn’t work.").slice(0, 300),
       new Date().toISOString(),

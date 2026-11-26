@@ -13,7 +13,7 @@ import { FavouritesHeaderLink } from "./favourites/FavouritesNav";
 import { CompanionDrawer } from "./pocket/CompanionDrawer";
 import { Icon } from "./Icon";
 import { LearnMenu } from "./LearnMenu";
-import { api, useApi, type Me } from "@/lib/api";
+import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 
 export function Logo({ className = "h-8 w-auto" }: { className?: string }) {
@@ -81,21 +81,12 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          {/* Prototype: shown to everyone. A learner who clicks it is switched to the demo author account,
-              since admin pages need an admin. Real sign-in would show it to admins only; the API enforces access either way. */}
-          {me && (
+          {/* Only for people who can use admin: authors and administrators, and an organisation's reports. Everyone else
+              sees the Hub without it, as they would with real sign-in (the owner, Nov 2026); switch profile to reach admin. */}
+          {me?.canReport && (
             <Link
               href="/admin"
               aria-current={inAdmin ? "page" : undefined}
-              title={me.canReport ? undefined : "Switches to the demo author account (Jordan Lee)"}
-              onClick={async (e) => {
-                if (me.canReport) return;
-                e.preventDefault();
-                await api("/api/demo/session", { body: { userId: "jordan" } });
-                // A full load so every part of the page picks up the new demo account.
-                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                window.location.assign("/admin/lessons");
-              }}
               className={cx(
                 "mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border px-3 text-[0.95rem] font-semibold sm:px-4 lg:max-xl:px-3",
                 inAdmin ? "border-action bg-tealtint text-ink" : "border-line-strong text-ink hover:bg-muted",

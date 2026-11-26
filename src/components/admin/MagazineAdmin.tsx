@@ -6,7 +6,7 @@ import { useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
-import { COMPLETION_MODES, GUIDE_AUDIENCES, type CompletionMode, type GuideAudience } from "@/lib/magazine";
+import { COMPLETION_MODES, GUIDE_AUDIENCES, SOURCE_FILE_TYPES, type CompletionMode, type GuideAudience } from "@/lib/magazine";
 import { TemplatePicker, type TemplateChoice } from "./MagazineTemplates";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
@@ -258,6 +258,14 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
   const [format, setFormat] = useState<"single" | "course">("single");
   const [template, setTemplate] = useState<TemplateChoice>("decide");
   const [withAi, setWithAi] = useState(false);
+  // The source documents, chosen here and uploaded to the new course's AI drafting once it exists.
+  const [docs, setDocs] = useState<File[]>([]);
+  const [over, setOver] = useState(false);
+  const addDocs = (list: FileList | null | undefined) => {
+    // Copied now: the input is cleared straight after, which empties its live FileList.
+    const files = Array.from(list ?? []);
+    setDocs((d) => [...d, ...files.filter((f) => !d.some((x) => x.name === f.name && x.size === f.size))]);
+  };
   const [audience, setAudience] = useState<GuideAudience[]>(["coordinator"]);
   const [completion, setCompletion] = useState<CompletionMode>("confirm");
   const [busy, setBusy] = useState(false);
@@ -269,6 +277,17 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
     setProblem(null);
     try {
       const g = await api<{ id: string }>("/api/admin/magazine", { body: { title, standfirst, template, audience, completion } });
+      // The documents go to its AI drafting before the editor opens on it, so the outline can be proposed straight away.
+      if (withAi && docs.length) {
+        const failed: string[] = [];
+        for (const file of docs) {
+          const form = new FormData();
+          form.append("file", file);
+          const res = await fetch(`/api/admin/magazine/${g.id}/ai/sources`, { method: "POST", body: form }).catch(() => null);
+          if (!res?.ok) failed.push(file.name);
+        }
+        if (failed.length) window.alert(`The course was made, but these didn’t upload: ${failed.join(", ")}. Add them again in its AI drafting panel.`);
+      }
       // A course opens on its outline, to plan the pages; a guide opens on its page.
       router.push(`/admin/magazine/${g.id}${withAi ? "?ai=1" : format === "course" ? "?view=outline" : ""}`);
     } catch (err) {
@@ -336,6 +355,46 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
           </span>
         </span>
       </label>
+      {withAi && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            addDocs(e.dataTransfer.files);
+          }}
+          className={cx("flex flex-col gap-3 rounded-2xl border-2 border-dashed p-4", over ? "border-action bg-tealtint" : "border-line-strong")}
+        >
+          <label className="flex cursor-pointer flex-col items-center gap-1 py-3 text-center">
+            <Icon name="doc" className="size-7 text-accent" />
+            <span className="font-semibold">Drop the source documents here</span>
+            <span className="text-sm text-ink-muted">
+              or click to choose them: PDF, Word, PowerPoint, text, Markdown, or a SCORM package (.zip) from an existing eLearning course. You can add more
+              later.
+            </span>
+            <input type="file" multiple accept={SOURCE_FILE_TYPES} className="sr-only" onChange={(e) => (addDocs(e.target.files), (e.target.value = ""))} />
+          </label>
+          {docs.length > 0 && (
+            <ul className="flex flex-col gap-1.5">
+              {docs.map((f) => (
+                <li key={f.name + f.size} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm">
+                  <Icon name="doc" className="size-4 shrink-0 text-ink-muted" />
+                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  <span className="shrink-0 text-xs text-ink-muted">{Math.max(1, Math.round(f.size / 1024))} KB</span>
+                  <button type="button" className="shrink-0 font-semibold text-danger hover:underline" onClick={() => setDocs((d) => d.filter((x) => x !== f))}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-ink-muted">How long it should take, and the outline, come next, on the course&rsquo;s AI drafting panel.</p>
+        </div>
+      )}
       <div hidden={withAi}>
         {format === "course" && <p className="mb-2 text-sm text-ink-muted">The first page; add the others from the course outline.</p>}
         <TemplatePicker value={template} onChange={setTemplate} name="new-template" />

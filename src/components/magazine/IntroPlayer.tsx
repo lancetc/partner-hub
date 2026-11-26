@@ -80,6 +80,7 @@ export function IntroPlayer({
   autoPlay = false,
   poster,
   posterControls = "overlay",
+  posterTall = false,
   className,
 }: {
   script: string;
@@ -92,9 +93,12 @@ export function IntroPlayer({
   poster?: { src: string; position?: string };
   /**
     Where the poster's Play, label, time and caption go: over the picture (a Discovery Path), or "below" it on the
-    surface colours, so a small picture's face stays clear (a Life Moment's voice message, docs/lives-in-progress.md).
+    surface colours, so a small picture's face stays clear (a Life Moment's voice message, docs/lives-in-progress.md);
+    or "only" those controls, beside a picture shown larger elsewhere (the homepage's featured profile).
   */
-  posterControls?: "overlay" | "below";
+  posterControls?: "overlay" | "below" | "only";
+  /** A fifth taller than the standard poster (a Magazine cover or page picture). */
+  posterTall?: boolean;
   className?: string;
 }) {
   useOnePlayer();
@@ -259,16 +263,22 @@ export function IntroPlayer({
   const playLabel = state === "playing" ? `Pause ${what}` : `Play ${what}, ${formatSeconds(total)}`;
 
   // The reduced player with its controls under the picture: the face stays clear, and the caption sits under Play.
-  if (poster && posterControls === "below")
+  if (poster && (posterControls === "below" || posterControls === "only"))
     return (
       <section data-player aria-label={label} className={cx("w-full overflow-hidden bg-surface text-ink", className ?? "mt-6 rounded-2xl")}>
-        <div className="relative aspect-[16/9] overflow-hidden bg-[#0b2230]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={poster.src} alt="" aria-hidden className="absolute inset-0 size-full object-cover" style={{ objectPosition: poster.position }} />
-          <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-black/25">
-            <div className="h-full bg-[#7fe0e4]" style={{ width: `${progress * 100}%` }} />
+        {posterControls === "below" ? (
+          <div className="relative aspect-[16/9] overflow-hidden bg-[#0b2230]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={poster.src} alt="" aria-hidden className="absolute inset-0 size-full object-cover" style={{ objectPosition: poster.position }} />
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-black/25">
+              <div className="h-full bg-[#7fe0e4]" style={{ width: `${progress * 100}%` }} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div aria-hidden className="mx-3 h-1 overflow-hidden rounded-full bg-line">
+            <div className="h-full bg-action" style={{ width: `${progress * 100}%` }} />
+          </div>
+        )}
         <div className="flex items-center gap-2.5 px-3 pt-2.5">
           <button
             type="button"
@@ -318,7 +328,7 @@ export function IntroPlayer({
         aria-label={label}
         className={cx("w-full max-w-2xl overflow-hidden rounded-2xl bg-[#0b2230] text-white shadow-sm", className ?? "mt-6")}
       >
-        <div className="relative isolate flex aspect-[16/9] items-end p-4 sm:aspect-[16/7] sm:p-5">
+        <div className={cx("relative isolate flex items-end p-4 sm:p-5", posterTall ? "aspect-[40/27] sm:aspect-[40/21]" : "aspect-[16/9] sm:aspect-[16/7]")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={poster.src} alt="" aria-hidden className="absolute inset-0 -z-20 size-full object-cover" style={{ objectPosition: poster.position }} />
           <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-[#06141f]/85 via-[#06141f]/25 via-55% to-transparent" />

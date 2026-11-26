@@ -10,6 +10,7 @@ import { activityInfo, pathVersion, scheduleFor, type EnrolmentRow, type Instanc
 import { adapterFor, type NotificationAdapter } from "./notify";
 import { wants } from "./emailPrefs";
 import { publishDueEpisodes } from "./livesInProgress";
+import { courseReminders } from "./onboardingCourses";
 import type { User } from "./auth";
 
 /*
@@ -294,6 +295,8 @@ export async function runWorker(db: Db, now: Date, adapters?: Partial<Record<"em
   await runContentReminders(db, now, adapters?.email);
   // Lives in Progress episodes whose time has come, and their followers told (also done on every learner read).
   publishDueEpisodes(db, now);
+  // Starting courses (docs/onboarding.md): the next step and its real due date, in the Inbox, once a week out and once overdue.
+  courseReminders(db, now);
   db.prepare("INSERT INTO worker_runs (started_at, clock, released, digests, dispatched, note) VALUES (?, ?, ?, ?, ?, ?)").run(
     new Date().toISOString(),
     iso(now),

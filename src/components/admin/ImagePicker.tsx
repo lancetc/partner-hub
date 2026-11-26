@@ -6,6 +6,7 @@ import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
 import { ImageGenerator } from "./ImageGenerator";
+import { PeopleReferences } from "./PeopleReferences";
 import { ImageCropper } from "./ImageCropper";
 import { btn, ErrorNote } from "./ui";
 import { PexelsPicker, uploadImage } from "./LessonEditor";
@@ -167,6 +168,9 @@ export function ImageLibraryDialog({
   A picture field that's a drop zone: drag an image onto it, upload, or choose from the library.
   `preview` replaces the plain picture when the field has its own way of showing one.
 */
+/** What a picture is for: "Start from this page" and its description, and the people it names (for reference pictures). */
+export type PictureContext = { label: string; prompt: string; names: string[]; noun?: string };
+
 export function ImageDropZone({
   picture,
   onChange,
@@ -174,6 +178,7 @@ export function ImageDropZone({
   aspect = "aspect-[16/10]",
   preview,
   addLabel,
+  context,
 }: {
   picture?: Picture;
   onChange: (p: Picture | undefined, how?: "crop" | "pexels", alt?: string) => void;
@@ -182,6 +187,8 @@ export function ImageDropZone({
   preview?: React.ReactNode;
   /** With no picture yet, a button that says what to add (e.g. "Add poster image"), beside Image library. */
   addLabel?: string;
+  /** What the picture is for (a Magazine page): a starting description and the people it names, for Generate with AI. */
+  context?: PictureContext;
 }) {
   const [over, setOver] = useState(false);
   const { busy, error, upload } = useUpload(onChange);
@@ -224,7 +231,7 @@ export function ImageDropZone({
           </span>
         )}
       </div>
-      <PictureActions picture={picture} onChange={onChange} upload={upload} busy={busy} addLabel={addLabel} />
+      <PictureActions picture={picture} onChange={onChange} upload={upload} busy={busy} addLabel={addLabel} context={context} />
       {error && <ErrorNote text={error} />}
     </div>
   );
@@ -240,6 +247,7 @@ export function PictureActions({
   upload,
   busy,
   addLabel,
+  context,
 }: {
   picture?: Picture;
   /** "crop" when it is a cropped copy of the same picture; a description comes with a Pexels photo. */
@@ -247,9 +255,13 @@ export function PictureActions({
   upload: (file?: File | null) => void;
   busy: boolean;
   addLabel?: string;
+  context?: PictureContext;
 }) {
   const [library, setLibrary] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Reference pictures for Generate with AI; null until the author changes them (the named characters start chosen).
+  const [refs, setRefs] = useState<string[] | null>(null);
+  const [shownRefs, setShownRefs] = useState<string[]>([]);
   const [cropping, setCropping] = useState(false);
   const [pexels, setPexels] = useState(false);
   return (
@@ -341,9 +353,26 @@ export function PictureActions({
                   Close
                 </button>
               </div>
+              {context && (
+                <div className="mb-4">
+                  <PeopleReferences
+                    names={context.names}
+                    noun={context.noun ?? "page"}
+                    chosen={refs}
+                    onChosen={setRefs}
+                    onShown={setShownRefs}
+                    onUse={(p, alt) => {
+                      onChange(p, undefined, alt);
+                      setGenerating(false);
+                    }}
+                  />
+                </div>
+              )}
               <ImageGenerator
                 useLabel="Use this picture"
                 defaultAspect="3:2"
+                start={context ? { label: context.label, prompt: context.prompt } : undefined}
+                references={refs ?? shownRefs}
                 onUse={(p) => {
                   onChange(p);
                   setGenerating(false);

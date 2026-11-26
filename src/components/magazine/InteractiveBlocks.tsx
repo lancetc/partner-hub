@@ -36,6 +36,8 @@ import {
 import { RichText } from "../RichText";
 import type { ReaderNote } from "@/server/magazine";
 import { ReflectBlock } from "./ReflectBlocks";
+import { AvaTransmission, avaLineMedia } from "../ava/AvaTransmission";
+import type { ReaderAva } from "@/server/ava";
 import { GuidePlayer } from "./LearningGuide";
 import { Roleplay } from "./Roleplay";
 import { FamilyCall } from "./FamilyCall";
@@ -122,6 +124,8 @@ export type InteractiveContext = {
   /** The Hub's AI Learning Guide (its name, introduction and portrait), and what a learner did with a recording. */
   guide: GuideIdentity;
   guideEvent: (blockId: string, outcome: "started" | "paused" | "completed" | "transcript" | "read_first" | "source") => void;
+  /** Ava's name, portrait and videos for this course (server/ava.ts avaForCourse), for her transmissions in the content. */
+  ava?: ReaderAva;
 };
 
 const column = "mx-auto w-full max-w-[42rem]";
@@ -323,9 +327,35 @@ export function InteractiveBlock({ block: b, ctx }: { block: Block; ctx: Interac
       return <ReflectBlock block={b} ctx={ctx} />;
     case "guide":
       return <GuidePlayer block={b} ctx={ctx} />;
+    case "ava":
+      return <AvaInContent block={b} ctx={ctx} />;
     default:
       return null;
   }
+}
+
+/**
+  One of Ava's transmissions in the content: her window, the same as at the top of a page, playing when the learner
+  presses Play (never by itself mid-page). With no video in yet, or one that no longer matches, nothing shows.
+*/
+function AvaInContent({ block: b, ctx }: { block: Extract<Block, { type: "ava" }>; ctx: InteractiveContext }) {
+  const line = `magazine:${ctx.guideId}:block:${b.id}`;
+  const video = ctx.ava?.videos[line] ?? null;
+  if (!video) return null;
+  return (
+    <div className={column}>
+      <AvaTransmission
+        layout="block"
+        media={avaLineMedia(line, video)}
+        portrait={ctx.ava?.portrait ?? null}
+        name={ctx.ava?.name ?? "Ava"}
+        script={video.transcript ?? ""}
+        title={b.title || `A transmission from ${ctx.ava?.name ?? "Ava"}`}
+        afterEnd="rest"
+        onEvent={(e) => (e === "started" || e === "completed") && ctx.guideEvent(b.id, e)}
+      />
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------

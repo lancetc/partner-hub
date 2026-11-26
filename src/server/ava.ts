@@ -179,9 +179,15 @@ export type ReaderAva = { name: string; portrait: string; videos: Record<string,
   Sent with the course itself, so the page knows from the start whether Ava introduces it: her window (and its "Incoming
   transmission") is there as the page appears, rather than a picture first that then gives way to her.
 */
-export async function avaForCourse(db: Db, guideId: string, pageIds: string[]): Promise<ReaderAva> {
+export async function avaForCourse(db: Db, guideId: string, pageIds: string[], blockIds: string[] = []): Promise<ReaderAva> {
   const videos: Record<string, AvaVideo> = {};
-  for (const key of [`magazine:${guideId}:intro`, ...pageIds.map((p) => `magazine:${guideId}:page:${p}`)]) {
+  const keys = [
+    `magazine:${guideId}:intro`,
+    ...pageIds.map((p) => `magazine:${guideId}:page:${p}`),
+    // Her transmissions placed in the page's content (Ava video blocks).
+    ...blockIds.map((b) => `magazine:${guideId}:block:${b}`),
+  ];
+  for (const key of keys) {
     const video = await avaVideoFor(db, key);
     if (video) videos[key] = video;
   }
@@ -253,11 +259,17 @@ export async function avaLines(db: Db, actor: User) {
   for (const g of courses) {
     lines.push({ key: `magazine:${g.id}:intro`, kind: "course", title: g.title });
     // Each page's introduction too: with a video, it plays at the top of the page before the page's picture.
-    let pages: { id: string; title?: string }[] = [];
+    type DocPage = { id: string; title?: string; sections?: { blocks?: { id: string; type: string; title?: string }[] }[] };
+    let pages: DocPage[] = [];
     try {
-      pages = (JSON.parse(g.doc) as { pages?: { id: string; title?: string }[] }).pages ?? [];
+      pages = (JSON.parse(g.doc) as { pages?: DocPage[] }).pages ?? [];
     } catch {}
-    pages.forEach((p, i) => lines.push({ key: `magazine:${g.id}:page:${p.id}`, kind: "page", title: `${g.title}: page ${i + 1}, ${p.title || p.id}` }));
+    pages.forEach((p, i) => {
+      lines.push({ key: `magazine:${g.id}:page:${p.id}`, kind: "page", title: `${g.title}: page ${i + 1}, ${p.title || p.id}` });
+      // And each Ava video block in the page's content.
+      for (const b of (p.sections ?? []).flatMap((s) => s.blocks ?? []).filter((x) => x.type === "ava"))
+        lines.push({ key: `magazine:${g.id}:block:${b.id}`, kind: "page", title: `${g.title}: page ${i + 1}, in the content${b.title ? `: ${b.title}` : ""}` });
+    });
   }
   const topics = db.prepare("SELECT slug, published FROM authored_lessons WHERE published IS NOT NULL ORDER BY slug").all() as {
     slug: string;
@@ -284,7 +296,9 @@ export async function avaLines(db: Db, actor: User) {
     try {
       script = scriptFor(db, line.key);
     } catch {
-      continue;
+      // An Ava video block has no script of its own: its words come with its video, so it's listed all the same.
+      if (!line.key.includes(":block:")) continue;
+      script = "";
     }
     const row = videoRow(db, line.key);
     // The whole script: it's what a video made elsewhere has to say, word for word.

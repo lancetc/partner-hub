@@ -221,7 +221,7 @@ describe("3. the case note stays apart, and popularity never confers endorsement
     const after = view(riley).feed!;
     expect(after.posts[0].id).toBe(other.id);
     expect(after.posts[0].label).toBe(ENDORSED_LABEL);
-    expect(after.posts[0].endorsement).toEqual({ by: "Jordan Lee", at: "2026-11-24", version: 1 });
+    expect(after.posts[0].endorsement).toEqual({ by: "Lance Elliott", at: "2026-11-24", version: 1 });
   });
 
   it("ranks by view: endorsed first in Helpful, members only in Other perspectives, nothing outdated in Helpful", () => {
@@ -414,7 +414,7 @@ describe("9. saved scripts: author, versions, a stale warning, and endorsement w
     const saved = view(riley).saved;
     const ex = saved.find((s) => s.postId === x.id)!;
     expect(ex.label).toBe(ENDORSED_LABEL);
-    expect(ex.endorsement).toMatchObject({ by: "Jordan Lee", at: "2026-11-24" });
+    expect(ex.endorsement).toMatchObject({ by: "Lance Elliott", at: "2026-11-24" });
     expect(ex.author).toMatch(/\(fictional\) · Fictional seed response/);
     expect(ex).toMatchObject({ caseVersion: 1, policyVersion: "2026.1", stale: [] });
     expect(saved.find((s) => s.postId === y.id)!.label).toBe(PEER_LABEL);

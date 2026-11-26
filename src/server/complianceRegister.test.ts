@@ -106,7 +106,7 @@ describe("compliance register", () => {
     const after = row(a.slug, "sam", later(1));
     expect(after.status).toBe("current");
     expect(after.completedAt).toBe(now.toISOString());
-    expect(after.demonstrated[0]).toMatch(/^Tested out: 2\/2 \(100%\) on the “Register path” upfront quiz, approved by Jordan Lee/);
+    expect(after.demonstrated[0]).toMatch(/^Tested out: 2\/2 \(100%\) on the “Register path” upfront quiz, approved by Lance Elliott/);
     expect(() => decideTestOut(db, u("jordan"), pending.id, false, "", now)).toThrow(/already approved/);
   });
 

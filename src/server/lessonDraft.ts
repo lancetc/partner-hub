@@ -4,12 +4,14 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { Lesson } from "@/content/lessons";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
+import { scormText, ScormTextError } from "./scormText";
+import { MAX_SCORM_BYTES } from "@/lib/sourceFiles";
 import { client, FORMAT, GENERATION_MODEL, validateLesson } from "./generate";
 import { BUILD_STAGES, isStage, stageCounts, STAGE_KEYS, type BuildStage } from "@/lib/buildSequence";
 
 /*
   Drafts a whole new lesson with Claude from an author's brief and, optionally, a source
-  document (PDF, Word or text). The document is the source of truth: Claude is told not to add
+  document (PDF, Word, text, or an eLearning course as a SCORM package). The document is the source of truth: Claude is told not to add
   policy, numbers or processes it doesn't contain. The draft opens in the lesson editor for the
   author to rewrite and approve; nothing is published from here.
 */
@@ -27,13 +29,31 @@ type Source = { kind: "pdf"; name: string; data: string } | { kind: "text"; name
 
 /** Reads an uploaded source document. PDFs go to Claude as they are; Word and text files become text. */
 export async function readSource(file: File): Promise<Source> {
-  if (file.size > MAX_FILE_BYTES) throw new HttpError(413, "That file is over 15 MB. Try a shorter document, or paste the key part into the brief.");
+  const zipName = /\.zip$/i.test(file.name || "");
+  if (zipName ? file.size > MAX_SCORM_BYTES : file.size > MAX_FILE_BYTES)
+    throw new HttpError(
+      413,
+      zipName
+        ? "That SCORM package is over 200 MB. Export it without its video, or upload the script instead."
+        : "That file is over 15 MB. Try a shorter document, or paste the key part into the brief.",
+    );
   const buf = Buffer.from(await file.arrayBuffer());
   const name = (file.name || "document").slice(0, 120);
   if (buf.subarray(0, 5).toString("latin1") === "%PDF-") return { kind: "pdf", name, data: buf.toString("base64") };
   if (buf[0] === 0x50 && buf[1] === 0x4b) {
+    // An eLearning course export: its outline, pages, slide text and narration captions, marked by section.
+    if (zipName || unzipEntry(buf, "imsmanifest.xml") !== null) {
+      try {
+        const s = await scormText(buf);
+        const text = [`An eLearning course (SCORM package)${s.title ? `: ${s.title}` : ""}`, ...s.sections].join("\n\n");
+        return { kind: "text", name, text: text.slice(0, MAX_TEXT) };
+      } catch (e) {
+        if (e instanceof ScormTextError) throw new HttpError(415, e.message);
+        throw e;
+      }
+    }
     const xml = unzipEntry(buf, "word/document.xml");
-    if (!xml) throw new HttpError(415, "That looks like a zip file but not a Word document. Upload a .docx, .pdf or .txt file.");
+    if (!xml) throw new HttpError(415, "That looks like a zip file but not a Word document or a SCORM package. Upload a .docx, .pdf, .txt or SCORM .zip file.");
     return { kind: "text", name, text: docxText(xml).slice(0, MAX_TEXT) };
   }
   if (/\.(txt|md|csv)$/i.test(name) || file.type.startsWith("text/")) {
@@ -43,7 +63,7 @@ export async function readSource(file: File): Promise<Source> {
   }
   if (buf.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0])))
     throw new HttpError(415, "That’s an older Word file (.doc). Save it as .docx or PDF and try again.");
-  throw new HttpError(415, "Upload a PDF, Word (.docx) or text file.");
+  throw new HttpError(415, "Upload a PDF, Word (.docx), text file or SCORM package (.zip).");
 }
 
 /** Finds one file inside a zip (a .docx is a zip) using the central directory. */

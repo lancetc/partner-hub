@@ -5,7 +5,7 @@ import { resources } from "@/content/resources";
 import { extractText } from "@/lib/lessonText";
 import { plainText } from "@/lib/richText";
 import type { Db } from "./db";
-import type { User } from "./auth";
+import { canAuthor, meantFor, type User } from "./auth";
 import { forLearner, parseWebinar, type Row as WebinarRow } from "./webinars";
 import { missionSlugs } from "./challenges";
 import { keywords } from "@/lib/keywords";
@@ -13,6 +13,8 @@ import { aidDocs } from "./favourites";
 import { businessSearchDocs } from "./businessNotes";
 import { pocketSearchDocs } from "./pocketTools";
 import { mythSearchDocs } from "./myths";
+import { canOpenTopic } from "./catalogue";
+import { pathFor } from "./learningPaths";
 
 /*
   Site search, built on the server from what's live now: every published topic (its title, summary
@@ -26,11 +28,18 @@ type Doc = SearchResult & { head: string; summary: string; body: string };
 const MAX_RESULTS = 20;
 const clean = (s: string) => plainText(s).replace(/\s+/g, " ").trim();
 
+const slugsOf = (db: Db, pathId: string) =>
+  (db.prepare("SELECT lesson_slug FROM learning_path_lessons WHERE path_id = ?").all(pathId) as { lesson_slug: string }[]).map((r) => r.lesson_slug);
+const assignedPath = (db: Db, user: User, pathId: string) =>
+  Boolean(db.prepare("SELECT 1 FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(pathId, user.id));
+
 function documents(db: Db, user: User): Doc[] {
   const missions = missionSlugs(db);
   const topics: Doc[] = lessons
     // Follow ups arrive in a sequence, and challenge missions open one a day: neither is in the catalogue.
     .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
+    // Only topics this person may open (server/catalogue): a coordinator doesn't find the Care Partners' topics.
+    .filter((l) => canOpenTopic(db, user, l.slug))
     .map((l) => ({
       id: `lesson:${l.slug}`,
       href: `/topics/${l.slug}`,
@@ -47,15 +56,20 @@ function documents(db: Db, user: User): Doc[] {
         "SELECT id, name, description, audience FROM learning_paths p WHERE archived = 0 AND EXISTS (SELECT 1 FROM learning_path_lessons l WHERE l.path_id = p.id) ORDER BY name",
       )
       .all() as { id: string; name: string; description: string; audience: string }[]
-  ).map((p) => ({
-    id: `path:${p.id}`,
-    href: `/paths/${p.id}`,
-    title: p.name,
-    meta: "Learning path",
-    head: p.name,
-    summary: `${p.description} ${p.audience}`,
-    body: "",
-  }));
+  )
+    // Paths for this person only (learningPaths.pathFor), and none holding a challenge mission unless it's theirs,
+    // as on the Discovery Paths page.
+    .filter((p) => pathFor(db, user, p))
+    .filter((p) => canAuthor(user) || !slugsOf(db, p.id).some((s) => missions.has(s)) || assignedPath(db, user, p.id))
+    .map((p) => ({
+      id: `path:${p.id}`,
+      href: `/paths/${p.id}`,
+      title: p.name,
+      meta: "Learning path",
+      head: p.name,
+      summary: `${p.description} ${p.audience}`,
+      body: "",
+    }));
 
   const webinars: Doc[] = (db.prepare("SELECT * FROM webinars WHERE status = 'published'").all() as WebinarRow[])
     .map(parseWebinar)
@@ -70,25 +84,30 @@ function documents(db: Db, user: User): Doc[] {
       body: w.transcript ?? "",
     }));
 
-  const news: Doc[] = stories.map((s) => ({
-    id: `story:${s.slug}`,
-    href: `/news/${s.slug}`,
-    title: s.title,
-    meta: categoryLabel(s.category),
-    head: s.title,
-    summary: s.dek,
-    body: s.body.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "image" ? `${b.alt} ${b.caption ?? ""}` : plainText(b.text))).join(" "),
-  }));
+  // News and resources tagged for partners and/or coordinators: only those meant for this person (auth.meantFor).
+  const news: Doc[] = stories
+    .filter((s) => meantFor(user, s.audience))
+    .map((s) => ({
+      id: `story:${s.slug}`,
+      href: `/news/${s.slug}`,
+      title: s.title,
+      meta: categoryLabel(s.category),
+      head: s.title,
+      summary: s.dek,
+      body: s.body.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "image" ? `${b.alt} ${b.caption ?? ""}` : plainText(b.text))).join(" "),
+    }));
 
-  const library: Doc[] = resources.map((r) => ({
-    id: `resource:${r.id}`,
-    href: `/resources#${r.id}`,
-    title: r.title,
-    meta: `Resource · ${r.kind}`,
-    head: r.title,
-    summary: r.description,
-    body: r.points.join(" "),
-  }));
+  const library: Doc[] = resources
+    .filter((r) => meantFor(user, r.audience))
+    .map((r) => ({
+      id: `resource:${r.id}`,
+      href: `/resources#${r.id}`,
+      title: r.title,
+      meta: `Resource · ${r.kind}`,
+      head: r.title,
+      summary: r.description,
+      body: r.points.join(" "),
+    }));
 
   // The Work Tools library itself, so it's found by name on a phone (where it isn't in the bottom bar), even before
   // any Job Aid is approved for this person's role.
@@ -113,7 +132,7 @@ function documents(db: Db, user: User): Doc[] {
     ...pocketSearchDocs(db, user),
     ...aidDocs(db, user),
     ...businessSearchDocs(db, user),
-    ...mythSearchDocs(db),
+    ...mythSearchDocs(db, new Date(), user),
     ...topics,
     ...paths,
     ...webinars,

@@ -7,6 +7,7 @@ import { plainText } from "@/lib/richText";
 import { applyFacts } from "@/lib/facts";
 import { audit, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
+import { canOpenTopic } from "./catalogue";
 import { client } from "./generate";
 import { editorLesson } from "./authoredLessons";
 import { factValues } from "./facts";
@@ -61,7 +62,8 @@ function topicFor(db: Db, user: User, slug: string, preview: boolean) {
     if (draft) return applyFacts(draft.lesson, factValues(db));
   }
   const live = lessonBySlug(slug);
-  if (!live || live.track === "reinforcement") throw new HttpError(404, "Topic not found.");
+  // Only about a topic this person may open (catalogue.canOpenTopic), as on the topic's own page.
+  if (!live || live.track === "reinforcement" || !canOpenTopic(db, user, slug)) throw new HttpError(404, "Topic not found.");
   return applyFacts(live, factValues(db));
 }
 

@@ -77,7 +77,7 @@ describe("review comments", () => {
     const c = postReviewComment(db, who, slug, { card: "kit", text: "Typo in the heading." }, now).comments[0];
     expect(() => resolveReviewComment(db, u("sam"), slug, c.id, true, now)).toThrow(/authors/);
     const done = resolveReviewComment(db, u("jordan"), slug, c.id, true, later(1)).comments[0];
-    expect(done.resolved).toMatchObject({ by: "Jordan Lee" });
+    expect(done.resolved).toMatchObject({ by: "Lance Elliott" });
     expect(resolveReviewComment(db, u("jordan"), slug, c.id, false, later(2)).comments[0].resolved).toBeNull();
   });
 

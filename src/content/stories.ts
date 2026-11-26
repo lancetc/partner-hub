@@ -352,7 +352,7 @@ export const stories: Story[] = [
       alt: "An older couple smiling and holding hands on a couch at home, beside a Trilogy Care booklet graphic",
       photo: { src: "/images/karen.jpeg", width: 311, height: 162, position: "70% center" },
     },
-    audience: ["partner", "coordinator"],
+    audience: ["partner"],
     body: [
       {
         type: "p",

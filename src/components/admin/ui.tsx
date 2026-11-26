@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { Icon } from "../Icon";
@@ -77,7 +77,50 @@ export const statusText: Record<string, string> = {
 const visible = (me: Me | null | undefined) =>
   ADMIN_GROUPS.map((g) => ({ ...g, links: g.links.filter((l) => linkAllowed(l, me) && !l.superadminOnly) })).filter((g) => g.links.length);
 
+/** The admin page you're on: the longest matching address, so "Path introductions" doesn't also light up "Discovery Paths". */
+const currentLink = (pathname: string) =>
+  ADMIN_GROUPS.flatMap((g) => g.links)
+    .filter((l) => pathname === l.href || pathname.startsWith(`${l.href}/`) || pathname.startsWith(`${l.href}#`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+
+const CLOSED_KEY = "tc-admin-nav-closed";
+
+/**
+  The admin menu: Overview, Superadmin, a "Find a page" filter, then the groups. Each group folds away with its title;
+  which ones are folded is remembered in this browser, and the group holding the page you're on always stays open.
+  While something is typed in the filter, every matching page shows, whatever is folded.
+*/
 function NavLinks({ pathname, me, onPick }: { pathname: string; me?: Me | null; onPick?: () => void }) {
+  const [find, setFind] = useState("");
+  const [closed, setClosed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? "[]") as unknown;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once in the browser after it loads
+      if (Array.isArray(saved)) setClosed(saved.filter((x): x is string => typeof x === "string"));
+    } catch {
+      // Private browsing: every group starts open.
+    }
+  }, []);
+  const toggle = (title: string) =>
+    setClosed((c) => {
+      const next = c.includes(title) ? c.filter((t) => t !== title) : [...c, title];
+      try {
+        localStorage.setItem(CLOSED_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembered: fine.
+      }
+      return next;
+    });
+  const here = currentLink(pathname);
+  const q = find.trim().toLowerCase();
+  const groups = visible(me)
+    // A page matches by its name or description, or by its group's name ("ava" brings the whole "Introductions and Ava").
+    .map((g) => ({
+      ...g,
+      links: q && !g.title.toLowerCase().includes(q) ? g.links.filter((l) => `${l.label} ${l.description}`.toLowerCase().includes(q)) : g.links,
+    }))
+    .filter((g) => g.links.length);
   return (
     <>
       <Link
@@ -108,28 +151,58 @@ function NavLinks({ pathname, me, onPick }: { pathname: string; me?: Me | null; 
           </span>
         </Link>
       )}
-      {visible(me).map((g) => (
-        <div key={g.title} className="mt-4">
-          <p className="mb-1 px-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">{g.title}</p>
-          {g.links.map((l) => {
-            const active = pathname.startsWith(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={onPick}
-                aria-current={active ? "page" : undefined}
-                className={cx(
-                  "flex min-h-10 items-center gap-2.5 rounded-xl px-3 font-medium",
-                  active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-muted hover:text-ink",
-                )}
-              >
-                <Icon name={l.icon} className={cx("size-4 shrink-0", active && "text-action")} /> {l.label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+      <label className="mt-3 flex min-h-10 items-center gap-2 rounded-xl border border-line px-3 focus-within:border-action">
+        <Icon name="search" className="size-4 shrink-0 text-ink-muted" />
+        <span className="sr-only">Find a page</span>
+        <input
+          type="search"
+          value={find}
+          onChange={(e) => setFind(e.target.value)}
+          placeholder="Find a page"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-ink-muted"
+        />
+      </label>
+      {q && !groups.length && <p className="mt-3 px-3 text-sm text-ink-muted">Nothing matches “{find.trim()}”.</p>}
+      {groups.map((g) => {
+        const open = Boolean(q) || !closed.includes(g.title) || g.links.some((l) => l === here);
+        const id = `admin-nav-${g.title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+        return (
+          <div key={g.title} className="mt-3">
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={id}
+              onClick={() => toggle(g.title)}
+              disabled={Boolean(q)}
+              className="flex min-h-9 w-full items-center gap-2 rounded-xl px-3 text-left font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted hover:bg-muted hover:text-ink disabled:hover:bg-transparent"
+            >
+              <span className="flex-1">{g.title}</span>
+              {!q && <Icon name="chevron-down" className={cx("size-3.5 transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />}
+            </button>
+            {open && (
+              <div id={id}>
+                {g.links.map((l) => {
+                  const active = l === here;
+                  return (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      onClick={onPick}
+                      aria-current={active ? "page" : undefined}
+                      className={cx(
+                        "flex min-h-10 items-center gap-2.5 rounded-xl px-3 font-medium",
+                        active ? "bg-tealtint text-ink" : "text-ink-muted hover:bg-muted hover:text-ink",
+                      )}
+                    >
+                      <Icon name={l.icon} className={cx("size-4 shrink-0", active && "text-action")} /> {l.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -139,7 +212,7 @@ export function AdminShell({ title, children, back }: { title: string; children:
   const pathname = usePathname();
   const me = useApi<Me>("/api/me").data;
   const [menu, setMenu] = useState(false);
-  const current = ADMIN_GROUPS.flatMap((g) => g.links).find((l) => pathname.startsWith(l.href));
+  const current = currentLink(pathname);
   // Editors (pages with a Back link) keep the whole width; lists and reports have the menu beside them.
   const withMenu = !back;
   return (

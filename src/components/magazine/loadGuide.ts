@@ -17,12 +17,14 @@ export async function loadGuide(key: string, draft: boolean): Promise<{ guide: R
   try {
     const read = draft ? previewGuide(db, user, key) : readGuide(db, user, key);
     // Ava's videos come with the course, so her window is there from the first moment (never a picture that gives way to her).
+    // With them, her transmissions placed in the content (Ava video blocks).
     const guide: ReaderGuide = {
       ...read,
       ava: await avaForCourse(
         db,
         read.id,
         read.doc.pages.map((p) => p.id),
+        read.doc.pages.flatMap((p) => p.sections.flatMap((s) => s.blocks.filter((b) => b.type === "ava").map((b) => b.id))),
       ),
     };
     return { guide, base: draft ? `/magazine/draft/${encodeURIComponent(guide.id)}` : `/magazine/${encodeURIComponent(guide.slug)}`, canEdit: canAuthor(user) };

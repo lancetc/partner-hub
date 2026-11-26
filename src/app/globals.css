@@ -1499,3 +1499,94 @@ body:has([data-signin-page]) > footer {
     color: #000;
   }
 }
+
+/*
+  A Digital Member's profile in its modal (community/DigitalMemberProfile): the window rises and fades in at its full
+  size (so it never grows or jumps as the story loads), then its parts drop in one after another, the way the homepage
+  builds: the banner, the tabs, then the story's sections. With reduced motion, a short fade only.
+*/
+@keyframes member-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.98);
+  }
+}
+@keyframes member-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes member-part-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-1.75rem);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(0.2rem);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+dialog.member-modal[open] {
+  animation: member-modal-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+dialog.member-modal[open]::backdrop {
+  animation: member-backdrop-in 300ms ease-out both;
+}
+.member-build > * > *,
+.member-build > * > :nth-child(3) > * > * {
+  animation: member-part-in 700ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.member-build > * > :nth-child(1) {
+  animation-delay: 80ms;
+}
+.member-build > * > :nth-child(2) {
+  animation-delay: 220ms;
+}
+.member-build > * > :nth-child(3) {
+  animation: none;
+}
+.member-build > * > :nth-child(n + 4) {
+  animation-delay: 360ms;
+}
+.member-build > * > :nth-child(3) > * > :nth-child(1) {
+  animation-delay: 360ms;
+}
+.member-build > * > :nth-child(3) > * > :nth-child(2) {
+  animation-delay: 480ms;
+}
+.member-build > * > :nth-child(3) > * > :nth-child(3) {
+  animation-delay: 600ms;
+}
+.member-build > * > :nth-child(3) > * > :nth-child(n + 4) {
+  animation-delay: 720ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.member-modal[open],
+  .member-build > * > *,
+  .member-build > * > :nth-child(3) > * > * {
+    animation: member-backdrop-in 200ms ease-out both;
+  }
+}
+
+/* The homepage's "Since your last visit" note, on the cover picture's bottom left: it rises in after the greeting. */
+@keyframes hub-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+.hub-note-in {
+  animation: hub-note-in 700ms cubic-bezier(0.2, 0.7, 0.3, 1) 900ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-note-in {
+    animation: member-backdrop-in 300ms ease-out 300ms both;
+  }
+}
+.member-build > p > * {
+  animation-delay: 600ms;
+}

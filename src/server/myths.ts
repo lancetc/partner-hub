@@ -93,7 +93,10 @@ export function tilesFor(db: Db, user: User, wanted: string[] | null, now: Date,
   for (const id of list) {
     const top = asAuthor ? latest(db, id) : undefined;
     const t = top && top.status !== "retired" ? top : current(db, id);
-    const shown = t && (asAuthor || wanted || tileState(t, today(now)) === "approved");
+    // The library lists only tiles tagged for this person's audience (authors see them all); one a course embeds by
+    // id is shown wherever the course is, since the course's own audience already decided who reads it.
+    const forThem = canAuthor(user) || wanted || t?.data.audiences.includes(user.audience);
+    const shown = t && forThem && (asAuthor || wanted || tileState(t, today(now)) === "approved");
     if (t && shown) out.push({ ...forReader(t, now), preview: asAuthor && t.status !== "approved" });
     else missing.push(id);
   }
@@ -159,12 +162,16 @@ export function mythStanding(db: Db, targetId: string, seen: string, now: Date) 
   };
 }
 
-/** Approved Myth vs Reality tiles as site search sees them, found by people's own words as well as the terms. */
-export function mythSearchDocs(db: Db, now = new Date()) {
+/**
+  Approved Myth vs Reality tiles as site search sees them, found by people's own words as well as the terms. Given the
+  person, only tiles tagged for their audience, as in the library (tilesFor).
+*/
+export function mythSearchDocs(db: Db, now = new Date(), user?: User) {
   ensureMyths(db, now);
   return ids(db).flatMap((id) => {
     const t = current(db, id);
     if (!t || tileState(t, today(now)) !== "approved") return [];
+    if (user && !canAuthor(user) && !t.data.audiences.includes(user.audience)) return [];
     const d = t.data;
     return [
       {

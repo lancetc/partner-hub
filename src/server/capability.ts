@@ -139,7 +139,9 @@ export function assets(db: Db): Map<string, Asset> {
       version: l.version,
       href: `/topics/${l.slug}`,
       relations,
-      audience: [],
+      // Who may be sent to it as a next step: a Care Partner or coordinator topic for its own audience (and Trilogy staff,
+      // who see every topic: catalogue.topicIsFor); anything else for everyone.
+      audience: l.track === "partner" || l.track === "coordinator" ? [l.track, "staff"] : [],
     });
   }
   for (const c of capabilityCourses(db)) {

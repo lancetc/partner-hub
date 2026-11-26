@@ -1,17 +1,29 @@
 import { handle } from "@/server/http";
 import { canAuthor, canReport, isSuperadmin } from "@/server/auth";
-import { demoUsers } from "@/server/db";
+import { demoUsers, SWITCHER_USERS } from "@/server/db";
 import { demoOffsetMs } from "@/server/clock";
 import { pictureUrl } from "@/server/profilePictures";
 
 export async function GET() {
   return handle(({ db, user }) => ({
-    user: { id: user.id, name: user.name, role: user.role, audience: user.audience, serviceRole: user.service_role, language: user.language ?? "en", avatar: pictureUrl(user.avatar ?? null) },
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      audience: user.audience,
+      serviceRole: user.service_role,
+      language: user.language ?? "en",
+      avatar: pictureUrl(user.avatar ?? null),
+    },
     org: db.prepare("SELECT name FROM orgs WHERE id = ?").get(user.org_id),
     canAuthor: canAuthor(user),
     canReport: canReport(user),
     isSuperadmin: isSuperadmin(user),
-    demoUsers: demoUsers.map((u) => ({ id: u.id, name: u.name, label: u.label })),
+    // The switcher's five stakeholders, in order, and whoever is signed in now if they're one of the others.
+    demoUsers: demoUsers
+      .filter((u) => (SWITCHER_USERS as readonly string[]).includes(u.id) || u.id === user.id)
+      .sort((a, b) => SWITCHER_USERS.indexOf(a.id as never) - SWITCHER_USERS.indexOf(b.id as never))
+      .map((u) => ({ id: u.id, name: u.name, label: u.label })),
     demoClockOffsetDays: Math.round(demoOffsetMs(db) / 86_400_000),
   }));
 }

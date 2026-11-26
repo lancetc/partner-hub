@@ -13,7 +13,8 @@ import { MythTile } from "./MythTile";
   topic and audience. Quick-reference: no practice step. Approved tiles can be saved to Favourites and pinned.
 
   Authors can switch to the preview: drafts and demonstration entries too, each labelled on the card, under a
-  banner that says learners don't see them. `?preview=1` opens it; `?tile=<id>` opens that tile (from a pin,
+  banner that says learners don't see them. While nothing is approved yet it opens by itself for an author, so the
+  demonstration entries are what they land on. `?preview=1` opens it; `?tile=<id>` opens that tile (from a pin,
   a favourite or search).
 */
 
@@ -22,6 +23,9 @@ const chip = "min-h-11 rounded-full px-4 text-sm font-semibold ring-1";
 
 export function MythResource() {
   const [preview, setPreview] = useState(false);
+  // Opened by itself because nothing is approved yet; and whether the author has chosen for themselves since.
+  const [auto, setAuto] = useState(false);
+  const [chose, setChose] = useState(false);
   const [opened, setOpened] = useState("");
   const loaded = useApi<Loaded>(`/api/myths${preview ? "?preview=1" : ""}`);
   const [q, setQ] = useState("");
@@ -35,9 +39,19 @@ export function MythResource() {
     setOpened(p.get("tile") ?? "");
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
+  const empty = Boolean(loaded.data?.canPreview && !preview && loaded.data.tiles.length === 0);
+  useEffect(() => {
+    if (!empty || chose) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- follows the loaded library: nothing approved, so show the demo */
+    setPreview(true);
+    setAuto(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [empty, chose]);
   const all = loaded.data?.tiles ?? [];
   const tiles = matchTiles(all, q, category, audience);
   const switchTo = (on: boolean) => {
+    setChose(true);
+    setAuto(false);
     setPreview(on);
     const url = new URL(window.location.href);
     if (on) url.searchParams.set("preview", "1");
@@ -54,7 +68,10 @@ export function MythResource() {
           )}
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="font-semibold">{preview ? `Preview for authors · ${DEMO_LABEL}` : "You’re seeing the live library: approved entries only."}</p>
+            <p className="font-semibold">
+              {preview ? `Preview for authors · ${DEMO_LABEL}` : "You’re seeing the live library: approved entries only."}
+              {auto && <span className="block text-sm font-normal">Nothing is approved yet, so you’re seeing the demonstration entries.</span>}
+            </p>
             <button
               type="button"
               aria-pressed={preview}

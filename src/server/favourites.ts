@@ -11,7 +11,8 @@ import { AID_CLIENT_EVENTS, AID_TEMPLATES, checksum, REVIEW_DECISIONS, type AidE
 import { identifierWarnings } from "@/lib/redpen";
 import { plainText } from "@/lib/richText";
 import { audit, type Db } from "./db";
-import { HttpError, requireAuthor, type User } from "./auth";
+import { HttpError, meantFor, requireAuthor, type User } from "./auth";
+import { canOpenTopic } from "./catalogue";
 import { missionLock } from "./challenges";
 import { factValues } from "./facts";
 import { translationIfReady } from "./lessonTranslations";
@@ -186,11 +187,12 @@ function cardPart(c: Card, also?: Card): Part {
 
 /**
   A Topic as this person may read it now: published, not deleted, and not a challenge mission that hasn't opened
-  for them. Shared facts show their current values, as on the page. Anything else is not there to read.
+  for them, and one that's for them (catalogue.canOpenTopic). Shared facts show their current values, as on the page.
+  Anything else is not there to read.
 */
 function readTopic(db: Db, user: User, slug: unknown, now: Date): Lesson {
   const live = lessonBySlug(str(slug, 120));
-  if (!live || missionLock(db, user, live.slug, now)) throw new HttpError(404, "Topic not found.");
+  if (!live || missionLock(db, user, live.slug, now) || !canOpenTopic(db, user, live.slug)) throw new HttpError(404, "Topic not found.");
   return applyFacts(live, factValues(db));
 }
 
@@ -221,8 +223,8 @@ function flatSource(db: Db, user: User, kind: FlatKind, id: unknown, now: Date):
   }
   if (kind === "news") {
     const story = storyBySlug(str(id, 120));
-    // Unpublished or deleted: storyBySlug only has what's live.
-    if (!story) throw new HttpError(404, "Story not found.");
+    // Unpublished or deleted: storyBySlug only has what's live. A story for the other audience isn't theirs either.
+    if (!story || !meantFor(user, story.audience)) throw new HttpError(404, "Story not found.");
     // A section runs from one subheading to the next; "s0" is the opening, before the first.
     let section = "s0";
     const parts = story.body.map((b, i) => {
@@ -242,7 +244,7 @@ function flatSource(db: Db, user: User, kind: FlatKind, id: unknown, now: Date):
   }
   // One Resources entry is one source: its own date says when it changed.
   const r = resources.find((x) => x.id === str(id, 120));
-  if (!r) throw new HttpError(404, "Resource not found.");
+  if (!r || !meantFor(user, r.audience)) throw new HttpError(404, "Resource not found.");
   return {
     kind,
     id: r.id,

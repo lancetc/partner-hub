@@ -14,6 +14,7 @@ import { extractText } from "@/lib/lessonText";
 import { plainText } from "@/lib/richText";
 import { SUBJECTS } from "@/lib/subjects";
 import { cx, formatBytes } from "@/lib/format";
+import { DRAFT_SOURCE_TYPES, draftSourceProblem } from "@/lib/sourceFiles";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
@@ -31,6 +32,7 @@ import { dropTargets, insertAfterCard, isLinear, mainLine, movable, moveBlock, m
 import { confirmAction } from "@/lib/confirm";
 import { CardComments, ReviewComments, type EditorReview } from "./ReviewComments";
 import { approvalButton, TopicApproval, type Approval } from "./TopicApproval";
+import { TopicPeopleNotice } from "./TopicPeopleNotice";
 import { openCounts } from "../ReviewThreads";
 import { ImageGenerator } from "./ImageGenerator";
 import { BuildProgress, readEvents, type BuildPhase } from "./BuildProgress";
@@ -2003,10 +2005,10 @@ function Cards({
 
       <aside aria-label="Add a card" className="order-first lg:order-none">
         {/* A row to scroll on a phone; two columns in groups beside the cards on a wide screen. */}
-        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-tealtint p-2 shadow-sm ring-1 ring-action/20 lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
+        <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-gold p-2 text-[#102a43] shadow-sm ring-1 ring-[#e0a12e] lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
           {PALETTE_GROUPS.map((g) => (
             <div key={g.title} role="group" aria-label={g.title} className="flex shrink-0 gap-1.5 lg:flex-col lg:gap-1">
-              <p className="hidden px-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted lg:block">{g.title}</p>
+              <p className="hidden px-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-[#102a43]/75 lg:block">{g.title}</p>
               <div className="flex gap-1.5 lg:grid lg:grid-cols-2 lg:gap-1">
                 {g.keys
                   .flatMap((k) => PALETTE.filter((p) => p.key === k))
@@ -2020,7 +2022,7 @@ function Cards({
                       onFocus={(e) => showTip(p.key, e.currentTarget)}
                       onMouseLeave={() => setTip(null)}
                       onBlur={() => setTip(null)}
-                      className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-medium hover:bg-surface lg:min-h-10 lg:w-full lg:px-2"
+                      className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl bg-surface px-3 text-sm font-medium text-ink shadow-sm hover:bg-tealtint lg:min-h-10 lg:w-full lg:px-2"
                     >
                       <Icon name={p.icon} className="size-4 shrink-0 text-ink-muted" /> <span className="truncate">{p.label}</span>
                     </button>
@@ -5287,11 +5289,66 @@ const VISUAL_KINDS: { kind: Visual["kind"]; label: string }[] = [
   { kind: "orbit", label: "People around the client" },
 ];
 
+/** "Start from this card": a description for a picture from the card's heading and its first couple of sentences. */
+function cardImagePrompt(c: Card) {
+  const heading = plainText(c.heading ?? "").trim();
+  const body = "body" in c && typeof c.body === "string" ? plainText(c.body) : "";
+  const scene = body
+    .split(/(?<=[.!?])\s+/)
+    .slice(0, 2)
+    .join(" ")
+    .trim()
+    .slice(0, 320);
+  return `A photo for a learning card${heading ? ` headed “${heading}”` : ""}${scene ? `. The scene: ${scene}` : ""}`.replace(/[.\s]*$/, ".");
+}
+
+const NOT_NAMES = new Set(
+  (
+    "A An The This That These Those It Its I You Your We Our They Their He She His Her What When Where Why How Who Which If But And Or So Then Now " +
+    "Today Tomorrow Yesterday Monday Tuesday Wednesday Thursday Friday Saturday Sunday January February March April May June July August September " +
+    "October November December Day Week Trilogy Care Partner Partners Coordinator Coordinators Support Home Hub Topic Card Step Module Part Microsoft Australia"
+  ).split(" "),
+);
+/** The people (and other proper names) a card mentions: "Bruce", "Harding". Words that only start a sentence aren't counted. */
+export function namesOnCard(c: Card): string[] {
+  const text = [c.heading ?? "", "body" in c && typeof c.body === "string" ? c.body : "", c.narration ?? ""].map((t) => plainText(t)).join(". ");
+  const seen = new Map<string, number>();
+  // A capitalised word that doesn't start a sentence (looked behind, so "Bruce Harding" gives both).
+  for (const m of text.matchAll(/(?<=(?:^|[^.!?])\s)([A-Z][a-z]{2,})(?:['’]s)?\b/g)) {
+    const w = m[1];
+    if (!NOT_NAMES.has(w)) seen.set(w, (seen.get(w) ?? 0) + 1);
+  }
+  return [...seen.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([w]) => w)
+    .slice(0, 4);
+}
+/** Library pictures whose file name, title or description mention one of those names, best match first. */
+function libraryMatches(names: string[], photos: (Photo & { name?: string; title?: string; alt?: string })[]) {
+  if (!names.length) return [];
+  const res = names.map((n) => new RegExp(`\\b${n}(?:['’]?s)?\\b`, "i"));
+  return photos
+    .map((ph) => {
+      const about = [ph.name, ph.title, ph.alt, ph.src.split("/").pop()].filter(Boolean).join(" ");
+      return { ph, score: res.reduce((n, re, i) => n + (re.test(about) ? names.length - i : 0), 0) };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((x) => x.ph);
+}
+
 function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (c: Card) => void) => void; lesson: string; update?: Update }) {
   const v = c.visual;
   const library = useLibrary();
   const [pexels, setPexels] = useState(false);
   const [giphy, setGiphy] = useState(false);
+  const [generate, setGenerate] = useState(false);
+  // Reference pictures chosen for "Generate from this card"; null until the author changes them (the people on the card start chosen).
+  const [refs, setRefs] = useState<string[] | null>(null);
+  const characters = useApi<{ characters: { id: string; name: string; aliases: string[]; portrait: string; hidden?: boolean }[] }>(
+    generate ? "/api/admin/characters" : null,
+  ).data;
   // Library photos have no credit; Pexels photos and GIPHY GIFs bring theirs (and a description for the alt text if there's none).
   const applyPhoto = (p: Photo, suggestedAlt = "") =>
     set((x) => {
@@ -5348,15 +5405,23 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
           <button
             type="button"
             aria-expanded={pexels}
-            onClick={() => (setPexels((o) => !o), setGiphy(false))}
+            onClick={() => (setPexels((o) => !o), setGiphy(false), setGenerate(false))}
             className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
           >
             <Icon name="search" className="size-4" /> Find on Pexels
           </button>
           <button
             type="button"
+            aria-expanded={generate}
+            onClick={() => (setGenerate((o) => !o), setPexels(false), setGiphy(false))}
+            className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
+          >
+            <Icon name="spark" className="size-4" /> Generate from this card
+          </button>
+          <button
+            type="button"
             aria-expanded={giphy}
-            onClick={() => (setGiphy((o) => !o), setPexels(false))}
+            onClick={() => (setGiphy((o) => !o), setPexels(false), setGenerate(false))}
             className="flex min-h-11 items-center gap-1 rounded-xl border-2 border-dashed border-line-strong px-3 text-xs font-semibold text-ink-muted hover:border-action hover:text-ink"
           >
             <Icon name="spark" className="size-4" /> Find a GIF
@@ -5381,6 +5446,103 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
             setPexels(false);
           }}
         />
+      )}
+      {/* A new picture for this card, as in Media and voice, starting from the card's own words. Paid: only on Generate. */}
+      {generate && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-muted/50 p-3">
+          {/* Always the libraries first: a picture already made of these people keeps them looking the same. */}
+          {(() => {
+            const names = namesOnCard(c);
+            // The character library's portraits first: the official look of the people on this card.
+            const people = (characters?.characters ?? []).filter(
+              (ch) => ch.portrait && !ch.hidden && [ch.name, ...(ch.aliases ?? [])].some((n) => names.some((w) => new RegExp(`\\b${w}\\b`, "i").test(n))),
+            );
+            const portraits = people.map((ch) => ({
+              src: ch.portrait,
+              width: 1024,
+              height: 1024,
+              label: `${ch.name} (character)`,
+              alt: `Portrait of ${ch.name}`,
+            }));
+            const found = libraryMatches(names, library.photos)
+              .filter((ph) => !portraits.some((x) => x.src === ph.src))
+              .map((ph) => ({ ...ph, label: (ph as { title?: string }).title || ph.src.split("/").pop() || "", alt: (ph as { alt?: string }).alt ?? "" }));
+            const tiles = [...portraits, ...found];
+            const chosen = refs ?? portraits.map((x) => x.src).slice(0, 4);
+            const toggle = (src: string) => setRefs(chosen.includes(src) ? chosen.filter((x) => x !== src) : [...chosen, src].slice(-4));
+            return (
+              <>
+                <div>
+                  <p className="text-sm font-semibold">People on this card</p>
+                  {tiles.length ? (
+                    <>
+                      <p className="text-xs text-ink-muted">
+                        Tap up to 4 to use as references, so {names.slice(0, 2).join(" and ") || "they"} look the same in the new picture. Character portraits
+                        come first.
+                      </p>
+                      <div className="mt-2 grid grid-cols-4 gap-2">
+                        {tiles.map((ph) => {
+                          const on = chosen.includes(ph.src);
+                          return (
+                            <div key={ph.src} className="flex flex-col gap-1">
+                              <button
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() => toggle(ph.src)}
+                                title={ph.label}
+                                aria-label={`${on ? "Stop using" : "Use"} ${ph.label} as a reference`}
+                                className={cx(
+                                  "relative aspect-[4/3] overflow-hidden rounded-xl border-2",
+                                  on ? "border-action ring-2 ring-action/30" : "border-transparent hover:border-line-strong",
+                                )}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={ph.src} alt="" className="size-full object-cover" />
+                                {on && (
+                                  <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-[0.6rem] font-bold text-on-action">
+                                    Reference
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-[0.7rem] font-semibold text-accent hover:underline"
+                                onClick={() => {
+                                  applyPhoto(ph, ph.alt);
+                                  setGenerate(false);
+                                }}
+                              >
+                                Use on the card
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-ink-muted">
+                      {names.length
+                        ? `Nothing in the character or image library mentions ${names.slice(0, 3).join(", ")} yet.`
+                        : "No names on this card to look for."}{" "}
+                      Make a new picture below.
+                    </p>
+                  )}
+                </div>
+                <ImageGenerator
+                  references={chosen}
+                  useLabel="Use on this card"
+                  defaultAspect="3:2"
+                  start={{ label: "Start from this card", prompt: cardImagePrompt(c) }}
+                  onMade={library.reload}
+                  onUse={(p, prompt) => {
+                    applyPhoto(p, prompt.slice(0, 200));
+                    setGenerate(false);
+                  }}
+                />
+              </>
+            );
+          })()}
+        </div>
       )}
       {giphy && (
         <GiphyPicker
@@ -5759,8 +5921,8 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
-    if (!/\.(pdf|docx|txt|md)$/i.test(f.name)) return setError("Attach a PDF, Word (.docx) or text file.");
-    if (f.size > 15 * 1024 * 1024) return setError("That file is over 15 MB.");
+    const problem = draftSourceProblem(f);
+    if (problem) return setError(problem);
     setError(null);
     setFile(f);
   };
@@ -5859,7 +6021,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             >
               <input
                 type="file"
-                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                accept={DRAFT_SOURCE_TYPES}
                 className="sr-only"
                 onChange={(e) => pick(e.target.files?.[0])}
                 disabled={busy}
@@ -5873,7 +6035,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
               ) : (
                 <>
                   <span className="font-semibold">Drop a PDF or Word file, or click to choose</span>
-                  <span className="text-xs text-ink-muted">PDF, .docx or text, up to 15 MB</span>
+                  <span className="text-xs text-ink-muted">PDF, .docx or text up to 15 MB, or a SCORM package (.zip) from an existing eLearning course</span>
                 </>
               )}
             </label>
@@ -6624,6 +6786,7 @@ function Review({
       </Panel>
       <div className="flex flex-col gap-5">
         {isNew ? <p className="text-ink-muted">Save the topic first, then submit it for review.</p> : approval}
+        {!isNew && <TopicPeopleNotice key={historyKey} slug={slug} />}
         {!isNew && <VersionHistory key={historyKey} slug={slug} />}
       </div>
     </div>

@@ -468,3 +468,98 @@ Seeded once on a demo Hub (keys `lives_calendar_seed` and `lives_calendar_moment
   - `server/lifeMoments.ts` (reschedule, add-on-a-day, reusable demo seeding);
   - `server/livesAssist.ts` (month mode, serendipity);
   - `LivesMomentsAdmin.tsx`, `LivesAdmin.tsx`.
+
+## Check in: People I follow
+
+Built from the owner's brief *Check in* (25 November 2026): a light way to see how someone you follow is getting on, without going to Community, opening a profile and starting a chat.
+
+### Where and what
+
+- **On the homepage, beside Your Favourites** (the owner's layout): two separate containers in one row, People I follow on the left and Favourites on the right.
+  - On wide screens they're half each and the same height; on narrow screens they stack, People I follow first.
+  - Expanding a catch-up grows its own container, and the row grows with it.
+  - Only shown when the learner follows someone. If they follow nobody, it shows nothing and Favourites takes the full width (a column is made only for what's shown).
+  - "Meanwhile, in their lives…" comes after the row.
+- **"People I follow"** and "Take a moment to check in." There's one compact card per person, showing:
+  - their portrait and name;
+  - a line from their life, which is (in order of preference) the newest shared moment from the last week, an approved upcoming teaser ("Coming up: …"), their current story, or their tagline;
+  - "Last conversation · 3 days ago" or "You haven't spoken yet";
+  - **Check in** (or **Say hello** if they've never spoken).
+- **The catch-up opens in place.** No modal, no page change, no big chat window. Focus moves to the person's name, and **Finish catch-up** closes it and returns focus to the card's button. It shows:
+  - the character's opening line;
+  - the conversation;
+  - "Not sure what to say?" chips, and a message box;
+  - "Fictional character · Conversation memory on".
+- It works on a phone (the card takes the full width) and with a keyboard.
+
+### It's the member chat, not a new chatbot
+
+- **The endpoint:** messages go to the existing `/api/community/digital-members/chat` with `mode: "checkin"`, so the house rules, limits, settings, four-layer memory, the Living Calendar's routines and coming-up, and the report all apply as before.
+- **The opening line** (`checkInOpener`, `lib/checkIn.ts`) is written by the Hub, never the model, and worked out again on the server for the AI (the browser can't supply it):
+  - With no stored conversation: "Hello! I don't think we've met before. I'm Mrs Alvarez. It's nice of you to say hello."
+  - With one: "Hello again! Last time we were talking about Isabel." (the topic the learner's own memory holds), plus their own words from a moment shared since. A quote that would need context ("She brought a cake…") is left out.
+  - The conversation in progress is never counted as "last time".
+- **Starters** (`checkInStarters`): up to four, from the current arc ("How are you feeling about everything at the moment?"), a recent moment (good news, a voice message, a visit), the learner's own memory ("Any news about Isabel?"), an approved upcoming teaser, and the Bible's interests ("Tell me about your roses."). After that, the reply's own three follow-ups.
+- **Natural endings** (`CHECKIN_RULES`): replies are short and warm. After about four, the character may close in their own way (something to get on with; they'll let you know how something goes), but they keep talking if the learner does.
+  - No guilt about time away.
+  - Never suggests they rely on, wait for or need the learner.
+  - Mentions an earlier chat only if it's in memory.
+- **No points, no streaks.** Nothing is marked as learning. The report counts catch-ups opened (`checkin_open`) alongside the other voluntary activity.
+
+### Spoken replies (off by default)
+
+The "Hear it" control is under each of the character's replies. It's disabled, with "Spoken replies are off on this Hub", until an author ticks **Check in: learners can hear a character's replies spoken** in Admin → Lives in Progress → Conversational memory.
+
+When it's on:
+- Each reply is a **live, paid** speech request in the character's approved voice and delivery notes: about **US$0.005 for a 300-character reply** with OpenAI `gpt-4o-mini-tts` (US$15 per million characters, to verify). The narration cache means the same words are never paid for twice.
+- **Guards** (`checkInVoice`):
+  - the learner must follow that person;
+  - the words must be one of that character's recent replies to that learner (kept in memory on the server by hash), so the endpoint can't be used to read out anything else;
+  - 900 characters at most;
+  - 30 an hour per learner.
+- It plays only when pressed, and one sound at a time on the page (`lib/onePlayer`).
+
+### Files
+
+- New:
+  - `src/lib/checkIn.ts`, `src/server/checkIn.ts` (+ test);
+  - `src/components/community/CheckIn.tsx`;
+  - routes `/api/community/check-in` (GET the cards, POST "opened") and `/api/community/check-in/voice` (POST, MP3).
+- Changed:
+  - `server/memberChat.ts` (`mode: "checkin"`: the Hub's opener, `CHECKIN_RULES`, replies remembered for the voice check);
+  - `lib/livesInProgress.ts` (the `checkInVoice` setting, off by default, and the `checkin_open` and `checkin_voice` kinds);
+  - `app/page.tsx`;
+  - `LivesAdmin.tsx` (the setting);
+  - the chat route (passes `mode`).
+
+## The narrative ecosystem: the admin overview
+
+At the top of Admin → Lives in Progress (`/admin/lives`), the six parts appear as connected cards, in order, with a quiet line joining each to the next:
+
+1. **Character Bible**: who they are.
+2. **Living Calendar**: what they're doing.
+3. **Life Moments**: what's happening in their lives.
+4. **Story Arcs**: how their lives evolve.
+5. **Conversational Memory**: what we've spoken about.
+6. **Check In**: how we maintain a connection.
+
+Each card is a labelled region with a real heading. It has live counts from the tables (`livesOverview`, `server/livesOverview.ts`, served at `/api/admin/lives?overview=1`), a **Needs attention** box when something's waiting, and a button into its tab.
+
+| Card | Counts | Needs attention |
+|---|---|---|
+| Character Bible | Approved; drafts or changes waiting; still-to-reconcile notes | "Bill: no approved Bible" (anyone with stories, moments or routines but no approved Bible); Bibles with changes waiting |
+| Living Calendar | Routines active and paused (a pause covering today); events this month (moments by their date, plus episodes); routine days this month | Routines waiting for approval; the month's review (duplicates, crowded days, spoilers, routine clashes, too much care) |
+| Life Moments | Scheduled; published this week; awaiting approval | "2 moments awaiting approval"; voice messages not recorded or checked |
+| Story Arcs | Active arcs; episodes due in the next week (and which) | Episodes in review; the consistency check's flags per episode ("Okafor ep 06: teaser gives away the next episode's title") |
+| Conversational Memory | Learners with memories; memories kept; how long they're kept | Memory switched off |
+| Check In | Learners following someone; follows; check-ins opened this week | Spoken replies switched on (each one is paid) |
+
+Below the cards, **"Who has what set up"** is a row per character with anyone in Lives in Progress. A tick (or "Not set up yet" for screen readers) means, in turn:
+- an approved Bible;
+- an approved routine;
+- a moment shared or scheduled;
+- an active arc;
+- at least one learner's memories;
+- at least one follower.
+
+It's all counts: nothing anyone said is read or shown. Cards stack on phones, sit two across on tablets and three across on wide screens, in light and dark themes.

@@ -11,6 +11,7 @@ import { catalogueTopics } from "@/server/catalogue";
 import { HomeLearning } from "@/components/HomeLearning";
 import { HeroStats, PageHero } from "@/components/PageHero";
 import { LearnTile } from "@/components/LearnMenu";
+import { featuredTags } from "@/server/magazineFeatured";
 import { MagazineBrowser, type BrowseGuide } from "@/components/magazine/MagazineBrowser";
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ async function guides(): Promise<BrowseGuide[]> {
   const db = getDb();
   const user = await currentUser(db);
   const at = now(db);
+  const tagged = featuredTags(db);
   const magazine: BrowseGuide[] = learnerGuides(db, user, at).map((g) => ({
     id: g.id,
     kind: "magazine",
@@ -69,6 +71,7 @@ async function guides(): Promise<BrowseGuide[]> {
     publishedAt: g.publishedAt,
     popularity: g.popularity,
     state: g.state,
+    featured: tagged.has(g.id),
   }));
   const popular = coursePopularity(db, at);
   const elearning: BrowseGuide[] = learnerCourses(db, user).courses.map((c) => {

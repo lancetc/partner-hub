@@ -3,7 +3,7 @@ import { lessons, type QuizQuestion } from "@/content/lessons";
 import { parseQuizSettings, quizMinutes } from "@/lib/pathQuizSettings";
 import { audit, tx, type Db } from "./db";
 import { HttpError, requireAuthor, requireReporter, type User } from "./auth";
-import { chaptersFor, getRow, inScope, slugsFor } from "./learningPaths";
+import { chaptersFor, getRow, inScope, pathFor, slugsFor } from "./learningPaths";
 import { requestTestOut, testOutRule } from "./complianceRegister";
 
 /*
@@ -227,7 +227,8 @@ export function previewQuiz(db: Db, actor: User, pathId: string, rand: () => num
 export function startQuiz(db: Db, user: User, pathId: string, now: Date, rand: () => number = Math.random) {
   const p = getRow(db, pathId);
   const offer = quizOffer(db, user, pathId);
-  if (!offer) throw new HttpError(404, "This learning path doesn’t have a quiz.");
+  // Only on a path that's for them (learningPaths.pathFor), as on the path's own page.
+  if (!offer || !pathFor(db, user, p)) throw new HttpError(404, "This learning path doesn’t have a quiz.");
   const open = attemptsOf(db, pathId, user.id).find((a) => !a.submitted_at);
   if (!open && !offer.available)
     throw new HttpError(

@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 
 /*
   Sign-in (prototype). Real sign-in will be handled by each person's organisation (single sign-on), so
-  the button is a placeholder: it signs in as the demo author, Jordan Lee.
+  the button is a placeholder: it signs in as the demo author, Lance Elliott.
 
   The page stands alone on white: the logo, the scene, one line and one button. It stays white in the dark
   theme too, because the scene is painted onto white (globals.css hides the footer here).

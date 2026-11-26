@@ -4,6 +4,7 @@ import { audit } from "./db";
 import { canAuthor, canReport, HttpError, type User } from "./auth";
 import { getLesson } from "./lessonStore";
 import { magazineWall } from "./magazine";
+import { canOpenTopic } from "./catalogue";
 
 /*
   Insight walls. Everyone answers the same question, and the wall only opens once you've posted:
@@ -30,8 +31,11 @@ type PostRow = {
 
 function wallCard(db: Db, user: User, slug: string, cardId: string) {
   if (slug.startsWith("magazine:")) return magazineWall(db, user, slug.slice("magazine:".length), cardId);
-  const card = getLesson(db, slug)?.nodes[cardId];
+  const lesson = getLesson(db, slug);
+  const card = lesson?.nodes[cardId];
   if (!card || card.type !== "wall") throw new HttpError(404, "Insight wall not found.");
+  // A catalogue Topic's wall is for the people the Topic is for (catalogue.canOpenTopic), like the Topic itself.
+  if (!("generated" in lesson! && lesson!.generated) && !canOpenTopic(db, user, slug)) throw new HttpError(404, "Insight wall not found.");
   return card;
 }
 

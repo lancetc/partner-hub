@@ -102,7 +102,8 @@ describe("a business's figures stay in the business", () => {
     expect(details).toContain("field:staffCostPerFte");
     // Anything off the list is dropped to blank rather than stored.
     expect(details.filter((d) => d === "").length).toBeGreaterThanOrEqual(2);
-    const all = JSON.stringify(rows);
+    // Everything stored except the random ids, which could contain "361" or "7777" by chance (a flaky failure, Nov 2026).
+    const all = JSON.stringify(rows.map(({ id: _id, idem: _idem, ...rest }) => (void _id, void _idem, rest)));
     expect(all).not.toMatch(/7777|7,777|361|18,?160|Private/);
     expect(() => recordPlannerEvent(db, casey, { event: "salary_entered", mode: "plan" }, now)).toThrow(/Unknown event/);
   });

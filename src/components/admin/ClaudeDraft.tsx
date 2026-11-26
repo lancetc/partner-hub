@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { btn, ErrorNote, input } from "./ui";
 import { Icon } from "../Icon";
+import { DRAFT_SOURCE_TYPES, draftSourceProblem } from "@/lib/sourceFiles";
 import { BuildProgress, readEvents, type BuildPhase, type BuildStep } from "./BuildProgress";
 
 /*
@@ -54,8 +55,8 @@ export function ClaudeDraftDialog<R>({
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
-    if (!/\.(pdf|docx|txt|md)$/i.test(f.name)) return setError("Attach a PDF, Word (.docx) or text file.");
-    if (f.size > 15 * 1024 * 1024) return setError("That file is over 15 MB.");
+    const problem = draftSourceProblem(f);
+    if (problem) return setError(problem);
     setError(null);
     setFile(f);
   };
@@ -153,9 +154,9 @@ export function ClaudeDraftDialog<R>({
                     pick(e.dataTransfer.files?.[0]);
                   }}
                 >
-                  <input type="file" accept=".pdf,.docx,.txt,.md" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} disabled={busy} />
+                  <input type="file" accept={DRAFT_SOURCE_TYPES} className="sr-only" onChange={(e) => pick(e.target.files?.[0])} disabled={busy} />
                   <Icon name="upload" className="size-5 text-ink-muted" />
-                  <span className="font-semibold">{file ? file.name : "Drop a PDF or Word file, or click"}</span>
+                  <span className="font-semibold">{file ? file.name : "Drop a PDF, Word file or SCORM package, or click"}</span>
                   {file && (
                     <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={(e) => (e.preventDefault(), setFile(null))}>
                       Remove

@@ -120,3 +120,16 @@ A short set of **approved, versioned Question Pool items** for an audience, take
 - Checked on throwaway data on the running Hub (a five-task matrix, a document through correction and approval, activation, a published check taken by a coordinator), then cleared along with the test files. No requirements are released, so the live page is unchanged.
 - Screen reader behaviour was checked by structure (labels, live regions, a described step indicator), not with a screen reader.
 - Images were accepted by type in tests using a PDF; real JPG, PNG and WebP uploads weren't tried in the browser.
+
+## Starting courses (26 November 2026)
+
+Built from the PRD *Role-based onboarding and course assignment*. Code: `src/server/onboardingCourses.ts`, `src/lib/onboardingCourses.ts`; tables `onbc_*` (made by `ensureCourses`, no change to `db.ts`).
+
+- **Learners:** the homepage card (one action, two next steps, Find a Job Aid, Get help), the first run at `/onboarding/start` (language, read or listen and text size first; then role with "This isn't my role"; then Continue), and each course at `/onboarding/course/<enrolment>`.
+- **Admin:** Onboarding → **Starting courses**: Courses (and equivalences), Rules (IF/THEN summary, audience preview, publish, owner approval, retire), People, Exceptions, Reports (with CSV), Learner preview, Audit trail.
+
+**The model.** A course is a versioned list of existing Topics, Magazine courses and Job Aids, by reference; progress is read from their own records (a Job Aid step is done when it's saved to Favourites). A rule (versioned, effective-dated, owned by a team) says which verified role and service type gets which course. Anyone who runs onboarding for that population can publish it as **recommended**; only its **named owner** can make it mandatory, and only then is there a due date and reminders. One enrolment per person, organisation and course version (a database constraint), so evaluation on every visit never duplicates. A change of role or service type adds the new course and ends what no longer applies; finished records are kept. A supplier with no verified service type, or an open "This isn't my role", gets nothing new and sees **We need to confirm your work type**. Completion is recorded against the exact Topic and Magazine versions and changes nothing about setup tasks or approval to work.
+
+**Demonstration pathways.** Five courses and five rules (supplier introduction, cleaner first visit, coordinator first client, Care Partner principal, Trilogy staff), all marked as demonstrations. Each asks to be mandatory but names only a team, so each is recommended with no due date until an owner is named and approves it. Content gaps are recorded on each course.
+
+**Not done.** Real invitations and identity (the demo sign-in stands in); integrations for verified role and service type (an administrator sets them here); reviewed translations (none: Google Translate is labelled as machine translation, with a help route); a second role's content opening for an account whose audience differs (flagged in Exceptions); phone, assistive-technology and non-English user testing.

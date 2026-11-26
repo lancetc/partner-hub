@@ -9,6 +9,7 @@ import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { RequirementsTab } from "./OnboardingRequirements";
 import { InstrumentsTab } from "./OnboardingInstruments";
+import { CoursesTab } from "./OnboardingCourses";
 
 /*
   Onboarding, for the people who run it (docs/onboarding.md): what's waiting for a reviewer, where everyone
@@ -21,6 +22,7 @@ type Progress = ReturnType<typeof funnel>;
 
 const TABS = [
   { id: "queue", label: "Review queue" },
+  { id: "courses", label: "Starting courses" },
   { id: "progress", label: "Progress" },
   { id: "requirements", label: "Requirements" },
   { id: "instruments", label: "Starting-point checks" },
@@ -56,6 +58,7 @@ export function OnboardingAdmin() {
       </div>
       <div id="onb-panel" role="tabpanel" aria-labelledby={`onb-tab-${tab}`} className="mt-5">
         {tab === "queue" && <QueueTab />}
+        {tab === "courses" && <CoursesTab />}
         {tab === "progress" && <ProgressTab />}
         {tab === "requirements" && <RequirementsTab />}
         {tab === "instruments" && <InstrumentsTab />}

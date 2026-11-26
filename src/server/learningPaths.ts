@@ -6,6 +6,7 @@ import { unpublishedLessons } from "./authoredLessons";
 import { seedExciter } from "./pathExciterStore";
 import { thumbnailFor } from "@/lib/pathThumbnail";
 import { cleanQuizSettings, parseQuizSettings, type PathQuizSettings } from "@/lib/pathQuizSettings";
+import { pathOpenTo } from "@/lib/pathShelves";
 
 /*
   Learning paths: a named set of lessons in order that an administrator assigns to people.
@@ -155,6 +156,16 @@ export function getRow(db: Db, id: string) {
   return row;
 }
 
+/**
+  Whether a learner may see and open this path: one assigned to them (or that they're already enrolled in) always,
+  otherwise one whose audience wording is for them (lib/pathShelves.pathOpenTo), so a coordinator isn't offered the
+  suppliers' paths and partners aren't offered the coordinators'. Authors see every path.
+*/
+export function pathFor(db: Db, user: User, p: Pick<PathRow, "id" | "audience">) {
+  if (canAuthor(user) || pathOpenTo(p.audience, user.audience)) return true;
+  return Boolean(db.prepare("SELECT 1 FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(p.id, user.id));
+}
+
 function requireEditor(actor: User, row: PathRow) {
   requireReporter(actor);
   if (!canAuthor(actor) && row.created_by !== actor.id) throw new HttpError(403, "Only the person who made this path, or a learning author, can change it.");
@@ -278,12 +289,11 @@ function visibleAssignments(db: Db, actor: User, pathId: string) {
   return rows;
 }
 
-/** Learning paths by name, each with its topics in path order, for grouping topics by path. */
-export const pathTopicOrder = (db: Db) =>
-  (db.prepare("SELECT id, name FROM learning_paths WHERE archived = 0 ORDER BY name").all() as { id: string; name: string }[]).map((p) => ({
-    ...p,
-    slugs: slugsFor(db, p.id),
-  }));
+/** Learning paths by name, each with its topics in path order, for grouping topics by path. Given a learner, only paths for them (pathFor). */
+export const pathTopicOrder = (db: Db, user?: User) =>
+  (db.prepare("SELECT id, name, audience FROM learning_paths WHERE archived = 0 ORDER BY name").all() as { id: string; name: string; audience: string }[])
+    .filter((p) => !user || pathFor(db, user, p))
+    .map(({ id, name }) => ({ id, name, slugs: slugsFor(db, id) }));
 
 export function listLearningPaths(db: Db, actor: User) {
   requireReporter(actor);
@@ -527,7 +537,8 @@ export function unassignLearningPath(db: Db, actor: User, id: string, userId: st
 export function enrolInPath(db: Db, user: User, id: string, hidden: Set<string>, now: Date) {
   const p = getRow(db, id);
   const slugs = slugsFor(db, id);
-  if (!slugs.some((s) => catalogue().some((l) => l.slug === s)) || slugs.some((s) => hidden.has(s))) throw new HttpError(404, "Learning path not found.");
+  if (!slugs.some((s) => catalogue().some((l) => l.slug === s)) || slugs.some((s) => hidden.has(s)) || !pathFor(db, user, p))
+    throw new HttpError(404, "Learning path not found.");
   const existing = db.prepare("SELECT self FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as { self: number } | undefined;
   if (existing) return { enrolled: true, selfEnrolled: Boolean(existing.self) };
   db.prepare("INSERT INTO learning_path_assignments (path_id, user_id, due_date, assigned_by, assigned_at, self) VALUES (?, ?, NULL, ?, ?, 1)").run(
@@ -594,19 +605,22 @@ export function startedLearningPaths(db: Db, user: User) {
       "SELECT p.* FROM learning_paths p WHERE p.archived = 0 AND NOT EXISTS (SELECT 1 FROM learning_path_assignments a WHERE a.path_id = p.id AND a.user_id = ?) ORDER BY p.name",
     )
     .all(user.id) as PathRow[];
-  return rows
-    .filter((p) => slugsFor(db, p.id).some((s) => touched.has(s)))
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      inOrder: Boolean(p.in_order),
-      dueDate: null,
-      assigned: false,
-      selfEnrolled: false,
-      chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
-      ...progress(db, user.id, slugsFor(db, p.id), Boolean(p.in_order)),
-    }));
+  return (
+    rows
+      // Only paths meant for them: a general topic they did doesn't put another audience's path in front of them.
+      .filter((p) => slugsFor(db, p.id).some((s) => touched.has(s)) && pathFor(db, user, p))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        inOrder: Boolean(p.in_order),
+        dueDate: null,
+        assigned: false,
+        selfEnrolled: false,
+        chapters: chaptersFor(db, p.id).map(({ lessons: l, ...c }) => ({ ...c, slugs: l })),
+        ...progress(db, user.id, slugsFor(db, p.id), Boolean(p.in_order)),
+      }))
+  );
 }
 
 /**
@@ -631,7 +645,7 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
   return (
     rows
       .map((p) => ({ p, slugs: slugsFor(db, p.id), a: mine.get(p.id) }))
-      .filter(({ slugs, a }) => slugs.some(published) && (a || !slugs.some((s) => hidden.has(s))))
+      .filter(({ p, slugs, a }) => slugs.some(published) && (a || !slugs.some((s) => hidden.has(s))) && (a || pathFor(db, user, p)))
       .map(({ p, slugs, a }) => {
         const { completed, total, done } = progress(db, user.id, slugs, Boolean(p.in_order));
         const first = slugs.map((s) => catalogue().find((l) => l.slug === s)).find(Boolean);
@@ -662,13 +676,14 @@ export function browseLearningPaths(db: Db, user: User, hidden: Set<string> = ne
 }
 
 /**
-  One path as a learner sees it, for its own page (where a QR code leads). Anyone signed in can
-  open it; it shows their own progress, and their due date if it's assigned to them.
+  One path as a learner sees it, for its own page (where a QR code leads). Anyone the path is for (pathFor) can
+  open it; it shows their own progress, and their due date if it's assigned to them. A path for another audience
+  is "not found", the same as on the list, so a link or QR code doesn't get round it.
 */
 export function learnerPath(db: Db, user: User, id: string) {
   const p = getRow(db, id);
   const slugs = slugsFor(db, id);
-  if (!slugs.length) throw new HttpError(404, "Learning path not found.");
+  if (!slugs.length || !pathFor(db, user, p)) throw new HttpError(404, "Learning path not found.");
   const a = db.prepare("SELECT due_date, self FROM learning_path_assignments WHERE path_id = ? AND user_id = ?").get(id, user.id) as
     { due_date: string | null; self: number } | undefined;
   return {

@@ -160,13 +160,29 @@ export const SIMULATION_BLOCKS = [
   as the people delivering services) and Trilogy Care's own teams, and the aim running through it is growing the
   business, ours and the partners'.
 */
+/**
+  The roles a story can be tagged for, named as the Hub's demo profiles are (the owner, Nov 2026): Suppliers (a partner
+  business's workers: Sam), Care Coordinators (Riley), Care Partners (the partner business's owner or manager: Casey) and
+  Trilogy Care staff (Avery, and administrators). The values stay as they were, so existing tags keep working.
+*/
 export const GUIDE_ROLES = [
-  { value: "partner", label: "Care Partners and their workers" },
-  { value: "coordinator", label: "Care coordinators" },
-  { value: "owner", label: "Business owners and managers" },
-  { value: "staff", label: "Trilogy Care teams" },
+  { value: "partner", label: "Suppliers" },
+  { value: "coordinator", label: "Care Coordinators" },
+  { value: "owner", label: "Care Partners" },
+  { value: "staff", label: "Trilogy Care staff" },
 ] as const;
 export type GuideRole = (typeof GUIDE_ROLES)[number]["value"];
+
+/**
+  The browsing role someone starts on in the Magazine's and the activity directory's role filters: their own (a partner
+  business's owner or manager is a Care Partner, its workers Suppliers), or none for authors and administrators, who
+  start on everything. They can always choose another.
+*/
+export function browsingRole(v: { audience: string; role: string; canAuthor?: boolean }): GuideRole | null {
+  if (v.canAuthor || v.role === "author") return null;
+  if (v.role === "org_admin" && v.audience === "partner") return "owner";
+  return GUIDE_ROLES.find((r) => r.value === v.audience)?.value ?? null;
+}
 export const GUIDE_GOALS = [
   { value: "grow", label: "Grow the business" },
   { value: "money", label: "Money and getting paid" },
@@ -261,7 +277,33 @@ export type Flag = { kind: "verify" | "illustrative"; note: string };
 */
 export const REVEALS = { rise: "Rise", fade: "Fade", slide: "Slide in", zoom: "Zoom", none: "None" } as const;
 export type Reveal = keyof typeof REVEALS;
-type Base = { id: string; note?: string; evidence?: Evidence[]; flag?: Flag; reveal?: Exclude<Reveal, "rise"> };
+/**
+  “Why this block?”: why the AI builder chose a block (lib/activityCatalogue), for the author and reviewers to read and
+  change. The behaviour it practises, what informed the choice, the option it was weighed against, what the learner does
+  and what will be measured. Learners never see it.
+*/
+export type BlockWhy = {
+  behaviour: string;
+  evidence: string;
+  alternative: string;
+  rationale: string;
+  learnerAction: string;
+  signal: string;
+  owner?: string;
+  source?: string;
+};
+export const WHY_FIELDS: [keyof BlockWhy, string][] = [
+  ["behaviour", "Behaviour it practises"],
+  ["rationale", "Why this activity fits"],
+  ["evidence", "What informed the choice"],
+  ["alternative", "Option considered instead"],
+  ["learnerAction", "What the learner does"],
+  ["signal", "What will be measured or observed"],
+  ["owner", "Review owner"],
+  ["source", "Source"],
+];
+/** `aiWhy`: the AI builder's “Why this block?” (BlockWhy). Named apart from the Job Aid block's `why` and the notes deck's `selection`. */
+type Base = { id: string; note?: string; evidence?: Evidence[]; flag?: Flag; reveal?: Exclude<Reveal, "rise">; aiWhy?: BlockWhy };
 /**
   `position`: which part of the picture shows when it's cropped to its frame (a wide strip, a circle), as
   "x% y%" (CSS object-position). The author drags the picture to choose it; centred when not set.
@@ -547,6 +589,13 @@ export type GuideMedia = {
   /** The provider's reference for the render, when there is one. */
   providerRef?: string;
 };
+/**
+  One of Ava's transmissions in the page's content: a video made elsewhere (ElevenLabs, with the Laura avatar), uploaded
+  in the editor with what she says. The video and its words are kept as one of her lines (server/ava.ts, the key
+  `magazine:<guideId>:block:<blockId>`), exactly like the one at the top of a page, so it plays in the same window with
+  her words highlighted. `title`: what the transmission is about, for its window and screen readers. Never an activity.
+*/
+export type AvaBlock = Base & { type: "ava"; title?: string };
 export type GuideBlock = Base & {
   type: "guide";
   mode: GuideMode;
@@ -606,6 +655,7 @@ export type Block =
   | PulseBlock
   | ActionBlock
   | GuideBlock
+  | AvaBlock
   | SignalBlock
   | MissionBlock
   | BalanceBlock
@@ -904,8 +954,9 @@ export function activityDone(b: Block, answers: Record<string, string>, quizzes:
     // choosing not to, both count).
     case "perspectives":
     case "pulse":
-    // The AI Learning Guide: playing (or not playing) a recording finishes nothing.
+    // The AI Learning Guide, and Ava's transmissions: playing (or not playing) a recording finishes nothing.
     case "guide":
+    case "ava":
       return null;
     // A Live SOP playbook is reference: reading it, or not, finishes nothing (docs/live-playbooks.md).
     case "playbook":
@@ -961,6 +1012,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   pulse: "Pulse check",
   action: "Action note",
   guide: "AI Learning Guide",
+  ava: "Ava video",
   signal: "Spot the Signal",
   mission: "First 30 Days Mission Board",
   balance: "Dignity of Risk Balance Scale",
@@ -1171,7 +1223,7 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
   const photo = (o: Record<string, unknown>, where: string): WithPhoto =>
     o.media && (o.media as { src?: unknown }).src ? { media: media(o.media, `${where} picture`) } : {};
   const common = (o: Record<string, unknown>, where: string) => {
-    const out: Pick<Base, "note" | "evidence" | "flag" | "reveal"> = {};
+    const out: Pick<Base, "note" | "evidence" | "flag" | "reveal" | "aiWhy"> = {};
     if (typeof o.reveal === "string" && o.reveal in REVEALS && o.reveal !== "rise") out.reveal = o.reveal as Exclude<Reveal, "rise">;
     const note = str(o.note, `${where} note`, { max: 1000 });
     if (note) out.note = note;
@@ -1187,6 +1239,22 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
       const f = o.flag as Record<string, unknown>;
       if (f.kind !== "verify" && f.kind !== "illustrative") problems.push(`${where} flag should be “verify” or “illustrative”.`);
       else out.flag = { kind: f.kind, note: str(f.note, `${where} flag note`, { max: 600 }) ?? "" };
+    }
+    // The AI builder's reasons for the block: kept (trimmed, never refused) while there's a reason to read.
+    if (o.aiWhy && typeof o.aiWhy === "object") {
+      const w = o.aiWhy as Record<string, unknown>;
+      const t = (k: string) => (typeof w[k] === "string" ? (w[k] as string).trim().slice(0, 600) : "");
+      const why: BlockWhy = {
+        behaviour: t("behaviour"),
+        evidence: t("evidence"),
+        alternative: t("alternative"),
+        rationale: t("rationale"),
+        learnerAction: t("learnerAction"),
+        signal: t("signal"),
+        ...(t("owner") && { owner: t("owner") }),
+        ...(t("source") && { source: t("source") }),
+      };
+      if (why.rationale || why.behaviour) out.aiWhy = why;
     }
     return out;
   };
@@ -1713,6 +1781,10 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
             text: str(op?.text, `${where} option ${i + 1}`, { required: true, max: 160 }) ?? "",
           })),
         };
+      }
+      case "ava": {
+        const title = typeof o.title === "string" ? o.title.trim().slice(0, 120) : "";
+        return { ...base, type: "ava", ...(title && { title }) };
       }
       case "guide": {
         const keep = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
@@ -2552,3 +2624,6 @@ export function templatePage(template: PageTemplate | "assessment", id: (prefix:
     sections: outlines[template],
   };
 }
+
+/** The documents AI drafting reads a course from (the file picker's accept list). */
+export const SOURCE_FILE_TYPES = ".pdf,.docx,.pptx,.txt,.md,.zip,application/pdf,text/plain,application/zip";

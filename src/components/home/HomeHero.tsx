@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { daypartAfter, daypartAt, HOME_SCENE_SIZE, HOME_SCENES, msUntilNextDaypart, type Daypart } from "@/lib/homeScenes";
 import { useApi, type Me } from "@/lib/api";
+import { browsingRole } from "@/lib/magazine";
+import { homeParts } from "@/lib/homeLayout";
 import { useHydrated } from "@/lib/store";
 import { greeting } from "../HomeWelcome";
 import { ImageZoom } from "./ImageZoom";
@@ -56,6 +58,13 @@ function useDaypartClock() {
   }, []);
 }
 
+const EDITIONS = {
+  partner: "Supplier edition",
+  coordinator: "Care Coordinator edition",
+  owner: "Care Partner edition",
+  staff: "Trilogy Care edition",
+} as const;
+
 export function HomeHero() {
   const hydrated = useHydrated();
   const me = useApi<Me>("/api/me").data;
@@ -65,13 +74,12 @@ export function HomeHero() {
   // Today, read only in the browser: the page is built ahead of time, when "now" would be the wrong day.
   const now = hydrated ? new Date() : null;
   const first = me?.user.name.trim().split(/\s+/)[0];
-  const role = me
-    ? me.user.audience === "coordinator"
-      ? "Coordinator edition"
-      : me.user.audience === "staff"
-        ? "Trilogy Care edition"
-        : "Care Partner edition"
-    : "Partner Hub";
+  // The masthead's edition, named as the demo profiles are (lib/magazine browsingRole): Supplier, Care Coordinator,
+  // Care Partner, or Trilogy Care for staff and administrators.
+  const viewer = me ? { audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor } : null;
+  const role = viewer ? EDITIONS[browsingRole(viewer) ?? "staff"] : "Partner Hub";
+  // The Digital Member who floats on the picture belongs to Lives in Progress, so only for those whose homepage has it.
+  const persona = viewer ? homeParts(viewer).includes("lives") : false;
   const dateline = now?.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
@@ -140,12 +148,19 @@ export function HomeHero() {
         </p>
       </div>
 
-      {/* A different Digital Member on each visit, floating in the middle of the picture's right side, close to the edge. Wide screens only: on narrower ones it would cover the greeting. */}
-      <div className="pointer-events-none absolute inset-0 mx-auto hidden max-w-7xl items-center justify-end px-4 sm:px-6 xl:flex">
-        <div>
-          <HomePersona />
-        </div>
+      {/* "Since your last visit": a small note at the picture's bottom left, drawn here by the workspace (HomeWorkspace). */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto max-w-7xl px-4 pb-4 sm:px-6 sm:pb-5">
+        <div id="home-hero-note" className="pointer-events-auto w-fit max-w-full empty:hidden" />
       </div>
+
+      {/* A different Digital Member on each visit, floating in the middle of the picture's right side, close to the edge. Wide screens only: on narrower ones it would cover the greeting. */}
+      {persona && (
+        <div className="pointer-events-none absolute inset-0 mx-auto hidden max-w-7xl items-center justify-end px-4 sm:px-6 xl:flex">
+          <div>
+            <HomePersona />
+          </div>
+        </div>
+      )}
 
       <ImageZoom
         src={HOME_SCENES[zoom ?? "day"].src}

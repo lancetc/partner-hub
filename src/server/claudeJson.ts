@@ -2,6 +2,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { HttpError } from "./auth";
 import { client, GENERATION_MODEL } from "./generate";
+import { claudeConfigured, openaiAsk, openaiReady, type OpenAIPart } from "./openaiText";
 import type { readSource } from "./lessonDraft";
 
 /*
@@ -29,6 +30,22 @@ async function ask(
   repair?: { previous: string; correction: string },
   effort: Effort = "high",
 ) {
+  // Without Claude, the Hub's OpenAI connection writes it, from the same documents and prompt (server/openaiText).
+  if (!claudeConfigured() && openaiReady()) {
+    const parts: OpenAIPart[] = content.flatMap((b): OpenAIPart[] =>
+      b.type === "text"
+        ? [{ kind: "text", text: b.text }]
+        : b.type === "document" && b.source.type === "text"
+          ? [{ kind: "doc", title: b.title ?? "Source", text: b.source.data }]
+          : b.type === "document" && b.source.type === "base64"
+            ? [{ kind: "pdf", title: b.title ?? "Source", data: b.source.data }]
+            : [],
+    );
+    const out = await openaiAsk(parts, repair);
+    const text = out.text.replace(/^```(?:json)?\s*|\s*```$/g, "");
+    onText(text);
+    return { text, usage: out.usage };
+  }
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
   if (repair) messages.push({ role: "assistant", content: repair.previous }, { role: "user", content: repair.correction });
   const stream = client().beta.messages.stream({
@@ -76,9 +93,12 @@ export async function askForJson<T>(
   let result = parse(text);
   if (result.issues.length) {
     progress.onPhase("fixing", result.issues.length);
-    ({ text, usage } = await ask(content, progress.onText, {
-      previous: text,
-      correction: `Your previous reply had these problems:\n${result.issues.slice(0, 30).join("\n")}\n\nReply again with the complete corrected JSON object only.`,
+    ({ text, usage } = await ask(
+      content,
+      progress.onText,
+      {
+        previous: text,
+        correction: `Your previous reply had these problems:\n${result.issues.slice(0, 30).join("\n")}\n\nReply again with the complete corrected JSON object only.`,
       },
       effort,
     ));

@@ -226,7 +226,7 @@ describe("evidence stages", () => {
     expect(mine().highest).toBeNull();
     decideMapping(db, jordan, id, { approve: true }, now);
     expect(mine().highest).toBe("introduced");
-    expect(framework(db, jordan).competencies[0].mappings[0]).toMatchObject({ status: "approved", decidedBy: "Jordan Lee", proposedBy: "Dana Okafor" });
+    expect(framework(db, jordan).competencies[0].mappings[0]).toMatchObject({ status: "approved", decidedBy: "Lance Elliott", proposedBy: "Dana Okafor" });
   });
 
   it("doesn't count testing out of a Topic as having been through it", () => {
@@ -377,11 +377,11 @@ describe("observations", () => {
       { ...obs, decision: "more_practice", behaviours: [BEHAVIOURS[0]], rationale: "Missed the rate mismatch on the second invoice." },
       now,
     );
-    expect(mine()).toMatchObject({ highest: null, morePractice: { by: "Jordan Lee" }, askedAt: null });
+    expect(mine()).toMatchObject({ highest: null, morePractice: { by: "Lance Elliott" }, askedAt: null });
     recordObservation(db, jordan, obs, later(1));
     const c = mine(riley, later(1));
     expect(c).toMatchObject({ highest: "verified", met: true, summary: "Verified at work.", morePractice: null });
-    expect(c.stages.verified).toMatchObject([{ by: "Jordan Lee", at: "2026-11-19", version: "competency version 1" }]);
+    expect(c.stages.verified).toMatchObject([{ by: "Lance Elliott", at: "2026-11-19", version: "competency version 1" }]);
     // The earlier one is kept, marked superseded.
     const all = personCapabilities(db, jordan, "riley", later(1)).observations;
     expect(all.map((o) => [o.decision, o.superseded])).toEqual([
@@ -406,7 +406,7 @@ describe("observations", () => {
     withdrawObservation(db, jordan, id, "Signed against the wrong person.", later(1));
     expect(mine(riley, later(1)).highest).toBeNull();
     expect(personCapabilities(db, jordan, "riley", later(1)).observations[0]).toMatchObject({
-      withdrawn: { by: "Jordan Lee", reason: "Signed against the wrong person." },
+      withdrawn: { by: "Lance Elliott", reason: "Signed against the wrong person." },
     });
   });
 
@@ -431,7 +431,7 @@ describe("observations", () => {
       now,
     );
     expect(mine()).toMatchObject({ highest: "demonstrated", met: false });
-    expect(mine().stages.demonstrated).toMatchObject([{ kind: "record", by: "Jordan Lee" }]);
+    expect(mine().stages.demonstrated).toMatchObject([{ kind: "record", by: "Lance Elliott" }]);
   });
 });
 
@@ -472,7 +472,7 @@ describe("privacy, corrections and the handoff", () => {
       later(1),
     );
     const me = myCapabilities(db, riley, later(1));
-    expect(me.corrections[0]).toMatchObject({ state: "resolved", resolvedBy: "Jordan Lee", resolution: "Confirmed with the induction record. Added." });
+    expect(me.corrections[0]).toMatchObject({ state: "resolved", resolvedBy: "Lance Elliott", resolution: "Confirmed with the induction record. Added." });
     expect(me.competencies[0]).toMatchObject({ highest: "demonstrated", met: true });
     expect(() => resolveCorrection(db, jordan, c.id, { state: "declined", resolution: "Changed my mind about this." }, later(2))).toThrow(
       /already been answered/,

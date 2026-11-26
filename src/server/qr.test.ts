@@ -79,8 +79,10 @@ describe("the path page a QR code opens", () => {
     expect(mine).toMatchObject({ id, assigned: true });
     expect(mine.steps.length).toBeGreaterThan(0);
     const other = db
-      .prepare("SELECT id FROM users WHERE role = 'learner' AND id NOT IN (SELECT user_id FROM learning_path_assignments WHERE path_id = ?)")
-      .get(id) as { id: string } | undefined;
+      .prepare(
+        "SELECT id FROM users WHERE role = 'learner' AND audience = (SELECT audience FROM users WHERE id = ?) AND id NOT IN (SELECT user_id FROM learning_path_assignments WHERE path_id = ?)",
+      )
+      .get(who, id) as { id: string } | undefined;
     if (other) expect(learnerPath(db, u(other.id), id)).toMatchObject({ assigned: false, dueDate: null });
   });
 });

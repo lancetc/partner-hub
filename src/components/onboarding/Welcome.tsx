@@ -77,7 +77,8 @@ export function Welcome() {
           </div>
           <h1 className="font-serif text-4xl font-semibold tracking-tight">Welcome to Trilogy Care</h1>
           <p className="text-lg">
-            We support people to live well at home, with support their way. As a Care Partner, you’re a big part of that.
+            {/* Before anyone has said what they do, so it names no role (the owner, Nov 2026). */}
+            We support people to live well at home, with support their way. Whatever your role, you’re a big part of that.
           </p>
           <p className="text-lg">A few quick questions to set you up, then we’ll build you a short topic on something you’d like to learn.</p>
           <p className="text-ink-muted">It takes about two minutes. You can skip any step.</p>

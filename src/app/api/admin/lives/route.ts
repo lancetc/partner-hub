@@ -1,4 +1,5 @@
 import { body, handle } from "@/server/http";
+import { livesOverview } from "@/server/livesOverview";
 import { demoDiaryEstimate, livesAction, livesAdmin, livesBible, livesReport } from "@/server/livesAuthoring";
 
 /**
@@ -8,13 +9,15 @@ import { demoDiaryEstimate, livesAction, livesAdmin, livesBible, livesReport } f
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
   return handle(({ db, user, now }) =>
-    q.get("bible")
-      ? livesBible(db, user, q.get("bible"), now)
-      : q.get("report")
-        ? livesReport(db, user, now, Math.min(365, Math.max(7, Number(q.get("days")) || 30)))
-        : q.get("estimate")
-          ? demoDiaryEstimate(db, user, now, q.get("voice") || undefined)
-          : livesAdmin(db, user, now),
+    q.get("overview")
+      ? livesOverview(db, user, now)
+      : q.get("bible")
+        ? livesBible(db, user, q.get("bible"), now)
+        : q.get("report")
+          ? livesReport(db, user, now, Math.min(365, Math.max(7, Number(q.get("days")) || 30)))
+          : q.get("estimate")
+            ? demoDiaryEstimate(db, user, now, q.get("voice") || undefined)
+            : livesAdmin(db, user, now),
   );
 }
 

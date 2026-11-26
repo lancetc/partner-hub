@@ -32,6 +32,8 @@ import {
 } from "@/lib/discovery";
 import { audit, ensureDiscovery, tx, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
+import { topicIsFor } from "./catalogue";
+import { myTopicAssignments } from "./people";
 import { missionSlugs } from "./challenges";
 import { discoveryCourses } from "./magazine";
 import { askForJson } from "./claudeJson";
@@ -115,9 +117,13 @@ export function catalogue(db: Db, user: User): Catalogue {
     (db.prepare("SELECT DISTINCT lesson_slug AS slug FROM lesson_completions WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug),
   );
   const begun = new Set((db.prepare("SELECT slug FROM lesson_progress WHERE user_id = ?").all(user.id) as { slug: string }[]).map((r) => r.slug));
+  const assigned = myTopicAssignments(db, user.id);
   const topics: IndexedItem[] = lessons
     // Follow ups arrive in a sequence and challenge missions open one a day: neither can be saved.
     .filter((l) => l.track !== "reinforcement" && !missions.has(l.slug))
+    // Only topics for this person (catalogue.topicIsFor) or assigned to them, as on Topics: a coordinator's path
+    // isn't offered the Care Partners' topics.
+    .filter((l) => topicIsFor(user, l) || assigned.has(l.slug))
     .map((l) => {
       const kinds = Object.values(l.nodes).map((n) => (n as { type: string }).type);
       return {

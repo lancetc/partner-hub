@@ -127,6 +127,16 @@ export const BLOCK_REGISTRY: ActivityContract[] = [
     signoff: "A person approves the script before it plays",
     events: ["guide.started", "guide.completed"],
   }),
+  read(
+    "ava",
+    "Watches one of Ava's transmissions, with her words highlighted as she speaks",
+    ["a word from Ava", "set the scene", "story moment", "transmission"],
+    1,
+    {
+      inputs: ["An uploaded video of Ava (made in ElevenLabs with the Laura avatar) and what she says in it"],
+      events: ["page.opened"],
+    },
+  ),
   c("playbook", {
     action: "task",
     purpose: "Follows the current approved steps of a procedure, with a route to urgent help",

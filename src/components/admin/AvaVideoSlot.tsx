@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import type { AvaVideoState } from "@/server/ava";
@@ -18,7 +19,7 @@ import { Icon } from "../Icon";
   listed in Admin → AI Learning Guide → Ava's talking videos.
 */
 
-type Where = "magazine" | "path" | "topic";
+type Where = "magazine" | "content" | "path" | "topic";
 /** What the panel says in each place: where the video plays, what it replaces, and which script it can stand in for. */
 const WHERE: Record<Where, { plays: string; script: string; stale: string }> = {
   magazine: {
@@ -26,6 +27,11 @@ const WHERE: Record<Where, { plays: string; script: string; stale: string }> = {
       "On the page it plays where the picture goes, then the picture takes over. Learners get the audio introduction beneath the heading as well; only one plays at a time.",
     script: "the Audio guide script below",
     stale: "The Audio guide script has changed since this video went in.",
+  },
+  content: {
+    plays: "It plays here in the page’s content, in Ava’s window, when the learner presses Play. Until it has a video, learners see nothing here.",
+    script: "",
+    stale: "This video has no words yet: paste what Ava says in it, then Save the script.",
   },
   path: {
     plays: "It plays at the top of the path’s page. Without one, Ava reads “What it covers” over her portrait.",
@@ -40,6 +46,21 @@ const WHERE: Record<Where, { plays: string; script: string; stale: string }> = {
 };
 
 type Line = { key: string; state: AvaVideoState; src: string | null; transcript: string | null; uploaded: boolean; timing?: string | null };
+
+/**
+  Whether a line has Ava's video, for a collapsed strip's summary line, so an author can see where her videos are
+  without opening every section. Nothing shows until it's known.
+*/
+export function AvaVideoBadge({ lineKey }: { lineKey: string }) {
+  const { data } = useApi<Line>(`/api/admin/ava?key=${encodeURIComponent(lineKey)}`);
+  if (!data) return null;
+  const has = Boolean(data.src && data.state !== "none");
+  return (
+    <Badge tone={!has ? "neutral" : data.state === "ready" ? "good" : "warn"}>
+      {!has ? "No Ava video" : data.state === "ready" ? "Ava video" : "Ava video out of date"}
+    </Badge>
+  );
+}
 
 export function AvaVideoSlot({
   lineKey,
@@ -125,6 +146,9 @@ export function AvaVideoSlot({
           </Badge>
         )}
         {data && has && data.timing && <Badge tone="neutral">{data.timing === "aligned" ? "Words timed to her voice" : "Words timed evenly"}</Badge>}
+        <Link href="/admin/learning-guide#ava-videos" className="ml-auto text-sm font-semibold text-accent underline underline-offset-2">
+          All of Ava’s videos
+        </Link>
       </div>
       <p className="text-sm text-ink-muted">
         A transmission from Ava, made in ElevenLabs with the Laura avatar, with her script so learners can follow her words. {say.plays}

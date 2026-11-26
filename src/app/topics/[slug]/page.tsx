@@ -21,6 +21,7 @@ import { EmbeddedPreview } from "@/components/player/EmbeddedPreview";
 import { topicMetadata } from "@/server/seo";
 import { challengeForMission, missionLock, missionSlugs } from "@/server/challenges";
 import { refreshDue } from "@/server/complianceRegister";
+import { canOpenTopic } from "@/server/catalogue";
 import Link from "next/link";
 
 export function generateStaticParams() {
@@ -69,6 +70,8 @@ async function Lesson({ params, searchParams }: Pick<PageProps<"/topics/[slug]">
   }
   const live = lessonBySlug(slug);
   if (!live) notFound();
+  // Only topics for this person (or given to them): another audience's topic by its link looks like no topic at all.
+  if (!canOpenTopic(db, user, slug)) notFound();
   // A challenge mission opens on its day, for everyone at once.
   const lock = missionLock(db, user, slug, now(db));
   if (lock) return <MissionLocked lock={lock} />;

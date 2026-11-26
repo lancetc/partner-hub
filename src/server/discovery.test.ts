@@ -396,7 +396,8 @@ describe("suggestions and requests", () => {
   });
 
   it("counts what's saved most, across people, without saying who", () => {
-    for (const u of [riley, sam]) addStep(db, u, createPath(db, u, {}, now).path.id, { key: TOPIC, from: "content" }, now);
+    // Noticing a change is a coordinator topic: a coordinator and a Trilogy staff member can both save it.
+    for (const u of [riley, userById(db, "avery")!]) addStep(db, u, createPath(db, u, {}, now).path.id, { key: TOPIC, from: "content" }, now);
     const gaps = discoveryGaps(db, author, now);
     expect(gaps.saved[0]).toMatchObject({ key: TOPIC, people: 2 });
     expect(gaps.totals).toMatchObject({ paths: 2, people: 2, savedElsewhere: 2 });

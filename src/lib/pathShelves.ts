@@ -44,6 +44,29 @@ export function pathForRole(audience: string, role: string | null | undefined) {
   return false;
 }
 
+/*
+  Which of the Hub's audiences a path's audience wording names. "Partner" must be a word of its own, so
+  "Partnership Managers" (Trilogy's own people) isn't read as Care Partners. Suppliers, contractors and (external)
+  service providers are the partners' side too.
+*/
+const NAMED = [
+  ["coordinator", /coordinat/i],
+  ["partner", /\bpartners?\b|supplier|contractor|provider/i],
+  ["staff", /staff|trilogy care teams?|relationship manager|partnership manager/i],
+] as const;
+
+/**
+  Whether a path may be shown to someone with this audience, from its wording: a path that names
+  coordinators, partners or staff is for the ones it names; one that names none of them ("Everyone",
+  "Everyone supporting older people at home") is for everyone. Trilogy staff see every path, as they
+  see every topic and webinar. Unlike pathForRole (the "For your role" row), general paths count.
+*/
+export function pathOpenTo(audience: string, role: string | null | undefined) {
+  if (role === "staff") return true;
+  const named = NAMED.filter(([, words]) => words.test(audience)).map(([who]) => who as string);
+  return !named.length || named.includes(role ?? "");
+}
+
 const byName = (a: ShelfPath, b: ShelfPath) => a.name.localeCompare(b.name);
 export const byPathPopularity = (a: ShelfPath, b: ShelfPath) => b.popularity - a.popularity || byName(a, b);
 export const byPathNewest = (a: ShelfPath, b: ShelfPath) => (b.addedAt ?? "").localeCompare(a.addedAt ?? "") || byName(a, b);

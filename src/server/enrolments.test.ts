@@ -2,15 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db";
 import { userById } from "./auth";
 import { enrolment, myTopicEnrolments } from "./enrolments";
-import {
-  assignLearningPath,
-  browseLearningPaths,
-  canSkipHolds,
-  createLearningPath,
-  learnerPath,
-  learningPathDetail,
-  myLearningPaths,
-} from "./learningPaths";
+import { assignLearningPath, browseLearningPaths, canSkipHolds, createLearningPath, learnerPath, learningPathDetail, myLearningPaths } from "./learningPaths";
 import { lessonReport, pathReport, personReport } from "./completionReports";
 
 /* Self-enrolment: learners add paths and topics to their own Learning page; administrators see who did. */
@@ -26,45 +18,45 @@ const topic = (id: string, action: "enrol" | "leave", who = "sam") => enrolment(
 
 describe("enrolling in a learning path", () => {
   it("puts the path on the learner's list, marked as self-enrolled for administrators", () => {
-    expect(myLearningPaths(db, u("sam")).map((p) => p.id)).not.toContain("lp-care-coordination");
-    expect(path("lp-care-coordination", "enrol")).toEqual({ enrolled: true, selfEnrolled: true });
+    expect(myLearningPaths(db, u("sam")).map((p) => p.id)).not.toContain("lp-quality-safety");
+    expect(path("lp-quality-safety", "enrol")).toEqual({ enrolled: true, selfEnrolled: true });
 
-    const mine = myLearningPaths(db, u("sam")).find((p) => p.id === "lp-care-coordination")!;
+    const mine = myLearningPaths(db, u("sam")).find((p) => p.id === "lp-quality-safety")!;
     expect(mine).toMatchObject({ assigned: false, selfEnrolled: true, dueDate: null });
-    expect(learnerPath(db, u("sam"), "lp-care-coordination")).toMatchObject({ assigned: false, selfEnrolled: true });
-    expect(browseLearningPaths(db, u("sam")).find((p) => p.id === "lp-care-coordination")).toMatchObject({ assigned: false, selfEnrolled: true });
+    expect(learnerPath(db, u("sam"), "lp-quality-safety")).toMatchObject({ assigned: false, selfEnrolled: true });
+    expect(browseLearningPaths(db, u("sam")).find((p) => p.id === "lp-quality-safety")).toMatchObject({ assigned: false, selfEnrolled: true });
 
-    const row = learningPathDetail(db, u("jordan"), "lp-care-coordination").assignments.find((a) => a.userId === "sam")!;
+    const row = learningPathDetail(db, u("jordan"), "lp-quality-safety").assignments.find((a) => a.userId === "sam")!;
     expect(row.selfEnrolled).toBe(true);
-    expect(pathReport(db, u("jordan"), "lp-care-coordination", now).people.find((r) => r.person.id === "sam")!.selfEnrolled).toBe(true);
-    expect(personReport(db, u("jordan"), "sam").paths.find((p) => p.id === "lp-care-coordination")!.selfEnrolled).toBe(true);
+    expect(pathReport(db, u("jordan"), "lp-quality-safety", now).people.find((r) => r.person.id === "sam")!.selfEnrolled).toBe(true);
+    expect(personReport(db, u("jordan"), "sam").paths.find((p) => p.id === "lp-quality-safety")!.selfEnrolled).toBe(true);
   });
 
   it("is harmless to repeat, and leaves an assigned path as an assignment", () => {
-    path("lp-care-coordination", "enrol");
-    expect(path("lp-care-coordination", "enrol")).toEqual({ enrolled: true, selfEnrolled: true });
+    path("lp-quality-safety", "enrol");
+    expect(path("lp-quality-safety", "enrol")).toEqual({ enrolled: true, selfEnrolled: true });
     // Sam is already assigned Partner Onboarding.
     expect(path("lp-partner-onboarding", "enrol")).toEqual({ enrolled: true, selfEnrolled: false });
     expect(myLearningPaths(db, u("sam")).find((p) => p.id === "lp-partner-onboarding")!.assigned).toBe(true);
   });
 
   it("lets the learner leave a path they enrolled in, but not one they were assigned", () => {
-    path("lp-care-coordination", "enrol");
-    expect(path("lp-care-coordination", "leave")).toEqual({ enrolled: false, selfEnrolled: false });
-    expect(myLearningPaths(db, u("sam")).map((p) => p.id)).not.toContain("lp-care-coordination");
+    path("lp-quality-safety", "enrol");
+    expect(path("lp-quality-safety", "leave")).toEqual({ enrolled: false, selfEnrolled: false });
+    expect(myLearningPaths(db, u("sam")).map((p) => p.id)).not.toContain("lp-quality-safety");
     expect(() => path("lp-partner-onboarding", "leave")).toThrow(/assigned to you/);
     expect(myLearningPaths(db, u("sam")).map((p) => p.id)).toContain("lp-partner-onboarding");
   });
 
   it("becomes an assignment when an administrator assigns the person, with their due date", () => {
-    path("lp-care-coordination", "enrol");
-    assignLearningPath(db, u("jordan"), "lp-care-coordination", ["sam"], "2026-12-01", now);
-    expect(myLearningPaths(db, u("sam")).find((p) => p.id === "lp-care-coordination")).toMatchObject({
+    path("lp-quality-safety", "enrol");
+    assignLearningPath(db, u("jordan"), "lp-quality-safety", ["sam"], "2026-12-01", now);
+    expect(myLearningPaths(db, u("sam")).find((p) => p.id === "lp-quality-safety")).toMatchObject({
       assigned: true,
       selfEnrolled: false,
       dueDate: "2026-12-01",
     });
-    expect(() => path("lp-care-coordination", "leave")).toThrow(/assigned to you/);
+    expect(() => path("lp-quality-safety", "leave")).toThrow(/assigned to you/);
   });
 
   it("doesn't let a self-enrolled learner skip holds on a testers' path", () => {
@@ -73,6 +65,13 @@ describe("enrolling in a learning path", () => {
     expect(canSkipHolds(db, "ash", "a-little-extra-time")).toBe(false);
     assignLearningPath(db, u("jordan"), id, ["ash"], null, now);
     expect(canSkipHolds(db, "ash", "a-little-extra-time")).toBe(true);
+  });
+
+  it("refuses another audience's path: a partner can't enrol in the coordinators' path, or a coordinator in a partner topic", () => {
+    expect(() => path("lp-care-coordination", "enrol")).toThrow(/not found/);
+    expect(() => path("lp-care-coordination", "enrol", "riley")).not.toThrow();
+    // A Care Partner topic (track partner) that isn't in any path Riley is given.
+    expect(() => topic("a-little-extra-time", "enrol", "riley")).toThrow(/not found/);
   });
 
   it("refuses paths with nothing published yet, and unknown paths", () => {

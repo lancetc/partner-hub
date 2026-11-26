@@ -47,6 +47,13 @@ export class HttpError extends Error {
 }
 
 export const canAuthor = (u: User) => u.role === "author";
+
+/**
+  Whether content tagged for Care Partners and/or care coordinators (news stories, resources) is for this person:
+  the rule webinars use (server/webinars.forLearner). That content can't be tagged for staff, so Trilogy staff see
+  all of it, and so do authors; a coordinator sees only what's tagged for coordinators, a partner only partners'.
+*/
+export const meantFor = (u: User, audience: readonly string[]) => canAuthor(u) || u.audience === "staff" || audience.includes(u.audience);
 /** Trilogy staff who manage people, their access and their learning across every organisation. */
 export const isSuperadmin = (u: User) => u.superadmin === 1;
 

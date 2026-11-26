@@ -61,7 +61,9 @@ export default function LearningPage() {
 /** The catalogue at a glance, for the banner. */
 async function TopicStats() {
   await connection();
-  const topics = catalogueTopics(getDb());
+  const db = getDb();
+  // Counted from the topics this person can see, so the banner matches the list under it.
+  const topics = catalogueTopics(db, (await currentUser(db)).id);
   const minutes = topics.length ? Math.round(topics.reduce((n, t) => n + t.minutes, 0) / topics.length) : 0;
   const subjects = SUBJECTS.filter((s) => topics.some((t) => t.subject === s.id)).length;
   return (
@@ -86,11 +88,12 @@ async function YourLearning() {
 async function Catalogue() {
   await connection();
   const db = getDb();
+  const user = await currentUser(db);
   return (
     <LessonList
-      topics={catalogueTopics(db, (await currentUser(db)).id)}
-      // For "Sort by: Learning path", which groups topics under each path in its own order.
-      paths={pathTopicOrder(db)}
+      topics={catalogueTopics(db, user.id)}
+      // For "Sort by: Learning path", which groups topics under each path in its own order (only paths for this person).
+      paths={pathTopicOrder(db, user)}
       // For the "Popular with your colleagues" row and "Sort by: Most popular".
       popularity={topicPopularity(db, now(db))}
     />

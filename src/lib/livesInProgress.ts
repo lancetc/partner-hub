@@ -94,6 +94,9 @@ export const ACTIVITY_KINDS = [
   "calendar_day",
   "calendar_filter",
   "calendar_event",
+  // Check in (lib/checkIn): a catch-up opened, and a reply spoken aloud.
+  "checkin_open",
+  "checkin_voice",
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
@@ -384,6 +387,11 @@ export type LivesSettings = {
     this share of days with none; and whether one person can appear on two days running.
   */
   variety: { maxPerDay: number; quietDays: number; consecutive: boolean };
+  /**
+    Check in (lib/checkIn): let learners hear a character's replies spoken. Each one is a live, paid speech request,
+    so it's off unless an author switches it on.
+  */
+  checkInVoice: boolean;
 };
 export const DEFAULT_LIVES_SETTINGS: LivesSettings = {
   memory: true,
@@ -394,6 +402,7 @@ export const DEFAULT_LIVES_SETTINGS: LivesSettings = {
   momentCategories: [],
   balance: { everyday: 35, social: 25, celebration: 15, story: 15, care: 10 },
   variety: { maxPerDay: 3, quietDays: 15, consecutive: false },
+  checkInVoice: false,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -628,6 +637,7 @@ export function cleanLivesSettings(raw: unknown): LivesSettings {
         consecutive: typeof v.consecutive === "boolean" ? v.consecutive : k.consecutive,
       };
     })(),
+    checkInVoice: o.checkInVoice === true,
   };
 }
 

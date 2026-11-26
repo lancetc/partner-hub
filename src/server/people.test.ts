@@ -33,7 +33,8 @@ describe("people and permissions", () => {
     expect(r.assigned).toBe(2);
     const t = catalogueTopics(db, "sam").find((x) => x.slug === TOPIC)!;
     expect(t.assignment).toEqual({ required: true, due: "2026-11-30" });
-    expect(catalogueTopics(db, "riley").find((x) => x.slug === TOPIC)!.assignment?.due).not.toBe("2026-11-30");
+    // A Care Partner topic, not assigned to Riley (a coordinator): not in Riley's catalogue at all.
+    expect(catalogueTopics(db, "riley").find((x) => x.slug === TOPIC)).toBeUndefined();
     expect(inbox(db, u("sam"), now).action.some((n) => n.title.includes("Topic assigned"))).toBe(true);
     const detail = personDetail(db, u("jordan"), "sam", now);
     expect(detail.topics).toMatchObject([{ slug: TOPIC, dueDate: "2026-11-30", state: "not_started", assignedBy: u("jordan").name }]);

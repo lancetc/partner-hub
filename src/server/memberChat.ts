@@ -15,6 +15,8 @@ import { DIGITAL_MEMBERS } from "@/content/digitalMembers";
 import { LIVES_RULES } from "@/lib/livesInProgress";
 import { audit, type Db } from "./db";
 import { livesChatContext, logStoryChat, rememberConversation } from "./livesInProgress";
+import { checkInOpenerFor, rememberReply } from "./checkIn";
+import { CHECKIN_RULES } from "@/lib/checkIn";
 import { canAuthor, HttpError, requireAuthor, type User } from "./auth";
 import { digitalMember } from "./digitalMembers";
 import { openaiReady, openaiTextModel } from "./openaiText";
@@ -188,10 +190,13 @@ function cleanTurns(input: unknown, max: number): Turn[] {
 export function prepareMemberChat(
   db: Db,
   user: User,
-  input: { memberId?: unknown; messages?: unknown; episodeId?: unknown; conversationId?: unknown; fresh?: unknown; preview?: unknown },
+  input: { memberId?: unknown; messages?: unknown; episodeId?: unknown; conversationId?: unknown; fresh?: unknown; preview?: unknown; mode?: unknown },
   now: Date,
   signal?: AbortSignal,
 ) {
+  // "checkin": a short catch-up from People I follow (server/checkIn). It opens with a line the Hub works out again
+  // here from real memory and shared moments, never one the browser sends.
+  const checkIn = input.mode === "checkin";
   const status = memberChatStatus(db, user, now);
   if (!status.available) throw new HttpError(403, status.reason ?? "Chat isn’t available.");
   const s = memberChatSettings(db);
@@ -216,13 +221,17 @@ export function prepareMemberChat(
     // What this chat is remembered as: topics and the learner's own questions, scrubbed. Never the AI's replies.
     if (typeof input.conversationId === "string") rememberConversation(db, user, p.id, input.conversationId, story.viewing, turns, now);
   }
+  // Leaving this conversation out, so it's the same line the learner saw when the catch-up opened.
+  const opener = (checkIn && checkInOpenerFor(db, user, p.id, now, typeof input.conversationId === "string" ? input.conversationId : "")) || p.hello;
   return {
     provider,
     name: p.name,
+    // A catch-up's replies can be spoken (when an author has switched that on): only words the character really said.
+    onReply: checkIn ? (text: string) => rememberReply(user.id, p.id, text) : undefined,
     request: {
       // The opening hello is on screen already: the AI is told it said it, so it carries on from there.
-      rules: story ? `${brief.rules}\n\n${LIVES_RULES}` : brief.rules,
-      context: `${brief.context}${story ? `\n\n${story.brief}` : ""}\n\nYou opened this chat by saying: "${p.hello}"`,
+      rules: [brief.rules, story && LIVES_RULES, checkIn && CHECKIN_RULES].filter(Boolean).join("\n\n"),
+      context: `${brief.context}${story ? `\n\n${story.brief}` : ""}\n\nYou opened this ${checkIn ? "catch-up" : "chat"} by saying: "${opener}"`,
       messages: turns.map((t) => ({ role: t.role, content: t.text })),
       maxTokens: REPLY_LENGTHS[s.replyLength].tokens + FOLLOWUP_TOKENS,
       signal,
@@ -258,12 +267,17 @@ export async function* withoutFollowUps(pieces: AsyncIterable<string>): AsyncGen
 /** The reply as it's written, then done; or an error the page can show. */
 export async function* memberChatReply(prepared: ReturnType<typeof prepareMemberChat>): AsyncGenerator<MemberChatEvent> {
   let any = false;
+  let said = "";
   try {
     for await (const event of withoutFollowUps(relayText(prepared.provider, prepared.request))) {
-      if (event.type === "text") any = true;
+      if (event.type === "text") {
+        any = true;
+        said += event.text;
+      }
       yield event;
     }
     if (!any) throw new Error("empty");
+    prepared.onReply?.(said.trim());
     yield { type: "done" };
   } catch {
     yield { type: "error", message: `${prepared.name} couldn’t reply just now. Try again in a moment.` };

@@ -39,6 +39,38 @@ async function openai(path: string, body: unknown, timeout = 120_000) {
   return res;
 }
 
+/** One part of a request: words, a text document, or a PDF (sent as a file). */
+export type OpenAIPart = { kind: "text"; text: string } | { kind: "doc"; title: string; text: string } | { kind: "pdf"; title: string; data: string };
+
+/**
+  One JSON reply from OpenAI for a request made of documents and a prompt (claudeJson's fallback when Claude isn't
+  connected: Magazine, Path and Challenge drafting). `repair`: the previous reply and what to fix in it.
+*/
+export async function openaiAsk(parts: OpenAIPart[], repair?: { previous: string; correction: string }) {
+  if (!openaiReady())
+    throw new HttpError(503, "Neither Claude nor OpenAI is connected. Add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env.local and restart the server.");
+  const content = parts.map((p) =>
+    p.kind === "text"
+      ? { type: "text", text: p.text }
+      : p.kind === "doc"
+        ? { type: "text", text: `<document title="${p.title.replace(/"/g, "'")}">\n${p.text}\n</document>` }
+        : { type: "file", file: { filename: p.title.endsWith(".pdf") ? p.title : `${p.title}.pdf`, file_data: `data:application/pdf;base64,${p.data}` } },
+  );
+  const messages: unknown[] = [{ role: "user", content }];
+  if (repair) messages.push({ role: "assistant", content: repair.previous }, { role: "user", content: repair.correction });
+  // A long course outline or page can run to many thousands of words, and the model reasons first.
+  const r = await openai(
+    "chat/completions",
+    { model: openaiTextModel(), response_format: { type: "json_object" }, max_completion_tokens: 32000, messages },
+    300_000,
+  );
+  const d = (await r.json()) as { choices?: { message?: { content?: string; refusal?: string }; finish_reason?: string }[]; usage?: unknown };
+  const choice = d.choices?.[0];
+  if (choice?.message?.refusal) throw new HttpError(502, "OpenAI declined to write this. Try rewording the brief.");
+  if (choice?.finish_reason === "length") throw new HttpError(502, "OpenAI’s reply was cut off. Try a smaller brief.");
+  return { text: (choice?.message?.content ?? "").trim(), usage: { provider: "openai", model: openaiTextModel(), ...(d.usage as object) } };
+}
+
 /** A JSON object from OpenAI that passes `check`; one retry with the problems listed, as with Claude. */
 export async function openaiJson<T>(prompt: string, check: (value: unknown) => string[], onPhase?: (phase: "checking" | "fixing", issues?: number) => void) {
   if (!openaiReady())

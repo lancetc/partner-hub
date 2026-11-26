@@ -240,7 +240,7 @@ export function useDigitalMemberModal() {
         setEpisode(null);
       }}
       onClick={(e) => e.target === e.currentTarget && dialog.current?.close()}
-      className="pointer-events-auto m-auto max-h-[92vh] w-[min(60rem,calc(100vw-2rem))] max-w-none overflow-y-auto overscroll-contain rounded-3xl bg-bg p-0 text-left text-ink shadow-2xl backdrop:bg-[#0b1626]/70 backdrop:backdrop-blur-sm"
+      className="member-modal pointer-events-auto m-auto h-[min(52rem,92vh)] max-h-[92vh] w-[min(60rem,calc(100vw-2rem))] max-w-none overflow-y-auto overscroll-contain rounded-3xl bg-bg p-0 text-left text-ink shadow-2xl backdrop:bg-[#0b1626]/70 backdrop:backdrop-blur-sm"
     >
       {/* Stays in the corner while the profile scrolls, without taking any room from it. */}
       <div className="sticky top-0 z-10 h-0">
@@ -254,23 +254,26 @@ export function useDigitalMemberModal() {
         </button>
       </div>
       {shown ? (
-        <>
+        // Its parts drop in one after another as they arrive (globals.css, .member-build).
+        <div className="member-build">
           {/* A Lives in Progress character opens on what's happening in their life now (LivesStory); others on their profile. */}
           {shown.lives ? (
             <LivesStory key={`${shown.id}:${episode ?? ""}`} profile={shown} titleId={titleId} onPerson={(p) => open(p)} modal initialEpisode={episode} />
           ) : (
-            <DigitalMemberProfile m={shown} titleId={titleId} onPerson={(p) => open(p)} modal />
+            <div>
+              <DigitalMemberProfile m={shown} titleId={titleId} onPerson={(p) => open(p)} modal />
+            </div>
           )}
           <p className="border-t border-line px-6 py-4 text-right sm:px-7">
             <Link href={`/community/digital/${shown.id}`} className="text-sm font-semibold text-[#008282] hover:underline dark:text-[#3cb8b9]">
               Open {firstName(shown.name)}’s page <span aria-hidden>→</span>
             </Link>
           </p>
-        </>
+        </div>
       ) : problem ? (
         <p className="p-8 text-ink-muted">Couldn’t open this profile: {problem}</p>
       ) : (
-        <div className="min-h-80 animate-pulse bg-[#102a43]" aria-label="Loading" />
+        <div className="h-80 animate-pulse bg-[#102a43]" aria-label="Loading" />
       )}
     </dialog>
   );
