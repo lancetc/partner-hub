@@ -985,6 +985,32 @@ function pagePictureContext(page: Page): PictureContext {
   return { label: "Start from this page", prompt, names: namesIn(page.purpose ?? "", ...texts.slice(0, 3)), noun: "page" };
 }
 
+/**
+  "Start from this course": a description for the cover from the course's title, its summary, what its pages cover and the
+  opening of its first page, and the people it names (the owner, Nov 2026: like "Start from the topic" on Topics).
+*/
+function coursePictureContext(draft: Draft): PictureContext {
+  const pages = draft.doc.pages;
+  const texts = pages.flatMap((p) => p.sections.flatMap((sec) => sec.blocks.flatMap((b) => (b.type === "text" ? [b.body] : []))));
+  const opening = plainText(texts[0] ?? "")
+    .split(/(?<=[.!?])\s+/)
+    .slice(0, 2)
+    .join(" ")
+    .slice(0, 320);
+  const about = plainText(draft.standfirst ?? "").trim();
+  const topics = pages.length > 1 ? pages.map((p) => p.title.trim()).filter(Boolean).slice(0, 4) : [];
+  const title = draft.title.trim() || "an untitled course";
+  const prompt = [
+    `A cover photo for a learning ${pages.length > 1 ? "course" : "guide"} called “${title}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1).replace(/\.$/, "")}` : ""}`,
+    topics.length ? `It covers ${topics.join(", ")}` : "",
+    opening ? `The scene: ${opening}` : "",
+  ]
+    .filter(Boolean)
+    .join(". ")
+    .replace(/[.\s]*$/, ".");
+  return { label: "Start from this course", prompt, names: namesIn(draft.standfirst ?? "", ...texts.slice(0, 3)), noun: "course" };
+}
+
 export function MagazineEditor({ id }: { id: string }) {
   const { data, error } = useApi<{ guide: AuthorGuide; paths: PathOption[] }>(`/api/admin/magazine/${id}`);
   const params = useSearchParams();
@@ -1844,6 +1870,7 @@ function CourseHeader({ draft, change, onSelect }: { draft: Draft; change: (fn: 
         label="Drag a cover picture here"
         addLabel="Add cover picture"
         aspect="aspect-[16/9]"
+        context={coursePictureContext(draft)}
       />
     </header>
   );
