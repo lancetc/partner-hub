@@ -12,6 +12,7 @@ import { InboxButton } from "./InboxButton";
 import { FavouritesHeaderLink } from "./favourites/FavouritesNav";
 import { CompanionDrawer } from "./pocket/CompanionDrawer";
 import { Icon } from "./Icon";
+import { FeatureGuideButton } from "./FeatureGuide";
 import { LearnMenu } from "./LearnMenu";
 import { useApi, type Me } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -81,6 +82,8 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
+          {/* The feature guide, for the owner only (the superadmin): everything added from the PRDs, at a glance. */}
+          {me?.isSuperadmin && <FeatureGuideButton />}
           {/* Only for people who can use admin: authors and administrators, and an organisation's reports. Everyone else
               sees the Hub without it, as they would with real sign-in (the owner, Nov 2026); switch profile to reach admin. */}
           {me?.canReport && (

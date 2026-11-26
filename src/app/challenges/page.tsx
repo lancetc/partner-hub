@@ -107,8 +107,8 @@ function ChallengeTile({ c }: { c: Mine }) {
   const cta =
     c.state === "upcoming" ? "See what’s coming" : c.state === "finished" ? "See the results" : c.todayDone ? "See the leaderboard" : "Play today’s mission";
   return (
-    <li className="group relative flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white">
-      {c.cover && <StoryVisual {...c.cover} alt="" className="-mx-5 -mt-5 aspect-[16/9]" />}
+    <li className="tile group relative flex flex-col gap-4 overflow-hidden rounded-3xl bg-[#2d4875] p-5 text-white">
+      {c.cover && <StoryVisual {...c.cover} alt="" className="-mx-5 -mt-5 aspect-[16/9] [&_img]:transition-transform [&_img]:duration-500 group-hover:[&_img]:scale-[1.03] motion-reduce:group-hover:[&_img]:scale-100" />}
       <div className="flex items-start gap-4">
         {/* The flag only when there's no picture: in a narrow column it crowds the name. */}
         {!c.cover && (
@@ -121,7 +121,7 @@ function ChallengeTile({ c }: { c: Mine }) {
             Trilogy Challenge · <span className={cx(c.state === "live" && !c.todayDone && "text-[#ffd27a]")}>{status}</span>
           </p>
           <h2 className="mt-1 font-serif text-xl font-semibold leading-tight">
-            <Link href={`/challenge/${c.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+            <Link href={`/challenge/${c.id}`} className="tile-link group-hover:text-[#9fe3df]">
               {c.name}
             </Link>
           </h2>
