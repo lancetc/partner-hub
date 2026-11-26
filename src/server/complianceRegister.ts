@@ -14,6 +14,7 @@ import {
 import { audit, tx, type Db } from "./db";
 import { canAuthor, HttpError, requireAuthor, requireReporter, type User } from "./auth";
 import { assessmentOf, csvCell, facts, isFor, people, quizScore, stateOf } from "./completionReports";
+import { thumbnailFor } from "@/lib/pathThumbnail";
 
 /*
   The compliance register. Each mandatory topic on it carries the organisation's rules: how often
@@ -482,6 +483,8 @@ export function myRequiredTraining(db: Db, user: User, now: Date) {
           expiresAt: r.expiresAt,
           daysLeft: r.daysLeft,
           missing: r.missing,
+          // Its picture, as its tile shows it (the owner, Nov 2026).
+          visual: thumbnailFor(l),
         },
       ];
     })

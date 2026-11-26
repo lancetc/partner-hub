@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pathForRole, pathShelves, type ShelfPath } from "./pathShelves";
+import { pathForRole, pathRoles, pathShelves, type ShelfPath } from "./pathShelves";
 
 /* The rows across the top of Discovery Paths. */
 
@@ -42,6 +42,17 @@ describe("Discovery Paths rows", () => {
     // Staff have no role row; one partner path isn't enough for a row.
     expect(pathShelves({ paths, audience: "staff" }).some((r) => r.id === "role")).toBe(false);
     expect(pathShelves({ paths, audience: "partner" }).some((r) => r.id === "role")).toBe(false);
+  });
+
+  it("reads a path's audience wording as the Magazine's roles", () => {
+    expect(pathRoles("Care Coordinators")).toEqual(["coordinator"]);
+    expect(pathRoles("Service partners and suppliers").sort()).toEqual(["owner", "partner"]);
+    expect(pathRoles("Independent contractors").sort()).toEqual(["owner", "partner"]);
+    expect(pathRoles("All staff and partners").sort()).toEqual(["owner", "partner", "staff"]);
+    expect(pathRoles("Business owners")).toEqual(["owner"]);
+    // Nobody named: for every role, as untagged Magazine stories are.
+    expect(pathRoles("Everyone").sort()).toEqual(["coordinator", "owner", "partner", "staff"]);
+    expect(pathRoles("").length).toBe(4);
   });
 
   it("collects short paths, shortest first, and leaves out rows with only one path", () => {

@@ -6,18 +6,19 @@ import { useEffect, useRef, useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { LANGUAGES } from "@/lib/languages";
-import { READ_MODES, TEXT_SIZES, type ReadMode, type TextSize } from "@/lib/onboardingCourses";
+import { ROLE_CHOICES, TEXT_SIZES, type ReadMode, type Segment, type TextSize } from "@/lib/onboardingCourses";
 import type { MyCourses } from "@/server/onboardingCourses";
+import type { Setup } from "@/server/onboarding";
 import { Icon } from "../Icon";
 import { Chip, dbtn, dinput, Problem } from "../discovery/parts";
 import { setTranslation } from "../SiteTranslator";
-import { DemoNote, HelpForm, UrgentNote, WhyBox } from "./CourseParts";
+import { DemoNote, HelpForm, WhenTag } from "./CourseParts";
 
 /*
   The first sign-in (docs/onboarding.md, "Starting courses"): three short steps, each saved on the server so a phone
   call or a dropped connection doesn't lose the place. First how to use the Hub (language, read or listen, text
-  size), before any long instructions; then who the Hub has them as, with a way to say it's wrong; then one action:
-  Continue to the first course. Nothing here can change a role.
+  size; audio isn't a choice here, it starts by itself as everywhere on the Hub), before any long instructions; then which of the four roles best describes them (their pick counts straight away); then one action:
+  Continue to the first course. Nothing here grants a permission.
 */
 
 const STEPS = ["language", "you", "ready"] as const;
@@ -72,7 +73,6 @@ type StepProps = { data: MyCourses; headingRef: React.RefObject<HTMLHeadingEleme
 
 function LanguageStep({ data, headingRef, onDone, onSaved }: StepProps & { onDone: () => void; onSaved: (p: { mode: ReadMode; textSize: TextSize }) => void }) {
   const [language, setLanguage] = useState(data.prefs.language);
-  const [mode, setMode] = useState<ReadMode>(data.prefs.mode);
   const [size, setSize] = useState<TextSize>(data.prefs.textSize);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -81,8 +81,8 @@ function LanguageStep({ data, headingRef, onDone, onSaved }: StepProps & { onDon
     setBusy(true);
     setProblem(null);
     try {
-      await api("/api/onboarding/courses", { body: { action: "prefs", mode, textSize: size, step: "you" } });
-      onSaved({ mode, textSize: size });
+      await api("/api/onboarding/courses", { body: { action: "prefs", textSize: size, step: "you" } });
+      onSaved({ mode: data.prefs.mode, textSize: size });
       if (language !== data.prefs.language) {
         await api("/api/me/preferences", { body: { language } });
         // Google Translate applies on a fresh load; the next step has been saved, so they land on it.
@@ -135,25 +135,6 @@ function LanguageStep({ data, headingRef, onDone, onSaved }: StepProps & { onDon
       )}
 
       <fieldset className="mt-6">
-        <legend className="font-semibold">Read or listen</legend>
-        <p className="text-sm text-ink-muted">Audio never starts by itself, and the words are always on the screen too.</p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {(Object.keys(READ_MODES) as ReadMode[]).map((m) => (
-            <label
-              key={m}
-              className={cx(
-                "flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border px-3",
-                mode === m ? "border-[#008282] bg-[#3cb8b9]/12" : "border-line-strong",
-              )}
-            >
-              <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="size-5 accent-[#008282]" />
-              <span className="font-medium">{READ_MODES[m]}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset className="mt-6">
         <legend className="font-semibold">Text size on these pages</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {(Object.keys(TEXT_SIZES) as TextSize[]).map((s) => (
@@ -187,11 +168,28 @@ function LanguageStep({ data, headingRef, onDone, onSaved }: StepProps & { onDon
 }
 
 function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { onBack: () => void; onDone: () => void; onChanged: (d: MyCourses) => void }) {
+  const account = data.person.roles[0];
+  const [role, setRole] = useState<Segment | null>(account?.segment ?? null);
   const [wrong, setWrong] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const others = data.person.roles.slice(1);
+  const next = async () => {
+    if (!role) return setProblem("Choose the role that best describes you.");
+    if (role === account?.segment) return onDone();
+    setBusy(true);
+    setProblem(null);
+    try {
+      onChanged(await api<MyCourses>("/api/onboarding/courses", { body: { action: "role", segment: role } }));
+      onDone();
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : "That didn’t save.");
+    } finally {
+      setBusy(false);
+    }
+  };
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -210,18 +208,37 @@ function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { 
       <h1 id="fr-you" ref={headingRef} tabIndex={-1} className="font-serif text-3xl font-semibold tracking-tight outline-none sm:text-4xl">
         Welcome, {data.person.firstName}
       </h1>
-      <p className="mt-3 font-semibold">The Hub has you as:</p>
-      <ul className="mt-2 flex flex-col gap-2">
-        {data.person.roles.map((r) => (
-          <li key={r.label} className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-            <p className="font-serif text-xl font-semibold">{r.segmentLabel}</p>
-            <p className="text-ink-muted">
-              {r.work ? `Providing ${r.work} · ` : ""}
-              {r.organisation}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {/* Self-identified (the owner, Nov 2026): what they see and their starting course follow the pick straight away. */}
+      <fieldset className="mt-4">
+        <legend className="font-semibold">Which best describes you?</legend>
+        <p className="text-sm text-ink-muted">This sets what you see first and your starting course. You can change it here later.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {ROLE_CHOICES.map((c) => (
+            <label
+              key={c.segment}
+              className={cx(
+                "flex cursor-pointer items-start gap-3 rounded-2xl border p-4",
+                role === c.segment ? "border-[#008282] bg-[#3cb8b9]/12" : "border-line-strong",
+              )}
+            >
+              <input
+                type="radio"
+                name="role"
+                value={c.segment}
+                checked={role === c.segment}
+                onChange={() => setRole(c.segment)}
+                className="mt-1 size-5 shrink-0 accent-[#008282]"
+              />
+              <span>
+                <span className="block font-serif text-lg font-semibold">{c.label}</span>
+                <span className="block text-sm text-ink-muted">{c.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {account?.organisation && <p className="mt-3 text-sm text-ink-muted">Your organisation: {account.organisation}</p>}
+      {others.length > 0 && <p className="mt-1 text-sm text-ink-muted">Also on your account: {others.map((r) => r.label).join(", ")}</p>}
       {data.confirm && (
         <p className="mt-3 rounded-2xl bg-[#fab53d]/15 p-4 ring-1 ring-[#fab53d]/50">
           <strong>We need to confirm your work type.</strong>{" "}
@@ -233,7 +250,7 @@ function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { 
       )}
       {sent ? (
         <p role="status" className="mt-4 rounded-2xl bg-muted p-4">
-          Thanks. An administrator will check it and fix your details. Nothing changes until they do, and you can keep using the Hub.
+          Thanks. An administrator will check it and fix your details. You can keep using the Hub meanwhile.
         </p>
       ) : wrong ? (
         <form onSubmit={send} className="mt-4 flex flex-col gap-2">
@@ -242,7 +259,6 @@ function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { 
             <span className="text-sm text-ink-muted">For example: “I’m a gardener, not a cleaner”, or “I work for a different business”.</span>
             <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className={cx(dinput, "py-2")} maxLength={600} />
           </label>
-          {problem && <Problem text={problem} />}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={busy} className={dbtn.primary}>
               {busy ? "Sending…" : "Send to an administrator"}
@@ -253,16 +269,21 @@ function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { 
           </div>
         </form>
       ) : null}
+      {problem && (
+        <div className="mt-4">
+          <Problem text={problem} />
+        </div>
+      )}
       <div className="mt-6 flex flex-wrap gap-2">
         <button type="button" onClick={onBack} className={dbtn.secondary}>
           <Icon name="arrow-left" className="size-4" /> Back
         </button>
-        <button type="button" onClick={onDone} className={dbtn.primary}>
-          {sent || data.confirm ? "Continue" : "Yes, that’s me"} <Icon name="arrow-right" className="size-4" />
+        <button type="button" onClick={next} disabled={busy} className={dbtn.primary}>
+          {busy && !wrong ? "Saving…" : "Continue"} <Icon name="arrow-right" className="size-4" />
         </button>
         {!wrong && !sent && (
           <button type="button" onClick={() => setWrong(true)} className={dbtn.quiet}>
-            This isn’t my role
+            My work or organisation is wrong
           </button>
         )}
       </div>
@@ -270,54 +291,113 @@ function YouStep({ data, headingRef, onBack, onDone, onChanged }: StepProps & { 
   );
 }
 
+/**
+  Your setup, inside Getting started (the owner, Nov 2026): once setup requirements have been released for the Hub, the
+  things still to send or waiting on someone, with a way into the list. Nothing shows while there's no setup to do.
+*/
+function SetupCard() {
+  const { data } = useApi<Setup>("/api/onboarding");
+  if (!data?.configured) return null;
+  const todo = data.tasks.filter((t) => t.mine && !t.ok && t.status !== "submitted");
+  const waiting = data.tasks.filter((t) => t.status === "submitted");
+  const done = data.state === "ready" || data.state === "active";
+  return (
+    <Link href="/onboarding" className="mt-5 flex items-center gap-4 rounded-2xl bg-surface p-4 ring-1 ring-line transition hover:ring-[#008282]">
+      <Icon name="checklist" className="size-6 shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold">Your setup</span>
+        <span className="block text-sm text-ink-muted">
+          {done
+            ? "Everything required has been approved."
+            : todo.length
+              ? `${todo.length} ${todo.length === 1 ? "thing" : "things"} to send before you can start work${waiting.length ? `, and ${waiting.length} being checked` : ""}.`
+              : waiting.length
+                ? `${waiting.length} ${waiting.length === 1 ? "thing is" : "things are"} being checked. Nothing for you to do right now.`
+                : "Nothing for you to do right now."}
+        </span>
+      </span>
+      <Icon name="arrow-right" className="size-5 shrink-0 text-accent" />
+    </Link>
+  );
+}
+
+/*
+  The last step (the owner, Nov 2026): the courses and training allocated to them, each with its steps, and no pressure to
+  start now: they're on the homepage dashboard ("Your courses and training") whenever they're ready. Going to the
+  homepage is the main way on; starting the first course straight away is there for anyone who wants to.
+*/
 function ReadyStep({ data, headingRef, onBack }: StepProps & { onBack: () => void }) {
   const router = useRouter();
+  const courses = data.courses;
   const c = data.primary;
   const finish = async (href: string) => {
     try {
       await api("/api/onboarding/courses", { body: { action: "prefs", done: true, step: "ready" } });
     } catch {
-      // The course still opens; the welcome will simply be offered again.
+      // The page still opens; the welcome will simply be offered again.
     }
     router.push(href);
   };
-  const todo = c ? c.steps.filter((s) => s.state !== "done" && s.state !== "unavailable") : [];
   return (
     <section aria-labelledby="fr-ready" className="mt-5">
       <h1 id="fr-ready" ref={headingRef} tabIndex={-1} className="font-serif text-3xl font-semibold tracking-tight outline-none sm:text-4xl">
-        {c ? c.title : "You’re all set"}
+        {courses.length ? "Your courses and training" : "You’re all set"}
       </h1>
-      {c ? (
+      {courses.length ? (
         <>
           <p className="mt-2 text-lg">
-            {todo.length === 1 ? "One step to do now." : `${Math.min(2, todo.length)} steps to do now.`} You can stop and come back.
+            These are your allocated courses and training. No need to start now: they’ll be on your homepage dashboard whenever you’re ready.
           </p>
-          {c.gains.length > 0 && (
-            <>
-              <h2 className="mt-4 font-semibold">What you’ll gain</h2>
-              <ul className="mt-1 list-disc pl-5">
-                {c.gains.map((g) => (
-                  <li key={g}>{g}</li>
-                ))}
-              </ul>
-            </>
+          {courses.some((x) => x.steps.some((s) => s.later)) && (
+            <p className="mt-2 text-ink-muted">Start with the ones marked Today. The ones marked Later can wait until you’re settled in.</p>
           )}
-          <p className="mt-3 flex flex-wrap gap-2">
-            <Chip>About {c.minutes} minutes in all</Chip>
-            {c.due ? <Chip tone={c.due.overdue ? "warn" : "neutral"}>{c.due.text}</Chip> : <Chip>No due date</Chip>}
-          </p>
-          <div className="mt-4">
-            <WhyBox why={c.why} />
-          </div>
-          {data.prefs.mode !== "read" && (
-            <p className="mt-3 text-sm text-ink-muted">You chose to listen. Steps with audio have a Listen button; press it when you’re ready.</p>
-          )}
-          <div className="mt-6 flex flex-wrap gap-2">
-            <button type="button" onClick={() => finish(`/onboarding/course/${c.id}`)} className={cx(dbtn.primary, "min-h-12 text-lg")}>
-              Continue: {c.title} <Icon name="arrow-right" className="size-5" />
+          <ul className="mt-5 flex flex-col gap-3">
+            {courses.map((course) => (
+              <li key={course.id} className="rounded-2xl bg-surface p-4 ring-1 ring-line">
+                <p className="font-serif text-xl font-semibold">{course.title}</p>
+                <p className="mt-1 flex flex-wrap gap-2">
+                  <Chip>About {course.minutes} minutes in all</Chip>
+                  {course.due ? <Chip tone={course.due.overdue ? "warn" : "neutral"}>{course.due.text}</Chip> : <Chip>No due date</Chip>}
+                </p>
+                <ol className="mt-3 flex flex-col gap-2.5 text-[0.95rem]">
+                  {course.steps.map((s, i) => (
+                    <li key={s.id} className="flex items-center gap-3">
+                      {s.poster ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- the item's own picture, as its tile shows it
+                        <img src={s.poster} alt="" className="aspect-video w-28 shrink-0 rounded-xl bg-muted object-cover sm:w-36" />
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="grid aspect-video w-28 shrink-0 place-items-center rounded-xl bg-muted font-semibold text-ink-muted sm:w-36"
+                        >
+                          {i + 1}
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium leading-snug">{s.title}</span>
+                          <WhenTag later={s.later} />
+                        </span>
+                        <span className="block text-sm text-ink-muted">
+                          {s.kindLabel}
+                          {s.minutes ? ` · about ${s.minutes} min` : ""}
+                          {!s.required ? " · optional" : ""}
+                          {s.state === "done" ? " · done" : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            {/* Start now takes them to their homepage dashboard, where these are waiting (the owner, Nov 2026). */}
+            <button type="button" onClick={() => finish("/")} className={cx(dbtn.primary, "min-h-12 text-lg")}>
+              Start now <Icon name="arrow-right" className="size-5" />
             </button>
           </div>
-          {c.demo && <DemoNote className="mt-4" />}
+          {c?.demo && <DemoNote className="mt-4" />}
         </>
       ) : (
         <p className="mt-2">Nothing is assigned to you right now. You can look around the Hub, and anything assigned later will show on your homepage.</p>
@@ -326,18 +406,13 @@ function ReadyStep({ data, headingRef, onBack }: StepProps & { onBack: () => voi
         <button type="button" onClick={onBack} className={dbtn.secondary}>
           <Icon name="arrow-left" className="size-4" /> Back
         </button>
-        <Link href={data.help.jobAids} className={dbtn.secondary}>
-          Find a Job Aid
-        </Link>
-        {!c && (
+        {!courses.length && (
           <button type="button" onClick={() => finish("/")} className={dbtn.primary}>
             Go to the homepage
           </button>
         )}
       </div>
-      <div className="mt-5">
-        <UrgentNote text={data.help.urgent.text} href={data.help.urgent.href} />
-      </div>
+      <SetupCard />
     </section>
   );
 }

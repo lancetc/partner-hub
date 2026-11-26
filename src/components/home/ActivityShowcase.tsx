@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { FeaturedCard, ShowcaseCard, WorkTile } from "@/server/activityCatalogue";
 import { Icon } from "../Icon";
+import { PictureTags } from "../PictureTags";
+import { cx } from "@/lib/format";
 
 /*
   “Practise the decisions you make every day” (docs/activity-catalogue-audit.md): the featured course first, large (two
@@ -45,7 +47,7 @@ export function ActivityShowcase({ featured, cards, work }: { featured: Featured
               <Link
                 href={featured.href}
                 onClick={() => send({ event: "opened", activity: featured.activity, surface: "home", ref: featured.slug, revision: featured.revision })}
-                className="group flex w-full flex-col overflow-hidden rounded-3xl border-2 border-[#fab53d]/70 bg-surface shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action motion-reduce:transition-none xl:flex-row"
+                className="tile tile-card group flex w-full flex-col border-2 border-[#fab53d]/70 shadow-sm transition hover:shadow-md motion-reduce:transition-none xl:flex-row"
               >
                 {/* Two cards wide and one tall (the owner, Nov 2026): on a wide screen the picture sits beside the words. */}
                 <div className="relative aspect-[16/9] shrink-0 overflow-hidden bg-[#007373] xl:aspect-auto xl:w-1/2">
@@ -62,14 +64,17 @@ export function ActivityShowcase({ featured, cards, work }: { featured: Featured
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#fab53d] px-3 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]">
                       <Icon name="star" className="size-3.5" /> Featured
                     </span>
-                    <span className="rounded-full bg-white/90 px-3 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]">
-                      {featured.kind}
-                      {featured.minutes ? ` · about ${featured.minutes} min` : ""}
-                    </span>
                   </span>
+                  <PictureTags
+                    items={[
+                      { icon: "target", text: featured.kind },
+                      ...(featured.minutes ? [{ icon: "clock" as const, text: `${featured.minutes} min` }] : []),
+                    ]}
+                    roles={featured.roles}
+                  />
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-5 xl:p-6">
-                  <p className="font-serif text-2xl font-semibold leading-snug">{featured.question}</p>
+                <div className="flex flex-1 flex-col gap-2 p-4 xl:p-5">
+                  <p className="tile-heading font-serif text-2xl font-semibold leading-snug">{featured.question}</p>
                   {featured.standfirst && featured.standfirst !== featured.question && (
                     <p className="line-clamp-4 text-sm leading-relaxed text-ink-muted">{featured.standfirst}</p>
                   )}
@@ -88,7 +93,7 @@ export function ActivityShowcase({ featured, cards, work }: { featured: Featured
               <Link
                 href={c.href}
                 onClick={() => send({ event: "opened", activity: c.activity, surface: "home", ref: c.slug, revision: c.revision })}
-                className="group flex w-full flex-col overflow-hidden rounded-3xl border border-line bg-surface transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action motion-reduce:transition-none"
+                className="tile tile-card group flex w-full flex-col transition hover:shadow-md motion-reduce:transition-none"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-[#007373]">
                   {c.image && (
@@ -100,13 +105,13 @@ export function ActivityShowcase({ featured, cards, work }: { featured: Featured
                       className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                     />
                   )}
-                  <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]">
-                    {c.kind}
-                    {c.minutes ? ` · about ${c.minutes} min` : ""}
-                  </span>
+                  <PictureTags
+                    items={[{ icon: "target", text: c.kind }, ...(c.minutes ? [{ icon: "clock" as const, text: `${c.minutes} min` }] : [])]}
+                    roles={c.roles}
+                  />
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-5">
-                  <p className="font-serif text-xl font-semibold leading-snug">{c.question}</p>
+                <div className="flex flex-1 flex-col gap-2 p-4">
+                  <p className="tile-heading font-serif text-xl font-semibold leading-snug">{c.question}</p>
                   <p className="text-sm text-ink-muted">
                     {c.title}. For {c.audience}. A fictional case to practise on.
                   </p>
@@ -123,16 +128,27 @@ export function ActivityShowcase({ featured, cards, work }: { featured: Featured
         <Link
           href={work.href}
           onClick={() => send({ event: "opened", activity: work.activity, surface: "work-tile" })}
-          className="group mt-5 flex items-start gap-4 rounded-3xl border-2 border-[#fab53d] bg-[#fab53d]/12 p-5 transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action motion-reduce:transition-none"
+          className={cx(
+            "group mt-5 flex gap-4 overflow-hidden rounded-3xl border-2 border-[#fab53d] bg-[#fab53d]/12 transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action motion-reduce:transition-none",
+            work.image ? "items-stretch pr-5" : "items-start p-5",
+          )}
         >
-          <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#fab53d] text-[#102a43]">
-            <Icon name={work.kind === "Calculator" ? "sliders" : "clipboard"} className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
+          {/* Its picture fills the tile's left side (the owner, Nov 2026); the icon when it has none. */}
+          {work.image ? (
+            <span className="relative min-h-28 w-32 shrink-0 bg-[#007373] sm:w-52">
+              {/* eslint-disable-next-line @next/next/no-img-element -- an uploaded course cover, sized by the frame */}
+              <img src={work.image} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+            </span>
+          ) : (
+            <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#fab53d] text-[#102a43]">
+              <Icon name={work.kind === "Calculator" ? "sliders" : "clipboard"} className="size-5" />
+            </span>
+          )}
+          <span className={cx("min-w-0 flex-1", work.image && "self-center py-5")}>
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#8a5a00] dark:text-[#ffd48a]">
               Use it at work · {work.kind} · not a training exercise
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">{work.title}</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e]">{work.title}</span>
             <span className="mt-1 block text-ink-muted">{work.text}</span>
           </span>
           <span className="hidden min-h-11 shrink-0 items-center gap-1.5 self-center font-semibold text-accent sm:inline-flex">

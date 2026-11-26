@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Page not found" };
 const PLACES: { href: string; label: string; note: string; icon: IconName }[] = [
   { href: "/topics", label: "Topics", note: "Short topics to learn between visits", icon: "book" },
   { href: "/news", label: "News", note: "What’s changing, and why", icon: "news" },
-  { href: "/onboarding", label: "My onboarding", note: "Your next steps", icon: "checklist" },
+  { href: "/onboarding/start", label: "Getting started", note: "Your next steps", icon: "checklist" },
   { href: "/resources", label: "Resources", note: "Guides, forms and contacts", icon: "folder" },
 ];
 

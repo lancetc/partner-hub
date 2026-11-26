@@ -37,6 +37,7 @@ import {
   type BlockType,
   type CompletionMode,
   type GuideAudience,
+  type GuideRole,
   type GuideDoc,
   type Page,
   type PageTemplate,
@@ -3997,10 +3998,74 @@ function BrowseTags({ draft, change }: { draft: Draft; change: (fn: (d: Draft) =
   );
   return (
     <div className="flex flex-col gap-4 border-t border-line pt-4">
-      <p className="text-xs text-ink-muted">How it browses in the Magazine. This doesn’t change who may read it; readers see it once published.</p>
-      {group("roles", "Roles it’s for", GUIDE_ROLES)}
       {group("goals", "What it helps them do", GUIDE_GOALS)}
+      <p className="text-xs text-ink-muted">How it browses in the Magazine. Readers see it once it’s published.</p>
     </div>
+  );
+}
+
+/**
+  Who it's for (the owner, Nov 2026): one list, the Magazine's four roles, instead of a separate "who may read it" and
+  "roles it's for". A tick sets both. Who may read it is the audience: Suppliers and Care Partners are both the partner
+  businesses' side (one audience), Care Coordinators and Trilogy Care staff their own; it applies straight away. Where it
+  shows under the Magazine's "Your role" is the roles themselves, and readers see that once it's published.
+  An older guide whose two settings disagree shows its roles, and the next tick brings who may read it into line.
+*/
+function rolesFromAudience(audience: readonly string[]): GuideRole[] {
+  const roles: GuideRole[] = [];
+  if (audience.includes("partner")) roles.push("partner", "owner");
+  if (audience.includes("coordinator")) roles.push("coordinator");
+  if (audience.includes("staff")) roles.push("staff");
+  return roles;
+}
+function audienceFromRoles(roles: readonly string[]): GuideAudience[] {
+  const out: GuideAudience[] = [];
+  if (roles.includes("coordinator")) out.push("coordinator");
+  if (roles.includes("partner") || roles.includes("owner")) out.push("partner");
+  if (roles.includes("staff")) out.push("staff");
+  return out;
+}
+function WhoItsFor({ draft, change }: { draft: Draft; change: (fn: (d: Draft) => void, tag?: string) => void }) {
+  const tagged = draft.doc.tags?.roles ?? [];
+  const ticked: string[] = tagged.length ? tagged : rolesFromAudience(draft.audience);
+  const readers = audienceFromRoles(ticked);
+  const outOfLine = readers.length !== draft.audience.length || readers.some((a) => !draft.audience.includes(a));
+  const set = (value: GuideRole, on: boolean) =>
+    change((d) => {
+      const next = GUIDE_ROLES.map((r) => r.value).filter((v) => (v === value ? on : ticked.includes(v)));
+      const t = d.doc.tags ?? { roles: [], goals: [] };
+      const tags = { ...t, roles: next };
+      d.doc.tags = tags.roles.length || tags.goals.length ? tags : undefined;
+      d.audience = audienceFromRoles(next);
+    }, "tags");
+  return (
+    <fieldset>
+      <legend className="text-sm font-semibold">Who it’s for</legend>
+      <div className="mt-2 flex flex-col gap-2">
+        {GUIDE_ROLES.map((r) => (
+          <label key={r.value} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-action)]"
+              checked={ticked.includes(r.value)}
+              onChange={(e) => set(r.value, e.target.checked)}
+            />
+            {r.label}
+          </label>
+        ))}
+        <span className="text-xs text-ink-muted">
+          None ticked: it’s for everyone signed in. Who can read it changes straight away; where it shows under the Magazine’s “Your role” follows when it’s
+          published.
+        </span>
+        {outOfLine && (
+          <span className="text-xs font-semibold text-[#7a4b00] dark:text-gold">
+            Today it can be read by{" "}
+            {draft.audience.length ? draft.audience.map((a) => GUIDE_AUDIENCES.find((x) => x.value === a)?.label).join(", ") : "everyone"}. Tick or untick a
+            role to bring that in line.
+          </span>
+        )}
+      </div>
+    </fieldset>
   );
 }
 
@@ -4083,23 +4148,7 @@ function GuideSettings({
   const run = (a: "archive" | "restore" | "duplicate") => onAct(a).catch((e: Error) => setProblem(e.message));
   return (
     <Panel title="Guide settings">
-      <fieldset>
-        <legend className="text-sm font-semibold">Who it’s for</legend>
-        <div className="mt-2 flex flex-col gap-2">
-          {GUIDE_AUDIENCES.map((a) => (
-            <label key={a.value} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="size-4 accent-[var(--color-action)]"
-                checked={draft.audience.includes(a.value)}
-                onChange={(e) => change((d) => void (d.audience = e.target.checked ? [...d.audience, a.value] : d.audience.filter((v) => v !== a.value)))}
-              />
-              {a.label}
-            </label>
-          ))}
-          <span className="text-xs text-ink-muted">None ticked: everyone signed in can read it. Changes apply straight away, without publishing.</span>
-        </div>
-      </fieldset>
+      <WhoItsFor draft={draft} change={change} />
       <BrowseTags draft={draft} change={change} />
       <Field label="How it’s completed" hint="Opening or scrolling never completes a guide.">
         <select className={input} value={draft.completion} onChange={(e) => change((d) => void (d.completion = e.target.value as CompletionMode))}>

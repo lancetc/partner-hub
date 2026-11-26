@@ -27,7 +27,7 @@ type Line = {
   transcript?: string | null;
   error?: string;
 };
-type Data = { portrait: string; configured: boolean; lines: Line[] };
+type Data = { portrait: string; sample: string | null; configured: boolean; lines: Line[] };
 
 const STATE: Record<AvaVideoState, { label: string; tone: "neutral" | "info" | "bad" | "warn" | "good" }> = {
   none: { label: "Portrait and voice", tone: "neutral" },
@@ -126,10 +126,21 @@ export function AvaVideosAdmin() {
   return (
     <section aria-labelledby="ava-videos" className="mt-5 rounded-3xl bg-surface p-5 ring-1 ring-line">
       <div className="flex flex-wrap items-start gap-4">
-        {data && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.portrait} alt="" className="aspect-video w-40 shrink-0 rounded-xl bg-muted object-cover object-[center_20%]" />
-        )}
+        {/* Ava as learners see her: a frame from one of her videos (the portrait only until she has one). */}
+        {data &&
+          (data.sample ? (
+            <video
+              src={`${data.sample}#t=1`}
+              preload="metadata"
+              muted
+              playsInline
+              aria-hidden
+              className="aspect-video w-40 shrink-0 rounded-xl bg-muted object-cover object-[center_20%]"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={data.portrait} alt="" className="aspect-video w-40 shrink-0 rounded-xl bg-muted object-cover object-[center_20%]" />
+          ))}
         <div className="min-w-0 flex-1">
           <h2 id="ava-videos" className="font-serif text-xl font-semibold">
             Ava’s talking videos
@@ -137,8 +148,8 @@ export function AvaVideosAdmin() {
           <p className="mt-1 max-w-3xl text-sm text-ink-muted">
             Each line Ava speaks can play as a video in her transmission window. <strong>Upload a video</strong> made elsewhere (in ElevenLabs with the Laura
             avatar, say): copy the script and have it said word for word, because a video stops playing if the script changes. Or{" "}
-            <strong>make the video</strong> here from the portrait above and her voice: a paid generation that needs the Image &amp; Video permission on the
-            ElevenLabs key. Until a line has a video, learners see the portrait while she speaks.
+            <strong>make the video</strong> here from her portrait (set above) and her voice: a paid generation that needs the Image &amp; Video permission on
+            the ElevenLabs key. Until a line has a video, learners see the portrait while she speaks.
           </p>
         </div>
       </div>

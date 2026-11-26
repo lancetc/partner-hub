@@ -4,9 +4,16 @@ import { lessons } from "@/content/lessons";
 import { domainOf, type Domain } from "@/lib/capability";
 import {
   HELP_KINDS,
+  ABOUT_INTERESTS,
+  ABOUT_LEARN,
+  ABOUT_YEARS,
+  type About,
   READ_MODES,
   SEGMENT_AUDIENCE,
   SEGMENTS,
+  ROLE_CHOICES,
+  accountSegment,
+  roleChoiceLabel,
   SERVICE_PHRASES,
   SERVICE_TYPES,
   STAFF_FUNCTIONS,
@@ -35,12 +42,15 @@ import {
   type TextSize,
 } from "@/lib/onboardingCourses";
 import { languageName } from "@/lib/languages";
+import { pathOpenTo } from "@/lib/pathShelves";
 import { audit, ensureOnboarding, tx, type Db } from "./db";
 import { canAuthor, HttpError, isSuperadmin, userById, type User } from "./auth";
 import { capAccess, type Access } from "./capability";
 import { isFor } from "./completionReports";
 import { notify } from "./notifications";
 import { ensurePlaybooks } from "./playbooks";
+import { thumbnailFor } from "@/lib/pathThumbnail";
+import { pictureUrl } from "./profilePictures";
 
 /*
   Starting courses (docs/onboarding.md, "Starting courses"): the getting-started course each person is assigned from
@@ -106,8 +116,13 @@ CREATE TABLE IF NOT EXISTS onbc_equivalences (
 );
 -- How someone wants to use the Hub while getting started. Personal: never in a report.
 CREATE TABLE IF NOT EXISTS onbc_prefs (
-  user_id TEXT PRIMARY KEY REFERENCES users(id), mode TEXT NOT NULL DEFAULT 'read', text_size TEXT NOT NULL DEFAULT 'standard',
+  user_id TEXT PRIMARY KEY REFERENCES users(id), mode TEXT NOT NULL DEFAULT 'both', text_size TEXT NOT NULL DEFAULT 'standard',
   first_run_step TEXT, first_run_done_at TEXT, last_seen_at TEXT, updated_at TEXT NOT NULL
+);
+-- Get to know you: someone's own answers about their background. Personal: never in a report.
+CREATE TABLE IF NOT EXISTS onbc_about (
+  user_id TEXT PRIMARY KEY REFERENCES users(id), years TEXT, before TEXT NOT NULL DEFAULT '', languages TEXT NOT NULL DEFAULT '',
+  interests TEXT NOT NULL DEFAULT '[]', learn TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS onbc_help (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), enrolment_id TEXT, kind TEXT NOT NULL, message TEXT NOT NULL DEFAULT '',
@@ -217,12 +232,13 @@ const ownsAny = (a: Access) => a.superadmin || a.pc || a.partnerOps;
 const OWNERS_ONLY = "Starting courses are run by People & Culture (employees) and Partner Operations (partners).";
 
 // ---------------------------------------------------------------------------------------------
-// Who someone is: their verified memberships. Never anything they chose for themselves.
+// Who someone is: their memberships (the first is the role they picked at their first sign-in, if they did).
 // ---------------------------------------------------------------------------------------------
 
 /** The membership on someone's Hub account, as an administrator set it. */
 function primaryMembership(db: Db, u: User): Membership {
-  const segment: Segment = u.audience === "staff" ? "staff" : u.audience === "coordinator" ? "coordinator" : u.role === "org_admin" ? "principal" : "supplier";
+  const segment: Segment = accountSegment(u);
+  const picked = Boolean(u.self_role) && segment === u.self_role;
   const staffFunction: StaffFunction | null =
     segment !== "staff" ? null : isSuperadmin(u) ? "administrator" : canAuthor(u) ? "author" : u.role === "org_admin" ? "manager" : "general";
   return {
@@ -232,7 +248,7 @@ function primaryMembership(db: Db, u: User): Membership {
     orgName: orgName(db, u.org_id),
     serviceType: segment === "supplier" ? serviceTypeOf(u.service_role) : null,
     staffFunction,
-    source: "Hub account, set by an administrator",
+    source: picked ? "Chosen by them at their first sign-in" : "Hub account, set by an administrator",
     verifiedBy: null,
     effectiveFrom: null,
     effectiveTo: null,
@@ -274,7 +290,20 @@ const disputed = (db: Db, userId: string) => Boolean(db.prepare("SELECT 1 FROM o
 // The content a step points at, and whether this person may open it
 // ---------------------------------------------------------------------------------------------
 
-type StepTarget = { label: string; href: string; version: string; minutes: number | null; open: (audience: string, author: boolean) => boolean };
+type StepTarget = {
+  label: string;
+  href: string;
+  version: string;
+  minutes: number | null;
+  /** Its picture, as its own tile shows it: a Topic's cover photo, a Discovery Path's first photo, a Magazine course's cover. */
+  poster: string | null;
+  open: (audience: string, author: boolean) => boolean;
+};
+/** A Topic's picture: its cover photo, or the first photo on its cards (lib/pathThumbnail). Used for every kind of step. */
+const topicPoster = (slug: string) => {
+  const l = lessons.find((x) => x.slug === slug && x.track !== "reinforcement");
+  return l ? (thumbnailFor(l).photo?.src ?? null) : null;
+};
 
 function targetOf(db: Db, ref: string): StepTarget | null {
   const [kind, id] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)];
@@ -282,11 +311,18 @@ function targetOf(db: Db, ref: string): StepTarget | null {
     const l = lessons.find((x) => x.slug === id && x.track !== "reinforcement");
     if (!l) return null;
     // The Topics' own rule (server/catalogue.topicIsFor): staff and authors see every track.
-    return { label: l.title, href: `/topics/${l.slug}`, version: l.version, minutes: l.minutes, open: (a, author) => author || a === "staff" || isFor(l, a) };
+    return {
+      label: l.title,
+      href: `/topics/${l.slug}`,
+      version: l.version,
+      minutes: l.minutes,
+      poster: topicPoster(l.slug),
+      open: (a, author) => author || a === "staff" || isFor(l, a),
+    };
   }
   if (kind === "course") {
-    const g = db.prepare("SELECT slug, title, audience, revision_id FROM magazine_guides WHERE id = ? AND status = 'published'").get(id) as
-      { slug: string; title: string; audience: string; revision_id: string | null } | undefined;
+    const g = db.prepare("SELECT slug, title, audience, revision_id, cover FROM magazine_guides WHERE id = ? AND status = 'published'").get(id) as
+      { slug: string; title: string; audience: string; revision_id: string | null; cover: string | null } | undefined;
     if (!g?.revision_id) return null;
     const aud = JSON.parse(g.audience) as string[];
     // The Magazine's own rule (server/magazine.canRead).
@@ -295,7 +331,23 @@ function targetOf(db: Db, ref: string): StepTarget | null {
       href: `/magazine/${g.slug}`,
       version: g.revision_id,
       minutes: null,
+      poster: g.cover,
       open: (a, author) => author || !aud.length || aud.includes(a),
+    };
+  }
+  if (kind === "path") {
+    const p = db.prepare("SELECT name, audience, updated_at FROM learning_paths WHERE id = ? AND archived = 0").get(id) as
+      { name: string; audience: string; updated_at: string } | undefined;
+    if (!p) return null;
+    const minutes = pathLessons(db, id).reduce((n, slug) => n + (lessons.find((l) => l.slug === slug)?.minutes ?? 0), 0);
+    // The Discovery Paths' own rule (lib/pathShelves pathOpenTo): from the wording of who it's for.
+    return {
+      label: p.name,
+      href: `/paths/${id}`,
+      version: p.updated_at,
+      minutes: minutes || null,
+      poster: pathLessons(db, id).map(topicPoster).find(Boolean) ?? null,
+      open: (a, author) => author || pathOpenTo(p.audience, a),
     };
   }
   if (kind === "aid") {
@@ -310,6 +362,7 @@ function targetOf(db: Db, ref: string): StepTarget | null {
       href: `/tools/${id}`,
       version: String(rel.number),
       minutes: d.minutes ?? null,
+      poster: null,
       open: (a) => (d.audiences ?? []).includes(a),
     };
   }
@@ -317,6 +370,12 @@ function targetOf(db: Db, ref: string): StepTarget | null {
 }
 
 /** Everything a course author can choose from, for the step picker: published Topics and Magazine courses, and Job Aids. */
+/** A Discovery Path's topics, in order. */
+const pathLessons = (db: Db, id: string) =>
+  (db.prepare("SELECT lesson_slug FROM learning_path_lessons WHERE path_id = ? ORDER BY position").all(id) as { lesson_slug: string }[]).map(
+    (r) => r.lesson_slug,
+  );
+
 function stepChoices(db: Db) {
   const topics = lessons
     .filter((l) => l.track !== "reinforcement")
@@ -338,7 +397,10 @@ function stepChoices(db: Db) {
       note: `${(d.audiences ?? []).join(", ")}${approved ? "" : " · no approved release yet"}`,
     };
   });
-  return [...topics, ...courses, ...aids];
+  const paths = (
+    db.prepare("SELECT id, name, audience FROM learning_paths WHERE archived = 0 ORDER BY name").all() as { id: string; name: string; audience: string }[]
+  ).map((p) => ({ ref: `path:${p.id}`, kind: "path" as StepKind, label: p.name, note: p.audience || "Everyone" }));
+  return [...topics, ...courses, ...paths, ...aids];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -370,6 +432,20 @@ function finished(db: Db, userId: string, ref: string): { at: string; version: s
       .get(userId, id) as { v: string; at: string } | undefined;
     return r ? { at: r.at, version: r.v } : null;
   }
+  if (ref.startsWith("path:")) {
+    const slugs = pathLessons(db, id);
+    if (!slugs.length) return null;
+    let last = "";
+    for (const slug of slugs) {
+      const r = db.prepare("SELECT MAX(completed_at) AS at FROM lesson_completions WHERE user_id = ? AND lesson_slug = ?").get(userId, slug) as {
+        at: string | null;
+      };
+      if (!r.at) return null;
+      if (r.at > last) last = r.at;
+    }
+    const p = db.prepare("SELECT updated_at FROM learning_paths WHERE id = ?").get(id) as { updated_at: string } | undefined;
+    return { at: last, version: p?.updated_at ?? "done" };
+  }
   if (ref.startsWith("aid:")) {
     // A Job Aid step is done when it's saved to Favourites, to keep for work.
     const r = db.prepare("SELECT seen AS v, saved_at AS at FROM favourites WHERE user_id = ? AND kind = 'job_aid' AND target_id = ?").get(userId, id) as
@@ -384,6 +460,12 @@ function begun(db: Db, userId: string, ref: string) {
   if (ref.startsWith("topic:")) return Boolean(db.prepare("SELECT 1 FROM lesson_progress WHERE user_id = ? AND slug = ?").get(userId, id));
   if (ref.startsWith("course:")) return Boolean(db.prepare("SELECT 1 FROM magazine_progress WHERE user_id = ? AND guide_id = ?").get(userId, id));
   if (ref.startsWith("aid:")) return Boolean(db.prepare("SELECT 1 FROM playbook_views WHERE user_id = ? AND snippet_id = ?").get(userId, id));
+  if (ref.startsWith("path:"))
+    return pathLessons(db, id).some(
+      (slug) =>
+        Boolean(db.prepare("SELECT 1 FROM lesson_progress WHERE user_id = ? AND slug = ?").get(userId, slug)) ||
+        Boolean(db.prepare("SELECT 1 FROM lesson_completions WHERE user_id = ? AND lesson_slug = ?").get(userId, slug)),
+    );
   return false;
 }
 
@@ -395,6 +477,10 @@ export type StepView = {
   kindLabel: string;
   required: boolean;
   minutes: number | null;
+  /** Its picture (StepTarget.poster), when it has one. */
+  poster: string | null;
+  /** For later rather than today (CourseStep.later). */
+  later: boolean;
   state: StepState;
   /** Only when this person may open it. */
   href: string | null;
@@ -414,7 +500,16 @@ export type StepView = {
 function stepsFor(db: Db, steps: CourseStep[], audience: string, author: boolean, who: string | null): StepView[] {
   return steps.map((s) => {
     const t = targetOf(db, s.ref);
-    const base = { id: s.id, title: s.title, kind: s.kind, kindLabel: STEP_KINDS[s.kind], required: s.required, minutes: s.minutes || t?.minutes || null };
+    const base = {
+      id: s.id,
+      title: s.title,
+      kind: s.kind,
+      kindLabel: STEP_KINDS[s.kind],
+      required: s.required,
+      minutes: s.minutes || t?.minutes || null,
+      poster: t?.poster ?? null,
+      later: Boolean(s.later),
+    };
     if (!t || !t.open(audience, author))
       return {
         ...base,
@@ -489,10 +584,12 @@ function cleanCourse(db: Db, raw: Record<string, unknown>): CourseData {
       ? "topic"
       : ref.startsWith("course:")
         ? "course"
-        : ref.startsWith("aid:")
-          ? "job_aid"
-          : undefined;
-    if (!kind) throw new HttpError(400, `Step ${i + 1} needs a Topic, Magazine course or Job Aid.`);
+        : ref.startsWith("path:")
+          ? "path"
+          : ref.startsWith("aid:")
+            ? "job_aid"
+            : undefined;
+    if (!kind) throw new HttpError(400, `Step ${i + 1} needs a Topic, Discovery Path, Magazine course or Job Aid.`);
     let id = typeof s.id === "string" && /^[a-z0-9-]{1,40}$/.test(s.id) ? s.id : `step-${i + 1}`;
     while (ids.has(id)) id = `${id}-x`;
     ids.add(id);
@@ -503,6 +600,8 @@ function cleanCourse(db: Db, raw: Record<string, unknown>): CourseData {
       title: text(s.title, 120) || `Step ${i + 1}`,
       required: s.required !== false,
       minutes: Math.min(120, Math.max(0, Math.round(Number(s.minutes)) || 0)),
+      // Today or Later (CourseStep.later): kept only when it’s for later.
+      ...(s.later === true ? { later: true } : {}),
     };
   });
   if (!steps.length) throw new HttpError(400, "Add at least one step.");
@@ -948,6 +1047,18 @@ export function evaluate(db: Db, u: User, now: Date, actor = SYSTEM) {
           audit(db, { actor, event: "onboarding.enrolment.reinstated", entity: `onbc_enrolment:${latest.id}`, at: now });
           added.push(latest.id);
         }
+        // A new version, for someone who hasn't started the old one yet: they simply get the latest (nothing of theirs changes).
+        if (latest.status === "active" && latest.course_version < course.version && !latest.started_at && !latest.completed_at && !held) {
+          db.prepare("UPDATE onbc_enrolments SET course_version = ?, updated_at = ? WHERE id = ?").run(course.version, now.toISOString(), latest.id);
+          audit(db, {
+            actor,
+            event: "onboarding.enrolment.moved_to_latest",
+            entity: `onbc_enrolment:${latest.id}`,
+            previous: { version: latest.course_version },
+            next: { version: course.version },
+            at: now,
+          });
+        }
         // A new version that the owner says needs a new assignment, for someone who finished the old one.
         if (latest.course_version < course.version && data.reassign === "new_assignment" && latest.status === "completed" && !held) {
           const id = insertEnrolment(db, enrolmentFields(u, p, course, data, now), now);
@@ -1287,11 +1398,63 @@ export function myEnrolment(db: Db, user: User, id: unknown, now: Date) {
     prefs: {
       language: user.language ?? "en",
       languageName: languageName(user.language ?? "en"),
-      mode: prefs?.mode ?? "read",
+      mode: prefs?.mode ?? "both",
       textSize: prefs?.text_size ?? "standard",
     },
     help: helpRoutes(db, user.audience),
+    about: aboutOf(db, user.id),
   };
+}
+
+/** The answers’ table, made here too: a server that started before it existed has run the schema already. */
+const ensureAbout = (db: Db) =>
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS onbc_about (user_id TEXT PRIMARY KEY REFERENCES users(id), years TEXT, before TEXT NOT NULL DEFAULT '', languages TEXT NOT NULL DEFAULT '', interests TEXT NOT NULL DEFAULT '[]', learn TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)",
+  );
+
+/** Someone's Get to know you answers, or empty ones before they've given any. */
+export function aboutOf(db: Db, userId: string): About {
+  ensureAbout(db);
+  const r = db.prepare("SELECT * FROM onbc_about WHERE user_id = ?").get(userId) as
+    { years: string | null; before: string; languages: string; interests: string; learn: string; note: string; updated_at: string } | undefined;
+  const list = (json: string | undefined, of: object) => {
+    try {
+      return (JSON.parse(json ?? "[]") as string[]).filter((v) => v in of);
+    } catch {
+      return [];
+    }
+  };
+  return {
+    years: r?.years && r.years in ABOUT_YEARS ? (r.years as About["years"]) : null,
+    before: r?.before ?? "",
+    languages: r?.languages ?? "",
+    interests: list(r?.interests, ABOUT_INTERESTS) as About["interests"],
+    learn: list(r?.learn, ABOUT_LEARN) as About["learn"],
+    note: r?.note ?? "",
+    updatedAt: r?.updated_at ?? null,
+  };
+}
+
+/** Saves someone's own Get to know you answers. Everything is optional; anything unrecognised is left out. */
+export function saveAbout(db: Db, user: User, input: Record<string, unknown>, now: Date): About {
+  ensureCourses(db, now);
+  const pick = (v: unknown, of: object) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x in of))] : []);
+  const years = typeof input.years === "string" && input.years in ABOUT_YEARS ? input.years : null;
+  db.prepare(
+    `INSERT INTO onbc_about (user_id, years, before, languages, interests, learn, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET years = excluded.years, before = excluded.before, languages = excluded.languages,
+       interests = excluded.interests, learn = excluded.learn, note = excluded.note, updated_at = excluded.updated_at`,
+  ).run(
+    user.id,
+    years,
+    text(input.before, 300),
+    text(input.languages, 120),
+    JSON.stringify(pick(input.interests, ABOUT_INTERESTS)),
+    JSON.stringify(pick(input.learn, ABOUT_LEARN)),
+    text(input.note, 600),
+    now.toISOString(),
+  );
+  return aboutOf(db, user.id);
 }
 
 /** Read or listen, text size, and where they are in the first run. Nothing else: a role can't be set from here. */
@@ -1299,7 +1462,7 @@ export function savePrefs(db: Db, user: User, input: Record<string, unknown>, no
   ensureCourses(db, now);
   const at = now.toISOString();
   const was = prefsOf(db, user.id);
-  const mode = (Object.keys(READ_MODES) as ReadMode[]).find((m) => m === input.mode) ?? was?.mode ?? "read";
+  const mode = (Object.keys(READ_MODES) as ReadMode[]).find((m) => m === input.mode) ?? was?.mode ?? "both";
   const size = (Object.keys(TEXT_SIZES) as TextSize[]).find((m) => m === input.textSize) ?? was?.text_size ?? "standard";
   const step = typeof input.step === "string" && /^[a-z-]{1,20}$/.test(input.step) ? input.step : (was?.first_run_step ?? null);
   db.prepare(
@@ -1413,6 +1576,7 @@ export function personCourses(db: Db, actor: User, userId: unknown, now: Date) {
       by: nameOf(db, c.granted_by),
       at: c.granted_at,
     })),
+    about: aboutOf(db, u.id),
     help: (
       db.prepare("SELECT id, kind, message, state, created_at FROM onbc_help WHERE user_id = ? ORDER BY created_at DESC LIMIT 20").all(u.id) as {
         id: string;
@@ -1632,6 +1796,278 @@ export function endMembership(db: Db, actor: User, input: Record<string, unknown
   return personCourses(db, actor, u.id, now);
 }
 
+// ---------------------------------------------------------------------------------------------
+// By role (the owner, Nov 2026): what each of the four roles does first, on one screen
+// ---------------------------------------------------------------------------------------------
+
+/** The rule in force that gives everyone in a role their starting course: no work or staff-function conditions. */
+function roleRule(db: Db, segment: Segment, now: Date) {
+  return rulesInForce(db, now)
+    .filter((r) => {
+      const w = ruleOf(r).when;
+      return w.segment === segment && !w.serviceTypes.length && !w.staffFunctions.length;
+    })
+    .sort((a, b) => (a.published_at ?? "").localeCompare(b.published_at ?? ""))[0];
+}
+
+/** The four roles, each with its starting course's items, for the "By role" screen, and the content that can be added. */
+export function roleStarts(db: Db, actor: User, now: Date) {
+  ensureCourses(db, now);
+  const a = capAccess(db, actor);
+  need(ownsAny(a), OWNERS_ONLY);
+  const choices = stepChoices(db)
+    .filter((c) => c.kind !== "job_aid")
+    .map((c) => {
+      const t = targetOf(db, c.ref);
+      return {
+        ref: c.ref,
+        kind: c.kind,
+        kindLabel: STEP_KINDS[c.kind],
+        label: c.label,
+        minutes: t?.minutes ?? null,
+        // Which roles could open it (a step someone can't open would block their course).
+        openTo: ROLE_CHOICES.filter((r) => t?.open(SEGMENT_AUDIENCE[r.segment], false)).map((r) => r.segment),
+      };
+    })
+    .filter((c) => c.openTo.length);
+  const roles = ROLE_CHOICES.map((r) => {
+    const rule = roleRule(db, r.segment, now);
+    const data = rule ? ruleOf(rule) : null;
+    const course = data ? (latestCourse(db, data.courseId) ?? null) : null;
+    const c = course ? courseOf(course) : null;
+    const others = rulesInForce(db, now).filter((x) => ruleOf(x).when.segment === r.segment && x.id !== rule?.id);
+    return {
+      segment: r.segment,
+      label: r.label,
+      editable: owns(a, segmentDomain(r.segment)),
+      courseId: data?.courseId ?? null,
+      title: c?.learnerTitle ?? "",
+      draft: course?.status === "draft",
+      steps: (c?.steps ?? []).map((s) => ({
+        ref: s.ref,
+        kind: s.kind,
+        kindLabel: STEP_KINDS[s.kind],
+        title: s.title,
+        required: s.required,
+        later: Boolean(s.later),
+        minutes: s.minutes || targetOf(db, s.ref)?.minutes || 0,
+      })),
+      // Only a due date that applies: one asked for but not yet approved is still a recommendation.
+      dueDays: data?.mandatory && rule?.mandatory_state === "approved" ? data.dueDays : null,
+      mandatory: rule?.mandatory_state ?? "none",
+      enrolled: data
+        ? (
+            db.prepare("SELECT COUNT(*) AS n FROM onbc_enrolments WHERE course_id = ? AND status IN ('active', 'completed')").get(data.courseId) as {
+              n: number;
+            }
+          ).n
+        : 0,
+      // Work-specific courses (a cleaners' branch, say), kept on the Rules screen.
+      also: others.map((x) => ruleOf(x).name),
+    };
+  });
+  return { roles, choices };
+}
+
+/**
+  Saves what a role does first: its course's title and items (a new published version, so people part-way through keep
+  theirs) and, when it changes, the due date (a new version of its rule, with the person saving as its owner, so a due
+  date they set applies at once). A role without a starting course gets one.
+*/
+export function saveRoleStart(db: Db, actor: User, input: Record<string, unknown>, now: Date) {
+  ensureCourses(db, now);
+  const segment = ROLE_CHOICES.find((r) => r.segment === input.segment)?.segment;
+  if (!segment) throw new HttpError(400, "Choose one of the four roles.");
+  need(owns(capAccess(db, actor), segmentDomain(segment)), OWNERS_ONLY);
+  const label = roleChoiceLabel(segment);
+  const rule = roleRule(db, segment, now);
+  const was = rule ? ruleOf(rule) : null;
+  const courseId = was?.courseId ?? `start-${segment}`;
+  const latest = latestCourse(db, courseId);
+  const base = latest ? courseOf(latest) : null;
+  const raw = (Array.isArray(input.steps) ? input.steps : []) as Record<string, unknown>[];
+  if (!raw.length) throw new HttpError(400, `Add at least one item for ${label}s.`);
+  // A step keeps its own wording when it stays; a new one reads as the content's title.
+  const steps = raw.map((s, i) => {
+    const ref = String(s.ref ?? "");
+    const kept = base?.steps.find((x) => x.ref === ref);
+    const t = targetOf(db, ref);
+    if (!t) throw new HttpError(400, `Item ${i + 1} isn’t published any more. Remove it, or choose another.`);
+    return {
+      id: kept?.id ?? `step-${i + 1}`,
+      ref,
+      title: kept?.title ?? t.label,
+      required: s.required !== false,
+      minutes: kept?.minutes || t.minutes || 0,
+      ...(s.later === true ? { later: true } : {}),
+    };
+  });
+  const title = text(input.title, 90) || base?.learnerTitle || `Getting started as a ${label}`;
+  const data = {
+    ...(base ?? { gains: [], stage: 1, order: 0, languages: ["en"], reassign: "continue", gaps: "" }),
+    name: base?.name ?? `${label}: starting course`,
+    learnerTitle: title,
+    segment,
+    serviceTypes: [],
+    steps,
+    ownerTeam: base?.ownerTeam || (segment === "staff" ? "People & Culture" : "Partner Operations"),
+    changeNote: "Changed on the By role screen",
+    demo: false,
+  };
+  const same =
+    base &&
+    latest?.status === "published" &&
+    JSON.stringify({ t: base.learnerTitle, s: base.steps.map((x) => [x.ref, x.required, Boolean(x.later)]) }) ===
+      JSON.stringify({ t: title, s: steps.map((x) => [x.ref, x.required, Boolean(x.later)]) });
+  if (!same) {
+    saveCourse(db, actor, { id: courseId, data }, now);
+    publishCourse(db, actor, courseId, now);
+  }
+  const days = Math.round(Number(input.dueDays));
+  const dueDays = days >= 1 && days <= 365 ? days : null;
+  const wasDue = was?.mandatory && rule?.mandatory_state === "approved" ? was.dueDays : null;
+  if (!rule || dueDays !== wasDue || (was?.demo ?? false)) {
+    const ruleId = rule?.id ?? `start-${segment}`;
+    saveRule(
+      db,
+      actor,
+      {
+        id: ruleId,
+        data: {
+          ...(was ?? { name: `Everyone who is a ${label}`, trigger: "joined", note: "" }),
+          when: { segment, serviceTypes: [], staffFunctions: [] },
+          courseId,
+          mandatory: dueDays !== null,
+          dueDays,
+          effectiveFrom: was?.effectiveFrom ?? today(now),
+          effectiveTo: null,
+          ownerTeam: was?.ownerTeam || (segment === "staff" ? "People & Culture" : "Partner Operations"),
+          // Whoever sets a due date here owns it, so it applies at once (an owner's approval, on record).
+          ownerUserId: dueDays !== null ? actor.id : (was?.ownerUserId ?? null),
+          demo: false,
+        },
+      },
+      now,
+    );
+    publishRule(db, actor, ruleId, now);
+  } else assignEveryone(db, now, segmentDomain(segment));
+  return roleStarts(db, actor, now);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The role someone picks for themself (the owner, Nov 2026)
+// ---------------------------------------------------------------------------------------------
+
+function ensureRoleChoices(db: Db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS onbc_role_choices (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), segment TEXT NOT NULL,
+    was_audience TEXT NOT NULL, was_self_role TEXT, chosen_at TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'open', reviewed_by TEXT, reviewed_at TEXT
+  )`);
+}
+type RoleChoiceRow = {
+  id: string;
+  user_id: string;
+  segment: Segment;
+  was_audience: User["audience"];
+  was_self_role: string | null;
+  chosen_at: string;
+  state: string;
+};
+
+/**
+  "Which best describes you?" at the first sign-in: the pick takes effect now (the account reads the Hub as that role,
+  and their starting course follows it), and waits in the exceptions queue for an administrator to keep or change back.
+  Picking the role the account already is changes nothing; picking back the one it was withdraws the pick.
+*/
+export function chooseRole(db: Db, user: User, input: Record<string, unknown>, now: Date) {
+  ensureCourses(db, now);
+  ensureRoleChoices(db);
+  const segment = ROLE_CHOICES.find((c) => c.segment === input.segment)?.segment;
+  if (!segment) throw new HttpError(400, "Choose one of the four roles.");
+  if (accountSegment(user) === segment) return;
+  const at = now.toISOString();
+  tx(db, () => {
+    const open = db.prepare("SELECT * FROM onbc_role_choices WHERE user_id = ? AND state = 'open'").get(user.id) as RoleChoiceRow | undefined;
+    const was = open ? accountSegment({ audience: open.was_audience, role: user.role, self_role: open.was_self_role }) : null;
+    if (open && was === segment) {
+      // Back to what the account was: nothing for an administrator to look at.
+      db.prepare("UPDATE onbc_role_choices SET state = 'withdrawn', reviewed_at = ? WHERE id = ?").run(at, open.id);
+      db.prepare("UPDATE users SET audience = ?, self_role = ? WHERE id = ?").run(open.was_audience, open.was_self_role, user.id);
+    } else {
+      if (open) db.prepare("UPDATE onbc_role_choices SET segment = ?, chosen_at = ? WHERE id = ?").run(segment, at, open.id);
+      else
+        db.prepare("INSERT INTO onbc_role_choices (id, user_id, segment, was_audience, was_self_role, chosen_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+          newId("role"),
+          user.id,
+          segment,
+          user.audience,
+          user.self_role ?? null,
+          at,
+        );
+      db.prepare("UPDATE users SET audience = ?, self_role = ? WHERE id = ?").run(SEGMENT_AUDIENCE[segment], segment, user.id);
+    }
+    audit(db, {
+      actor: user.id,
+      event: "onboarding.role_chosen",
+      entity: `user:${user.id}`,
+      previous: { audience: user.audience },
+      next: { segment },
+      at: now,
+    });
+  });
+  evaluate(db, userById(db, user.id)!, now, user.id);
+}
+
+/** The picks waiting for an administrator, for the exceptions queue. */
+function openRoleChoices(db: Db) {
+  ensureRoleChoices(db);
+  return db.prepare("SELECT * FROM onbc_role_choices WHERE state = 'open' ORDER BY chosen_at").all() as RoleChoiceRow[];
+}
+
+/** Keeps a role someone picked, or changes it back to what their account was (and tells them). */
+export function reviewRoleChoice(db: Db, actor: User, input: Record<string, unknown>, now: Date) {
+  ensureCourses(db, now);
+  ensureRoleChoices(db);
+  const c = db.prepare("SELECT * FROM onbc_role_choices WHERE id = ?").get(String(input.id ?? "")) as RoleChoiceRow | undefined;
+  if (!c) throw new HttpError(404, "That role isn’t waiting any more.");
+  const u = target(db, actor, c.user_id);
+  if (c.state !== "open") return { ok: true };
+  const keep = input.decision === "keep";
+  if (!keep && input.decision !== "undo") throw new HttpError(400, "Keep it, or change it back.");
+  const at = now.toISOString();
+  const was = roleChoiceLabel(accountSegment({ audience: c.was_audience, role: u.role, self_role: c.was_self_role }));
+  tx(db, () => {
+    db.prepare("UPDATE onbc_role_choices SET state = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?").run(keep ? "kept" : "undone", actor.id, at, c.id);
+    if (!keep) {
+      db.prepare("UPDATE users SET audience = ?, self_role = ? WHERE id = ?").run(c.was_audience, c.was_self_role, u.id);
+      notify(
+        db,
+        u.id,
+        {
+          kind: "update",
+          category: "Your setup",
+          priority: "normal",
+          title: "Your role has been changed back",
+          body: `An administrator checked it and set your role back to ${was}. If that isn’t right, choose again in Getting started.`,
+          href: "/onboarding/start?step=you",
+          source: `role-choice:${c.id}`,
+        },
+        now,
+      );
+    }
+    audit(db, {
+      actor: actor.id,
+      event: keep ? "onboarding.role_choice.kept" : "onboarding.role_choice.undone",
+      entity: `user:${u.id}`,
+      next: { segment: keep ? c.segment : was },
+      at: now,
+    });
+  });
+  if (!keep) evaluate(db, userById(db, u.id)!, now, actor.id);
+  return { ok: true };
+}
+
 export function resolveHelp(db: Db, actor: User, input: Record<string, unknown>, now: Date) {
   ensureCourses(db, now);
   const h = db.prepare("SELECT * FROM onbc_help WHERE id = ?").get(String(input.id ?? "")) as { id: string; user_id: string; state: string } | undefined;
@@ -1692,7 +2128,7 @@ export function exceptionsQueue(db: Db, actor: User, now: Date) {
   const a = capAccess(db, actor);
   need(ownsAny(a), OWNERS_ONLY);
   const users = (db.prepare("SELECT * FROM users ORDER BY name").all() as User[]).filter((u) => owns(a, domainOf(u.audience)));
-  const items: { kind: string; title: string; detail: string; person?: { id: string; name: string } }[] = [];
+  const items: { kind: string; title: string; detail: string; person?: { id: string; name: string }; choice?: { id: string } }[] = [];
   const rules = rulesInForce(db, now);
   for (const u of users) {
     const ms = membershipsOf(db, u, now);
@@ -1732,6 +2168,18 @@ export function exceptionsQueue(db: Db, actor: User, now: Date) {
       });
   }
   const ids = new Set(users.map((u) => u.id));
+  for (const c of openRoleChoices(db)) {
+    const u = users.find((x) => x.id === c.user_id);
+    if (!u) continue;
+    const was = roleChoiceLabel(accountSegment({ audience: c.was_audience, role: u.role, self_role: c.was_self_role }));
+    items.push({
+      kind: "role_chosen",
+      title: `Chose ${roleChoiceLabel(c.segment)} as their role`,
+      detail: `Their account had them as ${was}. They already see ${roleChoiceLabel(c.segment)} content and courses. Keep it, or change it back (they’re told).`,
+      person: { id: u.id, name: u.name },
+      choice: { id: c.id },
+    });
+  }
   for (const h of db.prepare("SELECT * FROM onbc_help WHERE state = 'open' ORDER BY created_at").all() as {
     id: string;
     user_id: string;
@@ -1848,7 +2296,33 @@ export function courseReport(db: Db, actor: User, input: { orgId?: unknown }, no
   };
   const d = today(now);
   const stepRows = new Map<string, { title: string; step: string; enrolled: number; started: number; done: number }>();
+  // Person first (the owner, Nov 2026): who they are, their role, and their allocated courses and how far they are.
+  type PersonCourse = {
+    title: string;
+    state: "done" | "overdue" | "started" | "not_started";
+    done: number;
+    total: number;
+    at: string | null;
+    assignedAt: string;
+  };
+  type PersonState = "stalled" | "overdue" | "started" | "not_started" | "done";
+  const people: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    segment: Segment;
+    role: string;
+    organisation: string;
+    /** When their first starting course was allocated. */
+    allocatedAt: string;
+    /** The last thing they did: a topic finished or saved, Getting started opened, a course started, their answers. */
+    lastActive: string | null;
+    /** How they're going overall, for the tiles and the order: not started a week after allocation is "stalled". */
+    state: PersonState;
+    courses: PersonCourse[];
+  }[] = [];
   for (const u of users) {
+    const mine: PersonCourse[] = [];
     refreshProgress(db, u, now);
     const ms = membershipsOf(db, u, now);
     // Eligible: who the rules in force reach today, against the version they'd be given.
@@ -1877,11 +2351,75 @@ export function courseReport(db: Db, actor: User, input: { orgId?: unknown }, no
         if (s.state === "done") sr.done += 1;
         stepRows.set(k, sr);
       }
+      // Allocated now, or finished: not the ones they were let off or that ended.
+      if (e.status === "active" || e.status === "completed") {
+        const req = stepsFor(db, courseOf(c).steps, u.audience, canAuthor(u), u.id).filter((s) => s.required);
+        const done = req.filter((s) => s.state === "done").length;
+        mine.push({
+          title: courseOf(c).learnerTitle,
+          state:
+            e.status === "completed"
+              ? "done"
+              : e.due_on && e.due_on < d
+                ? "overdue"
+                : e.started_at || req.some((s) => s.state !== "todo" && s.state !== "unavailable")
+                  ? "started"
+                  : "not_started",
+          done,
+          total: req.length,
+          at: e.status === "completed" ? e.completed_at : e.due_on,
+          assignedAt: e.assigned_at,
+        });
+      }
+    }
+    if (mine.length) {
+      const allocatedAt = mine.map((c) => c.assignedAt).sort()[0];
+      const latest = (sql: string) => (db.prepare(sql).get(u.id) as { at: string | null } | undefined)?.at ?? null;
+      ensureAbout(db);
+      const lastActive =
+        [
+          latest("SELECT MAX(completed_at) AS at FROM lesson_completions WHERE user_id = ?"),
+          latest("SELECT MAX(saved_at) AS at FROM lesson_progress WHERE user_id = ?"),
+          latest("SELECT last_seen_at AS at FROM onbc_prefs WHERE user_id = ?"),
+          latest("SELECT MAX(started_at) AS at FROM onbc_enrolments WHERE user_id = ?"),
+          latest("SELECT updated_at AS at FROM onbc_about WHERE user_id = ?"),
+        ]
+          .filter((x): x is string => Boolean(x))
+          .sort()
+          .at(-1) ?? null;
+      const week = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+      const state: PersonState = mine.every((c) => c.state === "done")
+        ? "done"
+        : mine.some((c) => c.state === "overdue")
+          ? "overdue"
+          : mine.some((c) => c.state === "started" || c.state === "done")
+            ? "started"
+            : allocatedAt < week
+              ? "stalled"
+              : "not_started";
+      people.push({
+        id: u.id,
+        name: u.name,
+        avatar: pictureUrl(u.avatar ?? null),
+        segment: accountSegment(u),
+        role: roleChoiceLabel(accountSegment(u)),
+        organisation: orgName(db, u.org_id) ?? "",
+        allocatedAt,
+        lastActive,
+        state,
+        courses: mine,
+      });
     }
   }
   const ids = new Set(users.map((u) => u.id));
   const help = (db.prepare("SELECT user_id, kind FROM onbc_help").all() as { user_id: string; kind: HelpKind }[]).filter((h) => ids.has(h.user_id));
   return {
+    // Who needs a nudge first: not started a week on, then overdue, then under way, then new, finished last.
+    people: people.sort(
+      (x, y) =>
+        ["stalled", "overdue", "started", "not_started", "done"].indexOf(x.state) - ["stalled", "overdue", "started", "not_started", "done"].indexOf(y.state) ||
+        x.name.localeCompare(y.name),
+    ),
     note: "Each column is its own count: eligible (the rules in force reach them today), invited, enrolled, started, completed, overdue, exempted, and no longer assigned. Language and reading preferences are never reported.",
     rows: [...rows.values()].sort((x, y) => x.title.localeCompare(y.title) || x.version - y.version),
     steps: [...stepRows.values()],

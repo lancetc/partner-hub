@@ -181,36 +181,10 @@ export function acknowledgementReport(db: Db, source: string) {
   prototype has something to show. Dates are relative to today. Each is added once.
 */
 function seedDemo(db: Db, user: User, now: Date) {
-  const days = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
   const ago = (h: number) => new Date(now.getTime() - h * 3_600_000);
   const add = (n: NewNotification, at: Date) => notify(db, user.id, n, at);
-  add(
-    {
-      kind: "action",
-      category: "Mandatory learning",
-      priority: "high",
-      title: "SIRS refresher due",
-      body: "Complete your refresher on the Serious Incident Response Scheme: knowing what to report, and when.",
-      href: "/topics/sirs-in-depth-know-what-to-report",
-      dueAt: days(17),
-      source: "demo:sirs-refresher",
-    },
-    ago(26),
-  );
-  add(
-    {
-      kind: "action",
-      category: "Acknowledgement required",
-      priority: "critical",
-      title: "Updated invoicing guidance",
-      body: "Invoices now need the visit date and the service code on every line. Review the guidance and confirm you’ve read it.",
-      href: "/news/extra-visit-time-briefing",
-      dueAt: days(7),
-      ack: { version: "Invoicing guidance v2.1" },
-      source: "demo:invoicing-guidance",
-    },
-    ago(5),
-  );
+  // No demo course or learning here (the owner, Nov 2026): what people are given to learn comes from onboarding (By role),
+  // and policies to acknowledge come from Admin → Policy acknowledgements (server/policyAcks).
   add(
     {
       kind: "update",

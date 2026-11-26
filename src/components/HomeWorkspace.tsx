@@ -13,6 +13,7 @@ import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
 import { CountUp } from "./CountUp";
 import type { MyPath } from "./MyLearningPaths";
+import { HomeCourses } from "./onboarding/HomeCourses";
 
 /*
   The top of the homepage: a workspace, not a content feed. It answers three questions in a couple of
@@ -59,8 +60,13 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
   // The cover picture's slot for that note (home/HomeHero): it's on the page by the time this has its inbox.
   const hydrated = useHydrated();
   const noteSlot = hydrated && typeof document !== "undefined" ? document.getElementById("home-hero-note") : null;
-  const todo = box?.action.filter((a) => !a.done) ?? [];
-  const important = box?.updates.find((u) => !u.read) ?? box?.updates[0];
+  // Starting courses' invitations and reminders stay in the Inbox but not here: "Your courses and training" carries them,
+  // and they're not urgent (the owner, Nov 2026). The My actions count follows the same list.
+  const todo = box?.action.filter((a) => !a.done && a.category !== "Getting started") ?? [];
+  // Time-sensitive only (the owner, Nov 2026): due within the next 7 days, or overdue, soonest first. The rest wait in
+  // the Inbox, and My actions still counts them all.
+  const week = now.getTime() + 7 * 86_400_000;
+  const dueSoon = todo.filter((a) => a.dueAt && Date.parse(a.dueAt) <= week).sort((x, y) => x.dueAt!.localeCompare(y.dueAt!));
 
   // Learning: the most recent topic in progress, and how far through their first learning path they are.
   const bySlug = new Map(topics.map((t) => [t.slug, t]));
@@ -86,8 +92,8 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
           >
             <Icon name="spark" className="mt-0.5 size-4 shrink-0 text-[#008282] dark:text-[#3cb8b9]" />
             <span>
-              <span className="font-semibold">{last ? "Since your last visit: " : ""}</span>
-              {summary}
+              <span className="font-semibold">{summary.lead}: </span>
+              {summary.text}
             </span>
           </p>,
           noteSlot,
@@ -95,91 +101,37 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
-          <div data-build-step style={step(2)}>
+          <div data-build-step style={step(2)} className="h-full [&>section]:h-full">
             <AskTrilogy />
           </div>
-
-          {/* What do I need to do? Kept apart from anything optional, so it never competes with a game or a post. */}
-          <section data-build-step style={step(3)} aria-labelledby="attention" className="rounded-3xl border border-[#fab53d]/50 bg-[#fab53d]/12 p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="attention" className="font-serif text-2xl font-semibold">
-                Needs your attention
-              </h2>
-              <Link href="/inbox" className="inline-flex min-h-11 items-center gap-1 font-semibold text-accent hover:underline">
-                View all <Icon name="arrow-right" className="size-4" />
-              </Link>
-            </div>
-            {!box ? (
-              <p className="mt-3 text-ink-muted">Loading…</p>
-            ) : todo.length === 0 ? (
-              <p className="mt-3 flex items-center gap-2 text-ink-muted">
-                <Icon name="circle-check" className="size-5 text-success" /> You’re all caught up.
-              </p>
-            ) : (
-              <ul className="mt-3 flex flex-col gap-2">
-                {todo.slice(0, 3).map((a) => {
-                  const days = a.dueAt ? Math.ceil((Date.parse(a.dueAt) - now.getTime()) / 86_400_000) : null;
-                  return (
-                    <li key={a.id}>
-                      <Link
-                        href="/inbox"
-                        className="group flex items-center gap-3 rounded-2xl bg-surface px-3 py-3 shadow-sm ring-1 ring-black/5 hover:ring-[#fab53d]"
-                      >
-                        <span
-                          aria-hidden
-                          className={cx(
-                            "grid size-10 shrink-0 place-items-center rounded-full",
-                            a.priority === "critical" ? "bg-[#c7393e] text-white" : "bg-[#fff1d6] text-[#7a4a00]",
-                          )}
-                        >
-                          <Icon name={a.ackRequired ? "check" : "flag"} className="size-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-semibold leading-snug group-hover:underline">{a.title}</span>
-                          <span className="block text-sm text-ink-muted">
-                            {a.ackRequired ? "Read and acknowledge" : a.category}
-                            {a.dueAt && ` · due ${formatDate(a.dueAt)}`}
-                            {days !== null && days <= 7 && days >= 0 && (
-                              <span className="font-semibold text-[#c7393e] dark:text-[#ff9ea2]"> · {days} days left</span>
-                            )}
-                          </span>
-                        </span>
-                        {a.priority === "critical" && <span className="rounded-full bg-[#c7393e] px-2 py-0.5 text-xs font-bold text-white">Critical</span>}
-                        <Icon name="arrow-right" className="size-4 shrink-0 text-ink-muted" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-5">
+        {/* Smaller tiles, and the topic to continue filling the rest, so this side ends where Ask Trilogy does. */}
+        <div className="flex min-w-0 flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <Link
               href="/inbox"
               data-build-step
               style={step(2)}
-              className="rounded-3xl border border-[#c7393e]/25 bg-[#c7393e]/10 p-4 hover:border-[#c7393e]/60 sm:p-5"
+              className="rounded-3xl border border-[#c7393e]/25 bg-[#c7393e]/10 px-4 py-3 hover:border-[#c7393e]/60"
             >
-              <span className="block text-sm font-semibold text-ink-muted">My actions</span>
-              <span className={cx("mt-1 block font-serif text-4xl font-semibold", todo.length ? "text-[#c7393e] dark:text-[#ff9ea2]" : "")}>
+              <span className="block text-xs font-semibold text-ink-muted">My actions</span>
+              <span className={cx("block font-serif text-3xl font-semibold leading-tight", todo.length ? "text-[#c7393e] dark:text-[#ff9ea2]" : "")}>
                 {box ? <CountUp value={todo.length} step={2} /> : "–"}
               </span>
-              <span className="block text-sm text-ink-muted">{todo.length === 1 ? "item needs attention" : "items need attention"}</span>
+              <span className="block text-xs text-ink-muted">{todo.length === 1 ? "item needs attention" : "items need attention"}</span>
             </Link>
             <Link
               href={path ? `/paths/${encodeURIComponent(path.id)}` : "/paths"}
               data-build-step
               style={step(3)}
-              className="rounded-3xl border border-[#3cb8b9]/40 bg-[#3cb8b9]/15 p-4 hover:border-[#008282] sm:p-5"
+              className="rounded-3xl border border-[#3cb8b9]/40 bg-[#3cb8b9]/15 px-4 py-3 hover:border-[#008282]"
             >
-              <span className="block text-sm font-semibold text-ink-muted">My learning</span>
-              <span className="mt-1 block font-serif text-4xl font-semibold text-[#008282] dark:text-[#3cb8b9]">
+              <span className="block text-xs font-semibold text-ink-muted">My learning</span>
+              <span className="block font-serif text-3xl font-semibold leading-tight text-[#008282] dark:text-[#3cb8b9]">
                 {percent === null ? "–" : <CountUp value={percent} step={3} format={(n) => `${n}%`} />}
               </span>
-              <span className="block truncate text-sm text-ink-muted">{path ? path.name : "Start a Discovery Path"}</span>
+              <span className="block truncate text-xs text-ink-muted">{path ? path.name : "Start a Discovery Path"}</span>
             </Link>
           </div>
 
@@ -188,34 +140,88 @@ function Workspace({ me, topics }: { me: Me; topics: TopicSummary[] }) {
               href={`/topics/${current.topic.slug}`}
               data-build-step
               style={step(4)}
-              className="group flex gap-4 rounded-3xl border border-[#f9b53f]/50 bg-[#f9b53f]/15 p-4 hover:border-[#f9b53f]"
+              className="tile tile-card group flex flex-1 items-stretch gap-4 border border-[#f9b53f]/50 bg-[#f9b53f]/15 pr-4 hover:border-[#f9b53f] hover:bg-[#e6f3f1] dark:hover:bg-[#3cb8b9]/15"
             >
-              <StoryVisual {...current.topic.visual} alt="" className="size-20 shrink-0 rounded-2xl" iconSize="size-6" />
-              <span className="min-w-0">
+              <StoryVisual {...current.topic.visual} alt="" className="min-h-24 w-28 shrink-0" iconSize="size-6" />
+              <span className="min-w-0 self-center py-4">
                 <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Continue where you left off</span>
-                <span className="mt-0.5 block font-serif text-lg font-semibold leading-snug group-hover:underline">{current.topic.title}</span>
+                <span className="tile-heading mt-0.5 block font-serif text-lg font-semibold leading-snug">{current.topic.title}</span>
                 <span className="block text-sm text-ink-muted">
                   Step {current.step} of {current.topic.steps} · {current.topic.minutes} min topic
                 </span>
               </span>
             </Link>
           )}
-
-          {important && (
-            <Link
-              href={important.href ?? "/inbox"}
-              data-build-step
-              style={step(5)}
-              className="group block rounded-3xl bg-[#1d2b4f] p-5 text-white hover:bg-[#24365f]"
-            >
-              <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#9fe3e3]">
-                Latest from Trilogy Care · {important.category}
-              </span>
-              <span className="mt-1 block font-serif text-xl font-semibold leading-snug group-hover:underline">{important.title}</span>
-              {important.body && <span className="mt-1 block text-sm text-white/85">{important.body}</span>}
-            </Link>
-          )}
         </div>
+      </div>
+
+      {/* Two halves (the owner, Nov 2026): the courses and training allocated to them, and what needs them now. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2">
+        <div data-build-step style={step(4)} className="min-w-0 [&>section]:h-full">
+          <HomeCourses />
+        </div>
+        {/* What do I need to do? Kept apart from anything optional, so it never competes with a game or a post. */}
+        <section
+          data-build-step
+          style={step(3)}
+          aria-labelledby="attention"
+          className="min-w-0 rounded-3xl border border-[#fab53d]/50 bg-[#fab53d]/12 p-5 sm:p-6"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="attention" className="font-serif text-2xl font-semibold">
+              Needs your attention
+            </h2>
+            <Link href="/inbox" className="inline-flex min-h-11 items-center gap-1 font-semibold text-accent transition-colors hover:text-[#007f7e]">
+              View all <Icon name="arrow-right" className="size-4" />
+            </Link>
+          </div>
+          {!box ? (
+            <p className="mt-3 text-ink-muted">Loading…</p>
+          ) : dueSoon.length === 0 ? (
+            <p className="mt-3 flex items-center gap-2 text-ink-muted">
+              <Icon name="circle-check" className="size-5 text-success" /> {todo.length ? "Nothing due in the next 7 days." : "You’re all caught up."}
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {dueSoon.slice(0, 3).map((a) => {
+                const days = a.dueAt ? Math.ceil((Date.parse(a.dueAt) - now.getTime()) / 86_400_000) : null;
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href="/inbox"
+                      className="group flex items-center gap-3 rounded-2xl bg-surface px-3 py-3 shadow-sm ring-1 ring-black/5 hover:ring-[#fab53d]"
+                    >
+                      <span
+                        aria-hidden
+                        className={cx(
+                          "grid size-10 shrink-0 place-items-center rounded-full",
+                          a.priority === "critical" ? "bg-[#c7393e] text-white" : "bg-[#fff1d6] text-[#7a4a00]",
+                        )}
+                      >
+                        <Icon name={a.ackRequired ? "check" : "flag"} className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold leading-snug transition-colors group-hover:text-[#007f7e]">{a.title}</span>
+                        <span className="block text-sm text-ink-muted">
+                          {a.ackRequired ? "Read and acknowledge" : a.category}
+                          {a.dueAt && ` · due ${formatDate(a.dueAt)}`}
+                          {days !== null && days <= 7 && (
+                            <span className="font-semibold text-[#c7393e] dark:text-[#ff9ea2]">
+                              {" "}
+                              · {days < 0 ? "overdue" : days === 0 ? "due today" : days === 1 ? "1 day left" : `${days} days left`}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      {a.priority === "critical" && <span className="rounded-full bg-[#c7393e] px-2 py-0.5 text-xs font-bold text-white">Critical</span>}
+                      <Icon name="arrow-right" className="size-4 shrink-0 text-ink-muted" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </div>
     </section>
   );

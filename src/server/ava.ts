@@ -304,7 +304,14 @@ export async function avaLines(db: Db, actor: User) {
     // The whole script: it's what a video made elsewhere has to say, word for word.
     out.push({ ...line, script, transcript: row?.transcript ?? null, uploaded: row?.voice === UPLOADED, ...(await stateOf(db, line.key, row)) });
   }
-  return { portrait: avaForLearners(db).portrait, configured: Boolean(process.env.ELEVENLABS_API_KEY), lines: out };
+  // Ava as she is now, for the page's header: a frame from one of her videos (a course introduction's first, else the
+  // newest), not the portrait, which may be an old placeholder (the owner, Nov 2026).
+  const sample = videos(db)
+    .prepare(
+      "SELECT video_src FROM ava_videos WHERE status = 'completed' AND video_src IS NOT NULL ORDER BY (key LIKE '%:intro') DESC, COALESCE(finished_at, created_at) DESC LIMIT 1",
+    )
+    .get() as { video_src: string } | undefined;
+  return { portrait: avaForLearners(db).portrait, sample: sample?.video_src ?? null, configured: Boolean(process.env.ELEVENLABS_API_KEY), lines: out };
 }
 
 /** Starts the talking video for one of Ava's lines. */

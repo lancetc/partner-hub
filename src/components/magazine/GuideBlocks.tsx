@@ -26,6 +26,7 @@ import { Icon, type IconName } from "../Icon";
 import { Burst } from "../player/Burst";
 // The same press, pop, glow and shake as answers in Topics.
 import "../player/fx.css";
+import { api } from "@/lib/api";
 
 /*
   The Magazine blocks as readers see them, drawn from the checked guide document (lib/magazine): never
@@ -703,25 +704,17 @@ function printJobAid(b: ChecklistBlock, ticked: Set<number>) {
 
 function Checklist({ block: b, ctx }: { block: ChecklistBlock; ctx: BlockContext }) {
   const [ticked, setTicked] = useState<Set<number>>(new Set());
-  const [copied, setCopied] = useState(false);
-  const text = `${b.title}\n\n${b.items.map((i) => `[ ] ${i}`).join("\n")}\n`;
-  const copy = async () => {
+  // Saved to Favourites (the owner, Nov 2026): the whole job aid, kept with a link back to this page.
+  const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const save = async () => {
+    if (!ctx.savePlace) return;
+    setSaved("saving");
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      await api("/api/favourites", { body: { action: "save-passage", source: "guide", ...ctx.savePlace, blockId: b.id, wholeBlock: true } });
+      setSaved("saved");
     } catch {
-      setCopied(false);
+      setSaved("failed");
     }
-  };
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-    const a = Object.assign(document.createElement("a"), {
-      href: url,
-      download: `${b.title.replace(/[^\w\s-]/g, "").trim() || "checklist"}.txt`,
-    });
-    a.click();
-    URL.revokeObjectURL(url);
   };
   return (
     <section aria-label={b.title} className={cx(column, "relative rounded-3xl bg-[#008282] p-5 text-white sm:p-7")}>
@@ -761,20 +754,24 @@ function Checklist({ block: b, ctx }: { block: ChecklistBlock; ctx: BlockContext
         ))}
       </ul>
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={copy}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-4 font-semibold text-[#005f5f] hover:bg-[#e3f4f3]"
-        >
-          <Icon name="copy" className="size-4" /> {copied ? "Copied" : "Copy"}
-        </button>
-        <button
-          type="button"
-          onClick={download}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/50 px-4 font-semibold hover:bg-white/10"
-        >
-          <Icon name="file" className="size-4" /> Download
-        </button>
+        {ctx.savePlace &&
+          (saved === "saved" ? (
+            <Link
+              href="/favourites"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/50 px-4 font-semibold hover:bg-white/10"
+            >
+              <Icon name="bookmark-filled" className="size-4 text-[#fab53d]" /> Saved · Open Favourites
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={save}
+              disabled={saved === "saving"}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-4 font-semibold text-[#005f5f] hover:bg-[#e3f4f3] disabled:opacity-60"
+            >
+              <Icon name="bookmark" className="size-4" /> {saved === "saving" ? "Saving…" : saved === "failed" ? "Try saving again" : "Save to Favourites"}
+            </button>
+          ))}
         {b.resource && (
           <Link
             href={b.resource.href}
@@ -784,9 +781,6 @@ function Checklist({ block: b, ctx }: { block: ChecklistBlock; ctx: BlockContext
           </Link>
         )}
       </div>
-      <p className="mt-3 text-sm text-white/85" aria-live="polite">
-        Ticks are just for you while you work; they aren’t saved.
-      </p>
     </section>
   );
 }

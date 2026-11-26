@@ -7,7 +7,7 @@ import Link from "next/link";
 import { getDb } from "@/server/db";
 import { catalogueTopics } from "@/server/catalogue";
 import { canAuthor, currentUser, meantFor, type User } from "@/server/auth";
-import { homeParts, moreFor, type HomePart } from "@/lib/homeLayout";
+import { homeParts, type HomePart } from "@/lib/homeLayout";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
 import { HomeFavourites } from "@/components/favourites/FavouritesList";
@@ -33,7 +33,7 @@ const step = (n: number) => ({ "--step": n }) as React.CSSProperties;
   workspace: what you need to know, what you need to do, and where to get help (Ask Trilogy). Then the
   issue itself: the latest from Trilogy Care as the lead feature, and the Community and challenges after it,
   each under the same kind of section masthead. (Your learning is on Topics and Discovery Paths.)
-  Each role gets the parts it uses most (lib/homeLayout); the rest are listed under "More on the Hub" at the end.
+  Each role gets the parts it uses most (lib/homeLayout). There is no "More on the Hub" row any more (the owner, Nov 2026).
 */
 export default function Home() {
   return (
@@ -113,10 +113,6 @@ export default function Home() {
           </section>
         </Only>
       </Suspense>
-
-      <Suspense>
-        <MoreOnTheHub />
-      </Suspense>
     </div>
   );
 }
@@ -128,34 +124,6 @@ async function Only({ part, children }: { part: HomePart; children: React.ReactN
   await connection();
   const user = await currentUser(getDb());
   return homeParts(viewer(user)).includes(part) ? <>{children}</> : null;
-}
-
-/** What this person's homepage leaves out, a click away: one quiet row at the end. Nothing for those who get everything. */
-async function MoreOnTheHub() {
-  await connection();
-  const more = moreFor(viewer(await currentUser(getDb())));
-  if (!more.length) return null;
-  return (
-    <section aria-labelledby="more-hub" className="mt-16">
-      <Masthead id="more-hub" kicker="When you have a minute" title="More on the Hub" />
-      <ul className="mt-5 grid gap-4 sm:grid-cols-2">
-        {more.map((m) => (
-          <li key={m.part}>
-            <Link
-              href={m.href}
-              className="group flex min-h-16 items-center gap-3 rounded-3xl border border-line bg-surface px-5 py-4 hover:border-action focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block font-serif text-lg font-semibold group-hover:underline">{m.label}</span>
-                <span className="block text-sm text-ink-muted">{m.text}</span>
-              </span>
-              <Icon name="arrow-right" className="size-4 shrink-0 text-accent" />
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
 }
 
 /** A section's masthead, as in a magazine: a small kicker, a serif title, a strong rule, and where to see more. */

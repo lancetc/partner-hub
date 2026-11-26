@@ -597,6 +597,90 @@ input[type="range"].brand-range::-moz-range-thumb {
 }
 
 /*
+  Topic, Discovery Path and Magazine cards (the owner, Nov 2026): the heading's link covers the whole card. A card has
+  16px corners, its poster square to its edges and 16px round the words. On hover it takes a soft teal wash and the
+  heading turns teal, with no underline; on keyboard focus the card gets a clear outline.
+  .tile goes on the card (with .tile-card for a card, .tile-row for a row in a list), .tile-link on its heading link.
+*/
+@layer components {
+  .tile {
+    position: relative;
+    isolation: isolate;
+  }
+  .tile-card {
+    border-radius: 16px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    box-shadow: 0 0 0 1px rgb(16 42 67 / 0.08);
+    transition: background 0.18s ease;
+  }
+  .tile-card img {
+    border-radius: 0;
+  }
+  /* The poster zooms a little on hover, inside its frame (as on the homepage). */
+  .tile-card > :first-child {
+    overflow: hidden;
+  }
+  .tile-card > :first-child img {
+    transition: transform 0.5s ease;
+  }
+  .tile-card:hover > :first-child img {
+    transform: scale(1.03);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tile-card:hover > :first-child img {
+      transform: none;
+    }
+  }
+  .tile-card:hover {
+    background: #e6f3f1;
+  }
+  .tile-row::before {
+    content: "";
+    position: absolute;
+    inset: 0.25rem;
+    z-index: -1;
+    border-radius: 0.75rem;
+    transition: background 0.18s ease;
+  }
+  .tile-row:hover::before {
+    background: #e6f3f1;
+  }
+  .tile-link,
+  .tile-heading {
+    text-decoration: none;
+    transition: color 0.18s ease;
+  }
+  .tile-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  .tile:hover :is(.tile-link, .tile-heading) {
+    color: #007f7e;
+  }
+  .tile-link:focus-visible {
+    outline: none;
+  }
+  .tile:has(.tile-link:focus-visible),
+  .tile:focus-visible {
+    outline: 3px solid #007f7e;
+    outline-offset: 2px;
+  }
+  .tile-row:has(.tile-link:focus-visible) {
+    outline-offset: -3px;
+    border-radius: 0.75rem;
+  }
+  [data-theme="dark"] .tile-card:hover,
+  [data-theme="dark"] .tile-row:hover::before {
+    background: rgb(60 184 185 / 0.14);
+  }
+  [data-theme="dark"] .tile:hover :is(.tile-link, .tile-heading) {
+    color: #7fd6d2;
+  }
+}
+
+/*
   Resources, a partner's first steps (PartnerOnboardingDiagram): each person pops in, the lines draw on
   with their arrowheads and labels after, then a soft flow keeps moving along them. Each part waits for
   its own --at. Without motion everything simply shows.

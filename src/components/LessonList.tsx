@@ -14,6 +14,16 @@ import { Icon } from "./Icon";
 import { cx, formatDate } from "@/lib/format";
 import { formatWhen, useApi, type FollowUpListItem, type Me } from "@/lib/api";
 import { byPopularity, topicShelves, type SeeAll, type Shelf } from "@/lib/topicShelves";
+import { PictureTags } from "./PictureTags";
+import { BrowsePanel } from "./BrowsePanel";
+
+const PROGRESS: Record<string, string> = {
+  new: "Not started",
+  "not-started": "Not started",
+  started: "Started",
+  "in-progress": "In progress",
+  completed: "Completed",
+};
 
 const trackLabel: Record<Lesson["track"], string> = {
   core: "For everyone",
@@ -68,7 +78,9 @@ export type PathTopics = { id: string; name: string; slugs: string[] };
 */
 function byPath(shown: TopicSummary[], paths: PathTopics[]) {
   const bySlug = new Map(shown.map((t) => [t.slug, t]));
-  const groups = paths.map((p) => ({ id: p.id as string | null, name: p.name, topics: p.slugs.flatMap((s) => bySlug.get(s) ?? []) })).filter((g) => g.topics.length);
+  const groups = paths
+    .map((p) => ({ id: p.id as string | null, name: p.name, topics: p.slugs.flatMap((s) => bySlug.get(s) ?? []) }))
+    .filter((g) => g.topics.length);
   const inAPath = new Set(paths.flatMap((p) => p.slugs));
   const loose = shown.filter((t) => !inAPath.has(t.slug));
   return loose.length ? [...groups, { id: null, name: "Not in a Discovery Path", topics: loose }] : groups;
@@ -110,10 +122,13 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
     setSubjectsClosing(from);
     window.clearTimeout(closeTimer.current);
     // The leaving animation (globals.css, subject-slide-out) plus its stagger.
-    closeTimer.current = window.setTimeout(() => {
-      setSubjectsOpen(false);
-      setSubjectsClosing(null);
-    }, 240 + SUBJECTS.length * 25);
+    closeTimer.current = window.setTimeout(
+      () => {
+        setSubjectsOpen(false);
+        setSubjectsClosing(null);
+      },
+      240 + SUBJECTS.length * 25,
+    );
   };
 
   // Keep the choices in the address (without reloading), so Back and bookmarks bring them back.
@@ -236,9 +251,10 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
             {enrolled.map((l) => {
               const s = label(l);
               return (
-                <li key={l.slug} className="relative flex gap-4 rounded-3xl border border-line bg-surface p-4">
-                  <StoryVisual {...l.visual} alt="" className="size-24 shrink-0 rounded-2xl" iconSize="size-6" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <li key={l.slug} className="relative flex gap-4 overflow-hidden rounded-3xl border border-line bg-surface pr-4">
+                  {/* The picture fills the card's left side, edge to edge (the owner, Nov 2026). */}
+                  <StoryVisual {...l.visual} alt="" className="min-h-32 w-32 shrink-0 sm:w-40" iconSize="size-6" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 py-4">
                     <p className="font-mulish text-xs font-bold text-accent">
                       Enrolled · {subjectLabel(l.subject)} · {l.minutes} min
                     </p>
@@ -263,163 +279,181 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
       )}
 
       <section aria-labelledby="all-topics">
-        <h2 id="all-topics" className="font-serif text-2xl font-semibold">
-          {filtering ? "Results" : "All topics"} <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : topics.length})</span>
-        </h2>
-
-        {/* Search, filters and sort: the same toolbar as Discovery Paths and the admin Topics page. */}
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
-            Search
-            <span className="relative">
-              <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-ink-muted" />
-              <input
-                type="search"
-                className={cx(field, "pl-11")}
-                placeholder="Title, subject or what it covers"
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setShown(ROW);
-                }}
-              />
-            </span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Audience
-            <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(ROW))}>
-              <option value="all">All audiences</option>
-              {tracks.map((tr) => (
-                <option key={tr} value={tr}>
-                  {trackLabel[tr]}
-                </option>
+        <BrowsePanel
+          id="all-topics"
+          title="Browse topics"
+          count={filtering ? filtered.length : topics.length}
+          active={filtering}
+          startOpen={["q", "subject", "for", "status", "length"].some((k) => params.has(k))}
+          storageKey="hub.browse.topics"
+          summary={
+            filtering
+              ? `Showing ${filtered.length}: ${[
+                  words.length ? `“${q.trim()}”` : null,
+                  subject !== "all" ? SUBJECTS.find((x) => x.id === subject)?.label : null,
+                  track !== "all" ? trackLabel[track as Lesson["track"]] : null,
+                  PROGRESS[status],
+                  length !== "any" ? LENGTHS.find((x) => x.value === length)?.label : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}`
+              : "Search, or filter by audience, progress, length and subject"
+          }
+        >
+          {/* Search, filters and sort: the same toolbar as Discovery Paths and the admin Topics page. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
+              Search
+              <span className="relative">
+                <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-ink-muted" />
+                <input
+                  type="search"
+                  className={cx(field, "pl-11")}
+                  placeholder="Title, subject or what it covers"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setShown(ROW);
+                  }}
+                />
+              </span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Audience
+              <select className={cx(field, "w-auto")} value={track} onChange={(e) => (setTrack(e.target.value), setShown(ROW))}>
+                <option value="all">All audiences</option>
+                {tracks.map((tr) => (
+                  <option key={tr} value={tr}>
+                    {trackLabel[tr]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Your progress
+              <select className={cx(field, "w-auto")} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(ROW))}>
+                <option value="any">Any progress</option>
+                <option value="not-started">Not started</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Length
+              <select className={cx(field, "w-auto")} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(ROW))}>
+                {LENGTHS.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Sort by
+              <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                {SORTS.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
+              {(["grid", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
+                  title={v === "grid" ? "Tiles" : "List"}
+                  onClick={() => setView(v)}
+                  className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
+                >
+                  <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
+                </button>
               ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Your progress
-            <select className={cx(field, "w-auto")} value={status} onChange={(e) => (setStatusFilter(e.target.value as Status), setShown(ROW))}>
-              <option value="any">Any progress</option>
-              <option value="not-started">Not started</option>
-              <option value="in-progress">In progress</option>
-              <option value="completed">Completed</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Length
-            <select className={cx(field, "w-auto")} value={length} onChange={(e) => (setLength(e.target.value as Length), setShown(ROW))}>
-              {LENGTHS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Sort by
-            <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              {SORTS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
-                title={v === "grid" ? "Tiles" : "List"}
-                onClick={() => setView(v)}
-                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
-              >
-                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
-              </button>
-            ))}
+            </div>
+            <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
+              {filtering ? `Showing ${filtered.length} of ${topics.length}` : `${topics.length} topics`}
+              {filtering && (
+                <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
+                  Clear search and filters
+                </button>
+              )}
+            </p>
           </div>
-          <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
-            {filtering ? `Showing ${filtered.length} of ${topics.length}` : `${topics.length} topics`}
-            {filtering && (
-              <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
-                Clear search and filters
-              </button>
-            )}
-          </p>
-        </div>
 
-        {/*
+          {/*
           Subjects: one chip showing the current subject ("All subjects" to start). Pressing it slides the
           other subjects out beside it; choosing one folds them away again.
         */}
-        <div
-          role="group"
-          aria-label="Subject"
-          className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
-        >
-          {(() => {
-            const all = [{ id: "all", label: "All subjects", icon: "list" as const }, ...SUBJECTS];
-            const current = all.find((s) => s.id === subject) ?? all[0];
-            const countOf = (id: string) => (id === "all" ? base.length : (counts.get(id) ?? 0));
-            return (
-              <>
-                <button
-                  type="button"
-                  aria-expanded={subjectsOpen}
-                  aria-controls="subject-choices"
-                  onClick={() => (subjectsOpen && !subjectsClosing ? closeSubjects(current.id) : openSubjects())}
-                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-action bg-action px-3.5 text-sm font-medium text-on-action"
-                >
-                  <span key={current.id} className="subject-swap inline-flex items-center gap-1.5">
-                    <Icon name={current.icon} className="size-4" /> {current.label}
-                    <span className="tabular-nums text-on-action/80">{countOf(current.id)}</span>
-                  </span>
-                  <Icon
-                    name="chevron-down"
-                    className={cx(
-                      "size-4 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-                      subjectsOpen && !subjectsClosing ? "rotate-90" : "-rotate-90",
-                    )}
-                  />
-                  <span className="sr-only">{subjectsOpen && !subjectsClosing ? "Hide subjects" : "Choose a subject"}</span>
-                </button>
-                {subjectsOpen && (
-                  <span id="subject-choices" className="contents">
-                    {all
-                      .filter((s) => s.id !== (subjectsClosing ?? current.id))
-                      .map((s, i, list) => {
-                        const n = countOf(s.id);
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            aria-pressed={false}
-                            disabled={!n}
-                            onClick={() => {
-                              closeSubjects(current.id);
-                              setSubject(s.id);
-                              setShown(ROW);
-                            }}
-                            // In one after another from the current chip; out in reverse, the furthest first.
-                            style={{ animationDelay: `${subjectsClosing ? (list.length - 1 - i) * 25 : i * 45}ms` }}
-                            className={cx(
-                              subjectsClosing ? "subject-slide-out" : "subject-slide",
-                              "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-sm font-medium hover:bg-muted disabled:opacity-40",
-                            )}
-                          >
-                            <Icon name={s.icon} className="size-4" /> {s.label}
-                            <span className="tabular-nums text-ink-muted">{n}</span>
-                          </button>
-                        );
-                      })}
-                  </span>
-                )}
-              </>
-            );
-          })()}
-        </div>
+          <div
+            role="group"
+            aria-label="Subject"
+            className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+          >
+            {(() => {
+              const all = [{ id: "all", label: "All subjects", icon: "list" as const }, ...SUBJECTS];
+              const current = all.find((s) => s.id === subject) ?? all[0];
+              const countOf = (id: string) => (id === "all" ? base.length : (counts.get(id) ?? 0));
+              return (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={subjectsOpen}
+                    aria-controls="subject-choices"
+                    onClick={() => (subjectsOpen && !subjectsClosing ? closeSubjects(current.id) : openSubjects())}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-action bg-action px-3.5 text-sm font-medium text-on-action"
+                  >
+                    <span key={current.id} className="subject-swap inline-flex items-center gap-1.5">
+                      <Icon name={current.icon} className="size-4" /> {current.label}
+                      <span className="tabular-nums text-on-action/80">{countOf(current.id)}</span>
+                    </span>
+                    <Icon
+                      name="chevron-down"
+                      className={cx(
+                        "size-4 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                        subjectsOpen && !subjectsClosing ? "rotate-90" : "-rotate-90",
+                      )}
+                    />
+                    <span className="sr-only">{subjectsOpen && !subjectsClosing ? "Hide subjects" : "Choose a subject"}</span>
+                  </button>
+                  {subjectsOpen && (
+                    <span id="subject-choices" className="contents">
+                      {all
+                        .filter((s) => s.id !== (subjectsClosing ?? current.id))
+                        .map((s, i, list) => {
+                          const n = countOf(s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              aria-pressed={false}
+                              disabled={!n}
+                              onClick={() => {
+                                closeSubjects(current.id);
+                                setSubject(s.id);
+                                setShown(ROW);
+                              }}
+                              // In one after another from the current chip; out in reverse, the furthest first.
+                              style={{ animationDelay: `${subjectsClosing ? (list.length - 1 - i) * 25 : i * 45}ms` }}
+                              className={cx(
+                                subjectsClosing ? "subject-slide-out" : "subject-slide",
+                                "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-sm font-medium hover:bg-muted disabled:opacity-40",
+                              )}
+                            >
+                              <Icon name={s.icon} className="size-4" /> {s.label}
+                              <span className="tabular-nums text-ink-muted">{n}</span>
+                            </button>
+                          );
+                        })}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </BrowsePanel>
 
         {/* The rows step aside while searching or filtering: the results are what matter then. */}
         {!filtering && shelves.length > 0 && (
@@ -485,25 +519,35 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
   function tile(l: TopicSummary, className?: string) {
     const s = label(l);
     return (
-      <li key={l.slug} className={cx("group relative flex flex-col gap-3", className)}>
-        <StoryVisual {...l.visual} alt="" className="aspect-[16/10] rounded-2xl" />
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-            {subjectLabel(l.subject)} · {l.minutes} min{enrolledSlugs.has(l.slug) && " · Enrolled"}
-          </p>
-          <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-3" />
+      <li key={l.slug} className={cx("tile tile-card group relative flex flex-col", className)}>
+        {/* On the picture (the owner, Nov 2026): its subject and length bottom left, who it's for bottom right. */}
+        <div className="relative">
+          <StoryVisual {...l.visual} alt="" className="aspect-[16/10]" />
+          <PictureTags
+            items={[
+              ...(enrolledSlugs.has(l.slug) ? [{ icon: "check" as const, text: "Enrolled" }] : []),
+              ...(l.subject ? [{ icon: "book" as const, text: subjectLabel(l.subject) }] : []),
+              { icon: "clock", text: `${l.minutes} min` },
+            ]}
+            roles={l.track === "partner" ? ["partner", "owner"] : l.track === "coordinator" ? ["coordinator"] : []}
+          />
         </div>
-        <h3 className="font-serif text-xl font-semibold leading-snug">
-          <Link href={`/topics/${l.slug}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
-            {l.title}
-          </Link>
-        </h3>
-        <p className="line-clamp-3 text-ink-muted">{l.summary}</p>
-        <p className="flex items-center gap-2 font-mulish text-sm font-semibold">
-          {s?.done && <Icon name="check" className="size-4 text-accent" />}
-          {s?.text ?? " "}
-        </p>
-        {spaced[l.slug] && <SpacedStatus stages={spaced[l.slug]} steps={stepsFor(l.slug)} signoff={signoffs[l.slug]} slug={l.slug} />}
+        <div className="flex flex-1 flex-col gap-2 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-serif text-xl font-semibold leading-snug">
+              <Link href={`/topics/${l.slug}`} className="tile-link">
+                {l.title}
+              </Link>
+            </h3>
+            <SaveButton id={`lesson:${l.slug}`} title={l.title} className="-mr-2 -mt-2 shrink-0" />
+          </div>
+          <p className="line-clamp-3 text-ink-muted">{l.summary}</p>
+          <p className="flex items-center gap-2 font-mulish text-sm font-semibold">
+            {s?.done && <Icon name="check" className="size-4 text-accent" />}
+            {s?.text ?? " "}
+          </p>
+          {spaced[l.slug] && <SpacedStatus stages={spaced[l.slug]} steps={stepsFor(l.slug)} signoff={signoffs[l.slug]} slug={l.slug} />}
+        </div>
       </li>
     );
   }
@@ -511,39 +555,36 @@ export function LessonList({ topics, paths = [], popularity = {} }: { topics: To
   /** Topics as tiles or as a compact list. */
   function topicList(items: TopicSummary[]) {
     return view === "grid" ? (
-          <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{items.map((l) => tile(l))}</ul>
-        ) : (
-          <ul className="mt-5 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
-            {items.map((l) => {
-              const s = label(l);
-              return (
-                <li key={l.slug} className="group relative flex items-center gap-4 p-3 sm:px-4">
-                  <StoryVisual {...l.visual} alt="" className="size-16 shrink-0 rounded-xl" iconSize="size-5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">
-                      {subjectLabel(l.subject)} · {l.minutes} min · {trackLabel[l.track]}
-                      {enrolledSlugs.has(l.slug) && " · Enrolled"}
-                    </p>
-                    <h3 className="font-semibold leading-snug">
-                      <Link
-                        href={`/topics/${l.slug}`}
-                        className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
-                      >
-                        {l.title}
-                      </Link>
-                    </h3>
-                    <p className="hidden truncate text-sm text-ink-muted sm:block">{l.summary}</p>
-                  </div>
-                  <p className="hidden shrink-0 items-center gap-1.5 text-sm font-semibold sm:flex">
-                    {s?.done && <Icon name="check" className="size-4 text-accent" />}
-                    {s?.text.replace(/ · step.*/, "") ?? ""}
-                  </p>
-                  <SaveButton id={`lesson:${l.slug}`} title={l.title} />
-                </li>
-              );
-            })}
-          </ul>
-        );
+      <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{items.map((l) => tile(l))}</ul>
+    ) : (
+      <ul className="mt-5 flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface">
+        {items.map((l) => {
+          const s = label(l);
+          return (
+            <li key={l.slug} className="tile tile-row group relative flex items-center gap-4 p-3 sm:px-4">
+              <StoryVisual {...l.visual} alt="" className="size-16 shrink-0 rounded-xl" iconSize="size-5" />
+              <div className="min-w-0 flex-1">
+                <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">
+                  {subjectLabel(l.subject)} · {l.minutes} min · {trackLabel[l.track]}
+                  {enrolledSlugs.has(l.slug) && " · Enrolled"}
+                </p>
+                <h3 className="font-semibold leading-snug">
+                  <Link href={`/topics/${l.slug}`} className="tile-link">
+                    {l.title}
+                  </Link>
+                </h3>
+                <p className="hidden truncate text-sm text-ink-muted sm:block">{l.summary}</p>
+              </div>
+              <p className="hidden shrink-0 items-center gap-1.5 text-sm font-semibold sm:flex">
+                {s?.done && <Icon name="check" className="size-4 text-accent" />}
+                {s?.text.replace(/ · step.*/, "") ?? ""}
+              </p>
+              <SaveButton id={`lesson:${l.slug}`} title={l.title} />
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
 }
 

@@ -91,8 +91,12 @@ export function AccountMenu() {
           <Link href="/capabilities" className={item} onClick={() => setOpen(false)}>
             <Icon name="layers" /> My Capabilities
           </Link>
-          <Link href="/onboarding" className={item} onClick={() => setOpen(false)}>
-            <Icon name="list" /> Your setup
+          {/*
+            Onboarding lives here after the first sign-in (the owner, Nov 2026): one way in, Getting started, with the
+            welcome, your starting course and, once setup requirements are released, what's left to send.
+          */}
+          <Link href="/onboarding/start" className={item} onClick={() => setOpen(false)}>
+            <Icon name="route" /> Getting started
           </Link>
           {me?.canReport && (
             <Link href={me.canAuthor ? "/admin/lessons" : "/admin/learning-paths"} className={item} onClick={() => setOpen(false)}>

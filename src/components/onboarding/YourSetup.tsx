@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, useApi } from "@/lib/api";
 import { cx, formatDate } from "@/lib/format";
 import { DOCUMENT_TYPES, SETUP_STATES, TASK_STATUS, type TaskStatus, type TaskView } from "@/lib/onboarding";
@@ -34,10 +35,14 @@ export function YourSetup() {
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [list, setList] = useState(false);
+  const router = useRouter();
+  // Nothing has been released to set up yet: there's only the welcome, and that's Getting started's (the owner, Nov 2026).
+  const nothingToSetUp = data ? !data.configured : false;
+  useEffect(() => {
+    if (nothingToSetUp) router.replace("/onboarding/start");
+  }, [nothingToSetUp, router]);
   if (error) return <Problem text={error} onRetry={reload} />;
-  if (!data) return <p className="mx-auto max-w-4xl px-4 py-10 text-ink-muted">Loading your setup…</p>;
-  // Nothing has been released to set up yet: the welcome and sample topics, as before.
-  if (!data.configured) return <OnboardingView />;
+  if (!data || nothingToSetUp) return <p className="mx-auto max-w-4xl px-4 py-10 text-ink-muted">Loading your setup…</p>;
 
   const post: Post = async (body) => {
     setProblem(null);
@@ -54,7 +59,11 @@ export function YourSetup() {
   const active = Boolean(data.activatedAt);
   return (
     <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6 lg:pt-8">
-      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">{active ? "Your account" : "Getting started"}</p>
+      {/* Part of Getting started: the way back to it, where the welcome and the starting course are. */}
+      <Link href="/onboarding/start" className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+        <Icon name="arrow-left" className="size-4" /> Getting started
+      </Link>
+      <p className="mt-3 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">{active ? "Your account" : "Getting started"}</p>
       <h1 className="mt-1 font-serif text-4xl font-semibold tracking-tight sm:text-5xl">{active ? "Your profile and requirements" : "Your setup"}</h1>
       <p role="status" aria-live="polite" className={cx("mt-2 inline-flex items-center gap-1.5 text-sm text-ink-muted", !saved && "sr-only")}>
         <Icon name="check" className="size-4" /> Saved

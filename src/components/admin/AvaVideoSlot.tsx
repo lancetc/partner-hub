@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -51,10 +51,26 @@ type Line = { key: string; state: AvaVideoState; src: string | null; transcript:
   Whether a line has Ava's video, for a collapsed strip's summary line, so an author can see where her videos are
   without opening every section. Nothing shows until it's known.
 */
+/** Ava's video for a line was uploaded, replaced or removed here: anything showing that line looks again. */
+const AVA_CHANGED = "tc-ava-video-changed";
+
+/**
+  Ava's video for a line, kept current as it's uploaded or removed anywhere on the page: `has` once there's a video,
+  `null` while it's still being looked up.
+*/
+export function useAvaVideo(lineKey: string) {
+  const { data, reload } = useApi<Line>(`/api/admin/ava?key=${encodeURIComponent(lineKey)}`);
+  useEffect(() => {
+    const again = (e: Event) => (e as CustomEvent<string>).detail === lineKey && reload();
+    window.addEventListener(AVA_CHANGED, again);
+    return () => window.removeEventListener(AVA_CHANGED, again);
+  }, [lineKey, reload]);
+  return { data, has: data ? Boolean(data.src && data.state !== "none") : null };
+}
+
 export function AvaVideoBadge({ lineKey }: { lineKey: string }) {
-  const { data } = useApi<Line>(`/api/admin/ava?key=${encodeURIComponent(lineKey)}`);
+  const { data, has } = useAvaVideo(lineKey);
   if (!data) return null;
-  const has = Boolean(data.src && data.state !== "none");
   return (
     <Badge tone={!has ? "neutral" : data.state === "ready" ? "good" : "warn"}>
       {!has ? "No Ava video" : data.state === "ready" ? "Ava video" : "Ava video out of date"}
@@ -75,7 +91,11 @@ export function AvaVideoSlot({
   onUploaded?: (size: { width: number; height: number }) => void;
 }) {
   const say = WHERE[where];
-  const { data, error, setData } = useApi<Line>(`/api/admin/ava?key=${encodeURIComponent(lineKey)}`);
+  const { data, error, setData: setLine } = useApi<Line>(`/api/admin/ava?key=${encodeURIComponent(lineKey)}`);
+  const setData = (l: Line) => {
+    setLine(l);
+    window.dispatchEvent(new CustomEvent(AVA_CHANGED, { detail: lineKey }));
+  };
   // The script box: what the video says. Starts from what's saved, and is the author's while they edit it.
   const [edited, setEdited] = useState<string | null>(null);
   const words = edited ?? data?.transcript ?? "";

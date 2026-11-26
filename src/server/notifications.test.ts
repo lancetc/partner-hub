@@ -15,12 +15,25 @@ beforeEach(() => {
 const u = (id: string) => userById(db, id)!;
 const now = new Date("2026-11-13T01:00:00Z");
 const later = new Date("2026-11-13T03:00:00Z");
-const adapter: NotificationAdapter = { name: "test", channel: "email", configured: true, send: async (m) => ({ status: "accepted", providerRef: m.idempotencyKey }) };
+const adapter: NotificationAdapter = {
+  name: "test",
+  channel: "email",
+  configured: true,
+  send: async (m) => ({ status: "accepted", providerRef: m.idempotencyKey }),
+};
 
 describe("the Inbox", () => {
-  it("opens with something in each tab, and counts what's outstanding", () => {
+  it("opens with something to read, and counts what's outstanding", () => {
+    // The demo Inbox has updates and activity; actions come from onboarding and policy acknowledgements (Nov 2026).
+    notify(db, "sam", { kind: "action", category: "Mandatory learning", priority: "high", title: "Something to do", source: "test:do" }, now);
+    notify(
+      db,
+      "sam",
+      { kind: "action", category: "Acknowledgement required", priority: "critical", title: "A policy", ack: { version: "v1" }, source: "test:ack" },
+      now,
+    );
     const box = inbox(db, u("sam"), now);
-    expect(box.action.length).toBeGreaterThan(0);
+    expect(box.action.length).toBe(2);
     expect(box.updates.length).toBeGreaterThan(0);
     expect(box.activity.length).toBeGreaterThan(0);
     // The critical acknowledgement comes first.
@@ -32,14 +45,20 @@ describe("the Inbox", () => {
   });
 
   it("keeps actions until they're done; reading isn't enough", () => {
+    notify(
+      db,
+      "sam",
+      { kind: "action", category: "Acknowledgement required", priority: "critical", title: "A policy", ack: { version: "v1" }, source: "test:ack" },
+      now,
+    );
     const ack = inbox(db, u("sam"), now).action.find((a) => a.ackRequired)!;
     markRead(db, u("sam"), ack.id, now);
-    expect(inbox(db, u("sam"), now).counts.action).toBe(2);
+    expect(inbox(db, u("sam"), now).counts.action).toBe(1);
     expect(() => markAllRead(db, u("sam"), "action", now)).toThrow(/stay until/);
     expect(() => markDone(db, u("sam"), ack.id, now)).toThrow(/Confirm/);
     acknowledge(db, u("sam"), ack.id, later);
     const after = inbox(db, u("sam"), now);
-    expect(after.counts.action).toBe(1);
+    expect(after.counts.action).toBe(0);
     expect(after.action.find((a) => a.id === ack.id)).toMatchObject({ done: true, ackedAt: later.toISOString() });
   });
 
@@ -66,7 +85,15 @@ describe("critical changes and acknowledgements", () => {
       db,
       jordan,
       id,
-      { name: "Invoicing", subject: "Invoicing is changing", preheader: "Read and confirm", blocks: [{ id: "b1", type: "text", text: "Hi" }], audience: ["partner", "coordinator"], topic: "critical", ack: true },
+      {
+        name: "Invoicing",
+        subject: "Invoicing is changing",
+        preheader: "Read and confirm",
+        blocks: [{ id: "b1", type: "text", text: "Hi" }],
+        audience: ["partner", "coordinator"],
+        topic: "critical",
+        ack: true,
+      },
       now,
     );
     setTopic(db, "sam", "announcements", false, now, "settings");
@@ -90,7 +117,13 @@ describe("critical changes and acknowledgements", () => {
   it("only asks for confirmation on critical and policy emails", () => {
     const jordan = u("jordan");
     const { id } = createCampaign(db, jordan, "one_off", now);
-    updateCampaign(db, jordan, id, { name: "x", subject: "News", preheader: "", blocks: [{ id: "b1", type: "text", text: "Hi" }], audience: ["partner"], topic: "news", ack: true }, now);
+    updateCampaign(
+      db,
+      jordan,
+      id,
+      { name: "x", subject: "News", preheader: "", blocks: [{ id: "b1", type: "text", text: "Hi" }], audience: ["partner"], topic: "news", ack: true },
+      now,
+    );
     expect(campaignDetail(db, jordan, id).ack).toBe(false);
   });
 });

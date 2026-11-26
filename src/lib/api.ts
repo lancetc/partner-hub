@@ -84,6 +84,8 @@ export type Me = {
     name: string;
     role: "learner" | "org_admin" | "author";
     audience: string;
+    /** The role they picked for themself at the first sign-in (lib/onboardingCourses), or null. */
+    selfRole?: string | null;
     serviceRole: string | null;
     language: string;
     avatar: string | null;

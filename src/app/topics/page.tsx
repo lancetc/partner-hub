@@ -5,7 +5,6 @@ import { getDb } from "@/server/db";
 import { LessonList } from "@/components/LessonList";
 import { HomeLearning } from "@/components/HomeLearning";
 import { WaitingSurveys } from "@/components/WaitingSurveys";
-import { ChallengeBanner } from "@/components/ChallengePage";
 import { catalogueTopics, topicPopularity } from "@/server/catalogue";
 import { now } from "@/server/clock";
 import { currentUser } from "@/server/auth";
@@ -45,9 +44,6 @@ export default function LearningPage() {
       <Suspense fallback={<div className="mt-6 min-h-20" aria-hidden />}>
         <YourLearning />
       </Suspense>
-      <div className="max-w-2xl empty:hidden">
-        <ChallengeBanner />
-      </div>
       <div className="mt-8 max-w-2xl empty:hidden">
         <WaitingSurveys heading="Survey waiting for you" />
       </div>

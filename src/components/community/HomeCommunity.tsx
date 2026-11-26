@@ -39,6 +39,15 @@ export function HomeCommunity() {
       <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[22rem_minmax(0,1fr)]">
         {/* The invitation. */}
         <div className="relative flex flex-col gap-4 overflow-hidden bg-[#008282] p-6 text-white sm:p-7">
+          {/* A photo of people sharing a morning tea, under a teal wash so the words stay easy to read (the owner, Nov 2026). */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- an image library upload, sized by the panel */}
+          <img
+            src="/api/uploads/3515e8f7-8790-4fdc-ab85-4f5c455010ee.webp"
+            alt=""
+            loading="lazy"
+            className="pointer-events-none absolute inset-0 size-full object-cover object-[60%_center]"
+          />
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#005f5f]/90 via-[#007373]/60 to-[#008282]/15" />
           <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="xMaxYMax slice" viewBox="0 0 360 300">
             <circle cx="330" cy="40" r="90" fill="#3cb8b9" opacity="0.35" />
             <circle cx="300" cy="300" r="60" fill="#fab53d" opacity="0.3" />

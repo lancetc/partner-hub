@@ -586,6 +586,9 @@ export function savePassage(db: Db, user: User, input: Record<string, unknown>, 
   let source: { kind: PassageKind; id: string; version: string; title: string; page: string; section: string; block: string; text: string };
   let quote = typeof input.quote === "string" ? input.quote.replace(/\s+/g, " ").trim() : "";
   const whole = typeof input.sectionId === "string" && !quote;
+  // A whole block of a Magazine page (a job aid's checklist, say), saved with one button (the owner, Nov 2026).
+  const wholeBlock = !whole && input.wholeBlock === true && typeof input.blockId === "string" && !quote;
+  let jobAidTitle = "";
   // Only the kinds of source listed: anything else is refused, not read as a guide.
   const kind = input.source === undefined ? "guide" : PASSAGE_KINDS.find((k) => k === input.source);
   if (!kind) throw new HttpError(400, "That can’t be highlighted.");
@@ -638,6 +641,18 @@ export function savePassage(db: Db, user: User, input: Record<string, unknown>, 
       block = pageBlocks(page).find((b) => b.id === input.blockId);
       if (!block) throw new HttpError(400, "Select text within one part of the page.");
       sectionId = page.sections.find((s) => s.blocks.some((b) => b.id === block!.id))?.id ?? "";
+      // What the reader sees of it: a job aid's title and its items, never an author's notes kept on the block.
+      if (wholeBlock && block.type === "checklist") jobAidTitle = block.title.trim();
+      if (wholeBlock)
+        quote = clipSentence(
+          block.type === "checklist"
+            ? [block.title, ...block.items]
+                .map((x) => plainText(x).trim())
+                .filter(Boolean)
+                .join(" ")
+            : blockWords(block),
+          PASSAGE_MAX - 100,
+        );
     }
     source = { kind: "guide", id: g.id, version: g.revisionId, title: g.title, page: page.id, section: sectionId, block: block.id, text: blockWords(block) };
   }
@@ -666,11 +681,13 @@ export function savePassage(db: Db, user: User, input: Record<string, unknown>, 
       source.title,
       quote,
       hash,
-      whole ? 1 : 0,
+      whole || wholeBlock ? 1 : 0,
       now.toISOString(),
     );
   const before = (db.prepare("SELECT COUNT(*) AS n FROM favourites WHERE user_id = ?").get(user.id) as { n: number }).n;
   const fav = addFavourite(db, user, passageId, source.version, now);
+  // A job aid saved whole is named after itself, as Favourites lists it.
+  if (fav.fresh && jobAidTitle) db.prepare("UPDATE favourites SET title = ? WHERE id = ?").run(jobAidTitle.slice(0, 80), fav.id);
   if (fav.fresh)
     recordAidEvent(
       db,

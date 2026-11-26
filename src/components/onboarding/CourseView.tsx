@@ -7,12 +7,13 @@ import { cx, formatDate } from "@/lib/format";
 import type { myEnrolment } from "@/server/onboardingCourses";
 import { Icon } from "../Icon";
 import { Chip, dbtn, Problem } from "../discovery/parts";
-import { DemoNote, HelpForm, Progress, StepList, UrgentNote, WhyBox } from "./CourseParts";
+import { DemoNote, Progress, StepList } from "./CourseParts";
+import { GetToKnowYou } from "./GetToKnowYou";
 
 /*
   One starting course (docs/onboarding.md, "Starting courses"): what you'll gain, how long it takes, where you're
-  up to, the steps (each opens the Topic, Magazine course or Job Aid itself, where its progress is saved), why it's
-  assigned, and help. Only ever the signed-in person's own: anyone else's is "not found".
+  up to, the steps (each opens the Topic, Magazine course or Job Aid itself, where its progress is saved), and Get to
+  know you (their background, in their own words). Only ever the signed-in person's own: anyone else's is "not found".
 */
 
 type Data = ReturnType<typeof myEnrolment>;
@@ -85,19 +86,17 @@ export function CourseView({ id }: { id: string }) {
         </section>
       )}
 
+      {/* Get to know you comes before the steps (the owner, Nov 2026): who they are, then what to do. */}
+      <GetToKnowYou about={data.about} />
+
       <section aria-labelledby="steps" className="mt-6">
         <h2 id="steps" className="font-serif text-2xl font-semibold">
           Steps
         </h2>
-        {data.prefs.mode !== "read" && (
-          <p className="mt-1 text-sm text-ink-muted">
-            You chose to listen. Steps with audio have a Listen button; nothing plays until you press it, and the words stay on screen.
-          </p>
-        )}
         {translated && !c.reviewedLanguages.includes(data.prefs.language) && (
           <p className="mt-2 rounded-2xl bg-muted/70 px-4 py-3 text-sm">
             You’re reading in {data.prefs.languageName}. This course hasn’t had a reviewed translation into it yet, so what you see is Google’s machine
-            translation: it isn’t approved guidance. If anything is unclear, use Get help below.
+            translation: it isn’t approved guidance. If anything is unclear, ask us.
           </p>
         )}
         <div className="mt-3">
@@ -105,10 +104,7 @@ export function CourseView({ id }: { id: string }) {
         </div>
       </section>
 
-      <div className="mt-5">
-        <WhyBox why={c.why} />
-      </div>
-      {c.demo && <DemoNote className="mt-3" />}
+      {c.demo && <DemoNote className="mt-5" />}
 
       <section aria-labelledby="where" className="mt-6 rounded-3xl bg-surface p-5 ring-1 ring-line">
         <h2 id="where" className="font-semibold">
@@ -128,26 +124,6 @@ export function CourseView({ id }: { id: string }) {
           <dt className="font-semibold">Approval to work</dt>
           <dd>Managed separately by Trilogy Care. Finishing this course doesn’t approve you to start a service.</dd>
         </dl>
-      </section>
-
-      <section aria-labelledby="help-heading" id="help" className="mt-6 scroll-mt-24 rounded-3xl bg-surface p-5 ring-1 ring-line">
-        <h2 id="help-heading" className="font-serif text-2xl font-semibold">
-          Get help
-        </h2>
-        <div className="mt-3">
-          <UrgentNote text={data.help.urgent.text} href={data.help.urgent.href} />
-        </div>
-        <p className="mt-3 flex flex-wrap gap-2">
-          <Link href={data.help.jobAids} className={dbtn.secondary}>
-            <Icon name="search" className="size-4" /> Find a Job Aid
-          </Link>
-          <Link href="/onboarding/start?step=you" className={dbtn.secondary}>
-            This isn’t my role
-          </Link>
-        </p>
-        <div className="mt-4">
-          <HelpForm enrolmentId={c.id} />
-        </div>
       </section>
     </div>
   );

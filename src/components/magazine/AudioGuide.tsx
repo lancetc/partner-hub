@@ -128,7 +128,7 @@ export function AudioGuideCard({
     return () => cancelAnimationFrame(frame);
   }, [state, follow]);
 
-  if (!ok) return toggle && variant === "inline" ? <AudioGuideSwitch on={toggle.on} onChange={toggle.onChange} /> : null;
+  if (!ok) return null;
   const n = ok.audio;
   const mark = (outcome: "started" | "finished") => {
     if (sent.current.has(outcome)) return;

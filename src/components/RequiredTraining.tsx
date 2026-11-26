@@ -4,6 +4,9 @@ import Link from "next/link";
 import { cx, formatDate } from "@/lib/format";
 import type { RegisterStatus } from "@/lib/complianceRegister";
 import { Icon } from "./Icon";
+import { StoryVisual } from "./StoryVisual";
+import type { TopicSummary } from "@/lib/topicSummary";
+import type { Thumbnail } from "@/lib/pathThumbnail";
 
 export type RequiredItem = {
   slug: string;
@@ -15,6 +18,8 @@ export type RequiredItem = {
   expiresAt: string | null;
   daysLeft: number | null;
   missing: string[];
+  /** Its picture (lib/pathThumbnail). */
+  visual?: Thumbnail;
 };
 
 /** When it needs doing, in a few words. */
@@ -36,37 +41,59 @@ function when(t: RequiredItem) {
 /** Required training that needs the person to do something: expired, due soon, changed, not done, or missing its quiz result. */
 export const requiredToDo = (items: RequiredItem[]) =>
   items.filter(
-    (t) => t.status === "expired" || t.status === "due_soon" || t.status === "refresher" || t.status === "not_trained" || t.missing.includes("an assessment record"),
+    (t) =>
+      t.status === "expired" || t.status === "due_soon" || t.status === "refresher" || t.status === "not_trained" || t.missing.includes("an assessment record"),
   );
 
 /**
   The person's required (compliance register) training, as a card in the "Your learning" panel
   (HomeLearning): what's due first, each linking to its topic.
 */
-export function RequiredTraining({ items, className }: { items: RequiredItem[]; className?: string }) {
+/** `visuals`: each topic's picture by slug, for a small thumbnail at the start of its row (the owner, Nov 2026). */
+export function RequiredTraining({
+  items,
+  className,
+  visuals,
+}: {
+  items: RequiredItem[];
+  className?: string;
+  visuals?: Record<string, TopicSummary["visual"]>;
+}) {
   if (!items.length) return null;
   const action = requiredToDo(items).length;
   return (
-    <section aria-labelledby="required-training" className={cx("flex flex-col gap-1 rounded-2xl border border-line p-4", className)}>
+    <section
+      aria-labelledby="required-training"
+      className={cx(
+        "flex flex-col gap-2 rounded-2xl border border-[#fab53d]/45 bg-gradient-to-br from-[#fab53d]/15 via-[#fab53d]/8 to-[#3cb8b9]/10 p-4",
+        className,
+      )}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="required-training" className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
           <Icon name="shield" className="size-4 text-accent" /> Your required training
         </h3>
         <span className={cx("text-sm", action ? "font-semibold text-danger" : "text-ink-muted")}>{action ? `${action} to do` : "All up to date"}</span>
       </div>
-      <ul className="flex flex-col divide-y divide-line">
+      <ul className="flex flex-col gap-2">
         {items.map((t) => {
           const urgent = t.status === "expired" || t.status === "due_soon";
           return (
             <li key={t.slug}>
-              <Link href={`/topics/${encodeURIComponent(t.slug)}`} className="flex min-h-14 items-center justify-between gap-3 py-2.5 hover:text-accent">
-                <span className="min-w-0">
+              <Link
+                href={`/topics/${encodeURIComponent(t.slug)}`}
+                className="flex min-h-16 items-stretch justify-between gap-3 overflow-hidden rounded-xl bg-surface/85 pr-3 shadow-sm ring-1 ring-black/5 hover:text-accent hover:ring-[#fab53d]"
+              >
+                {(t.visual ?? visuals?.[t.slug]) && (
+                  <StoryVisual {...(t.visual ?? visuals![t.slug])} alt="" className="min-h-16 w-24 shrink-0 sm:w-28" iconSize="size-4" />
+                )}
+                <span className="min-w-0 flex-1 self-center py-2.5 first:pl-3">
                   <span className="block font-semibold">{t.title}</span>
                   <span className={cx("block text-sm", t.status === "expired" ? "font-semibold text-danger" : "text-ink-muted")}>{when(t)}</span>
                 </span>
                 <span
                   className={cx(
-                    "shrink-0 rounded-full border px-2.5 py-0.5 font-mulish text-xs font-bold",
+                    "shrink-0 self-center rounded-full border px-2.5 py-0.5 font-mulish text-xs font-bold",
                     t.status === "current"
                       ? "border-success bg-success/10"
                       : urgent

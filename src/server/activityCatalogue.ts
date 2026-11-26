@@ -712,6 +712,7 @@ export function homeShowcase(db: Db, user: User, now: Date) {
           image: fg.cover ?? (e ? FALLBACK_IMAGE[e.kind] : null) ?? null,
           minutes: fg.minutes,
           audience: fg.audience.length ? audiencePhrase(fg.audience) : "everyone",
+          roles: fg.tags.roles as string[],
           state: fg.state,
         };
       })()
@@ -738,6 +739,7 @@ export function homeShowcase(db: Db, user: User, now: Date) {
           image: g.cover ?? FALLBACK_IMAGE[e.kind] ?? null,
           minutes: g.minutes,
           audience: g.audience.length ? audiencePhrase(g.audience) : "everyone",
+          roles: g.tags.roles as string[],
           state: g.state,
         },
       ];
@@ -759,10 +761,24 @@ function workTile(db: Db, user: User, now: Date) {
       text: "Plan when to recruit and what growth could do to workload, margin and cash. Private to your business.",
       href: "/tools/caseload-margin",
       cta: "Open the calculator",
+      // Its picture (the owner, Nov 2026): the cover of its Magazine course, "Can we take on the next 10 clients?".
+      image:
+        (
+          db.prepare("SELECT cover FROM magazine_guides WHERE slug = 'can-we-take-on-the-next-10-clients' AND cover IS NOT NULL").get() as
+            { cover: string } | undefined
+        )?.cover ?? FALLBACK_IMAGE.calculator,
     };
   const aid = playbooksForRelay(db, user, now)[0];
   if (!aid) return null;
-  return { activity: "tool.job-aids", kind: "Job Aid", title: aid.title, text: aid.purpose, href: `/tools/${aid.id}`, cta: "Open the Job Aid" };
+  return {
+    activity: "tool.job-aids",
+    kind: "Job Aid",
+    title: aid.title,
+    text: aid.purpose,
+    href: `/tools/${aid.id}`,
+    cta: "Open the Job Aid",
+    image: null as string | null,
+  };
 }
 export type WorkTile = NonNullable<ReturnType<typeof workTile>>;
 
@@ -847,7 +863,10 @@ export function learnerDirectory(db: Db, user: User, now: Date) {
       },
     ];
   });
-  return { items: [...courses, ...tools], role: browsingRole({ audience: user.audience, role: user.role, canAuthor: canAuthor(user) }) ?? "" };
+  return {
+    items: [...courses, ...tools],
+    role: browsingRole({ audience: user.audience, role: user.role, canAuthor: canAuthor(user), selfRole: user.self_role }) ?? "",
+  };
 }
 export type DirectoryItem = ReturnType<typeof learnerDirectory>["items"][number];
 

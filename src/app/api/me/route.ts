@@ -11,6 +11,7 @@ export async function GET() {
       name: user.name,
       role: user.role,
       audience: user.audience,
+      selfRole: user.self_role ?? null,
       serviceRole: user.service_role,
       language: user.language ?? "en",
       avatar: pictureUrl(user.avatar ?? null),

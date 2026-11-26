@@ -24,6 +24,8 @@ export type User = {
   avatar?: string | null;
   /** 1: manages people and permissions across every organisation (server/people). */
   superadmin?: number;
+  /** The role they picked for themself at the first sign-in: a lib/onboardingCourses Segment, or null. */
+  self_role?: string | null;
 };
 
 export const SESSION_COOKIE = "tc-demo-user";

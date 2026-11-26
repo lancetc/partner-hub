@@ -67,6 +67,25 @@ export function pathOpenTo(audience: string, role: string | null | undefined) {
   return !named.length || named.includes(role ?? "");
 }
 
+/**
+  The browsing roles (lib/magazine GUIDE_ROLES: partner = Suppliers, coordinator = Care Coordinators, owner = Care
+  Partners, staff = Trilogy Care staff) a path's audience wording is for, for the "Your role" filter on Discovery Paths,
+  which matches the Magazine's. Partner wording is the partner businesses' side, so Suppliers and Care Partners both;
+  owners, principals or businesses named are Care Partners. A path that names nobody ("Everyone") is for every role.
+*/
+export function pathRoles(audience: string): string[] {
+  const named = NAMED.filter(([, words]) => words.test(audience)).map(([who]) => who as string);
+  const roles = new Set<string>();
+  if (named.includes("coordinator")) roles.add("coordinator");
+  if (named.includes("partner")) {
+    roles.add("partner");
+    roles.add("owner");
+  }
+  if (named.includes("staff")) roles.add("staff");
+  if (/\bowners?\b|principal|business/i.test(audience)) roles.add("owner");
+  return roles.size ? [...roles] : ["partner", "coordinator", "owner", "staff"];
+}
+
 const byName = (a: ShelfPath, b: ShelfPath) => a.name.localeCompare(b.name);
 export const byPathPopularity = (a: ShelfPath, b: ShelfPath) => b.popularity - a.popularity || byName(a, b);
 export const byPathNewest = (a: ShelfPath, b: ShelfPath) => (b.addedAt ?? "").localeCompare(a.addedAt ?? "") || byName(a, b);

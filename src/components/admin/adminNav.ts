@@ -307,6 +307,13 @@ export const ADMIN_GROUPS: { title: string; links: AdminLink[] }[] = [
         description: "Monthly updates and newsletters to partners and coordinators.",
         authorOnly: true,
       },
+      {
+        href: "/admin/policies",
+        label: "Policy acknowledgements",
+        icon: "check",
+        description: "Ask people to read an updated policy and confirm by a date, and see who has.",
+        authorOnly: true,
+      },
       { href: "/admin/outbox", label: "Notifications", icon: "info", description: "Emails and reminders sent, waiting or failed." },
       // Only while spaced learning is switched on (lib/features).
       ...(spacedLearningOn()

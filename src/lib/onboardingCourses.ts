@@ -19,6 +19,30 @@ export const SEGMENTS = {
 } as const;
 export type Segment = keyof typeof SEGMENTS;
 
+/**
+  The four roles someone picks from at the first sign-in (the owner, Nov 2026): the Magazine's four, in its order. The
+  pick takes effect straight away (their content and starting course follow it); an administrator can keep it or change
+  it back. It never grants anything: a Care Partner picked here isn't an administrator of their business.
+*/
+export const ROLE_CHOICES: { segment: Segment; label: string; hint: string }[] = [
+  { segment: "supplier", label: "Supplier", hint: "You deliver services to Trilogy Care clients, such as cleaning, gardening or nursing." },
+  { segment: "coordinator", label: "Care Coordinator", hint: "You coordinate clients’ care and services." },
+  { segment: "principal", label: "Care Partner", hint: "You own or manage a partner business." },
+  { segment: "staff", label: "Trilogy Care staff", hint: "You work for Trilogy Care." },
+];
+export const roleChoiceLabel = (s: string | null | undefined) => ROLE_CHOICES.find((c) => c.segment === s)?.label ?? "Not set";
+
+/**
+  The role an account is: the one they picked for themself while it still fits their account's audience (an
+  administrator may have changed that since), otherwise from the account (a partner business's administrator is its
+  Care Partner, everyone else there a Supplier).
+*/
+export function accountSegment(u: { audience: string; role: string; self_role?: string | null }): Segment {
+  const picked = u.self_role as Segment | null | undefined;
+  if (picked && picked in SEGMENTS && SEGMENT_AUDIENCE[picked] === u.audience) return picked;
+  return u.audience === "staff" ? "staff" : u.audience === "coordinator" ? "coordinator" : u.role === "org_admin" ? "principal" : "supplier";
+}
+
 /** The Hub audience each segment reads content as. A principal is a Care Partner; a supplier reads Care Partner content too. */
 export const SEGMENT_AUDIENCE: Record<Segment, "partner" | "coordinator" | "staff"> = {
   supplier: "partner",
@@ -126,17 +150,22 @@ export type RuleData = {
 export type MandatoryState = "none" | "pending" | "approved";
 
 /** A step in a course: an existing Topic, Magazine course or Job Aid, by reference. Never a copy. */
-export type StepKind = "topic" | "course" | "job_aid";
-export const STEP_KINDS: Record<StepKind, string> = { topic: "Topic", course: "Magazine course", job_aid: "Job Aid" };
+export type StepKind = "topic" | "course" | "path" | "job_aid";
+export const STEP_KINDS: Record<StepKind, string> = { topic: "Topic", course: "Magazine course", path: "Discovery Path", job_aid: "Job Aid" };
 export type CourseStep = {
   id: string;
   kind: StepKind;
-  /** `topic:<slug>`, `course:<guide id>` or `aid:<snippet id>`. */
+  /** `topic:<slug>`, `course:<guide id>`, `path:<learning path id>` or `aid:<snippet id>`. */
   ref: string;
   /** The step as the learner reads it: what to do, not the content's title. */
   title: string;
   required: boolean;
   minutes: number;
+  /**
+    For later rather than today (the owner, Nov 2026): a short course first, a longer one when they're ready. Still
+    allocated, and still counts; it's just not where they start. Missing: today.
+  */
+  later?: boolean;
 };
 
 export type CourseData = {
@@ -240,6 +269,46 @@ export function dueWords(dueOn: string | null, now: Date): { text: string; overd
 }
 
 /** The learner's preferences for getting started. Language itself is the Hub-wide setting (Profile and settings). */
+/**
+  Get to know you (the owner, Nov 2026): a few optional questions on a starting course's page, so Trilogy Care
+  understands someone's background. Every answer is optional and can be changed; administrators see them on the
+  person's page (Admin → Onboarding → Starting courses → People).
+*/
+export const ABOUT_YEARS = {
+  new: "I’m new to it",
+  lt1: "Less than a year",
+  "1to3": "1 to 3 years",
+  "3to10": "3 to 10 years",
+  "10plus": "More than 10 years",
+} as const;
+export type AboutYears = keyof typeof ABOUT_YEARS;
+export const ABOUT_INTERESTS = {
+  clients: "Working with clients and families",
+  quality: "Quality and safety",
+  money: "Funding, quotes and getting paid",
+  business: "Running or growing a business",
+  tech: "Using the Hub and other systems",
+  compliance: "Rules and compliance",
+} as const;
+export type AboutInterest = keyof typeof ABOUT_INTERESTS;
+export const ABOUT_LEARN = {
+  videos: "Short videos",
+  reading: "Reading",
+  listening: "Listening",
+  practice: "Practising with real situations",
+  people: "Learning from other people",
+} as const;
+export type AboutLearn = keyof typeof ABOUT_LEARN;
+export type About = {
+  years: AboutYears | null;
+  before: string;
+  languages: string;
+  interests: AboutInterest[];
+  learn: AboutLearn[];
+  note: string;
+  updatedAt: string | null;
+};
+
 export const READ_MODES = { read: "Read", listen: "Listen", both: "Read and listen" } as const;
 export type ReadMode = keyof typeof READ_MODES;
 export const TEXT_SIZES = { standard: "Standard", large: "Larger" } as const;

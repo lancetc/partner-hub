@@ -350,6 +350,8 @@ type Mine = {
   points: number;
   streak: number;
   todayDone: boolean;
+  /** The first mission's cover photo, for the banner's picture. */
+  cover: Thumbnail | null;
 };
 
 export function ChallengeBanner() {
@@ -357,11 +359,22 @@ export function ChallengeBanner() {
   const c = data?.challenges.find((x) => x.state === "live") ?? data?.challenges.find((x) => x.state === "upcoming");
   if (!c) return null;
   return (
-    <Link href={`/challenge/${c.id}`} className="mt-6 flex items-center gap-4 rounded-3xl bg-[#2d4875] p-4 text-white hover:opacity-95 sm:p-5">
-      <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/15">
-        <Icon name="flag" className="size-6" />
-      </span>
-      <span className="min-w-0 flex-1">
+    <Link
+      href={`/challenge/${c.id}`}
+      className={cx(
+        "mt-6 flex gap-4 overflow-hidden rounded-3xl bg-[#2d4875] text-white hover:opacity-95",
+        c.cover ? "items-stretch pr-4 sm:pr-5" : "items-center p-4 sm:p-5",
+      )}
+    >
+      {/* Its picture, filling the banner's left side (the owner, Nov 2026); the flag when it has none. */}
+      {c.cover ? (
+        <StoryVisual {...c.cover} alt="" className="min-h-24 w-28 shrink-0 sm:w-40" iconSize="size-6" />
+      ) : (
+        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/15">
+          <Icon name="flag" className="size-6" />
+        </span>
+      )}
+      <span className={cx("min-w-0 flex-1", c.cover && "self-center py-4")}>
         <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-white/75">Trilogy Challenge</span>
         <span className="block font-serif text-xl font-semibold leading-tight">{c.name}</span>
         <span className="block text-sm text-white/85">
@@ -372,7 +385,7 @@ export function ChallengeBanner() {
               : `Day ${c.day} of ${c.days} is open · ${c.points.toLocaleString("en-AU")} points so far`}
         </span>
       </span>
-      <Icon name="arrow-right" className="size-5 shrink-0" />
+      <Icon name="arrow-right" className="size-5 shrink-0 self-center" />
     </Link>
   );
 }

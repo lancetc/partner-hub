@@ -1,10 +1,15 @@
 import { body, handle } from "@/server/http";
 import { HttpError } from "@/server/auth";
 import { acknowledge, inbox, markAllRead, markDone, markRead, type Kind } from "@/server/notifications";
+import { syncPolicyAcks } from "@/server/policyAcks";
 
 /** Your Inbox: actions, updates and activity. */
 export async function GET() {
-  return handle(({ db, user, now }) => inbox(db, user, now));
+  return handle(({ db, user, now }) => {
+    // Policies to acknowledge that apply to them now (someone new, or a changed role), before the Inbox is read.
+    syncPolicyAcks(db, user, now);
+    return inbox(db, user, now);
+  });
 }
 
 type Action = { action: "read" | "ack" | "done"; id: number } | { action: "read_all"; kind: Kind };

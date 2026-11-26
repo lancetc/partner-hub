@@ -1,7 +1,7 @@
 import { body, handle } from "@/server/http";
-import { HttpError } from "@/server/auth";
+import { HttpError, userById } from "@/server/auth";
 import { reportMismatch } from "@/server/onboarding";
-import { askForHelp, myCourses, myEnrolment, savePrefs, seedDemoCourses } from "@/server/onboardingCourses";
+import { askForHelp, chooseRole, myCourses, saveAbout, myEnrolment, savePrefs, seedDemoCourses } from "@/server/onboardingCourses";
 
 /**
   Your starting courses (docs/onboarding.md, "Starting courses"): only ever the signed-in person's own. Reading it
@@ -22,8 +22,16 @@ export async function POST(req: Request) {
     switch (input.action) {
       case "prefs":
         return savePrefs(db, user, input, now);
+      case "about":
+        // Get to know you: their own answers about their background.
+        return saveAbout(db, user, input, now);
       case "help":
         return askForHelp(db, user, input, now);
+      case "role":
+        // "Which best describes you?": takes effect now; an administrator keeps it or changes it back.
+        // Their courses are read from the account as it is now, not as it was when the request came in.
+        chooseRole(db, user, input, now);
+        return myCourses(db, userById(db, user.id) ?? user, now);
       case "mismatch":
         // The setup's own request: it goes to the population's owner and changes nothing by itself.
         reportMismatch(db, user, input, now);

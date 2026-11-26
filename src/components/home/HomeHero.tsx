@@ -76,7 +76,7 @@ export function HomeHero() {
   const first = me?.user.name.trim().split(/\s+/)[0];
   // The masthead's edition, named as the demo profiles are (lib/magazine browsingRole): Supplier, Care Coordinator,
   // Care Partner, or Trilogy Care for staff and administrators.
-  const viewer = me ? { audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor } : null;
+  const viewer = me ? { audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor, selfRole: me.user.selfRole } : null;
   const role = viewer ? EDITIONS[browsingRole(viewer) ?? "staff"] : "Partner Hub";
   // The Digital Member who floats on the picture belongs to Lives in Progress, so only for those whose homepage has it.
   const persona = viewer ? homeParts(viewer).includes("lives") : false;

@@ -47,9 +47,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
   const required = useApi<{ training: RequiredItem[] }>("/api/me/compliance").data?.training ?? [];
   const requiredOpen = requiredToDo(required);
   // Sample topics made for them in onboarding, until they've finished them.
-  const samples = (useApi<{ topics: SampleTopicItem[] }>("/api/me/sample-topics").data?.topics ?? []).filter(
-    (t) => attempts[t.slug]?.status !== "completed",
-  );
+  const samples = (useApi<{ topics: SampleTopicItem[] }>("/api/me/sample-topics").data?.topics ?? []).filter((t) => attempts[t.slug]?.status !== "completed");
   const [open, setOpen] = useState(() => typeof window !== "undefined" && readOpen());
   const toggle = () => {
     setOpen(!open);
@@ -68,9 +66,7 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
   const ready = followUps.filter((f) => f.status === "available" || f.status === "in_progress");
   const due = topics.filter((t) => t.assignment?.required && attempts[t.slug]?.status !== "completed");
   // Topics they enrolled in and haven't opened yet (ones under way show as in progress).
-  const enrolled = enrolments
-    .map((e) => bySlug.get(e.slug))
-    .filter((t): t is TopicSummary => Boolean(t) && !attempts[t!.slug] && !t!.assignment?.required);
+  const enrolled = enrolments.map((e) => bySlug.get(e.slug)).filter((t): t is TopicSummary => Boolean(t) && !attempts[t!.slug] && !t!.assignment?.required);
   const mine = me?.user.audience === "coordinator" ? "coordinator" : "partner";
   const starters = topics
     .filter((t) => !attempts[t.slug] && (t.track === "core" || t.track === mine))
@@ -85,13 +81,18 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
     : samples[0]
       ? `Made for you: ${samples[0].title}`
       : paths[0]
-      ? `${paths[0].name} Discovery Path`
-      : ready.length + due.length + enrolled.length
-        ? `${ready.length + due.length + enrolled.length} ready for you`
-        : null;
+        ? `${paths[0].name} Discovery Path`
+        : ready.length + due.length + enrolled.length
+          ? `${ready.length + due.length + enrolled.length} ready for you`
+          : null;
 
   return (
-    <section aria-labelledby="your-learning" data-build-step style={{ "--step": 4 } as React.CSSProperties} className="mt-6 rounded-3xl border border-line bg-surface">
+    <section
+      aria-labelledby="your-learning"
+      data-build-step
+      style={{ "--step": 4 } as React.CSSProperties}
+      className="mt-6 rounded-3xl border border-line bg-surface"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 pl-2 pr-5 sm:pr-6">
         <h2 id="your-learning" className="min-w-0 flex-1">
           <button
@@ -116,25 +117,30 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
           </button>
         </h2>
         {link && (
-          <Link href={link.href} className="inline-flex min-h-11 items-center gap-1.5 pl-3 font-semibold text-accent hover:underline sm:pl-0">
-            {link.label} <Icon name="arrow-right" className="size-4" /></Link>
+          <Link
+            href={link.href}
+            className="inline-flex min-h-11 items-center gap-1.5 pl-3 font-semibold text-accent transition-colors hover:text-[#007f7e] sm:pl-0"
+          >
+            {link.label} <Icon name="arrow-right" className="size-4" />
+          </Link>
         )}
       </div>
 
       <div id="your-learning-panel" hidden={!open} className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mt-1 grid gap-4 lg:grid-cols-2">
           {/* Required training first: what the person must do comes before what they might like to. */}
-          <RequiredTraining items={required} className="lg:col-span-2" />
+          <RequiredTraining items={required} className="lg:col-span-2" visuals={Object.fromEntries(topics.map((t) => [t.slug, t.visual]))} />
           {/* Pick up where you left off: the most recent topic first. */}
           {inProgress[0] && (
             <Link
               href={`/topics/${inProgress[0].topic.slug}`}
-              className="group flex gap-4 rounded-2xl bg-[#DCECE5] p-4 text-[#102a43] ring-1 ring-[#0e7c7b]/15 hover:ring-[#0e7c7b]/40"
+              className="group flex items-stretch gap-4 overflow-hidden rounded-2xl bg-[#DCECE5] pr-4 text-[#102a43] ring-1 ring-[#0e7c7b]/15 hover:ring-[#0e7c7b]/40"
             >
-              <StoryVisual {...inProgress[0].topic.visual} alt="" className="size-20 shrink-0 rounded-xl" iconSize="size-6" />
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
+              {/* The picture fills the card's left side, edge to edge (the owner, Nov 2026). */}
+              <StoryVisual {...inProgress[0].topic.visual} alt="" className="min-h-24 w-28 shrink-0 sm:w-32" iconSize="size-6" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1 self-center py-4">
                 <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#0e7c7b]">Continue where you left off</span>
-                <span className="font-serif text-lg font-semibold leading-snug group-hover:underline">{inProgress[0].topic.title}</span>
+                <span className="font-serif text-lg font-semibold leading-snug transition-colors group-hover:text-[#007f7e]">{inProgress[0].topic.title}</span>
                 <span className="text-sm">
                   Step {inProgress[0].step} of {inProgress[0].topic.steps} · {inProgress[0].topic.minutes} min topic
                 </span>
@@ -152,41 +158,55 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
             const next = live.find((s) => !isDone(p, s.slug));
             const left = p.steps.filter((s) => !isDone(p, s.slug)).reduce((n, s) => n + s.minutes, 0);
             const percent = live.length ? Math.round((done / live.length) * 100) : 0;
+            // Its poster: the picture from its first topic, as on its tile (the owner, Nov 2026).
+            const poster = p.steps.map((s) => bySlug.get(s.slug)).find(Boolean)?.visual;
             return (
-              <div key={p.id} className="flex flex-col gap-2 rounded-2xl border border-line p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                      {p.selfEnrolled ? "Discovery Path you enrolled in" : p.assigned === false ? "Discovery Path you’ve started" : "Discovery Path"}
+              <div
+                key={p.id}
+                className="flex items-stretch gap-4 overflow-hidden rounded-2xl bg-gradient-to-br from-[#3cb8b9]/15 via-[#3cb8b9]/8 to-[#fab53d]/12 pr-4 ring-1 ring-[#0e7c7b]/15"
+              >
+                {/* The picture fills the card's left side, edge to edge. */}
+                {poster && <StoryVisual {...poster} alt="" className="min-h-24 w-28 shrink-0 sm:w-32" iconSize="size-6" />}
+                <div className={cx("flex min-w-0 flex-1 flex-col gap-2 self-center py-4", !poster && "pl-4")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+                        {p.selfEnrolled ? "Discovery Path you enrolled in" : p.assigned === false ? "Discovery Path you’ve started" : "Discovery Path"}
+                      </span>
+                      <Link
+                        href={`/paths/${encodeURIComponent(p.id)}`}
+                        className="font-serif text-lg font-semibold leading-snug transition-colors hover:text-[#007f7e]"
+                      >
+                        {p.name}
+                      </Link>
                     </span>
-                    <Link href={`/paths/${encodeURIComponent(p.id)}`} className="font-serif text-lg font-semibold leading-snug hover:underline">
-                      {p.name}
-                    </Link>
+                    <span className="grid size-12 shrink-0 place-items-center rounded-full bg-white/80 text-sm font-semibold tabular-nums shadow-sm">
+                      {percent}%
+                    </span>
+                  </div>
+                  <span className="h-1.5 overflow-hidden rounded-full bg-white/70" aria-hidden>
+                    <span className="block h-full rounded-full bg-[#0e7c7b]" style={{ width: `${percent}%` }} />
                   </span>
-                  <span className="grid size-12 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold tabular-nums">{percent}%</span>
+                  <p className="text-sm text-ink-muted">
+                    {done} of {live.length} topics{left > 0 && ` · ${formatDuration(left).replace(/^About/, "about")} to go`}
+                    {p.dueDate && done < live.length && ` · due ${formatDate(p.dueDate)}`}
+                  </p>
+                  {next ? (
+                    <Link
+                      href={`/topics/${next.slug}`}
+                      className="inline-flex min-h-10 items-center gap-1.5 self-start font-semibold text-accent transition-colors hover:text-[#007f7e]"
+                    >
+                      Next: {next.title} <Icon name="arrow-right" className="size-4" />
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/paths/${encodeURIComponent(p.id)}/certificate`}
+                      className="inline-flex min-h-10 items-center gap-1.5 self-start font-semibold text-success hover:underline"
+                    >
+                      <Icon name="star" className="size-4" /> Path complete: get your certificate
+                    </Link>
+                  )}
                 </div>
-                <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  <span className="block h-full rounded-full bg-[#0e7c7b]" style={{ width: `${percent}%` }} />
-                </span>
-                <p className="text-sm text-ink-muted">
-                  {done} of {live.length} topics{left > 0 && ` · ${formatDuration(left).replace(/^About/, "about")} to go`}
-                  {p.dueDate && done < live.length && ` · due ${formatDate(p.dueDate)}`}
-                </p>
-                {next ? (
-                  <Link
-                    href={`/topics/${next.slug}`}
-                    className="inline-flex min-h-10 items-center gap-1.5 self-start font-semibold text-accent hover:underline"
-                  >
-                    Next: {next.title} <Icon name="arrow-right" className="size-4" />
-                  </Link>
-                ) : (
-                  <Link
-                    href={`/paths/${encodeURIComponent(p.id)}/certificate`}
-                    className="inline-flex min-h-10 items-center gap-1.5 self-start font-semibold text-success hover:underline"
-                  >
-                    <Icon name="star" className="size-4" /> Path complete: get your certificate
-                  </Link>
-                )}
               </div>
             );
           })}
@@ -279,15 +299,12 @@ export function HomeLearning({ topics, browse }: { topics: TopicSummary[]; brows
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">{newcomer ? "Good places to begin" : "Try next"}</p>
             <ul className={cx("mt-3 grid gap-4 sm:grid-cols-3")}>
               {starters.map((t) => (
-                <li key={t.slug} className="group relative flex flex-col gap-2">
+                <li key={t.slug} className="tile group relative flex flex-col gap-2">
                   <StoryVisual {...t.visual} alt="" className="aspect-[16/10] rounded-2xl" iconSize="size-8" />
                   <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
                     {subjectLabel(t.subject)} · {t.minutes} min
                   </span>
-                  <Link
-                    href={`/topics/${t.slug}`}
-                    className="font-serif text-lg font-semibold leading-snug after:absolute after:inset-0 after:content-[''] group-hover:underline"
-                  >
+                  <Link href={`/topics/${t.slug}`} className="tile-link font-serif text-lg font-semibold leading-snug">
                     {t.title}
                   </Link>
                 </li>

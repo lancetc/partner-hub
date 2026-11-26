@@ -50,26 +50,52 @@ export function StepList({ steps, currentId, compact = false }: { steps: StepVie
     <ol className="flex flex-col gap-2">
       {steps.map((s, i) => {
         const current = s.id === currentId;
+        // With a picture, it fills the card's left side, edge to edge (the owner, Nov 2026); the words keep their padding.
+        const pictured = Boolean(s.poster) && !compact;
         return (
           <li
             key={s.id}
             aria-current={current ? "step" : undefined}
-            className={cx("rounded-2xl bg-surface p-3 ring-1 ring-line sm:p-4", current && "ring-2 ring-[#008282] dark:ring-[#3cb8b9]")}
+            className={cx(
+              "rounded-2xl bg-surface ring-1 ring-line",
+              pictured ? "overflow-hidden" : "p-3 sm:p-4",
+              current && "ring-2 ring-[#008282] dark:ring-[#3cb8b9]",
+            )}
           >
-            <div className="flex items-start gap-3">
-              <span
-                aria-hidden
-                className={cx(
-                  "grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold",
-                  s.state === "done" ? "bg-[#008282] text-white" : "bg-muted text-ink",
-                )}
-              >
-                {s.state === "done" ? <Icon name="check" className="size-4" /> : i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold leading-snug">
-                  {current && <span className="sr-only">Current step: </span>}
-                  {s.title}
+            <div className={cx("flex gap-3", pictured ? "items-stretch sm:gap-4" : "items-start")}>
+              {/* Its picture, as its own tile shows it (the owner, Nov 2026), with the step's number (or a tick) on its corner. */}
+              {pictured ? (
+                <span className="relative min-h-20 w-28 shrink-0 bg-muted sm:w-40">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the item's own picture */}
+                  <img src={s.poster!} alt="" className="absolute inset-0 size-full object-cover" />
+                  <span
+                    aria-hidden
+                    className={cx(
+                      "absolute left-2 top-2 grid size-7 place-items-center rounded-full text-xs font-bold shadow ring-2 ring-surface",
+                      s.state === "done" ? "bg-[#008282] text-white" : "bg-surface text-ink",
+                    )}
+                  >
+                    {s.state === "done" ? <Icon name="check" className="size-3.5" /> : i + 1}
+                  </span>
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className={cx(
+                    "grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold",
+                    s.state === "done" ? "bg-[#008282] text-white" : "bg-muted text-ink",
+                  )}
+                >
+                  {s.state === "done" ? <Icon name="check" className="size-4" /> : i + 1}
+                </span>
+              )}
+              <div className={cx("min-w-0 flex-1", pictured && "self-center py-3 sm:py-4")}>
+                <p className="flex flex-wrap items-center gap-2 font-semibold leading-snug">
+                  <span>
+                    {current && <span className="sr-only">Current step: </span>}
+                    {s.title}
+                  </span>
+                  {s.state !== "done" && <WhenTag later={s.later} />}
                 </p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
                   <span>{s.kindLabel}</span>
@@ -81,7 +107,7 @@ export function StepList({ steps, currentId, compact = false }: { steps: StepVie
                 {s.unavailable && <p className="mt-1 text-sm text-ink-muted">{s.unavailable}</p>}
               </div>
               {!compact && s.href && (
-                <Link href={s.href} className={cx(current ? dbtn.primary : dbtn.secondary, "shrink-0")}>
+                <Link href={s.href} className={cx(current ? dbtn.primary : dbtn.secondary, "shrink-0", pictured && "mr-3 self-center sm:mr-4")}>
                   {s.state === "done" ? "Open again" : s.state === "started" ? "Continue" : "Start"}
                   <span className="sr-only">: {s.title}</span>
                 </Link>
@@ -174,5 +200,19 @@ export function HelpForm({ enrolmentId, initial = "question" }: { enrolmentId?: 
         </p>
       </div>
     </form>
+  );
+}
+
+/** Today or Later on an allocated item (CourseStep.later): where to start, and what can wait. */
+export function WhenTag({ later }: { later: boolean }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center rounded-full px-2 py-0.5 font-mulish text-xs font-bold",
+        later ? "bg-[#fab53d]/25 text-[#7a4b00] dark:text-[#fab53d]" : "bg-[#3cb8b9]/20 text-[#006b6b] dark:text-[#3cb8b9]",
+      )}
+    >
+      {later ? "Later" : "Today"}
+    </span>
   );
 }

@@ -2161,6 +2161,8 @@ export function migrate(db: Db) {
   if (!userCols.includes("superadmin")) db.exec("ALTER TABLE users ADD COLUMN superadmin INTEGER NOT NULL DEFAULT 0");
   // The full-screen background behind the main pages (server/backgrounds, lib/background), as JSON; null is the default.
   if (!userCols.includes("background")) db.exec("ALTER TABLE users ADD COLUMN background TEXT");
+  // The role they picked for themself at the first sign-in (lib/onboardingCourses accountSegment).
+  if (!userCols.includes("self_role")) db.exec("ALTER TABLE users ADD COLUMN self_role TEXT");
   const settingCols = (db.prepare("PRAGMA table_info(lesson_settings)").all() as { name: string }[]).map((c) => c.name);
   const uploadCols = (db.prepare("PRAGMA table_info(uploads)").all() as { name: string }[]).map((c) => c.name);
   // Stock photos keep their photographer's credit (JSON).

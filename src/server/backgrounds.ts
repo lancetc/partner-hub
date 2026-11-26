@@ -53,7 +53,10 @@ export function setBackground(db: Db, user: User, input: unknown, now: Date) {
   return save(db, user, checked.value, now);
 }
 
-const hex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+const hex = (n: number) =>
+  Math.max(0, Math.min(255, Math.round(n)))
+    .toString(16)
+    .padStart(2, "0");
 
 /** Saves an uploaded photo as the background. */
 export async function uploadBackground(db: Db, user: User, file: File, now: Date) {
@@ -65,7 +68,10 @@ export async function uploadBackground(db: Db, user: User, file: File, now: Date
   let color: string | null = null;
   try {
     const image = () => sharp(input, { limitInputPixels: 20000 * 20000 }).rotate();
-    large = await image().resize({ width: LARGE_SIDE, height: LARGE_SIDE, fit: "inside", withoutEnlargement: true }).webp({ quality: 76 }).toBuffer({ resolveWithObject: true });
+    large = await image()
+      .resize({ width: LARGE_SIDE, height: LARGE_SIDE, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 76 })
+      .toBuffer({ resolveWithObject: true });
     small = await image().resize({ width: SMALL_SIDE, height: SMALL_SIDE, fit: "inside", withoutEnlargement: true }).webp({ quality: 74 }).toBuffer();
     const { dominant } = await sharp(small).stats();
     color = `#${hex(dominant.r)}${hex(dominant.g)}${hex(dominant.b)}`;
@@ -107,15 +113,111 @@ const photo = (id: number, width: number, height: number, color: string, photogr
 });
 
 export const CURATED_PHOTOS: PexelsChoice[] = [
-  photo(1318500, 3968, 2976, "#637676", "Damon Hall", "damodigital", "aerial-photo-of-white-sandy-beach-during-the-day", "Aerial view of the rocky shoreline at Currumbin Beach, Queensland"),
+  photo(
+    1318500,
+    3968,
+    2976,
+    "#637676",
+    "Damon Hall",
+    "damodigital",
+    "aerial-photo-of-white-sandy-beach-during-the-day",
+    "Aerial view of the rocky shoreline at Currumbin Beach, Queensland",
+  ),
   photo(12354525, 6000, 4000, "#585C41", "Gis photography", "gis-photography-73329568", "trees-in-the-forest", "Eucalyptus trees in a summer forest"),
-  photo(31434495, 3840, 2560, "#466B7B", "Anton Massalov", "antonhansenphotography", "serene-ocean-horizon-under-clear-blue-sky", "A calm ocean horizon under a clear blue sky"),
+  photo(
+    31434495,
+    3840,
+    2560,
+    "#466B7B",
+    "Anton Massalov",
+    "antonhansenphotography",
+    "serene-ocean-horizon-under-clear-blue-sky",
+    "A calm ocean horizon under a clear blue sky",
+  ),
   photo(5321520, 6016, 4000, "#76766A", "Ravi Kant", "ravikant", "foggy-forest", "Tall trees in a misty forest"),
   photo(31497132, 7728, 5152, "#C4AD8E", "Hami Durgut", "hamidurgut", "tranquil-sky-at-sunrise-with-soft-clouds", "Soft clouds in golden sunrise light"),
   photo(24700962, 3888, 2592, "#4C5864", "Walter Coppola", "waltc", "beautiful-beach-against-seascape", "The rocky coast at Cape Paterson, Victoria"),
-  photo(5738357, 4032, 3024, "#526377", "Austin Cooper", "austin-cooper-3865095", "lake-near-the-mountains-under-the-blue-sky", "A mountain lake with forest reflections"),
-  photo(5349603, 5200, 3467, "#7B7E68", "Magda Ehlers", "magda-ehlers-pexels", "flower-field-near-hills-under-the-blue-sky", "Spring wildflowers beneath hills and a blue sky"),
-  photo(32915492, 3982, 2240, "#876E5A", "Mark Direen", "mark-direen-622749", "aerial-view-of-the-rugged-australian-outback", "A dirt road across the Australian outback from above"),
+  photo(
+    5738357,
+    4032,
+    3024,
+    "#526377",
+    "Austin Cooper",
+    "austin-cooper-3865095",
+    "lake-near-the-mountains-under-the-blue-sky",
+    "A mountain lake with forest reflections",
+  ),
+  photo(
+    5349603,
+    5200,
+    3467,
+    "#7B7E68",
+    "Magda Ehlers",
+    "magda-ehlers-pexels",
+    "flower-field-near-hills-under-the-blue-sky",
+    "Spring wildflowers beneath hills and a blue sky",
+  ),
+  photo(
+    32915492,
+    3982,
+    2240,
+    "#876E5A",
+    "Mark Direen",
+    "mark-direen-622749",
+    "aerial-view-of-the-rugged-australian-outback",
+    "A dirt road across the Australian outback from above",
+  ),
+  // Australian country homes (the owner, Nov 2026).
+  photo(
+    38098746,
+    5439,
+    3626,
+    "#A6A37A",
+    "Anh Thu Le",
+    "anh-thu-le-2161532235",
+    "scenic-view-of-port-arthur-countryside-in-tasmania",
+    "A white farmhouse below green hills near Port Arthur, Tasmania",
+  ),
+  photo(
+    35729169,
+    4608,
+    3456,
+    "#9CA087",
+    "Dianne J. Larsen",
+    "dianne-j-larsen-97169438",
+    "historic-farmhouse-in-tenterfield-landscape",
+    "A timber farmhouse with brick chimneys in Tenterfield, New South Wales",
+  ),
+  photo(
+    27209914,
+    2500,
+    1667,
+    "#70837D",
+    "Gaynor Mullen",
+    "gaynor-mullen-276315146",
+    "a-farm-with-a-fence-and-a-road",
+    "A stone farmhouse beside a fence line and a country road in Stanley, Tasmania",
+  ),
+  photo(
+    11637810,
+    3000,
+    2000,
+    "#29537D",
+    "Goran Dojcinovic",
+    "goran-dojcinovic-1793126",
+    "clear-sky-over-house-in-countryside",
+    "A white homestead with a wraparound veranda under a deep blue sky",
+  ),
+  photo(
+    4501786,
+    5762,
+    3841,
+    "#5B6056",
+    "Elle Hughes",
+    "elletakesphotos",
+    "wooden-house-with-solar-panels-near-green-trees",
+    "A timber house with a veranda among gum trees",
+  ),
   photo(14013575, 5184, 3888, "#43492F", "Ana Mai", "ana-mai-1144537", "sunbeam-in-jungle", "Sunbeams through a rainforest canopy"),
 ];
 

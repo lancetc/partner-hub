@@ -178,8 +178,11 @@ export type GuideRole = (typeof GUIDE_ROLES)[number]["value"];
   business's owner or manager is a Care Partner, its workers Suppliers), or none for authors and administrators, who
   start on everything. They can always choose another.
 */
-export function browsingRole(v: { audience: string; role: string; canAuthor?: boolean }): GuideRole | null {
+export function browsingRole(v: { audience: string; role: string; canAuthor?: boolean; selfRole?: string | null }): GuideRole | null {
   if (v.canAuthor || v.role === "author") return null;
+  // The role they picked for themself at the first sign-in (lib/onboardingCourses ROLE_CHOICES).
+  if (v.audience === "partner" && v.selfRole === "principal") return "owner";
+  if (v.audience === "partner" && v.selfRole === "supplier") return "partner";
   if (v.role === "org_admin" && v.audience === "partner") return "owner";
   return GUIDE_ROLES.find((r) => r.value === v.audience)?.value ?? null;
 }

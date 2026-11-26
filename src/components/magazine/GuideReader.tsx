@@ -16,7 +16,7 @@ import { useSelfReview } from "./SelfReview";
 import { useMyNotes } from "./ReflectBlocks";
 import { AddToDiscovery } from "../discovery/AddToDiscovery";
 import { MemberCaption } from "../community/MemberCaption";
-import { listenable, playable } from "@/lib/magazineNarration";
+import { listenable } from "@/lib/magazineNarration";
 import { useOnePlayer } from "@/lib/onePlayer";
 import { StoryAt, useStory } from "../story/StoryMoments";
 import { AvaRelay } from "../relay/AvaRelay";
@@ -41,22 +41,12 @@ import { chapterLabel, chapterOf, hasChapters, pageGroups } from "@/lib/magazine
 type Done = ReaderGuide["completed"];
 
 /**
-  The learner's Audio Guide choice for this course (kept with their progress), and whether to offer it:
-  only when the author allows automatic playback and something here can be heard. With "auto" it starts
-  on until they turn it off; with "offer-auto" it starts off until they turn it on.
+  The course's voice-overs. They always play by themselves as a page opens, with sound (the owner, Nov 2026): there's no
+  Audio guide switch any more. A learner can still pause any of them, and the Hub-wide "start audio automatically"
+  setting (Profile and settings) still holds.
 */
-function useAudioGuide(guide: ReaderGuide, send: ReturnType<typeof useSend>) {
-  const audio = guide.doc.audio;
-  const chosen = guide.progress.answers["audio:guide"];
-  const [on, setOn] = useState(audio?.playback === "auto" ? chosen !== "off" : chosen === "on");
-  const offered =
-    (audio?.playback === "auto" || audio?.playback === "offer-auto") &&
-    (playable(audio.intro, audio) || guide.doc.pages.some((p) => playable(p.narration, audio)));
-  const change = (next: boolean) => {
-    setOn(next);
-    send("events", { event: "audioGuide", detail: { on: next } }).catch(() => {});
-  };
-  return { audio, on: Boolean(offered && on), offered: Boolean(offered), change };
+function useAudioGuide(guide: ReaderGuide) {
+  return { audio: guide.doc.audio };
 }
 
 /** Sends what the reader did. A 409 means the course was republished while the page was open. */
@@ -156,7 +146,7 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
   const next = resumeAt ?? pages.find((p) => !finished.has(p.id)) ?? pages[0];
   const started = guide.progress.started && !preview;
   const doneHere = completed?.thisRevision ? completed : null;
-  const audioGuide = useAudioGuide(guide, send);
+  const audioGuide = useAudioGuide(guide);
   // One sound at a time: Ava on the cover and anything else here (lib/onePlayer).
   useOnePlayer();
   // The course's approved introduction, which Ava gives on the cover in her own voice.
@@ -201,8 +191,6 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             {pages.length > 1 && audioGuide.audio?.intro && (
               <AudioGuideCard
                 variant="inline"
-                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
-                // With Ava giving the introduction on the cover, this keeps only the Audio guide switch.
                 narration={avaIntro !== null || coverIntro ? undefined : audioGuide.audio.intro}
                 audio={audioGuide.audio}
                 level="course"
@@ -211,9 +199,6 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
                 onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
               />
             )}
-            <span>
-              {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
-            </span>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link
@@ -238,7 +223,7 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             title={guide.title}
             cover={guide.cover ?? null}
             script={avaIntro}
-            startMuted={audioGuide.offered && !audioGuide.on}
+            startMuted={false}
             onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
           />
         ) : coverIntro && guide.cover ? (
@@ -250,7 +235,7 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
             poster={{ src: guide.cover }}
             label="Listen to the introduction"
             posterTall
-            autoPlay={!audioGuide.offered || audioGuide.on}
+            autoPlay
             className="mt-0 rounded-3xl"
             onEvent={(action) =>
               void (
@@ -352,6 +337,9 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
           </div>
         )}
       </section>
+      <p className="mt-12 border-t border-line pt-4 text-sm text-ink-muted">
+        {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
+      </p>
     </article>
   );
 }
@@ -384,7 +372,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     preview,
     useCallback(() => setStale(true), []),
   );
-  const audioGuide = useAudioGuide(guide, send);
+  const audioGuide = useAudioGuide(guide);
   // One sound at a time: the introduction, Ava's transmissions and the video blocks (lib/onePlayer).
   useOnePlayer();
   // Ava introducing this page, when its introduction has a video (Admin → AI Learning Guide, Ava's talking videos): she
@@ -456,6 +444,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
     answers,
     preview,
     guideId: guide.id,
+    savePlace: preview ? undefined : { id: guide.slug, revisionId: guide.revisionId, pageId: page.id },
     quizzes: guide.quizzes,
     reflections,
     answer: async (blockId, choiceId) => {
@@ -605,27 +594,18 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
                 <AddToDiscovery itemKey={`page:${guide.id}:${page.id}`} />
               </span>
             )}
-            {/* The Audio guide switch, where the author offers it: off, Ava's transmissions start without sound. The introduction itself is below. */}
-            {/* A one-page course without Ava's video: its approved introduction is here to listen to (never by itself). */}
-            {page.kind === "content" && audioGuide.audio && (audioGuide.offered || listenToCourseIntro) && (
+            {/* A one-page course without Ava's video: its approved introduction is here, and plays by itself. */}
+            {page.kind === "content" && audioGuide.audio && listenToCourseIntro && (
               <AudioGuideCard
                 key={page.id}
                 variant="inline"
-                toggle={audioGuide.offered ? { on: audioGuide.on, onChange: audioGuide.change } : undefined}
                 narration={listenToCourseIntro && !posterIntro ? audioGuide.audio.intro : undefined}
                 audio={audioGuide.audio}
                 level={course ? "page" : "course"}
                 // A one-page course's introduction plays by itself when the page opens (the owner, Nov 2026).
                 autoplay={listenToCourseIntro && !posterIntro}
-                onEvent={
-                  listenToCourseIntro ? (outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {}) : () => {}
-                }
+                onEvent={(outcome) => send("events", { event: "narration", pageId: "intro", detail: { outcome } }).catch(() => {})}
               />
-            )}
-            {!course && (
-              <span>
-                {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
-              </span>
             )}
             {finished.includes(page.id) && (
               <span className="inline-flex items-center gap-1.5 font-semibold text-[#0f5b3a] dark:text-[#8fe0b5]">
@@ -671,7 +651,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             title={title}
             cover={hero?.src ?? null}
             script={pageIntro}
-            startMuted={audioGuide.offered && !audioGuide.on}
+            startMuted={false}
             onEvent={(outcome) => send("events", { event: "narration", pageId: page.id, detail: { outcome } }).catch(() => {})}
           />
         ) : posterIntro && hero?.src ? (
@@ -683,7 +663,7 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
             poster={{ src: hero.src }}
             label="Listen to the introduction"
             posterTall
-            autoPlay={!audioGuide.offered || audioGuide.on}
+            autoPlay
             className="mt-0 rounded-3xl"
             onEvent={(action, detail) =>
               void (
@@ -793,6 +773,9 @@ export function GuideReader({ guide, pageId, base, preview = false }: { guide: R
         </div>
         {!preview && <Highlighter root={pageBody} source="guide" id={guide.slug} revisionId={guide.revisionId} pageId={page.id} />}
       </SavedMarks>
+      <p className="mt-12 border-t border-line pt-4 text-sm text-ink-muted">
+        {guide.revision > 1 ? "Updated" : "Published"} {formatDate(guide.publishedAt)}
+      </p>
       {selfReview.button("float")}
       {selfReview.dialog}
       {myNotes.dialog}

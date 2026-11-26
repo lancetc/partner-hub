@@ -20,6 +20,9 @@ import {
   publishCourse,
   publishRule,
   resolveHelp,
+  reviewRoleChoice,
+  roleStarts,
+  saveRoleStart,
   retireRule,
   saveCourse,
   saveEquivalence,
@@ -36,6 +39,8 @@ export async function GET(req: Request) {
   return handle(({ db, user, now }) => {
     seedDemoCourses(db, now);
     switch (q.get("view")) {
+      case "roles":
+        return roleStarts(db, user, now);
       case "people":
         return searchPeople(db, user, q.get("q"), now);
       case "person":
@@ -68,6 +73,10 @@ export async function POST(req: Request) {
   return handle(async ({ db, user, now }) => {
     const input = await body<Record<string, unknown>>(req);
     switch (input.action) {
+      case "save-role":
+        return saveRoleStart(db, user, input, now);
+      case "role-choice":
+        return reviewRoleChoice(db, user, input, now);
       case "save-course":
         return saveCourse(db, user, input, now);
       case "publish-course":

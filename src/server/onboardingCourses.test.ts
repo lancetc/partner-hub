@@ -358,3 +358,141 @@ describe("demonstration pathways", () => {
     expect((db.prepare("SELECT COUNT(*) AS n FROM onbc_enrolments WHERE due_on IS NOT NULL OR mandatory = 1").get() as { n: number }).n).toBe(0);
   });
 });
+
+describe("the role someone picks", () => {
+  const choices = (u: User) =>
+    db.prepare("SELECT * FROM onbc_role_choices WHERE user_id = ? ORDER BY chosen_at").all(u.id) as { id: string; segment: string; state: string }[];
+
+  it("takes effect straight away and waits for an administrator to keep or change back", () => {
+    standard();
+    c.evaluate(db, sam, now);
+    c.chooseRole(db, sam, { segment: "coordinator" }, now);
+    expect(userById(db, "sam")).toMatchObject({ audience: "coordinator", self_role: "coordinator", role: "learner" });
+    expect(choices(sam)).toMatchObject([{ segment: "coordinator", state: "open" }]);
+    // Their starting course follows the pick.
+    expect(c.myCourses(db, userById(db, "sam")!, now).primary?.title).toBe("Course coord");
+    const item = c.exceptionsQueue(db, jordan, now).items.find((i) => i.kind === "role_chosen" && i.person?.id === "sam");
+    expect(item?.choice?.id).toBe(choices(sam)[0].id);
+
+    c.reviewRoleChoice(db, jordan, { id: item!.choice!.id, decision: "undo" }, later(1));
+    expect(userById(db, "sam")).toMatchObject({ audience: "partner", self_role: null });
+    expect(choices(sam)[0].state).toBe("undone");
+    const told = db.prepare("SELECT title FROM notifications WHERE user_id = 'sam' AND source LIKE 'role-choice:%'").get() as { title: string } | undefined;
+    expect(told?.title).toBe("Your role has been changed back");
+    expect(c.exceptionsQueue(db, jordan, later(1)).items.some((i) => i.kind === "role_chosen")).toBe(false);
+  });
+
+  it("withdraws the pick when they choose their account's role again, and changes nothing for the role they already have", () => {
+    c.chooseRole(db, sam, { segment: "staff" }, now);
+    c.chooseRole(db, userById(db, "sam")!, { segment: "supplier" }, later(1));
+    expect(userById(db, "sam")).toMatchObject({ audience: "partner", self_role: null });
+    expect(choices(sam)).toMatchObject([{ state: "withdrawn" }]);
+    c.chooseRole(db, riley, { segment: "coordinator" }, now);
+    expect(choices(riley)).toEqual([]);
+    expect(() => c.chooseRole(db, sam, { segment: "author" }, now)).toThrow(/four roles/);
+  });
+
+  it("never makes anyone an administrator: a Care Partner picked here stays a learner", () => {
+    c.chooseRole(db, sam, { segment: "principal" }, now);
+    expect(userById(db, "sam")).toMatchObject({ audience: "partner", role: "learner", self_role: "principal" });
+    expect(c.myCourses(db, userById(db, "sam")!, now).person.roles[0].segment).toBe("principal");
+    c.reviewRoleChoice(db, jordan, { id: choices(sam)[0].id, decision: "keep" }, now);
+    expect(choices(sam)[0].state).toBe("kept");
+    expect(userById(db, "sam")!.self_role).toBe("principal");
+  });
+});
+
+describe("by role", () => {
+  const addPath = (id: string, audience: string, slugs: string[]) => {
+    const at = now.toISOString();
+    db.prepare("INSERT INTO learning_paths (id, name, audience, created_by, created_at, updated_at) VALUES (?, ?, ?, 'jordan', ?, ?)").run(
+      id,
+      `Path ${id}`,
+      audience,
+      at,
+      at,
+    );
+    slugs.forEach((s, i) => db.prepare("INSERT INTO learning_path_lessons (path_id, position, lesson_slug) VALUES (?, ?, ?)").run(id, i, s));
+  };
+
+  it("lists the four roles, and saves a role's items as its starting course, with a due date only when one is given", () => {
+    standard();
+    addPath("p-coord", "Care Coordinators", ["legislative-framework", "noticing-a-change"]);
+    const view = c.roleStarts(db, jordan, now);
+    expect(view.roles.map((r) => r.label)).toEqual(["Supplier", "Care Coordinator", "Care Partner", "Trilogy Care staff"]);
+    expect(view.roles[1].courseId).toBe("coord");
+    // A coordinators' path can be added for coordinators, not suppliers.
+    const p = view.choices.find((x) => x.ref === "path:p-coord");
+    expect(p?.openTo).toEqual(["coordinator", "staff"]);
+
+    const saved = c.saveRoleStart(
+      db,
+      jordan,
+      { segment: "coordinator", title: "Your first weeks", steps: [{ ref: "path:p-coord" }, { ref: "topic:noticing-a-change", required: false, later: true }] },
+      now,
+    );
+    const coord = saved.roles[1];
+    expect(coord).toMatchObject({ courseId: "coord", title: "Your first weeks", dueDays: null, mandatory: "none" });
+    expect(coord.steps.map((s) => [s.kind, s.required])).toEqual([
+      ["path", true],
+      ["topic", false],
+    ]);
+    // Today or Later: the topic waits until they’re settled in, and learners see it marked so.
+    expect(coord.steps.map((s) => s.later)).toEqual([false, true]);
+    expect(c.myCourses(db, userById(db, "riley")!, later(1)).primary!.steps.map((s) => s.later)).toEqual([false, true]);
+    // Riley is assigned it; the path step is done once every topic in it is.
+    const mine = () => c.myCourses(db, userById(db, "riley")!, later(1)).primary!;
+    expect(mine().title).toBe("Your first weeks");
+    expect(mine().steps[0].state).toBe("todo");
+    complete(riley, "legislative-framework");
+    complete(riley, "noticing-a-change");
+    c.myCourses(db, userById(db, "riley")!, later(2));
+    expect(
+      enrolments(riley)
+        .filter((e) => e.course_id === "coord")
+        .map((e) => e.status),
+    ).toEqual(["completed"]);
+
+    // A due date makes it required at once: the person saving owns it.
+    const due = c.saveRoleStart(db, jordan, { segment: "staff", title: "Using the Hub", steps: [{ ref: "topic:legislative-framework" }], dueDays: 10 }, now);
+    expect(due.roles[3]).toMatchObject({ dueDays: 10, mandatory: "approved", courseId: "start-staff" });
+  });
+
+  it("refuses items a role couldn't open, and people who don't run onboarding", () => {
+    standard();
+    addPath("p-coord", "Care Coordinators", ["legislative-framework"]);
+    expect(() => c.saveRoleStart(db, jordan, { segment: "supplier", steps: [{ ref: "path:p-coord" }] }, now)).toThrow(/isn’t open to Suppliers/);
+    expect(() => c.saveRoleStart(db, jordan, { segment: "supplier", steps: [] }, now)).toThrow(/at least one item/);
+    expect(() => c.roleStarts(db, sam, now)).toThrow();
+    expect(() => c.saveRoleStart(db, sam, { segment: "supplier", steps: [{ ref: "topic:legislative-framework" }] }, now)).toThrow();
+  });
+
+  it("keeps Get to know you answers: their own, cleaned, and seen by an administrator", () => {
+    expect(c.aboutOf(db, sam.id)).toMatchObject({ years: null, interests: [], updatedAt: null });
+    const saved = c.saveAbout(
+      db,
+      sam,
+      {
+        years: "1to3",
+        before: "  Ran a café  ",
+        languages: "Greek",
+        interests: ["quality", "made-up", "quality"],
+        learn: ["videos", 7],
+        note: "Prefers mornings",
+      },
+      now,
+    );
+    expect(saved).toMatchObject({
+      years: "1to3",
+      before: "Ran a café",
+      languages: "Greek",
+      interests: ["quality"],
+      learn: ["videos"],
+      note: "Prefers mornings",
+    });
+    expect(c.saveAbout(db, sam, { years: "forever" }, now)).toMatchObject({ years: null, before: "" });
+    c.saveAbout(db, sam, { years: "new", learn: ["reading"] }, now);
+    expect(c.aboutOf(db, sam.id)).toMatchObject({ years: "new", learn: ["reading"] });
+    expect(c.personCourses(db, jordan, "sam", now).about).toMatchObject({ years: "new" });
+  });
+});

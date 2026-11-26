@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getDb } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { currentUser, canAuthor } from "@/server/auth";
 import { browseLearningPaths, myCertificates, slugsFor } from "@/server/learningPaths";
 import { HeroStats, PageHero } from "@/components/PageHero";
 import { LearnTile } from "@/components/LearnMenu";
@@ -14,6 +14,7 @@ import { catalogueTopics, topicPopularity } from "@/server/catalogue";
 import { now } from "@/server/clock";
 import { missionSlugs } from "@/server/challenges";
 import { featuredTags } from "@/server/magazineFeatured";
+import { browsingRole } from "@/lib/magazine";
 
 export const metadata: Metadata = {
   title: "Discovery Paths",
@@ -118,6 +119,7 @@ async function Paths() {
   return (
     <PathsBrowser
       audience={user.audience}
+      startRole={browsingRole({ audience: user.audience, role: user.role, canAuthor: canAuthor(user), selfRole: user.self_role })}
       paths={paths.map((p) => {
         const slugs = slugsFor(db, p.id);
         return {

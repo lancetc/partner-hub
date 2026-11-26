@@ -35,7 +35,7 @@ import type { IntroPageStats } from "@/server/narrationStats";
 import { Badge, btn, ErrorNote, input } from "./ui";
 import { stream } from "./MagazineAi";
 import { Icon } from "../Icon";
-import { AvaVideoBadge, AvaVideoSlot } from "./AvaVideoSlot";
+import { AvaVideoBadge, AvaVideoSlot, useAvaVideo } from "./AvaVideoSlot";
 
 /*
   Audio Introductions in the editor (docs/magazine-audio-guide.md): the settings in the sidebar, an Audio introduction
@@ -433,31 +433,9 @@ export function AudioGuidePanel({ draft, change, onOpenReview }: { draft: Draft;
               </label>
             ))}
           </fieldset>
-          <fieldset className="flex flex-col gap-1 text-sm">
-            <legend className="mb-1 font-semibold">Playback</legend>
-            <p className="text-xs text-ink-muted">Introductions never play by themselves: learners press Play.</p>
-            {(
-              [
-                ["press-play", "No Audio guide switch (recommended)", ""],
-                ["auto", "Offer an Audio guide switch, starting on", "Off starts Ava’s transmissions without sound."],
-                ["offer-auto", "Offer an Audio guide switch, starting off", "Ava’s transmissions start without sound until a learner turns it on."],
-              ] as const
-            ).map(([value, label, hint]) => (
-              <label key={value} className="flex items-start gap-2">
-                <input
-                  type="radio"
-                  name="narration-playback"
-                  className="mt-0.5 size-4 accent-[var(--color-action)]"
-                  checked={audio.playback === value}
-                  onChange={() => set((a) => void (a.playback = value))}
-                />
-                <span>
-                  {label}
-                  {hint && <span className="block text-xs text-ink-muted">{hint}</span>}
-                </span>
-              </label>
-            ))}
-          </fieldset>
+          <p className="text-sm">
+            <span className="font-semibold">Playback:</span> <span className="text-ink-muted">introductions play by themselves as each page opens.</span>
+          </p>
           <button
             type="button"
             className="self-start text-xs font-semibold text-accent hover:underline"
@@ -1345,24 +1323,42 @@ export function PageNarrationStrip({ guideId, draft, change, page }: { guideId: 
   const [open, setOpen] = useState(false);
   const busy = Object.keys(actions.jobs).length > 0;
   const w = workingCopy(page.narration);
+  // Ava's video in the page's header overrides this introduction (the owner, Nov 2026): learners see her instead of
+  // hearing it, so it's greyed out here, still there for when her video is removed. (A one-page guide's is the course's.)
+  const ava = useAvaVideo(draft.doc.pages.length > 1 ? `magazine:${guideId}:page:${page.id}` : `magazine:${guideId}:intro`).has;
   return (
-    <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="group rounded-2xl border border-action/25 bg-tealtint">
-      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm">
-        <Icon name="volume" className="size-4 text-accent" />
+    <details
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+      className={cx("group rounded-2xl border", ava ? "border-line bg-muted" : "border-action/25 bg-tealtint")}
+    >
+      <summary className={cx("flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm", ava && "text-ink-muted")}>
+        <Icon name="volume" className={cx("size-4", ava ? "text-ink-muted" : "text-accent")} />
         <span className="font-semibold">Audio introduction</span>
-        <Badge tone={NARRATION_STATES[state].tone}>{NARRATION_STATES[state].label}</Badge>
+        {ava ? (
+          <Badge tone="neutral">Not used: Ava’s video plays instead</Badge>
+        ) : (
+          <Badge tone={NARRATION_STATES[state].tone}>{NARRATION_STATES[state].label}</Badge>
+        )}
         {w && !open && <span className="min-w-0 flex-1 truncate text-ink-muted">“{w.script}”</span>}
         <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
       </summary>
       <div className="flex flex-col gap-2 px-3 pb-3">
-        <NarrationRow
-          draft={draft}
-          change={change}
-          target={page.id}
-          actions={actions}
-          busy={busy}
-          label={draft.doc.pages.length > 1 ? "Page introduction" : "Introduction"}
-        />
+        {ava && (
+          <p role="note" className="rounded-xl bg-surface px-3 py-2 text-sm">
+            This page has Ava’s video in its header, so learners see her instead of hearing this introduction. It’s kept here for if her video is removed.
+          </p>
+        )}
+        <div className={cx(ava && "opacity-60 grayscale")}>
+          <NarrationRow
+            draft={draft}
+            change={change}
+            target={page.id}
+            actions={actions}
+            busy={busy}
+            label={draft.doc.pages.length > 1 ? "Page introduction" : "Introduction"}
+          />
+        </div>
         {/* Ava's video for the page is set beside its picture, in the page's header ("Ava in the header"). */}
       </div>
     </details>

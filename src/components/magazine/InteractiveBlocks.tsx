@@ -108,6 +108,8 @@ export type InteractiveContext = {
   preview?: boolean;
   /** The course's id, for its insight walls. */
   guideId: string;
+  /** Where a block sits, so it can be saved to Favourites whole (a job aid); missing in an author's preview. */
+  savePlace?: { id: string; revisionId: string; pageId: string };
   rate: (blockId: string, rating: number) => Promise<void>;
   activity: (blockId: string, detail: { outcome?: string; score?: number; total?: number }) => void;
   /** The reader has worked through this block, for pages that ask for every activity. */

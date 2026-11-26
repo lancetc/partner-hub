@@ -9,6 +9,8 @@ import { ShelfRow } from "../ShelfRow";
 import { FeaturedTag } from "../FeaturedTag";
 import { GUIDE_GOALS, GUIDE_ROLES, browsingRole, type GuideGoal, type GuideRole } from "@/lib/magazine";
 import { useApi, type Me } from "@/lib/api";
+import { PictureTags } from "../PictureTags";
+import { BrowsePanel } from "../BrowsePanel";
 
 /*
   Magazine, laid out like Topics and Discovery Paths: "Browse the Magazine" with a toolbar, the rows to browse, then
@@ -226,7 +228,7 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   useEffect(() => {
     if (roleChosen.current || !me) return;
     roleChosen.current = true;
-    const mine = browsingRole({ audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor });
+    const mine = browsingRole({ audience: me.user.audience, role: me.user.role, canAuthor: me.canAuthor, selfRole: me.user.selfRole });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- once, when we know who's reading
     if (mine && guides.some((g) => g.roles.includes(mine))) setRole(mine);
   }, [me, guides]);
@@ -290,6 +292,15 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
     if (s.goal) setGoal(s.goal);
     requestAnimationFrame(() => everyStory.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
+  // The browse panel's closed line: what's chosen, or what it offers.
+  const chosen = [
+    words.length ? `“${q.trim()}”` : null,
+    goals.find((x) => x.value === goal)?.label,
+    GUIDE_ROLES.find((x) => x.value === role)?.label,
+    FORMATS.find((f) => f.value === format)?.chip,
+    PROGRESS[status],
+    length !== "any" ? LENGTHS.find((x) => x.value === length)?.label : null,
+  ].filter(Boolean);
   const chip = (active: boolean) =>
     cx(
       "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors",
@@ -299,109 +310,114 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   return (
     <div className="mt-8 flex flex-col gap-12">
       <section aria-labelledby="all-magazines">
-        <h2 id="all-magazines" className="font-serif text-2xl font-semibold">
-          {filtering ? "Results" : "Browse the Magazine"}{" "}
-          <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : guides.length})</span>
-        </h2>
+        <BrowsePanel
+          id="all-magazines"
+          title="Browse the Magazine"
+          count={filtering ? filtered.length : guides.length}
+          active={filtering}
+          startOpen={["q", "kind", "goal", "role", "status", "length"].some((k) => params.has(k))}
+          storageKey="hub.browse.magazine"
+          summary={filtering ? `Showing ${filtered.length}: ${chosen.join(" · ")}` : "Search, or filter by goal, role, format, progress and length"}
+        >
+          {/* Goals: what a story helps someone do, with how many match the rest of the choices. Growing the business first. */}
+          {goals.length > 0 && (
+            <div role="group" aria-label="Goal" className="scrollbar-none -mx-4 mt-1 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+              <button type="button" aria-pressed={goal === "any"} onClick={() => setGoal("any")} className={chip(goal === "any")}>
+                Everything <span className={cx("text-xs font-bold", goal === "any" ? "opacity-80" : "text-ink-muted")}>{beforeGoal.length}</span>
+              </button>
+              {goals.map((x) => {
+                const n = beforeGoal.filter((g) => g.goals.includes(x.value)).length;
+                return (
+                  <button key={x.value} type="button" aria-pressed={goal === x.value} onClick={() => setGoal(x.value)} className={chip(goal === x.value)}>
+                    <Icon name={GOAL_ICONS[x.value]} className="size-4" />
+                    {x.label} <span className={cx("text-xs font-bold", goal === x.value ? "opacity-80" : "text-ink-muted")}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-        {/* Goals: what a story helps someone do, with how many match the rest of the choices. Growing the business first. */}
-        {goals.length > 0 && (
-          <div role="group" aria-label="Goal" className="scrollbar-none -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-            <button type="button" aria-pressed={goal === "any"} onClick={() => setGoal("any")} className={chip(goal === "any")}>
-              Everything <span className={cx("text-xs font-bold", goal === "any" ? "opacity-80" : "text-ink-muted")}>{beforeGoal.length}</span>
-            </button>
-            {goals.map((x) => {
-              const n = beforeGoal.filter((g) => g.goals.includes(x.value)).length;
-              return (
-                <button key={x.value} type="button" aria-pressed={goal === x.value} onClick={() => setGoal(x.value)} className={chip(goal === x.value)}>
-                  <Icon name={GOAL_ICONS[x.value]} className="size-4" />
-                  {x.label} <span className={cx("text-xs font-bold", goal === x.value ? "opacity-80" : "text-ink-muted")}>{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Search, filters and sort: the same toolbar as Topics and Discovery Paths. */}
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
-            Search
-            <span className="relative">
-              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
-              <input type="search" className={cx(field, "pl-9")} placeholder="A topic, title or word" value={q} onChange={(e) => setQ(e.target.value)} />
-            </span>
-          </label>
-          {roles.length > 1 && (
+          {/* Search, filters and sort: the same toolbar as Topics and Discovery Paths. */}
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
+              Search
+              <span className="relative">
+                <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+                <input type="search" className={cx(field, "pl-9")} placeholder="A topic, title or word" value={q} onChange={(e) => setQ(e.target.value)} />
+              </span>
+            </label>
+            {roles.length > 1 && (
+              <label className="flex flex-col gap-1 text-sm font-semibold">
+                Your role
+                <select
+                  className={cx(field, "w-auto")}
+                  value={role}
+                  onChange={(e) => {
+                    roleChosen.current = true;
+                    setRole(e.target.value as Role);
+                  }}
+                >
+                  <option value="any">Any role</option>
+                  {roles.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {formats.length > 1 && (
+              <label className="flex flex-col gap-1 text-sm font-semibold">
+                Format
+                <select className={cx(field, "w-auto")} value={format} onChange={(e) => setFormat(e.target.value as Format)}>
+                  <option value="any">Any format</option>
+                  {formats.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.chip}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="flex flex-col gap-1 text-sm font-semibold">
-              Your role
-              <select
-                className={cx(field, "w-auto")}
-                value={role}
-                onChange={(e) => {
-                  roleChosen.current = true;
-                  setRole(e.target.value as Role);
-                }}
-              >
-                <option value="any">Any role</option>
-                {roles.map((x) => (
+              Your progress
+              <select className={cx(field, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+                <option value="any">Any progress</option>
+                <option value="new">Not started</option>
+                <option value="started">Started</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Length
+              <select className={cx(field, "w-auto")} value={length} onChange={(e) => setLength(e.target.value as Length)}>
+                {LENGTHS.map((x) => (
                   <option key={x.value} value={x.value}>
                     {x.label}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          {formats.length > 1 && (
             <label className="flex flex-col gap-1 text-sm font-semibold">
-              Format
-              <select className={cx(field, "w-auto")} value={format} onChange={(e) => setFormat(e.target.value as Format)}>
-                <option value="any">Any format</option>
-                {formats.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.chip}
+              Sort by
+              <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                {SORTS.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Your progress
-            <select className={cx(field, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-              <option value="any">Any progress</option>
-              <option value="new">Not started</option>
-              <option value="started">Started</option>
-              <option value="completed">Completed</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Length
-            <select className={cx(field, "w-auto")} value={length} onChange={(e) => setLength(e.target.value as Length)}>
-              {LENGTHS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Sort by
-            <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              {SORTS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
-            {filtering ? `Showing ${filtered.length} of ${guides.length}` : `${guides.length} ${guides.length === 1 ? "story" : "stories"}`}
-            {filtering && (
-              <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
-                Clear search and filters
-              </button>
-            )}
-          </p>
-        </div>
+            <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
+              {filtering ? `Showing ${filtered.length} of ${guides.length}` : `${guides.length} ${guides.length === 1 ? "story" : "stories"}`}
+              {filtering && (
+                <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
+                  Clear search and filters
+                </button>
+              )}
+            </p>
+          </div>
+        </BrowsePanel>
 
         {!filtering && rows.length > 0 && (
           <div className="mt-10 flex flex-col gap-10">
@@ -448,6 +464,14 @@ export function MagazineBrowser({ guides, canEdit = false }: { guides: BrowseGui
   );
 }
 
+const PROGRESS: Record<string, string> = {
+  new: "Not started",
+  "not-started": "Not started",
+  started: "Started",
+  "in-progress": "In progress",
+  completed: "Completed",
+};
+
 function Grid({ guides, view, canEdit }: { guides: BrowseGuide[]; view: View; canEdit: boolean }) {
   if (view === "list")
     return (
@@ -485,33 +509,48 @@ function State({ guide }: { guide: BrowseGuide }) {
 
 function Tile({ guide: g, canEdit, className }: { guide: BrowseGuide; canEdit: boolean; className?: string }) {
   return (
-    <li className={cx("group relative flex flex-col gap-3", className)}>
+    <li className={cx("tile tile-card group relative flex flex-col", className)}>
       <div className="relative">
-        <Cover guide={g} className="aspect-[16/10] w-full rounded-2xl" />
+        <Cover guide={g} className="aspect-[16/10] w-full" />
         {g.featured && <FeaturedTag />}
+        {/* On the picture (the owner, Nov 2026): what it is and how long bottom left, who it's for bottom right. */}
+        <PictureTags
+          items={[
+            g.kind === "elearning"
+              ? { icon: "monitor", text: "eLearning" }
+              : g.format === "course"
+                ? { icon: "layers", text: `${g.pages} pages` }
+                : g.format === "simulation"
+                  ? { icon: "target", text: "Simulation" }
+                  : { icon: "magazine", text: "Guide" },
+            ...(g.minutes != null ? [{ icon: "clock" as const, text: hoursAndMinutes(g.minutes) }] : []),
+          ]}
+          roles={g.roles}
+        />
       </div>
-      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{meta(g)}</p>
-      <h3 className="font-serif text-xl font-semibold leading-snug">
-        <Link href={g.href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
-          {g.title}
-        </Link>
-      </h3>
-      {g.standfirst && <p className="line-clamp-3 text-ink-muted">{g.standfirst}</p>}
-      <State guide={g} />
-      <p className="mt-auto text-sm text-ink-muted">Added {formatDate(g.publishedAt)}</p>
-      {canEdit && g.editHref && <EditLink href={g.editHref} />}
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <h3 className="font-serif text-xl font-semibold leading-snug">
+          <Link href={g.href} className="tile-link">
+            {g.title}
+          </Link>
+        </h3>
+        {g.standfirst && <p className="line-clamp-3 text-ink-muted">{g.standfirst}</p>}
+        <State guide={g} />
+        <p className="mt-auto text-sm text-ink-muted">Added {formatDate(g.publishedAt)}</p>
+        {canEdit && g.editHref && <EditLink href={g.editHref} />}
+      </div>
     </li>
   );
 }
 
 function Row({ guide: g, canEdit }: { guide: BrowseGuide; canEdit: boolean }) {
   return (
-    <li className="group relative flex items-center gap-4 p-3 sm:px-4">
+    <li className="tile tile-row group relative flex items-center gap-4 p-3 sm:px-4">
       <Cover guide={g} className="size-16 shrink-0 rounded-xl" />
       <div className="min-w-0 flex-1">
         <p className="font-mulish text-xs font-bold uppercase tracking-[0.1em] text-accent">{meta(g)}</p>
         <h3 className="font-semibold leading-snug">
-          <Link href={g.href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+          <Link href={g.href} className="tile-link">
             {g.title}
           </Link>
         </h3>

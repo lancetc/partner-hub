@@ -8,7 +8,10 @@ import { Icon } from "./Icon";
 import { StoryVisual } from "./StoryVisual";
 import { FeaturedTag } from "./FeaturedTag";
 import { ShelfRow } from "./ShelfRow";
-import { byPathNewest, byPathPopularity, pathForRole, pathShelves, type PathSeeAll } from "@/lib/pathShelves";
+import { byPathNewest, byPathPopularity, pathRoles, pathShelves, type PathSeeAll } from "@/lib/pathShelves";
+import { GUIDE_ROLES } from "@/lib/magazine";
+import { PictureTags } from "./PictureTags";
+import { BrowsePanel } from "./BrowsePanel";
 
 /*
   The Learning paths page, laid out like Learning: the person's own paths, then "All paths" with the
@@ -62,6 +65,14 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: "longest", label: "Longest first" },
   { value: "most", label: "Most topics" },
 ];
+const PROGRESS: Record<string, string> = {
+  new: "Not started",
+  "not-started": "Not started",
+  started: "Started",
+  "in-progress": "In progress",
+  completed: "Completed",
+};
+
 const LENGTHS: { value: Length; label: string; test: (m: number) => boolean }[] = [
   { value: "any", label: "Any length", test: () => true },
   { value: "short", label: "Under 1 hour", test: (m) => m < 60 },
@@ -77,13 +88,24 @@ const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface p
 
 const stateOf = (p: BrowsePath): Exclude<Status, "any"> => (p.done ? "completed" : p.started ? "in-progress" : "not-started");
 
-/** The Audience filter's own choice for "See all" on the role row: every path meant for their role. */
-const ROLE = "role";
-
-export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; audience?: string | null }) {
+export function PathsBrowser({
+  paths,
+  audience: role,
+  startRole,
+}: {
+  paths: BrowsePath[];
+  audience?: string | null;
+  /** The reader's own browsing role (lib/magazine browsingRole), which "Your role" starts on, as in the Magazine. */
+  startRole?: string | null;
+}) {
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
-  const [audience, setAudience] = useState(params.get("for") ?? "all");
+  // "Your role", as in the Magazine: Suppliers, Care Coordinators, Care Partners or Trilogy Care staff. It starts on the
+  // reader's own (when any path is for it), unless the address chose one.
+  const roleValues: string[] = GUIDE_ROLES.map((r) => r.value);
+  const myRole = startRole && roleValues.includes(startRole) && paths.some((p) => pathRoles(p.audience).includes(startRole)) ? startRole : "all";
+  const fromAddress = params.get("for");
+  const [audience, setAudience] = useState(fromAddress && roleValues.includes(fromAddress) ? fromAddress : fromAddress ? "all" : myRole);
   const [status, setStatus] = useState<Status>((params.get("status") as Status) || "any");
   const [length, setLength] = useState<Length>((params.get("length") as Length) || "any");
   const [sort, setSort] = useState<Sort>((params.get("sort") as Sort) || "az");
@@ -103,12 +125,12 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [q, audience, status, length, sort, view]);
 
-  const audiences = [...new Set(paths.map((p) => p.audience).filter(Boolean))].sort();
+  const roles = GUIDE_ROLES.filter((r) => paths.some((p) => pathRoles(p.audience).includes(r.value)));
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const lengthTest = LENGTHS.find((x) => x.value === length)!.test;
   const filtered = paths.filter(
     (p) =>
-      (audience === "all" || (audience === ROLE ? pathForRole(p.audience, role) : p.audience === audience)) &&
+      (audience === "all" || pathRoles(p.audience).includes(audience)) &&
       (status === "any" || stateOf(p) === status) &&
       lengthTest(p.minutes) &&
       words.every((w) => [p.name, p.description, p.audience, ...p.topicTitles].join(" ").toLowerCase().includes(w)),
@@ -142,11 +164,10 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
   const seeAll = (s: PathSeeAll) => {
     reset();
     if (s.sort) setSort(s.sort);
-    if (s.audience) setAudience(ROLE);
+    if (s.audience) setAudience(myRole);
     if (s.length) setLength(s.length);
     requestAnimationFrame(() => everyPath.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
-  const roleLabel = role === "partner" ? "For Care Partners" : role === "coordinator" ? "For care coordinators" : null;
 
   return (
     <div className="mt-8 flex flex-col gap-12">
@@ -160,86 +181,102 @@ export function PathsBrowser({ paths, audience: role }: { paths: BrowsePath[]; a
       )}
 
       <section aria-labelledby="all-paths">
-        <h2 id="all-paths" className="font-serif text-2xl font-semibold">
-          {filtering ? "Results" : "All paths"} <span className="text-base font-normal text-ink-muted">({filtering ? filtered.length : paths.length})</span>
-        </h2>
-
-        {/* Search, filters and sort: the same toolbar as Topics. */}
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
-            Search
-            <span className="relative">
-              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
-              <input type="search" className={cx(field, "pl-9")} placeholder="Path name or a topic in it" value={q} onChange={(e) => setQ(e.target.value)} />
-            </span>
-          </label>
-          {(audiences.length > 1 || roleLabel) && (
+        <BrowsePanel
+          id="all-paths"
+          title="Browse Discovery Paths"
+          count={filtering ? filtered.length : paths.length}
+          active={filtering}
+          startOpen={["q", "for", "status", "length"].some((k) => params.has(k))}
+          storageKey="hub.browse.paths"
+          summary={
+            filtering
+              ? `Showing ${filtered.length}: ${[
+                  words.length ? `“${q.trim()}”` : null,
+                  GUIDE_ROLES.find((r) => r.value === audience)?.label,
+                  PROGRESS[status],
+                  length !== "any" ? LENGTHS.find((x) => x.value === length)?.label : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}`
+              : "Search, or filter by role, progress and length"
+          }
+        >
+          {/* Search, filters and sort: the same toolbar as Topics. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm font-semibold sm:max-w-xs">
+              Search
+              <span className="relative">
+                <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+                <input type="search" className={cx(field, "pl-9")} placeholder="Path name or a topic in it" value={q} onChange={(e) => setQ(e.target.value)} />
+              </span>
+            </label>
+            {roles.length > 1 && (
+              <label className="flex flex-col gap-1 text-sm font-semibold">
+                Your role
+                <select className={cx(field, "w-auto max-w-[16rem]")} value={audience} onChange={(e) => setAudience(e.target.value)}>
+                  <option value="all">Any role</option>
+                  {roles.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="flex flex-col gap-1 text-sm font-semibold">
-              Audience
-              <select className={cx(field, "w-auto max-w-[16rem]")} value={audience} onChange={(e) => setAudience(e.target.value)}>
-                <option value="all">All audiences</option>
-                {roleLabel && <option value={ROLE}>{roleLabel}</option>}
-                {audiences.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+              Your progress
+              <select className={cx(field, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+                <option value="any">Any progress</option>
+                <option value="not-started">Not started</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Length
+              <select className={cx(field, "w-auto")} value={length} onChange={(e) => setLength(e.target.value as Length)}>
+                {LENGTHS.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Your progress
-            <select className={cx(field, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-              <option value="any">Any progress</option>
-              <option value="not-started">Not started</option>
-              <option value="in-progress">In progress</option>
-              <option value="completed">Completed</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Length
-            <select className={cx(field, "w-auto")} value={length} onChange={(e) => setLength(e.target.value as Length)}>
-              {LENGTHS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Sort by
+              <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                {SORTS.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
+              {(["grid", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
+                  title={v === "grid" ? "Tiles" : "List"}
+                  onClick={() => setView(v)}
+                  className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
+                >
+                  <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
+                </button>
               ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Sort by
-            <select className={cx(field, "w-auto")} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              {SORTS.map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div role="group" aria-label="View" className="flex rounded-full border border-line-strong p-0.5">
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                aria-label={v === "grid" ? "Show as tiles" : "Show as a list"}
-                title={v === "grid" ? "Tiles" : "List"}
-                onClick={() => setView(v)}
-                className={cx("grid size-9 place-items-center rounded-full", view === v ? "bg-action text-on-action" : "text-ink-muted hover:bg-muted")}
-              >
-                <Icon name={v === "grid" ? "widget" : "list"} className="size-4" />
-              </button>
-            ))}
+            </div>
+            <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
+              {filtering ? `Showing ${filtered.length} of ${paths.length}` : `${paths.length} paths`}
+              {filtering && (
+                <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
+                  Clear search and filters
+                </button>
+              )}
+            </p>
           </div>
-          <p className="ml-auto flex flex-wrap items-center gap-3 pb-2.5 text-sm text-ink-muted" role="status">
-            {filtering ? `Showing ${filtered.length} of ${paths.length}` : `${paths.length} paths`}
-            {filtering && (
-              <button type="button" onClick={reset} className="font-semibold text-accent hover:underline">
-                Clear search and filters
-              </button>
-            )}
-          </p>
-        </div>
+        </BrowsePanel>
 
         {!filtering && shelves.length > 0 && (
           <div className="mt-10 flex flex-col gap-10">
@@ -321,7 +358,7 @@ function PathRow({ path: p }: { path: BrowsePath }) {
           {(p.assigned || p.selfEnrolled) && (p.assigned ? " · Assigned to you" : " · Enrolled")}
         </p>
         <h3 className="font-semibold leading-snug">
-          <Link href={`/paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+          <Link href={`/paths/${p.id}`} className="tile-link">
             {p.name}
           </Link>
         </h3>
@@ -355,40 +392,42 @@ function PathTile({ path: p, className }: { path: BrowsePath; className?: string
   const pct = p.total ? Math.round((p.completed / p.total) * 100) : 0;
   const cta = p.done ? "Revisit path" : p.started ? "Continue" : "Start path";
   return (
-    <li className={cx("group relative flex flex-col gap-3", className)}>
+    <li className={cx("tile tile-card group relative flex flex-col", className)}>
       <div className="relative">
-        {p.thumbnail ? (
-          <StoryVisual {...p.thumbnail} alt="" className="aspect-[16/10] rounded-2xl" />
-        ) : (
-          <div className="aspect-[16/10] rounded-2xl bg-tealtint" aria-hidden />
-        )}
+        {p.thumbnail ? <StoryVisual {...p.thumbnail} alt="" className="aspect-[16/10]" /> : <div className="aspect-[16/10] bg-tealtint" aria-hidden />}
         {p.featured && <FeaturedTag />}
+        {/* On the picture (the owner, Nov 2026): its size and length bottom left, who it's for bottom right. */}
+        <PictureTags
+          items={[
+            { icon: "book", text: `${p.topics} ${p.topics === 1 ? "topic" : "topics"}` },
+            { icon: "clock", text: formatHoursMinutes(p.minutes) },
+          ]}
+          roles={pathRoles(p.audience)}
+        />
       </div>
-      <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-        {p.topics} {p.topics === 1 ? "topic" : "topics"} · {formatHoursMinutes(p.minutes)}
-        {p.audience && ` · ${p.audience}`}
-      </p>
-      {(p.selfEnrolled || p.assigned) && <p className="-mt-1 font-mulish text-sm font-bold text-success">{p.assigned ? "Assigned to you" : "Enrolled"}</p>}
-      <h3 className="font-serif text-xl font-semibold leading-snug">
-        <Link href={`/paths/${p.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
-          {p.name}
-        </Link>
-      </h3>
-      {p.description && <p className="line-clamp-3 text-ink-muted">{p.description}</p>}
-      {p.dueDate && !p.done && <p className="font-mulish text-sm font-bold text-warm">Due {formatDate(p.dueDate)}</p>}
-      {p.started && (
-        <div className="flex items-center gap-3">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${p.completed} of ${p.total} topics finished`}>
-            <div className="h-full bg-action" style={{ width: `${pct}%` }} />
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        {(p.selfEnrolled || p.assigned) && <p className="font-mulish text-sm font-bold text-success">{p.assigned ? "Assigned to you" : "Enrolled"}</p>}
+        <h3 className="font-serif text-xl font-semibold leading-snug">
+          <Link href={`/paths/${p.id}`} className="tile-link">
+            {p.name}
+          </Link>
+        </h3>
+        {p.description && <p className="line-clamp-3 text-ink-muted">{p.description}</p>}
+        {p.dueDate && !p.done && <p className="font-mulish text-sm font-bold text-warm">Due {formatDate(p.dueDate)}</p>}
+        {p.started && (
+          <div className="flex items-center gap-3">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${p.completed} of ${p.total} topics finished`}>
+              <div className="h-full bg-action" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-sm text-ink-muted">
+              {p.completed} of {p.total}
+            </span>
           </div>
-          <span className="text-sm text-ink-muted">
-            {p.completed} of {p.total}
-          </span>
-        </div>
-      )}
-      <span className="mt-auto inline-flex items-center gap-1 font-semibold text-accent">
-        {cta} <Icon name="arrow-right" className="size-4" />
-      </span>
+        )}
+        <span className="mt-auto inline-flex items-center gap-1 font-semibold text-accent">
+          {cta} <Icon name="arrow-right" className="size-4" />
+        </span>
+      </div>
     </li>
   );
 }

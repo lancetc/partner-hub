@@ -53,10 +53,7 @@ function Byline({ story, withAuthor = true }: { story: Story; withAuthor?: boole
 function Headline({ story, className }: { story: Story; className: string }) {
   return (
     <h3 className={cx("font-serif font-bold text-ink", className)}>
-      <Link
-        href={href(story)}
-        className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4"
-      >
+      <Link href={href(story)} className="tile-link">
         {story.title}
       </Link>
     </h3>
@@ -203,7 +200,7 @@ function Broadsheet({ stories }: { stories: Story[] }) {
 
 function Lead({ story, className }: { story: Story; className?: string }) {
   return (
-    <article className={cx("group relative flex flex-col", className)}>
+    <article className={cx("tile group relative flex flex-col", className)}>
       <div className="flex items-start justify-between gap-3">
         <Kicker story={story} />
         <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
@@ -223,7 +220,7 @@ function Lead({ story, className }: { story: Story; className?: string }) {
 
 function TextStory({ story }: { story: Story }) {
   return (
-    <article className="group relative py-4 first:pt-1">
+    <article className="tile group relative py-4 first:pt-1">
       <Kicker story={story} />
       <Headline story={story} className="mt-1 text-[1.2rem] leading-snug" />
       <p className="mt-1.5 text-[0.92rem] leading-snug text-ink-muted">{story.dek}</p>
@@ -239,7 +236,7 @@ function PolicyNotice({ story, className }: { story: Story; className?: string }
   const p = story.policy!;
   return (
     <div className={className}>
-      <article className="group relative border-2 border-ink bg-surface">
+      <article className="tile group relative border-2 border-ink bg-surface">
         <p className="flex items-center justify-between gap-2 bg-ink px-4 py-1.5 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-bg">
           Policy notice
           <Icon name="info" className="size-3.5" />
@@ -271,24 +268,29 @@ function PolicyNotice({ story, className }: { story: Story; className?: string }
 
 function ColumnStory({ story, className }: { story: Story; className?: string }) {
   return (
-    <article className={cx("group relative flex flex-col", className)}>
-      <StoryVisual {...story.visual} className="aspect-[3/2] overflow-hidden rounded-2xl" iconSize="size-8" />
-      <div className="mt-3 flex items-start justify-between gap-2">
-        <Kicker story={story} />
-        <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-3" />
-      </div>
-      <Headline story={story} className="text-[1.15rem] leading-snug" />
-      <p className="mt-1.5 line-clamp-3 text-[0.9rem] leading-snug text-ink-muted">{story.dek}</p>
-      <div className="mt-auto pt-3">
-        <Byline story={story} withAuthor={false} />
-      </div>
-    </article>
+    // The column's spacing and hairlines go on its cell, so the card's picture runs edge to edge.
+    <div className={cx("flex", className)}>
+      <article className="tile tile-card group relative flex flex-1 flex-col">
+        <StoryVisual {...story.visual} className="aspect-[3/2]" iconSize="size-8" />
+        <div className="flex flex-1 flex-col p-4">
+          <div className="flex items-start justify-between gap-2">
+            <Kicker story={story} />
+            <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-2" />
+          </div>
+          <Headline story={story} className="text-[1.15rem] leading-snug" />
+          <p className="mt-1.5 line-clamp-3 text-[0.9rem] leading-snug text-ink-muted">{story.dek}</p>
+          <div className="mt-auto pt-3">
+            <Byline story={story} withAuthor={false} />
+          </div>
+        </div>
+      </article>
+    </div>
   );
 }
 
 function WideStory({ story, className }: { story: Story; className?: string }) {
   return (
-    <article className={cx("group relative grid gap-5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]", className)}>
+    <article className={cx("tile group relative grid gap-5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]", className)}>
       <StoryVisual {...story.visual} className="aspect-[16/10] overflow-hidden rounded-2xl sm:aspect-auto sm:min-h-60" />
       <div className="flex flex-col">
         <div className="flex items-start justify-between gap-2">
@@ -308,7 +310,7 @@ function WideStory({ story, className }: { story: Story; className?: string }) {
 /** A brief: a big serif numeral beside the headline, as in a paper's news-in-brief column. */
 function Brief({ story, n }: { story: Story; n: number }) {
   return (
-    <li className="group relative flex gap-4 py-3.5 first:pt-1">
+    <li className="tile group relative flex gap-4 py-3.5 first:pt-1">
       <span aria-hidden className="w-7 shrink-0 font-serif text-3xl font-bold leading-none text-line-strong">
         {n}
       </span>
