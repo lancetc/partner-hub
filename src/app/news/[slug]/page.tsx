@@ -200,15 +200,12 @@ async function StoryArticle({
         <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-5 pb-7 pt-1 sm:min-h-[29rem] sm:px-8 sm:pb-10 sm:pt-24 lg:min-h-[31rem] lg:px-12 lg:pb-12">
           <div className="max-w-[47rem]">
             <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.16em] text-[#bdeeee]">{categoryLabel(story.category)}</p>
-            <h1 className="mt-3 text-balance font-serif text-[2.1rem] font-semibold leading-[1.08] tracking-tight [text-shadow:0_2px_18px_rgb(0_0_0/0.3)] sm:text-5xl lg:text-[3.4rem] lg:leading-[1.04]">
-              {story.title}
-            </h1>
-            <p className="mt-4 text-lg text-white/85 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] sm:text-xl">{story.dek}</p>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/20 pt-4">
-              <p className="font-mulish text-sm text-white/80">
-                {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
-              </p>
-              <div className="flex items-center gap-2">
+            {/* The save buttons sit beside the headline, on the right (the owner, Nov 2026); the byline, date and reading time are at the end of the story. */}
+            <div className="mt-3 flex items-start gap-4">
+              <h1 className="min-w-0 flex-1 text-balance font-serif text-[2.1rem] font-semibold leading-[1.08] tracking-tight [text-shadow:0_2px_18px_rgb(0_0_0/0.3)] sm:text-5xl lg:text-[3.4rem] lg:leading-[1.04]">
+                {story.title}
+              </h1>
+              <div className="flex shrink-0 items-center gap-2 pt-1 sm:pt-2">
                 {/* Save the opening without selecting anything; each subheading has its own. */}
                 {!draft && hasOpening && (
                   <span className="print:hidden">
@@ -218,6 +215,7 @@ async function StoryArticle({
                 <SaveButton id={`story:${story.slug}`} title={story.title} withLabel onDark />
               </div>
             </div>
+            <p className="mt-4 text-lg text-white/85 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] sm:text-xl">{story.dek}</p>
           </div>
         </div>
       </header>
@@ -233,43 +231,49 @@ async function StoryArticle({
       </div>
 
       <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:mt-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
-        <HighlightArea
-          source="news"
-          id={story.slug}
-          revisionId={edition}
-          off={Boolean(draft)}
-          className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
-        >
-          {intro && <StoryIntro script={intro.script} audio={intro.audio} />}
-          {p && (
-            <div className="rounded-2xl border border-line bg-muted p-5 text-base">
-              <p className="flex items-center gap-2 font-semibold">
-                <Icon name="info" className="size-5 text-accent" /> {policyStatusLabel[p.status]}
-              </p>
-              {p.correction && <p className="mt-2 text-danger">Correction: {p.correction}</p>}
-              <p className="mt-2 text-ink-muted">Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.</p>
-            </div>
-          )}
-          {/* Each part of the story is a place a passage can be highlighted, and found again (#hl-p3 from Favourites). */}
-          {story.body.map((b, i) => (
-            <Fragment key={i}>
-              <div data-hl={`p${i}`} id={`hl-p${i}`} className="scroll-mt-24">
-                {b.type === "h2" && !draft ? (
-                  <div className="flex items-end justify-between gap-3">
-                    <Block block={b} />
-                    <span className="print:hidden">
-                      <SaveSection source="news" id={story.slug} revisionId={edition} sectionId={`s${i}`} />
-                    </span>
-                  </div>
-                ) : (
-                  <Block block={b} />
-                )}
+        <div className="min-w-0">
+          {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
+          <HighlightArea
+            source="news"
+            id={story.slug}
+            revisionId={edition}
+            off={Boolean(draft)}
+            className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
+          >
+            {intro && <StoryIntro script={intro.script} audio={intro.audio} />}
+            {p && (
+              <div className="rounded-2xl border border-line bg-muted p-5 text-base">
+                <p className="flex items-center gap-2 font-semibold">
+                  <Icon name="info" className="size-5 text-accent" /> {policyStatusLabel[p.status]}
+                </p>
+                {p.correction && <p className="mt-2 text-danger">Correction: {p.correction}</p>}
+                <p className="mt-2 text-ink-muted">Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.</p>
               </div>
-              <SavedMarkChips blockId={`p${i}`} />
-            </Fragment>
-          ))}
-        </HighlightArea>
+            )}
+            {/* Each part of the story is a place a passage can be highlighted, and found again (#hl-p3 from Favourites). */}
+            {story.body.map((b, i) => (
+              <Fragment key={i}>
+                <div data-hl={`p${i}`} id={`hl-p${i}`} className="scroll-mt-24">
+                  {b.type === "h2" && !draft ? (
+                    <div className="flex items-end justify-between gap-3">
+                      <Block block={b} />
+                      <span className="print:hidden">
+                        <SaveSection source="news" id={story.slug} revisionId={edition} sectionId={`s${i}`} />
+                      </span>
+                    </div>
+                  ) : (
+                    <Block block={b} />
+                  )}
+                </div>
+                <SavedMarkChips blockId={`p${i}`} />
+              </Fragment>
+            ))}
+          </HighlightArea>
+          {/* Who wrote it, when, and how long it takes: at the end of the story. */}
+          <p className="mt-10 border-t border-line pt-4 font-mulish text-sm text-ink-muted">
+            {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
+          </p>
+        </div>
 
         <aside className="flex flex-col gap-5">
           {lesson && (
