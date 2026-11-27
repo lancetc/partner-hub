@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { api, useApi, type Me } from "@/lib/api";
 import { LANGUAGES, languageName } from "@/lib/languages";
-import { setAutoplay, setFollowWords, setSoundEffects, useAutoplay, useFollowWords, useSoundEffects } from "@/lib/audioPrefs";
+import {
+  setAutoplay,
+  setBriefingAutoplay,
+  setFollowWords,
+  setSoundEffects,
+  useAutoplay,
+  useBriefingAutoplay,
+  useFollowWords,
+  useSoundEffects,
+} from "@/lib/audioPrefs";
 import { setTranslation } from "./SiteTranslator";
 import { Icon } from "./Icon";
 import { OfflineLessons } from "./OfflineLessons";
@@ -18,6 +27,7 @@ export function ProfileSettings() {
   const meApi = useApi<Me>("/api/me");
   const me = meApi.data;
   const autoplay = useAutoplay();
+  const briefing = useBriefingAutoplay();
   const follow = useFollowWords();
   const sfx = useSoundEffects();
   const [choice, setChoice] = useState<string | null>(null);
@@ -151,6 +161,15 @@ export function ProfileSettings() {
           </span>
         </label>
         <label className="mt-3 flex cursor-pointer items-start gap-3">
+          <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={briefing} onChange={(e) => setBriefingAutoplay(e.target.checked)} />
+          <span>
+            <span className="font-semibold">Play the Trilogy Briefing when I reach the news</span>
+            <span className="block text-sm text-ink-muted">
+              Off unless you turn it on. It starts once a visit, only when nothing else is playing, and pauses if you scroll away. Saved on this device.
+            </span>
+          </span>
+        </label>
+        <label className="mt-3 flex cursor-pointer items-start gap-3">
           <input type="checkbox" className="mt-0.5 size-5 accent-[var(--action)]" checked={follow} onChange={(e) => setFollowWords(e.target.checked)} />
           <span>
             <span className="font-semibold">Highlight each word as it’s spoken</span>
@@ -162,8 +181,8 @@ export function ProfileSettings() {
           <span>
             <span className="font-semibold">Sound effects</span>
             <span className="block text-sm text-ink-muted">
-              A soft click when you press a button, with a light tap on phones, and small sounds as you drag and swipe cards in a topic. Muting a
-              topic’s audio silences the card sounds. Saved on this device.
+              A soft click when you press a button, with a light tap on phones, and small sounds as you drag and swipe cards in a topic. Muting a topic’s audio
+              silences the card sounds. Saved on this device.
             </span>
           </span>
         </label>

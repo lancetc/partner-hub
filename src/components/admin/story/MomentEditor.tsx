@@ -336,7 +336,7 @@ function Editor({
             hint={`Optional. With a video, the transmission ends with one pulse of interference, the picture goes, the stage stays empty for ${TX.hold / 1000} seconds, then the still fades in with Begin. Without one, the learner gets the words and Begin.`}
           >
             <div className={cx(box, "grid gap-3 sm:grid-cols-2")}>
-              <Field label="Video" hint="An approved MP4, WebM or MOV, up to 80 MB. A voice alone doesn’t make a talking video: upload the finished clip.">
+              <Field label="Video" hint="An approved MP4, WebM or MOV, up to 250 MB. A voice alone doesn’t make a talking video: upload the finished clip.">
                 <input type="file" accept="video/mp4,video/webm,video/quicktime" className="text-sm" onChange={file("src")} />
               </Field>
               <Field label="Captions" hint="A WebVTT file that matches the video.">

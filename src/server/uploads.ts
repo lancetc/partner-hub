@@ -16,8 +16,8 @@ import { titleFromFileName } from "@/lib/imageNames";
 const DIR = process.env.HUB_UPLOADS_DIR ?? path.join(process.cwd(), "data", "uploads");
 /** Largest image accepted; it's compressed to WebP (see imageCompress.ts), so what's stored is much smaller. */
 export const MAX_BYTES = 25 * 1024 * 1024;
-/** Short talking-head clips recorded in the editor, or uploaded. */
-export const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+/** Videos: clips recorded in the editor, or uploaded (a news story's interview recording can be long, Nov 2026). */
+export const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
 /** PDFs for Resources cards. */
 export const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const TYPES: Record<string, { ext: string; magic: (b: Buffer) => boolean }> = {
@@ -107,7 +107,7 @@ export async function saveUpload(
 ) {
   requireAuthor(actor);
   if (!file || typeof file.arrayBuffer !== "function") throw new HttpError(400, "Choose an image to upload.");
-  if (file.size > MAX_VIDEO_BYTES) throw new HttpError(413, "That file is over 80 MB. Try a shorter clip.");
+  if (file.size > MAX_VIDEO_BYTES) throw new HttpError(413, "That file is over 250 MB. Try a shorter clip, or put it on YouTube or Vimeo and link it.");
   let buf = Buffer.from(await file.arrayBuffer());
   // Trust the file's bytes, not its name or the browser's label.
   const detected = buf.length >= 12 ? Object.entries(TYPES).find(([, t]) => t.magic(buf)) : undefined;
@@ -208,6 +208,24 @@ export function readUpload(db: Db, filename: string) {
     if (next) return readFile(next);
   }
   return readFile(row);
+}
+
+/**
+  An uploaded file on this server's disk, for reading part of it: a long video is served a byte range at a time rather
+  than read whole for every request. Null when it isn't here (the online demo's shipped files are read whole instead).
+*/
+export function uploadOnDisk(db: Db, filename: string) {
+  if (!NAME.test(filename)) return null;
+  let row = db.prepare("SELECT * FROM uploads WHERE filename = ?").get(filename) as UploadRow | undefined;
+  if (row?.replaced_by && row.replaced_by !== filename)
+    row = (db.prepare("SELECT * FROM uploads WHERE filename = ?").get(row.replaced_by) as UploadRow | undefined) ?? row;
+  if (!row) return null;
+  const file = path.join(/*turbopackIgnore: true*/ DIR, row.filename);
+  try {
+    return { file, size: fs.statSync(file).size, mime: row.mime, name: row.original_name };
+  } catch {
+    return null;
+  }
 }
 
 function readFile(row: UploadRow) {

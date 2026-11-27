@@ -82,6 +82,7 @@ export function IntroPlayer({
   posterControls = "overlay",
   posterTall = false,
   onPicture = false,
+  quiet = false,
   className,
 }: {
   script: string;
@@ -105,6 +106,11 @@ export function IntroPlayer({
     the white Play, label, time, live caption and progress line, with no picture or background of their own.
   */
   onPicture?: boolean;
+  /**
+    The same small controls on the page's own colours, with no box of their own (a news story's "At a glance" summary,
+    the owner, Nov 2026): a teal Play, the label and time, and the progress line.
+  */
+  quiet?: boolean;
   className?: string;
 }) {
   useOnePlayer();
@@ -326,10 +332,10 @@ export function IntroPlayer({
       </section>
     );
 
-  // On a picture shown elsewhere: the poster's controls, caption and progress line, on whatever is behind them.
-  if (onPicture)
+  // On a picture shown elsewhere: the poster's controls, caption and progress line, on whatever is behind them. Quiet: the same on the page.
+  if (onPicture || quiet)
     return (
-      <section data-player aria-label={label} className={cx("w-full text-white", className ?? "mt-6")}>
+      <section data-player aria-label={label} className={cx("w-full", onPicture ? "text-white" : "text-ink", className ?? "mt-6")}>
         <div className="flex w-full flex-col gap-3">
           <div className="flex w-full items-center gap-3">
             <button
@@ -338,8 +344,10 @@ export function IntroPlayer({
               disabled={state === "broken"}
               aria-label={playLabel}
               className={cx(
-                "grid size-12 shrink-0 place-items-center rounded-full bg-white/95 text-[#0b2230] shadow-lg transition hover:scale-105 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50",
-                blocked && state !== "playing" && "ring-4 ring-white/40 motion-safe:animate-pulse",
+                onPicture
+                  ? "grid size-12 shrink-0 place-items-center rounded-full bg-white/95 text-[#0b2230] shadow-lg transition hover:scale-105 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
+                  : "grid size-11 shrink-0 place-items-center rounded-full bg-[#007f7e] text-white transition hover:bg-[#006766] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#007f7e] disabled:opacity-50",
+                blocked && state !== "playing" && (onPicture ? "ring-4 ring-white/40" : "ring-4 ring-[#007f7e]/25") + " motion-safe:animate-pulse",
               )}
             >
               <Icon
@@ -347,9 +355,9 @@ export function IntroPlayer({
                 className={cx("size-5", state !== "playing" && state !== "ended" && "ml-0.5")}
               />
             </button>
-            <div className="min-w-0 [text-shadow:0_1px_8px_rgb(0_0_0/0.4)]">
+            <div className={cx("min-w-0", onPicture && "[text-shadow:0_1px_8px_rgb(0_0_0/0.4)]")}>
               <p className="font-semibold leading-tight">{blocked && state !== "playing" ? "Tap to listen" : label}</p>
-              <p className="text-sm tabular-nums text-white/80">
+              <p className={cx("text-sm tabular-nums", onPicture ? "text-white/80" : "text-ink-muted")}>
                 {state === "playing" || state === "paused" ? `${formatSeconds(at)} / ${formatSeconds(total)}` : formatSeconds(total)}
                 <span className="sr-only">. </span>
                 <span aria-hidden> · </span>
@@ -358,7 +366,7 @@ export function IntroPlayer({
             </div>
           </div>
           {/* Under the Play button: the sentence being said, its word highlighted. */}
-          {sentence && (
+          {sentence && onPicture && (
             <p aria-live="polite" className="max-w-[40rem] font-serif text-[1.1rem] italic leading-snug [text-shadow:0_1px_8px_rgb(0_0_0/0.55)]">
               <span className="sr-only">{script.slice(sentence.from, sentence.to)}</span>
               <span aria-hidden>
@@ -366,11 +374,17 @@ export function IntroPlayer({
               </span>
             </p>
           )}
-          <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-white/20">
-            <div className="h-full bg-[#7fe0e4]" style={{ width: `${progress * 100}%` }} />
-          </div>
+          {(onPicture || state !== "idle") && (
+            <div aria-hidden className={cx("h-1 w-full overflow-hidden rounded-full", onPicture ? "bg-white/20" : "bg-[#007f7e]/15")}>
+              <div className={cx("h-full", onPicture ? "bg-[#7fe0e4]" : "bg-[#007f7e]")} style={{ width: `${progress * 100}%` }} />
+            </div>
+          )}
         </div>
-        {state === "broken" && <p className="mt-2 text-sm font-semibold text-white">This recording can’t be played here. Here are its words: {script}</p>}
+        {state === "broken" && (
+          <p className={cx("mt-2 text-sm font-semibold", onPicture ? "text-white" : "text-danger")}>
+            This recording can’t be played here. Here are its words: {script}
+          </p>
+        )}
         {audioEl}
       </section>
     );

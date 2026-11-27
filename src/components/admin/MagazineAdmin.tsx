@@ -6,7 +6,8 @@ import { useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
-import { COMPLETION_MODES, GUIDE_AUDIENCES, SOURCE_FILE_TYPES, type CompletionMode, type GuideAudience } from "@/lib/magazine";
+import { COMPLETION_MODES, GUIDE_AUDIENCES, SOURCE_FILE_TYPES, UNTITLED_COURSE, type CompletionMode, type GuideAudience } from "@/lib/magazine";
+import { describeSource, readDraftSource, wordsAsFile, type DraftSource } from "@/lib/documentText";
 import { TemplatePicker, type TemplateChoice } from "./MagazineTemplates";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
@@ -258,13 +259,23 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
   const [format, setFormat] = useState<"single" | "course">("single");
   const [template, setTemplate] = useState<TemplateChoice>("decide");
   const [withAi, setWithAi] = useState(false);
-  // The source documents, chosen here and uploaded to the new course's AI drafting once it exists.
-  const [docs, setDocs] = useState<File[]>([]);
+  // The source documents, read here in the browser (only their words go up, however large the file) and added to the
+  // new course's AI drafting once it exists. A SCORM package goes up as it is.
+  const [docs, setDocs] = useState<{ key: string; name: string; read: DraftSource }[]>([]);
+  const [reading, setReading] = useState(0);
+  const [docProblem, setDocProblem] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const addDocs = (list: FileList | null | undefined) => {
     // Copied now: the input is cleared straight after, which empties its live FileList.
-    const files = Array.from(list ?? []);
-    setDocs((d) => [...d, ...files.filter((f) => !d.some((x) => x.name === f.name && x.size === f.size))]);
+    const files = Array.from(list ?? []).filter((f) => !docs.some((x) => x.key === f.name + f.size));
+    setDocProblem(null);
+    for (const f of files) {
+      setReading((n) => n + 1);
+      readDraftSource(f)
+        .then((read) => setDocs((d) => (d.some((x) => x.key === f.name + f.size) ? d : [...d, { key: f.name + f.size, name: f.name, read }])))
+        .catch((e: Error) => setDocProblem(`${f.name}: ${e.message}`))
+        .finally(() => setReading((n) => n - 1));
+    }
   };
   const [audience, setAudience] = useState<GuideAudience[]>(["coordinator"]);
   const [completion, setCompletion] = useState<CompletionMode>("confirm");
@@ -276,15 +287,17 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
     setBusy(true);
     setProblem(null);
     try {
-      const g = await api<{ id: string }>("/api/admin/magazine", { body: { title, standfirst, template, audience, completion } });
+      // Drafted from documents with no title yet: a working title, which the AI outline replaces with its own.
+      const named = title.trim() || (withAi && docs.length ? UNTITLED_COURSE : title);
+      const g = await api<{ id: string }>("/api/admin/magazine", { body: { title: named, standfirst, template, audience, completion } });
       // The documents go to its AI drafting before the editor opens on it, so the outline can be proposed straight away.
       if (withAi && docs.length) {
         const failed: string[] = [];
-        for (const file of docs) {
+        for (const d of docs) {
           const form = new FormData();
-          form.append("file", file);
+          form.append("file", d.read.kind === "scorm" ? d.read.file : wordsAsFile(d.read.doc));
           const res = await fetch(`/api/admin/magazine/${g.id}/ai/sources`, { method: "POST", body: form }).catch(() => null);
-          if (!res?.ok) failed.push(file.name);
+          if (!res?.ok) failed.push(d.name);
         }
         if (failed.length) window.alert(`The course was made, but these didn’t upload: ${failed.join(", ")}. Add them again in its AI drafting panel.`);
       }
@@ -299,13 +312,20 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
   return (
     <form onSubmit={create} className="mt-6 flex flex-col gap-5 rounded-3xl border border-line bg-surface p-5 sm:p-6">
       <h2 className="font-serif text-2xl font-semibold">New Magazine</h2>
-      <Field label="Title" hint="A working title is fine; you can change it on the page.">
+      <Field
+        label="Title"
+        hint={
+          withAi && docs.length
+            ? "Optional when drafting from documents: the AI proposes one with the outline."
+            : "A working title is fine; you can change it on the page."
+        }
+      >
         <input
           className={input}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={140}
-          required
+          required={!(withAi && docs.length)}
           autoFocus
           placeholder="When an invoice doesn’t match the service"
         />
@@ -351,7 +371,8 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
             <Icon name="spark" className="size-4 text-accent" /> Draft it with AI from documents
           </span>
           <span className="block text-sm text-ink-muted">
-            Upload the source documents, say how long it should take, and Claude proposes an outline for you to review before any page is written.
+            Drop in the source documents, say how long it should take, and AI proposes the title, what learners will be able to do and an outline for you to
+            review before any page is written.
           </span>
         </span>
       </label>
@@ -373,18 +394,18 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
             <Icon name="doc" className="size-7 text-accent" />
             <span className="font-semibold">Drop the source documents here</span>
             <span className="text-sm text-ink-muted">
-              or click to choose them: PDF, Word, PowerPoint, text, Markdown, or a SCORM package (.zip) from an existing eLearning course. You can add more
-              later.
+              or click to choose them: Word, PowerPoint, PDF, text or Markdown, any size (read on your computer: only the words are sent), or a SCORM package
+              (.zip) from an existing eLearning course. You can add more later.
             </span>
             <input type="file" multiple accept={SOURCE_FILE_TYPES} className="sr-only" onChange={(e) => (addDocs(e.target.files), (e.target.value = ""))} />
           </label>
           {docs.length > 0 && (
             <ul className="flex flex-col gap-1.5">
               {docs.map((f) => (
-                <li key={f.name + f.size} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm">
+                <li key={f.key} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm">
                   <Icon name="doc" className="size-4 shrink-0 text-ink-muted" />
                   <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  <span className="shrink-0 text-xs text-ink-muted">{Math.max(1, Math.round(f.size / 1024))} KB</span>
+                  <span className="shrink-0 text-xs text-ink-muted">{describeSource(f.read)}</span>
                   <button type="button" className="shrink-0 font-semibold text-danger hover:underline" onClick={() => setDocs((d) => d.filter((x) => x !== f))}>
                     Remove
                   </button>
@@ -392,6 +413,12 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
               ))}
             </ul>
           )}
+          {reading > 0 && (
+            <p className="text-sm text-ink-muted" role="status">
+              Reading {reading === 1 ? "a document" : `${reading} documents`}…
+            </p>
+          )}
+          {docProblem && <p className="text-sm font-semibold text-danger">{docProblem}</p>}
           <p className="text-xs text-ink-muted">How long it should take, and the outline, come next, on the course&rsquo;s AI drafting panel.</p>
         </div>
       )}
@@ -429,7 +456,7 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
       </div>
       {problem && <ErrorNote text={problem} />}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={btn.primary} disabled={busy || title.trim().length < 2}>
+        <button type="submit" className={btn.primary} disabled={busy || reading > 0 || (title.trim().length < 2 && !(withAi && docs.length))}>
           {busy ? "Creating…" : "Create and edit"}
         </button>
         <button type="button" className={btn.secondary} onClick={onCancel} disabled={busy}>

@@ -3,7 +3,8 @@
   policy details are real Trilogy announcements; each is labelled as demo in the UI.
 */
 
-import type { NarrationAudio } from "@/lib/magazine";
+import type { NarrationAudio, VideoEmbed } from "@/lib/magazine";
+import type { StoryGlance, StoryPractice } from "@/lib/storyGlance";
 
 export type CategoryId = "trilogy" | "policy" | "spotlight" | "case-study" | "learning" | "industry";
 
@@ -27,7 +28,17 @@ export type StoryBlock =
   | { type: "list"; items: string[] }
   | { type: "quote"; text: string; cite: string }
   /** A picture in the story: beside the text (left or right), centred, or the full width. */
-  | { type: "image"; src: string; width: number; height: number; alt: string; align: "left" | "right" | "center" | "full"; caption?: string };
+  | {
+      type: "image";
+      src: string;
+      width: number;
+      height: number;
+      alt: string;
+      align: "left" | "right" | "center" | "full";
+      caption?: string;
+      /** Readers can open it full size, and zoom in on it (a slide, a chart, a document). */
+      lightbox?: boolean;
+    };
 
 export type PolicyMeta = {
   status: "proposal" | "announced" | "in_effect" | "superseded";
@@ -72,8 +83,36 @@ export type Story = {
     (OpenAI's Alloy). Learners hear it only once an author approves the recording, and only while it matches the script.
   */
   narration?: StoryNarration;
+  /** The homepage's lead story (the owner, Nov 2026), whatever its date. One at a time: featuring a story un-features the last. */
+  featured?: boolean;
+  /** The last day it stays pinned as the feature (YYYY-MM-DD); open-ended when not set. */
+  featuredUntil?: string;
+  /** An important business announcement: it leads for everyone who hasn't read it, for 30 days. */
+  priority?: boolean;
   /** When it was last edited in admin (for search engines' "updated" date). */
   updated?: string;
+  /** "At a glance": three to five takeaways under the hero, checked by an author (lib/storyGlance). */
+  glance?: StoryGlance;
+  /** "Put it into practice": a few optional things to try, with an optional personal checklist (lib/storyGlance). */
+  practice?: StoryPractice;
+  /** A video with the story: uploaded to the Hub, or on YouTube, Vimeo or Loom. */
+  video?: StoryVideo;
+};
+
+/**
+  A news story's video (the owner, Nov 2026), such as a recorded interview. Uploaded to the Hub (`src`, with a WebVTT
+  captions file if there is one) or on YouTube, Vimeo or Loom (`embed`). It never plays by itself. `placement`: after
+  At a glance and before the story ("top"), after the story's opening paragraphs ("opening"), or at the end ("end").
+*/
+export type StoryVideo = {
+  title: string;
+  src?: string;
+  embed?: VideoEmbed;
+  poster?: string;
+  captions?: string;
+  caption?: string;
+  transcript?: string;
+  placement: "top" | "opening" | "end";
 };
 
 export type StoryNarration = { script: string; audio?: NarrationAudio; approved?: boolean };

@@ -2,7 +2,7 @@ import "server-only";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { GENERATION_MODEL } from "./generate";
-import { MAX_BRIEF, readSource } from "./lessonDraft";
+import { MAX_BRIEF, sourceOf, type Source } from "./lessonDraft";
 import { askForJson, contentFor, keyCounts } from "./claudeJson";
 import { catalogueInfo } from "./learningPaths";
 import { MAX_DAYS } from "./challenges";
@@ -94,7 +94,7 @@ export async function generateChallengeDraft(
   db: Db,
   actor: User,
   req: { brief: string; days: number },
-  file: File | null,
+  file: File | Source | null,
   now: Date,
   onProgress: (p: ChallengeDraftProgress) => void = () => {},
 ): Promise<{ draft: ChallengeDraft; source: string | null }> {
@@ -104,7 +104,7 @@ export async function generateChallengeDraft(
   if (brief.length > MAX_BRIEF) throw new HttpError(400, `Keep the brief under ${MAX_BRIEF} characters. Attach a document for anything longer.`);
   const days = Math.min(MAX_DAYS, Math.max(2, Math.round(req.days) || 5));
   if (file) onProgress({ type: "phase", phase: "reading" });
-  const source = file ? await readSource(file) : undefined;
+  const source = await sourceOf(file);
   const catalogue = catalogueInfo(db).filter((t) => t.track !== "reinforcement" && !t.draft);
   const known = new Set(catalogue.map((t) => t.slug));
 

@@ -7,6 +7,7 @@ import { HttpError, requireAuthor, type User } from "./auth";
 import { scormText, ScormTextError } from "./scormText";
 import { MAX_SCORM_BYTES } from "@/lib/sourceFiles";
 import { client, FORMAT, GENERATION_MODEL, validateLesson } from "./generate";
+import { claudeConfigured, openaiAsk, openaiReady, type OpenAIPart } from "./openaiText";
 import { BUILD_STAGES, isStage, stageCounts, STAGE_KEYS, type BuildStage } from "@/lib/buildSequence";
 
 /*
@@ -18,6 +19,8 @@ import { BUILD_STAGES, isStage, stageCounts, STAGE_KEYS, type BuildStage } from 
 
 export const MAX_BRIEF = 4000;
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
+/** A slide deck carries its pictures with it, so it may be larger: only its slides' words are read. */
+export const MAX_PPTX_BYTES = 100 * 1024 * 1024;
 const MAX_TEXT = 120_000;
 
 export type DraftRequest = { brief: string; audience?: Lesson["track"]; minutes?: number };
@@ -25,12 +28,14 @@ export type DraftRequest = { brief: string; audience?: Lesson["track"]; minutes?
 /** What the author sees while Claude works: which part of the job it's on, and the cards written so far by stage. */
 export type DraftProgress =
   { type: "phase"; phase: "reading" | "writing" | "checking" | "fixing"; issues?: number } | { type: "stages"; counts: Record<BuildStage, number> };
-type Source = { kind: "pdf"; name: string; data: string } | { kind: "text"; name: string; text: string };
+export type Source = { kind: "pdf"; name: string; data: string } | { kind: "text"; name: string; text: string };
 
 /** Reads an uploaded source document. PDFs go to Claude as they are; Word and text files become text. */
 export async function readSource(file: File): Promise<Source> {
   const zipName = /\.zip$/i.test(file.name || "");
-  if (zipName ? file.size > MAX_SCORM_BYTES : file.size > MAX_FILE_BYTES)
+  const deckName = /\.pptx$/i.test(file.name || "");
+  if (deckName && file.size > MAX_PPTX_BYTES) throw new HttpError(413, "That slide deck is over 100 MB. Save a copy without its videos and try again.");
+  if (!deckName && (zipName ? file.size > MAX_SCORM_BYTES : file.size > MAX_FILE_BYTES))
     throw new HttpError(
       413,
       zipName
@@ -52,8 +57,18 @@ export async function readSource(file: File): Promise<Source> {
         throw e;
       }
     }
+    // A PowerPoint deck: each slide's words, marked "[Slide n]".
+    if (deckName || unzipEntry(buf, "ppt/presentation.xml") !== null) {
+      const slides = pptxText(buf);
+      if (!slides.length) throw new HttpError(415, "No slides could be read from that deck.");
+      return { kind: "text", name, text: [`A slide deck: ${name}`, ...slides].join("\n\n").slice(0, MAX_TEXT) };
+    }
     const xml = unzipEntry(buf, "word/document.xml");
-    if (!xml) throw new HttpError(415, "That looks like a zip file but not a Word document or a SCORM package. Upload a .docx, .pdf, .txt or SCORM .zip file.");
+    if (!xml)
+      throw new HttpError(
+        415,
+        "That looks like a zip file but not a Word document, a PowerPoint deck or a SCORM package. Upload a .docx, .pptx, .pdf, .txt or SCORM .zip file.",
+      );
     return { kind: "text", name, text: docxText(xml).slice(0, MAX_TEXT) };
   }
   if (/\.(txt|md|csv)$/i.test(name) || file.type.startsWith("text/")) {
@@ -62,9 +77,49 @@ export async function readSource(file: File): Promise<Source> {
     return { kind: "text", name, text: text.slice(0, MAX_TEXT) };
   }
   if (buf.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0])))
-    throw new HttpError(415, "That’s an older Word file (.doc). Save it as .docx or PDF and try again.");
-  throw new HttpError(415, "Upload a PDF, Word (.docx), text file or SCORM package (.zip).");
+    throw new HttpError(
+      415,
+      /\.ppt$/i.test(name)
+        ? "That’s an older PowerPoint file (.ppt). Save it as .pptx or PDF and try again."
+        : "That’s an older Word file (.doc). Save it as .docx or PDF and try again.",
+    );
+  throw new HttpError(415, "Upload a PDF, Word (.docx), PowerPoint (.pptx), text file or SCORM package (.zip).");
 }
+
+/** The slides' text from a PowerPoint file, each marked "[Slide n]" so a claim can point at its slide. */
+export function pptxText(buf: Buffer) {
+  const slides: string[] = [];
+  for (let n = 1; n <= 500; n++) {
+    const xml = unzipEntry(buf, `ppt/slides/slide${n}.xml`);
+    if (xml === null) break;
+    const text = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)]
+      .map((m) => m[1])
+      .join(" ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, "&")
+      .trim();
+    slides.push(`[Slide ${n}]\n${text}`);
+  }
+  return slides;
+}
+
+/**
+  A draft's source from the editor's form: the words of a document read in the browser ("documentText", so a large
+  Word, PowerPoint or PDF file never has to be uploaded), or a file to read here (a SCORM package). Null when neither.
+*/
+export function draftSourceFrom(form: FormData): File | Source | null {
+  const text = form.get("documentText");
+  if (typeof text === "string" && text.trim())
+    return { kind: "text", name: String(form.get("documentName") ?? "document").slice(0, 120), text: text.slice(0, MAX_TEXT) };
+  const file = form.get("file");
+  return file instanceof File && file.size > 0 ? file : null;
+}
+
+/** Reads a draft's source: a file here, or words already read in the browser. */
+export const sourceOf = async (s: File | Source | null) => (!s ? undefined : s instanceof File ? await readSource(s) : s);
 
 /** Finds one file inside a zip (a .docx is a zip) using the central directory. */
 export function unzipEntry(zip: Buffer, wanted: string): string | null {
@@ -167,6 +222,22 @@ async function ask(
   /** Called with the reply so far as it streams in. */
   onText?: (soFar: string) => void,
 ) {
+  // Without Claude, the Hub's OpenAI connection writes it from the same documents and prompt (server/openaiText).
+  if (!claudeConfigured() && openaiReady()) {
+    const parts: OpenAIPart[] = content.flatMap((b): OpenAIPart[] =>
+      b.type === "text"
+        ? [{ kind: "text", text: b.text }]
+        : b.type === "document" && b.source.type === "text"
+          ? [{ kind: "doc", title: b.title ?? "Source", text: b.source.data }]
+          : b.type === "document" && b.source.type === "base64"
+            ? [{ kind: "pdf", title: b.title ?? "Source", data: b.source.data }]
+            : [],
+    );
+    const out = await openaiAsk(parts, repair);
+    const text = out.text.replace(/^```(?:json)?\s*|\s*```$/g, "");
+    onText?.(text);
+    return { text, usage: out.usage as unknown as Anthropic.Beta.BetaUsage };
+  }
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
   if (repair) messages.push({ role: "assistant", content: repair.previous }, { role: "user", content: repair.correction });
   const stream = client().beta.messages.stream({
@@ -275,7 +346,7 @@ export async function generateLessonDraft(
   db: Db,
   actor: User,
   req: DraftRequest,
-  file: File | null,
+  file: File | Source | null,
   now: Date,
   /** Progress as Claude works, for the editor's build view. */
   onProgress: (p: DraftProgress) => void = () => {},
@@ -285,7 +356,7 @@ export async function generateLessonDraft(
   if (brief.length < 10 && !file) throw new HttpError(400, "Write a short brief, or attach a document to work from.");
   if (brief.length > MAX_BRIEF) throw new HttpError(400, `Keep the brief under ${MAX_BRIEF} characters. Attach a document for anything longer.`);
   if (file) onProgress({ type: "phase", phase: "reading" });
-  const source = file ? await readSource(file) : undefined;
+  const source = await sourceOf(file);
   const request = { ...req, brief: brief || "Turn the attached document into a lesson." };
 
   const content: Anthropic.Beta.BetaContentBlockParam[] = [];

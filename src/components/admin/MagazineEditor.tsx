@@ -43,6 +43,7 @@ import {
   type PageTemplate,
   type Verdict,
   WHY_FIELDS,
+  UNTITLED_COURSE,
 } from "@/lib/magazine";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { DescribeButton, ImageDropZone, PictureButtons, type PictureContext } from "./ImagePicker";
@@ -1636,7 +1637,17 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
             intro={draft.doc.pages.length > 1 ? <CourseIntroStrip guideId={id} draft={draft} change={change} /> : undefined}
             ai={
               <>
-                <MagazineAi guideId={id} onAddPage={addDraftedPage} startOpen={startAi || isStarter(initial.doc)} />
+                <MagazineAi
+                  guideId={id}
+                  onAddPage={addDraftedPage}
+                  onCourseDetails={(c) =>
+                    change((d) => {
+                      if (c.title && (!d.title.trim() || d.title.trim() === UNTITLED_COURSE)) d.title = c.title;
+                      if (c.standfirst && !(d.standfirst ?? "").trim()) d.standfirst = c.standfirst;
+                    })
+                  }
+                  startOpen={startAi || isStarter(initial.doc)}
+                />
                 {canRevise && (
                   <MagazineRevise guideId={id} doc={draft.doc} scope="course" onApply={applyRevision} onShow={(pid) => open({ kind: "page", id: pid })} />
                 )}
@@ -3172,7 +3183,7 @@ function VideoEdit({
           <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl p-4 text-center hover:bg-muted">
             <Icon name="upload" className="size-6 text-accent" />
             <span className="font-semibold">{busy ? "Uploading…" : "Upload a video"}</span>
-            <span className="text-sm text-ink-muted">MP4, WebM or MOV, up to 80 MB</span>
+            <span className="text-sm text-ink-muted">MP4, WebM or MOV, up to 250 MB</span>
             <input
               type="file"
               accept="video/mp4,video/webm,video/quicktime"

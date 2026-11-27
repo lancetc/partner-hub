@@ -14,10 +14,10 @@ export type BuildPhase = "idle" | "reading" | "writing" | "checking" | "fixing" 
 
 const PHASE_TEXT: Record<Exclude<BuildPhase, "idle">, string> = {
   reading: "Reading your document…",
-  writing: "Claude is writing, in this order:",
+  writing: "AI is writing, in this order:",
   checking: "Checking the draft against the format and the sequence…",
-  fixing: "Claude is fixing what the checks found…",
-  done: "Done. Here’s what Claude built:",
+  fixing: "AI is fixing what the checks found…",
+  done: "Done. Here’s what AI built:",
 };
 
 /**
@@ -30,7 +30,7 @@ export function BuildProgress({
   counts = {},
   unit = ["card", "cards"],
   issues,
-  title = "How Claude builds it",
+  title = "How AI builds it",
   details = {},
 }: {
   steps: readonly BuildStep[];
@@ -59,7 +59,7 @@ export function BuildProgress({
         ) : (
           <>
             <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden />
-            {phase === "fixing" && issues ? `Claude is fixing ${issues} ${issues === 1 ? "problem" : "problems"} the checks found…` : PHASE_TEXT[phase]}
+            {phase === "fixing" && issues ? `AI is fixing ${issues} ${issues === 1 ? "problem" : "problems"} the checks found…` : PHASE_TEXT[phase]}
           </>
         )}
       </p>

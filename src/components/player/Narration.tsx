@@ -116,6 +116,7 @@ export function Narration({
   ttsKey,
   controls = true,
   panel = "above",
+  tapToPause = false,
 }: {
   text: string;
   label?: string;
@@ -132,6 +133,8 @@ export function Narration({
   controls?: boolean;
   /** Where the controls open: above the button (in a footer), or below it, aligned to its right edge. */
   panel?: "above" | "below";
+  /** Tapping the orb plays and pauses; a small button beside it opens the controls and transcript (the homepage briefing). */
+  tapToPause?: boolean;
 }) {
   const parts = useMemo(() => sentences(text), [text]);
   // Where each sentence sits in the script.
@@ -389,7 +392,41 @@ export function Narration({
         />
       )}
 
-      {!controls ? null : playable ? (
+      {!controls ? null : playable && tapToPause ? (
+        // Tap to play and tap again to pause (the homepage briefing, the owner, Nov 2026); the controls and transcript
+        // open from the small button beside it.
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => (state === "playing" || state === "loading" ? pause() : play())}
+            aria-label={state === "playing" || state === "loading" ? `Pause ${name}` : state === "ended" ? `Play ${name} again` : `Play ${name}`}
+            className={cx(
+              "audio-orb relative isolate inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-action text-on-action shadow-md transition-transform active:scale-95",
+              state === "playing" && "is-playing",
+            )}
+          >
+            {state === "loading" ? (
+              <span aria-hidden className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <Icon
+                name={state === "playing" ? "pause" : state === "ended" ? "refresh" : "play"}
+                className={cx("size-6", state !== "playing" && state !== "ended" && "ml-0.5")}
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpanded((x) => !x)}
+            aria-expanded={expanded}
+            aria-controls={`${id}-panel`}
+            aria-label={expanded ? "Hide audio controls and transcript" : "Show audio controls and transcript"}
+            title="Controls and transcript"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line-strong text-ink hover:bg-muted"
+          >
+            <Icon name="doc" className="size-5" />
+          </button>
+        </span>
+      ) : !controls ? null : playable ? (
         <button
           type="button"
           onClick={() => {

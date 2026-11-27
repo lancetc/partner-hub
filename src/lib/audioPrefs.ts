@@ -109,3 +109,36 @@ export function useSoundEffects() {
 }
 
 export const soundEffectsEnabled = readSfx;
+
+/*
+  Learner preference for the homepage's Trilogy Briefing starting by itself when the news comes into view (the owner,
+  Nov 2026). Off by default: unexpected sound is a problem in a shared office or a client's home. Stored per browser.
+*/
+const BRIEFING_KEY = "tc-briefing-autoplay";
+const briefingListeners = new Set<() => void>();
+
+function readBriefing() {
+  try {
+    return localStorage.getItem(BRIEFING_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function setBriefingAutoplay(on: boolean) {
+  try {
+    localStorage.setItem(BRIEFING_KEY, on ? "on" : "off");
+  } catch {}
+  briefingListeners.forEach((l) => l());
+}
+
+export function useBriefingAutoplay() {
+  return useSyncExternalStore(
+    (cb) => {
+      briefingListeners.add(cb);
+      return () => briefingListeners.delete(cb);
+    },
+    readBriefing,
+    () => false,
+  );
+}

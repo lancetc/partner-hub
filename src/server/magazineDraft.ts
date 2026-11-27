@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
-import { readSource, unzipEntry, MAX_FILE_BYTES } from "./lessonDraft";
+import { pptxText, readSource, unzipEntry, MAX_FILE_BYTES } from "./lessonDraft";
 import { MAX_SCORM_BYTES } from "@/lib/sourceFiles";
 import { askForJson, keyCounts } from "./claudeJson";
 import { GENERATION_MODEL } from "./generate";
@@ -136,26 +136,6 @@ const sourcesOf = (db: Db, guideId: string) =>
 
 /** The course's uploaded documents as Claude reads them, authoritative ones first. */
 export const sourceDocuments = (db: Db, guideId: string) => documents(sourcesOf(db, guideId));
-
-/** The slides' text from a PowerPoint file, each marked "[Slide n]" so a claim can point at its slide. */
-function pptxText(buf: Buffer) {
-  const slides: string[] = [];
-  for (let n = 1; n <= 500; n++) {
-    const xml = unzipEntry(buf, `ppt/slides/slide${n}.xml`);
-    if (xml === null) break;
-    const text = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)]
-      .map((m) => m[1])
-      .join(" ")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, "&")
-      .trim();
-    slides.push(`[Slide ${n}]\n${text}`);
-  }
-  return slides;
-}
 
 /**
   Reads an uploaded source and keeps what could be read. A file that can't be read is kept too, marked
@@ -532,6 +512,10 @@ ${RULES}
 
 Reply with only a JSON object, no other text:
 {
+  "course": {
+    "title": "A title for the whole course, at most 70 characters, sentence case, specific to the situation (for example: When an invoice doesn't match the service)",
+    "standfirst": "One sentence: what learners will be able to do at the end"
+  },
   "pages": [
     {
       "title": "Short page title",
@@ -978,7 +962,7 @@ export async function proposeOutline(
   ];
   send({ type: "phase", phase: "writing" });
   const check = { candidates: new Set(candidates.map((c) => c.id)), reuse: new Set(reuse.map((r) => r.slug)) };
-  const { value, usage } = await askForJson<{ pages: unknown[]; questions?: unknown[]; reuse?: unknown[] }>(
+  const { value, usage } = await askForJson<{ pages: unknown[]; questions?: unknown[]; reuse?: unknown[]; course?: { title?: unknown; standfirst?: unknown } }>(
     content,
     (v) => outlineIssues(v, minutes, names, check),
     {
@@ -1014,7 +998,10 @@ export async function proposeOutline(
     next: { types: recommended, offered: [...offered], reuse: reuse.map((r) => r.slug), catalogue: CATALOGUE_VERSION },
     at: now,
   });
-  return { outline, questions };
+  // The course's own title and standfirst, as proposed: the editor fills them in only where the author left them blank.
+  const one = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const course = { title: one(value.course?.title, 140), standfirst: one(value.course?.standfirst, 400) };
+  return { outline, questions, course };
 }
 
 /**

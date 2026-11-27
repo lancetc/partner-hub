@@ -14,7 +14,8 @@ import { extractText } from "@/lib/lessonText";
 import { plainText } from "@/lib/richText";
 import { SUBJECTS } from "@/lib/subjects";
 import { cx, formatBytes } from "@/lib/format";
-import { DRAFT_SOURCE_TYPES, draftSourceProblem } from "@/lib/sourceFiles";
+import { appendDraftSource, type DraftSource } from "@/lib/documentText";
+import { DocumentDrop } from "./DocumentDrop";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
@@ -969,9 +970,9 @@ export function LessonEditor({ initial, isNew, status: initialStatus, card }: { 
         {step === "cards" && !showDraft && (isNew || draftNote) && (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
             <Icon name="spark" className="size-4 text-accent" />
-            <span className="min-w-0 flex-1">{draftNote ?? "Start from a brief or a document and Claude will draft the cards for you."}</span>
+            <span className="min-w-0 flex-1">{draftNote ?? "Start from a brief or a document (Word, PowerPoint or PDF) and AI drafts the cards for you."}</span>
             <button type="button" className={btn.secondary} onClick={() => setShowDraft(true)}>
-              {draftNote ? "Generate again" : "Generate with Claude"}
+              {draftNote ? "Generate again" : "Generate with AI"}
             </button>
           </div>
         )}
@@ -5499,9 +5500,7 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={ph.src} alt="" className="size-full object-cover" />
                                 {on && (
-                                  <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-xs font-bold text-on-action">
-                                    Reference
-                                  </span>
+                                  <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-xs font-bold text-on-action">Reference</span>
                                 )}
                               </button>
                               <button
@@ -5850,7 +5849,7 @@ function BuiltSequence({ lesson: l, selected, onSelect }: { lesson: Lesson; sele
   return (
     <section aria-labelledby="built-sequence" className="mb-4 rounded-2xl border border-line bg-surface p-4">
       <h2 id="built-sequence" className="flex items-center gap-2 text-sm font-semibold">
-        <Icon name="route" className="size-4 text-accent" /> How Claude built it
+        <Icon name="route" className="size-4 text-accent" /> How AI built it
       </h2>
       <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {stages.map((s, i) => (
@@ -5907,25 +5906,17 @@ type DraftEvent =
 function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: (draft: Lesson, source: string | null) => void; onClose: () => void }) {
   const generator = useApi<{ generator: { connected: boolean; model: string } }>("/api/admin/lessons").data?.generator;
   const [brief, setBrief] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  // The document, read here in the browser (or a SCORM package for the server): DocumentDrop.
+  const [source, setSource] = useState<DraftSource | null>(null);
   const [audience, setAudience] = useState<Lesson["track"]>(l.track === "reinforcement" ? "partner" : l.track);
   const [minutes, setMinutes] = useState(4);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [over, setOver] = useState(false);
   // The build, live: which part of the job Claude is on, and how many cards of each stage it has written.
   const [phase, setPhase] = useState<BuildPhase>("idle");
   const [counts, setCounts] = useState<Partial<Record<string, number>>>({});
   const [issues, setIssues] = useState<number | undefined>();
-  const ready = brief.trim().length >= 10 || Boolean(file);
-
-  const pick = (f: File | undefined | null) => {
-    if (!f) return;
-    const problem = draftSourceProblem(f);
-    if (problem) return setError(problem);
-    setError(null);
-    setFile(f);
-  };
+  const ready = brief.trim().length >= 10 || Boolean(source);
 
   async function generate() {
     setBusy(true);
@@ -5935,13 +5926,13 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       form.append("brief", brief);
       form.append("audience", audience);
       form.append("minutes", String(minutes));
-      if (file) form.append("file", file);
+      appendDraftSource(form, source);
       setCounts({});
-      setPhase(file ? "reading" : "writing");
+      setPhase(source ? "reading" : "writing");
       const res = await fetch("/api/admin/lessons/draft?stream=1", { method: "POST", body: form });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Claude couldn’t draft the topic.");
+        throw new Error(data.error ?? "The topic couldn’t be drafted. Try again.");
       }
       let finished: { lesson: Lesson; source: string | null } | null = null;
       await readEvents<DraftEvent>(res, (e) => {
@@ -5952,7 +5943,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
         else if (e.type === "done") finished = { lesson: e.lesson, source: e.source };
         else if (e.type === "error") throw new Error(e.error);
       });
-      if (!finished) throw new Error("Claude stopped before the draft was finished. Try again.");
+      if (!finished) throw new Error("The draft stopped before it was finished. Try again.");
       const done: { lesson: Lesson; source: string | null } = finished;
       setPhase("done");
       onDraft(done.lesson, done.source);
@@ -5969,11 +5960,11 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="draft-title" className="flex items-center gap-2 font-serif text-2xl font-semibold">
-            <Icon name="spark" className="size-5 text-accent" /> Generate the cards with Claude
+            <Icon name="spark" className="size-5 text-accent" /> Generate the cards with AI
           </h2>
           <p className="mt-1 max-w-2xl text-ink-muted">
-            Describe the topic, and attach a policy, procedure or guide if you have one. Claude builds the cards in seven stages, in order: Hook, Show, Explain,
-            Choose, Feedback, Apply and Recap. You see each stage as it’s written, then edit everything on the canvas.
+            Describe the topic, or drop in a policy, procedure, guide or slide deck, or both. AI builds the cards in seven stages, in order: Hook, Show,
+            Explain, Choose, Feedback, Apply and Recap. You see each stage as it’s written, then edit everything on the canvas.
           </p>
         </div>
         <button type="button" className={btn.quiet} onClick={onClose} disabled={busy}>
@@ -5983,7 +5974,8 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
 
       {generator && !generator.connected && (
         <p className="mt-4 rounded-2xl border-2 border-dashed border-gold p-3 text-sm">
-          <strong>Claude isn’t connected yet.</strong> Add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the server, then generate.
+          <strong>Writing with AI isn’t set up yet.</strong> Add <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> to <code>.env.local</code> and
+          restart the server, then generate.
         </p>
       )}
 
@@ -6002,48 +5994,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
         <div className="flex flex-col gap-4">
           <div>
             <span className="text-sm font-semibold">Source document (optional)</span>
-            <label
-              onDragOver={(e) => {
-                e.preventDefault();
-                setOver(true);
-              }}
-              onDragLeave={() => setOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOver(false);
-                pick(e.dataTransfer.files?.[0]);
-              }}
-              className={cx(
-                "mt-1 flex min-h-32 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed p-4 text-center text-sm has-[:focus-visible]:outline-2",
-                over ? "border-action bg-tealtint" : "border-line-strong hover:border-action",
-                busy && "pointer-events-none opacity-60",
-              )}
-            >
-              <input
-                type="file"
-                accept={DRAFT_SOURCE_TYPES}
-                className="sr-only"
-                onChange={(e) => pick(e.target.files?.[0])}
-                disabled={busy}
-              />
-              <Icon name="upload" className="size-5 text-ink-muted" />
-              {file ? (
-                <>
-                  <span className="font-semibold">{file.name}</span>
-                  <span className="text-xs text-ink-muted">{Math.max(1, Math.round(file.size / 1024))} KB · click to change</span>
-                </>
-              ) : (
-                <>
-                  <span className="font-semibold">Drop a PDF or Word file, or click to choose</span>
-                  <span className="text-xs text-ink-muted">PDF, .docx or text up to 15 MB, or a SCORM package (.zip) from an existing eLearning course</span>
-                </>
-              )}
-            </label>
-            {file && (
-              <button type="button" className={cx(btn.quiet, "mt-1")} onClick={() => setFile(null)} disabled={busy}>
-                Remove file
-              </button>
-            )}
+            <DocumentDrop value={source} onChange={setSource} disabled={busy} className="mt-1" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Track">
@@ -6069,7 +6020,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       </div>
 
       <div className="mt-5">
-        <BuildProgress steps={BUILD_STAGES} phase={phase} counts={counts} issues={issues} title="How Claude builds the cards" />
+        <BuildProgress steps={BUILD_STAGES} phase={phase} counts={counts} issues={issues} title="How AI builds the cards" />
       </div>
 
       {error && (
@@ -6079,14 +6030,14 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
       )}
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" className={btn.primary} disabled={busy || !ready} onClick={generate}>
-          <Icon name="spark" className="size-4" /> {busy ? "Claude is writing the cards…" : "Generate cards"}
+          <Icon name="spark" className="size-4" /> {busy ? "Writing the cards…" : "Generate cards"}
         </button>
         {busy ? (
           <span className="text-sm text-ink-muted">
-            This usually takes a minute or two{file ? " with a document" : ""}. Each stage ticks off as it’s written.
+            This usually takes a minute or two{source ? " with a document" : ""}. Each stage ticks off as it’s written.
           </span>
         ) : (
-          <span className="text-sm text-ink-muted">Claude only uses facts from your document. Nothing is published until you review it.</span>
+          <span className="text-sm text-ink-muted">AI only uses facts from your document. Nothing is published until you review it.</span>
         )}
       </div>
     </section>

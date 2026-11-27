@@ -279,14 +279,14 @@ function ChallengeForm({
             Start from a brief and Claude drafts the challenge: a theme, the week’s story, and a mission and story beat each day.
           </span>
           <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
-            <Icon name="spark" className="size-4" /> Generate with Claude
+            <Icon name="spark" className="size-4" /> Generate with AI
           </button>
         </div>
       )}
       {generating && (
         <ClaudeDraftDialog<{ draft: ChallengeDraftResult }>
-          title="Generate the challenge with Claude"
-          intro="Describe the challenge, and attach a document if you have one. Claude designs the week using your existing topics as missions where they fit, and names any new ones to write. You review it before anything changes."
+          title="Generate the challenge with AI"
+          intro="Describe the challenge, or drop in a document, or both. AI designs the week using your existing topics as missions where they fit, and names any new ones to write. You review it before anything changes."
           steps={CHALLENGE_STEPS}
           endpoint="/api/admin/challenges/draft"
           placeholder="For example: A five-day challenge for Care Partners on spotting and reporting changes in a client, building to a SIRS scenario on Friday."

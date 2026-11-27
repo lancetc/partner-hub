@@ -7,6 +7,7 @@ import { BLOCK_LABELS, PAGE_TEMPLATES, SOURCE_FILE_TYPES, WHY_FIELDS, type Block
 import { AI_MODES, CATALOGUE, catalogueEntry } from "@/lib/activityCatalogue";
 import { btn, ErrorNote, Field, input } from "./ui";
 import { readEvents } from "./BuildProgress";
+import { readDraftSource, wordsAsFile } from "@/lib/documentText";
 import { Icon } from "../Icon";
 
 /*
@@ -97,7 +98,18 @@ export async function stream<T>(url: string, payload: unknown, onProgress: (text
   return result;
 }
 
-export function MagazineAi({ guideId, onAddPage, startOpen }: { guideId: string; onAddPage: (page: Page) => void; startOpen: boolean }) {
+export function MagazineAi({
+  guideId,
+  onAddPage,
+  onCourseDetails,
+  startOpen,
+}: {
+  guideId: string;
+  onAddPage: (page: Page) => void;
+  /** The course's title and standfirst as the outline proposes them, for the editor to fill in where they're blank. */
+  onCourseDetails?: (c: { title: string; standfirst: string }) => void;
+  startOpen: boolean;
+}) {
   const { data, error } = useApi<Plan>(`/api/admin/magazine/${guideId}/ai`);
   return (
     <details open={startOpen} className="group rounded-2xl border-2 border-action/40 bg-tealtint">
@@ -112,13 +124,23 @@ export function MagazineAi({ guideId, onAddPage, startOpen }: { guideId: string;
       <div className="border-t border-line px-4 py-5 sm:px-5">
         {error && <ErrorNote text={error} />}
         {!data && !error && <p className="text-ink-muted">Loading…</p>}
-        {data && <Drafter guideId={guideId} initial={data} onAddPage={onAddPage} />}
+        {data && <Drafter guideId={guideId} initial={data} onAddPage={onAddPage} onCourseDetails={onCourseDetails} />}
       </div>
     </details>
   );
 }
 
-function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Plan; onAddPage: (page: Page) => void }) {
+function Drafter({
+  guideId,
+  initial,
+  onAddPage,
+  onCourseDetails,
+}: {
+  guideId: string;
+  initial: Plan;
+  onAddPage: (page: Page) => void;
+  onCourseDetails?: (c: { title: string; standfirst: string }) => void;
+}) {
   const base = `/api/admin/magazine/${guideId}/ai`;
   const [sources, setSources] = useState(initial.sources);
   const [brief, setBrief] = useState(initial.brief);
@@ -151,8 +173,11 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
     for (const file of Array.from(files)) {
       setUploading((n) => n + 1);
       try {
+        // Word, PowerPoint, PDF and text are read here, so only their words go up, however large the file; a SCORM
+        // package goes up as it is, to be read on the server.
+        const read = await readDraftSource(file);
         const form = new FormData();
-        form.append("file", file);
+        form.append("file", read.kind === "scorm" ? read.file : wordsAsFile(read.doc));
         const res = await fetch(`${base}/sources`, { method: "POST", body: form });
         const out = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((out as { error?: string }).error ?? `${file.name} didn’t upload.`);
@@ -186,7 +211,7 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
   const propose = async () => {
     setOutlineJob({ state: "running", text: "Starting…" });
     try {
-      const out = await stream<{ outline: OutlinePage[]; questions: string[] }>(
+      const out = await stream<{ outline: OutlinePage[]; questions: string[]; course?: { title: string; standfirst: string } }>(
         `${base}/outline`,
         { brief, minutes },
         (text) => setOutlineJob({ state: "running", text }),
@@ -195,6 +220,7 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
       loaded.current = true; // Saved by the server already.
       setOutline(out.outline);
       setQuestions(out.questions);
+      if (out.course) onCourseDetails?.(out.course);
       setJobs({});
       setOutlineJob({ state: "done" });
     } catch (e) {
@@ -246,8 +272,9 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
           1. Source documents
         </h3>
         <p className="text-sm text-ink-muted">
-          PDF, Word, PowerPoint or text, up to 15 MB each, or an eLearning course as a SCORM package (.zip, up to 200 MB) to read its words from. Mark approved
-          guidance as authoritative; anything else as background, so Claude doesn’t rest a claim on it alone. Learners never see these files.
+          Word, PowerPoint, PDF or text, any size: they’re read on your computer and only their words are kept. Or an eLearning course as a SCORM package (.zip,
+          up to 200 MB) to read its words from. Mark approved guidance as authoritative; anything else as background, so Claude doesn’t rest a claim on it
+          alone. Learners never see these files.
         </p>
         <label
           onDragOver={(e) => e.preventDefault()}
@@ -285,7 +312,7 @@ function Drafter({ guideId, initial, onAddPage }: { guideId: string; initial: Pl
                 </div>
                 {s.status === "ready" && (
                   <select
-                    aria-label={`How Claude should treat ${s.name}`}
+                    aria-label={`How AI should treat ${s.name}`}
                     className="min-h-9 rounded-lg border border-line-strong bg-surface px-2 text-sm"
                     value={s.authority}
                     onChange={(e) => void setAuthority(s, e.target.value as Source["authority"])}

@@ -16,8 +16,14 @@ import { ImageDropZone, type PictureContext } from "./ImagePicker";
 import { namesIn } from "./PeopleReferences";
 import { plainText } from "@/lib/richText";
 import { textHash } from "@/lib/magazineNarration";
+import { draftStoryScript } from "@/lib/storyNarration";
 import type { NarrationAudio } from "@/lib/magazine";
 import { StoryDocEditor } from "./StoryDocEditor";
+import { NewsEditionAdmin } from "./NewsEditionAdmin";
+import { readDocumentText, type DocumentText } from "@/lib/documentText";
+import { GlanceField, PracticeField } from "./StoryGlanceAdmin";
+import { StoryPictures, type PictureIdeas } from "./StoryPictures";
+import { StoryVideoField } from "./StoryVideoField";
 
 /*
   The homepage news: every story, built-in or new, with its words, poster image, category and
@@ -32,6 +38,8 @@ type Summary = {
   date: string;
   status: "draft" | "published";
   edited: boolean;
+  featured?: boolean;
+  glance?: "none" | "proposed" | "check" | "on" | "off";
   builtIn: boolean;
   photo: string | null;
   updatedAt: string | null;
@@ -67,6 +75,7 @@ export function NewsList() {
           <ErrorNote text={error} />
         </div>
       )}
+      <NewsEditionAdmin />
       {!data ? (
         <p className="mt-6 text-ink-muted">Loading…</p>
       ) : (
@@ -89,13 +98,35 @@ export function NewsList() {
                     <Badge tone={s.status === "published" ? "good" : "neutral"}>{s.status === "published" ? "Published" : "Draft"}</Badge>
                     <Badge>{categoryLabel(s.category)}</Badge>
                     {s.edited && <Badge tone="info">Edited</Badge>}
+                    {s.featured && <Badge tone="warn">Featured</Badge>}
+                    {s.glance === "proposed" && <Badge tone="info">Summary proposed</Badge>}
+                    {s.glance === "check" && <Badge tone="warn">Summary to check</Badge>}
                   </div>
                   <h2 className="font-serif text-lg font-semibold leading-snug">
                     <Link href={`/admin/news/${s.slug}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
                       {s.title}
                     </Link>
                   </h2>
-                  <p className="mt-auto pt-1 text-sm text-ink-muted">{formatDate(s.date)}</p>
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+                    <p className="text-sm text-ink-muted">{formatDate(s.date)}</p>
+                    {/* Clear ways in, above the card's own link (the owner, Nov 2026). */}
+                    <span className="relative z-10 flex items-center gap-1">
+                      <a
+                        href={`/news/${s.slug}${s.status === "draft" ? "?preview=1" : ""}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink-muted hover:bg-muted hover:text-ink"
+                      >
+                        <Icon name="eye" className="size-4" /> View<span className="sr-only"> {s.title} (opens in a new tab)</span>
+                      </a>
+                      <Link
+                        href={`/admin/news/${s.slug}`}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
+                      >
+                        <Icon name="pen" className="size-4" /> Edit<span className="sr-only"> {s.title}</span>
+                      </Link>
+                    </span>
+                  </div>
                 </div>
               </li>
             ))}
@@ -157,6 +188,10 @@ function Form({ initial }: { initial: Detail | null }) {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+  // The poster and pictures the writer suggested for the story it wrote (StoryPictures).
+  const [ideas, setIdeas] = useState<PictureIdeas | null>(null);
+  // Drafted with AI: the introduction is recorded, and approved, when the story is first saved.
+  const [voiceOnSave, setVoiceOnSave] = useState(false);
   const set = (patch: Partial<Story>) => {
     setS((x) => ({ ...x, ...patch }));
     setDirty(true);
@@ -190,6 +225,18 @@ function Form({ initial }: { initial: Detail | null }) {
       if (isNew) {
         const r = await api<{ slug: string }>("/api/admin/stories", { body: { story: s } });
         setDirty(false);
+        const script = s.narration?.script?.trim();
+        if (voiceOnSave && script && !s.narration?.audio) {
+          // The story now has its address, so its introduction can be recorded (Magazine Editorial Voice) and approved.
+          // If that fails the story is still saved, and the introduction can be recorded from the editor.
+          setNote({ text: "Saved. Recording the voiced introduction…", ok: true });
+          try {
+            const { audio } = await api<{ audio: NarrationAudio }>(`/api/admin/stories/${encodeURIComponent(r.slug)}/narration`, { body: { script } });
+            await api(`/api/admin/stories/${r.slug}`, { method: "PUT", body: { story: { ...s, narration: { script, audio, approved: true } } } });
+          } catch {
+            // Recorded in the editor instead.
+          }
+        }
         router.replace(`/admin/news/${r.slug}`);
         return;
       }
@@ -246,14 +293,26 @@ function Form({ initial }: { initial: Detail | null }) {
 
       {isNew && (
         <StoryWriter
-          onDraft={(story, imageIdea) => {
+          onDraft={(r, makePoster) => {
             // Keep a poster already chosen; everything else comes from the draft.
-            setS((x) => ({ ...story, visual: x.visual.photo ? x.visual : story.visual }));
+            setS((x) => ({ ...r.story, visual: x.visual.photo ? x.visual : r.story.visual }));
             setDirty(true);
+            setIdeas({ poster: r.imageIdea ? { idea: r.imageIdea, alt: r.imageAlt, make: makePoster } : null, pictures: r.pictures ?? [] });
+            setVoiceOnSave(true);
             setNote({
-              text: `Claude filled in the story from your brief. Check every fact and add a poster image${imageIdea ? ` (suggestion: ${imageIdea})` : ""}, then save.`,
+              text: `AI filled in every field, including At a glance, the actions and the introduction script (recorded and approved when you save).${makePoster && r.imageIdea ? " The poster is being made under the writer." : ""} Check every fact and picture, turn on the actions if you want them, then save.`,
               ok: true,
             });
+          }}
+        />
+      )}
+      {isNew && ideas && (
+        <StoryPictures
+          ideas={ideas}
+          story={s}
+          update={(fn) => {
+            setS(fn);
+            setDirty(true);
           }}
         />
       )}
@@ -267,13 +326,16 @@ function Form({ initial }: { initial: Detail | null }) {
             <textarea rows={2} className={textarea} value={s.dek} onChange={(e) => set({ dek: e.target.value })} />
           </Field>
           <StoryDocEditor value={s.body} onChange={(body) => set({ body })} />
+          <StoryVideoField story={s} onChange={(video) => set({ video })} />
+          <GlanceField slug={initial?.slug ?? null} story={s} onChange={(glance) => set({ glance })} />
+          <PracticeField slug={initial?.slug ?? null} story={s} onChange={(practice) => set({ practice })} />
           {s.category === "policy" && <PolicyFields policy={s.policy} onChange={(policy) => set({ policy })} />}
           <SeoFields story={s} slug={initial?.slug} onChange={(seo) => set({ seo })} />
         </div>
 
         <aside className="flex flex-col gap-5">
           <PosterField visual={s.visual} onChange={(visual) => set({ visual })} context={storyPictureContext(s)} />
-          <NarrationField slug={initial?.slug ?? null} narration={s.narration} onChange={(narration) => set({ narration })} />
+          <NarrationField slug={initial?.slug ?? null} story={s} narration={s.narration} onChange={(narration) => set({ narration })} />
           <div className="grid gap-4 rounded-2xl border border-line p-4">
             <Field label="Category">
               <select className={input} value={s.category} onChange={(e) => set({ category: e.target.value as Story["category"] })}>
@@ -304,6 +366,39 @@ function Form({ initial }: { initial: Detail | null }) {
                 </label>
               ))}
             </fieldset>
+            {/* The homepage's lead story, whatever its date (the owner, Nov 2026). */}
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-5 accent-[var(--action)]"
+                checked={s.featured === true}
+                onChange={(e) => set({ featured: e.target.checked || undefined })}
+              />
+              <span>
+                <span className="text-sm font-semibold">Feature on the homepage</span>
+                <span className="block text-sm text-ink-muted">
+                  It’s one of the featured stories at the top of the homepage news, which readers browse 01 / 03. Tick as many as you like; unread ones come
+                  first.
+                </span>
+              </span>
+            </label>
+            {s.featured && (
+              <Field label="Pinned until" hint="The last day it’s the feature. Leave empty to keep it until you choose another.">
+                <input type="date" className={input} value={s.featuredUntil ?? ""} onChange={(e) => set({ featuredUntil: e.target.value || undefined })} />
+              </Field>
+            )}
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-5 accent-[var(--action)]"
+                checked={s.priority === true}
+                onChange={(e) => set({ priority: e.target.checked || undefined })}
+              />
+              <span>
+                <span className="text-sm font-semibold">Priority announcement</span>
+                <span className="block text-sm text-ink-muted">Leads ahead of the feature for everyone who hasn’t read it, for 30 days from its date.</span>
+              </span>
+            </label>
             <Field
               label="Related topic"
               hint={
@@ -395,7 +490,17 @@ const POSITIONS = [
   Magazine Editorial Voice (Alloy), listen, and approve it for learners. Editing the script after recording needs a new
   recording before it can be approved again. Saved with the story.
 */
-function NarrationField({ slug, narration, onChange }: { slug: string | null; narration: Story["narration"]; onChange: (n: Story["narration"]) => void }) {
+function NarrationField({
+  slug,
+  story,
+  narration,
+  onChange,
+}: {
+  slug: string | null;
+  story: Story;
+  narration: Story["narration"];
+  onChange: (n: Story["narration"]) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const script = narration?.script ?? "";
@@ -408,7 +513,8 @@ function NarrationField({ slug, narration, onChange }: { slug: string | null; na
     setError(null);
     try {
       const { audio: rec } = await api<{ audio: NarrationAudio }>(`/api/admin/stories/${encodeURIComponent(slug)}/narration`, { body: { script } });
-      onChange({ script, audio: rec });
+      // Recorded is approved (the owner, Nov 2026): untick it to hold it back. Learners hear it once the story is published.
+      onChange({ script, audio: rec, approved: true });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -431,7 +537,15 @@ function NarrationField({ slug, narration, onChange }: { slug: string | null; na
       <button type="button" className={btn.secondary} disabled={busy || !slug || !script.trim()} onClick={() => void record()}>
         <Icon name="mic" className="size-4" /> {busy ? "Recording…" : audio ? "Record again" : "Record it"}
       </button>
-      {!slug && <p className="text-sm text-ink-muted">Save the story first, then record its introduction.</p>}
+      {/* Every story has a script: saving drafts one from the story when the box is empty, and this redrafts it on request. */}
+      <button
+        type="button"
+        className="self-start text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
+        onClick={() => onChange({ script: draftStoryScript(story) })}
+      >
+        {script.trim() ? "Redraft from the story" : "Draft from the story"}
+      </button>
+      {!slug && <p className="text-sm text-ink-muted">Saving the story drafts its script if this is empty. Save it first, then record.</p>}
       {error && <ErrorNote text={error} />}
       {audio && (
         <>
@@ -446,7 +560,7 @@ function NarrationField({ slug, narration, onChange }: { slug: string | null; na
               />
               <span>
                 <span className="font-semibold">Approved for learners</span>
-                <span className="block text-ink-muted">They see “Listen to the introduction” at the top of the story once it’s saved.</span>
+                <span className="block text-ink-muted">Ticked when it’s recorded. Learners hear it at the top of the story once it’s saved and published.</span>
               </span>
             </label>
           ) : (
@@ -611,17 +725,60 @@ function SeoFields({ story: s, slug, onChange }: { story: Story; slug?: string; 
 }
 
 /** At the top of a new story: a brief in, a complete news item out, every field filled in to check. */
-function StoryWriter({ onDraft }: { onDraft: (story: Story, imageIdea: string) => void }) {
+const DOC_TYPES =
+  ".docx,.pptx,.pdf,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain";
+const DOC_OK = /\.(docx|pptx|pdf|txt|md)$/i;
+
+/**
+  "Write it with AI" on a new story: drop in a document (Word, PowerPoint, PDF or text) and/or type a brief, and AI
+  fills in every field below from it (server/storyDraft). Nothing is saved until the author saves.
+*/
+type Written = { story: Story; imageIdea: string; imageAlt: string; pictures: PictureIdeas["pictures"] };
+
+function StoryWriter({ onDraft }: { onDraft: (r: Written, makePoster: boolean) => void }) {
+  // Make the poster with AI as soon as the story is written (the owner, Nov 2026): on unless the author unticks it.
+  const [poster, setPoster] = useState(true);
   const [brief, setBrief] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  // The document's words, read here in the browser: the file itself is never uploaded.
+  const [doc, setDoc] = useState<DocumentText | null>(null);
+  const [reading, setReading] = useState(false);
+  const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const words = brief.trim().split(/\s+/).filter(Boolean).length;
+  function choose(f: File | undefined) {
+    if (!f) return;
+    setError(null);
+    if (/\.(doc|ppt)$/i.test(f.name))
+      return setError(`That’s an older Office file. Save it as .${/\.ppt$/i.test(f.name) ? "pptx" : "docx"} or PDF and try again.`);
+    if (!DOC_OK.test(f.name)) return setError("Drop a Word (.docx), PowerPoint (.pptx), PDF or text file.");
+    setFile(f);
+    setDoc(null);
+    setReading(true);
+    readDocumentText(f)
+      .then((d) => {
+        if (d.text.split(/\s+/).filter(Boolean).length < 20)
+          throw new Error(
+            "Almost no text could be read from it. If it’s a scan or all pictures, export it as a PDF with text, or paste the key part into the brief.",
+          );
+        setDoc(d);
+      })
+      .catch((e: Error) => {
+        setFile(null);
+        setError(e.message || "That document couldn’t be read.");
+      })
+      .finally(() => setReading(false));
+  }
   async function write() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ story: Story; imageIdea: string }>("/api/admin/stories/draft", { body: { brief } });
-      onDraft(r.story, r.imageIdea);
+      const r = await api<Written>("/api/admin/stories/draft", {
+        body: { brief, ...(doc ? { document: { name: doc.name, text: doc.text } } : {}) },
+      });
+      onDraft(r, poster);
       setDone(true);
     } catch (e) {
       setError((e as Error).message);
@@ -632,34 +789,99 @@ function StoryWriter({ onDraft }: { onDraft: (story: Story, imageIdea: string) =
   return (
     <section aria-labelledby="writer-heading" className="mt-5 rounded-3xl border-2 border-action/30 bg-surface p-5">
       <h2 id="writer-heading" className="flex items-center gap-2 font-serif text-xl font-semibold">
-        <Icon name="spark" className="size-5 text-accent" /> Write it with Claude
+        <Icon name="spark" className="size-5 text-accent" /> Write it with AI
       </h2>
       <p className="mt-1 max-w-3xl text-ink-muted">
-        Paste or type a brief: what’s happening, who it’s for, what they need to do, and any dates, sources or quotes. Claude turns it into a news item and
-        fills in every field below. It uses only what’s in your brief, so check the facts before you save.
+        Drop in a document, or type a brief, or both. AI writes the story from it and fills in every field below: headline, standfirst, the story, category,
+        audience, At a glance, actions to try, related learning, search details and the introduction script. It uses only what’s in your document and brief, so
+        check the facts before you save.
       </p>
-      <label htmlFor="story-brief" className="sr-only">
-        Your brief
-      </label>
-      <textarea
-        id="story-brief"
-        rows={5}
-        value={brief}
-        maxLength={4000}
-        onChange={(e) => setBrief(e.target.value)}
-        placeholder="For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all Care Partners. Source: Trilogy Care operations update, 20 November."
-        className={cx(textarea, "mt-3")}
-      />
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            choose(e.dataTransfer.files[0]);
+          }}
+          className={cx(
+            "flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-5 text-center transition-colors",
+            over ? "border-[#007f7e] bg-[#e6f3f1]" : "border-line-strong",
+          )}
+        >
+          {file ? (
+            <>
+              <Icon name="file" className="size-6 text-accent" />
+              <p className="max-w-full break-words font-semibold">{file.name}</p>
+              <p className="text-sm text-ink-muted" aria-live="polite">
+                {reading
+                  ? "Reading it…"
+                  : doc
+                    ? `${doc.kind === "PowerPoint" ? `${doc.parts} ${doc.parts === 1 ? "slide" : "slides"}` : doc.kind === "PDF" ? `${doc.parts} ${doc.parts === 1 ? "page" : "pages"}` : doc.kind} read · ${doc.text.split(/\s+/).filter(Boolean).length.toLocaleString()} words`
+                    : ""}
+              </p>
+              <button
+                type="button"
+                className={btn.quiet}
+                disabled={busy}
+                onClick={() => {
+                  setFile(null);
+                  setDoc(null);
+                }}
+              >
+                <Icon name="close" className="size-4" /> Remove
+              </button>
+            </>
+          ) : (
+            <>
+              <Icon name="upload" className="size-6 text-accent" />
+              <p className="font-semibold">Drop a document here</p>
+              <p className="text-sm text-ink-muted">Word, PowerPoint, PDF or text</p>
+              <label className={cx(btn.secondary, "cursor-pointer")}>
+                Choose a file
+                <input type="file" accept={DOC_TYPES} className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
+              </label>
+            </>
+          )}
+        </div>
+        <div className="flex flex-col">
+          <label htmlFor="story-brief" className="text-sm font-semibold">
+            {file ? "Anything to add? (optional)" : "Or write a brief"}
+          </label>
+          <textarea
+            id="story-brief"
+            rows={6}
+            value={brief}
+            maxLength={4000}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder={
+              file
+                ? "For example: write it for coordinators, and lead with what changes for them."
+                : "For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all Care Partners. Source: Trilogy Care operations update, 20 November."
+            }
+            className={cx(textarea, "mt-1 flex-1")}
+          />
+        </div>
+      </div>
       {error && (
-        <div className="mt-2">
+        <div className="mt-3">
           <ErrorNote text={error} />
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" className={btn.primary} disabled={busy || brief.trim().split(/\s+/).filter(Boolean).length < 8} onClick={write}>
-          <Icon name="spark" className="size-4" /> {busy ? "Writing the story…" : done ? "Write it again" : "Write the story"}
+        <button type="button" className={btn.primary} disabled={busy || reading || (file ? !doc : words < 8)} onClick={write}>
+          <Icon name="spark" className="size-4" />{" "}
+          {busy ? "Writing the story…" : done ? "Write it again" : file ? "Write the story from this document" : "Write the story"}
         </button>
-        {busy && <span className="text-sm text-ink-muted">This usually takes under a minute.</span>}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="size-5 accent-[var(--action)]" checked={poster} onChange={(e) => setPoster(e.target.checked)} />
+          Make a poster picture as well
+        </label>
+        {busy && <span className="text-sm text-ink-muted">This usually takes under a minute{file ? ", longer for a big document" : ""}.</span>}
       </div>
     </section>
   );

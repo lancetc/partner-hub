@@ -1728,3 +1728,56 @@ dialog.member-modal[open]::backdrop {
 .member-build > p > * {
   animation-delay: 600ms;
 }
+
+/*
+  The homepage newspaper arriving (NewsReveal, the owner, Nov 2026): parts marked data-reveal rise 12px and fade in,
+  each at its own delay (--nr), and rules marked data-reveal-rule draw across from the left. The whole sequence
+  is over in about 1.1 seconds. Opacity, transform and a thin background line only: no layout shift. Off with reduced motion.
+*/
+[data-reveal-rule="ink2"] { --rule-c: var(--ink); --rule-w: 2px; }
+[data-reveal-rule="ink3"] { --rule-c: var(--ink); --rule-w: 3px; }
+[data-reveal-rule="line1"] { --rule-c: var(--line-strong); --rule-w: 1px; }
+@media (prefers-reduced-motion: no-preference) {
+  .nr-wait [data-reveal] { opacity: 0; }
+  .nr-wait [data-reveal-rule] { border-bottom-color: transparent; }
+  .nr-run [data-reveal],
+  .nr-run [data-reveal-rule] {
+    animation-duration: 0.5s;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+    animation-fill-mode: both;
+    animation-delay: var(--nr, 0ms);
+  }
+  .nr-run [data-reveal] { animation-name: nr-rise; }
+  .nr-run [data-reveal-rule] {
+    animation-name: nr-rule;
+    animation-duration: 0.7s;
+    border-bottom-color: transparent;
+    background-image: linear-gradient(var(--rule-c), var(--rule-c));
+    background-repeat: no-repeat;
+    background-position: left bottom;
+  }
+  .nr-run [data-reveal][data-reveal-rule] { animation-name: nr-rise, nr-rule; animation-duration: 0.5s, 0.7s; }
+}
+@keyframes nr-rise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes nr-rule { from { background-size: 0% var(--rule-w); } to { background-size: 100% var(--rule-w); } }
+
+/*
+  The Trilogy Briefing's narration cues (BriefingStrip, lib/briefingCues): the part of the newspaper the narrator is
+  talking about is gently emphasised, then let go. A headline underline drawing in, an accent rule beside it, a soft
+  teal ground, or its picture lifting a touch. Nothing moves, scrolls or hides.
+*/
+[data-news-root] [data-cue] { transition: background-color 0.5s ease, box-shadow 0.5s ease; }
+[data-news-root] [data-cue] :is(h2, h3, h4) a {
+  background-image: linear-gradient(#007f7e, #007f7e);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 2px;
+  transition: background-size 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+[data-news-root] .is-cued.cue-headline :is(h2, h3, h4) a { background-size: 100% 2px; }
+[data-news-root] .is-cued.cue-rule { box-shadow: -10px 0 0 -7px #007f7e; }
+[data-news-root] .is-cued.cue-tint { background-color: rgb(0 127 126 / 0.07); box-shadow: 0 0 0 8px rgb(0 127 126 / 0.07); border-radius: 4px; }
+[data-news-root] [data-cue] img { transition: filter 0.6s ease, outline-color 0.6s ease; outline: 3px solid transparent; outline-offset: 2px; }
+[data-news-root] .is-cued.cue-picture img { filter: saturate(1.12) brightness(1.04); outline-color: rgb(0 127 126 / 0.55); }
+:root[data-theme="dark"] [data-news-root] [data-cue] :is(h2, h3, h4) a { background-image: linear-gradient(#7fd6d2, #7fd6d2); }
+:root[data-theme="dark"] [data-news-root] .is-cued.cue-rule { box-shadow: -10px 0 0 -7px #7fd6d2; }

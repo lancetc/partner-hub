@@ -5,12 +5,13 @@ import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { btn, ErrorNote, input } from "./ui";
 import { Icon } from "../Icon";
-import { DRAFT_SOURCE_TYPES, draftSourceProblem } from "@/lib/sourceFiles";
+import { appendDraftSource, type DraftSource } from "@/lib/documentText";
+import { DocumentDrop } from "./DocumentDrop";
 import { BuildProgress, readEvents, type BuildPhase, type BuildStep } from "./BuildProgress";
 
 /*
-  "Generate with Claude" for learning paths and challenges: a brief and an optional document, then the
-  steps Claude works through, ticking off live as it writes. The result goes back to the editor to be
+  "Generate with AI" for learning paths and challenges: a brief and/or a document (read in the browser, so only its
+  words are sent: the owner, Nov 2026), then the steps the AI works through, ticking off live as it writes. The result goes back to the editor to be
   reviewed before anything is applied or saved.
 */
 
@@ -44,38 +45,30 @@ export function ClaudeDraftDialog<R>({
   onClose: () => void;
 }) {
   const [brief, setBrief] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState<DraftSource | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<BuildPhase>("idle");
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [details, setDetails] = useState<Record<string, string>>({});
   const [issues, setIssues] = useState<number | undefined>();
-  const ready = brief.trim().length >= 10 || Boolean(file);
-
-  const pick = (f: File | undefined | null) => {
-    if (!f) return;
-    const problem = draftSourceProblem(f);
-    if (problem) return setError(problem);
-    setError(null);
-    setFile(f);
-  };
+  const ready = brief.trim().length >= 10 || Boolean(source);
 
   async function generate() {
     setBusy(true);
     setError(null);
     setCounts({});
     setDetails({});
-    setPhase(file ? "reading" : "writing");
+    setPhase(source ? "reading" : "writing");
     try {
       const form = new FormData();
       form.append("brief", brief);
-      if (file) form.append("file", file);
+      appendDraftSource(form, source);
       addFields?.(form);
       const res = await fetch(endpoint, { method: "POST", body: form });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Claude couldn’t draft it.");
+        throw new Error(data.error ?? "It couldn’t be drafted. Try again.");
       }
       let result: R | null = null;
       await readEvents<Event<R>>(res, (e) => {
@@ -88,7 +81,7 @@ export function ClaudeDraftDialog<R>({
         } else if (e.type === "error") throw new Error(e.error);
         else if (e.type === "done") result = e;
       });
-      if (!result) throw new Error("Claude stopped before the draft was finished. Try again.");
+      if (!result) throw new Error("The draft stopped before it was finished. Try again.");
       setPhase("done");
       onDone(result);
     } catch (e) {
@@ -143,26 +136,7 @@ export function ClaudeDraftDialog<R>({
             <div className="flex flex-col gap-3">
               <div>
                 <span className="text-sm font-semibold">Source document (optional)</span>
-                <label
-                  className={cx(
-                    "mt-1 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-line-strong p-3 text-center text-sm hover:border-action has-[:focus-visible]:outline-2",
-                    busy && "pointer-events-none opacity-60",
-                  )}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    pick(e.dataTransfer.files?.[0]);
-                  }}
-                >
-                  <input type="file" accept={DRAFT_SOURCE_TYPES} className="sr-only" onChange={(e) => pick(e.target.files?.[0])} disabled={busy} />
-                  <Icon name="upload" className="size-5 text-ink-muted" />
-                  <span className="font-semibold">{file ? file.name : "Drop a PDF, Word file or SCORM package, or click"}</span>
-                  {file && (
-                    <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={(e) => (e.preventDefault(), setFile(null))}>
-                      Remove
-                    </button>
-                  )}
-                </label>
+                <DocumentDrop value={source} onChange={setSource} disabled={busy} className="mt-1" />
               </div>
               {extra}
             </div>
@@ -186,7 +160,7 @@ export function ClaudeDraftDialog<R>({
             Cancel
           </button>
           <button type="button" className={btn.primary} onClick={generate} disabled={busy || !ready}>
-            <Icon name="spark" className="size-4" /> {busy ? "Claude is writing…" : "Generate"}
+            <Icon name="spark" className="size-4" /> {busy ? "Writing…" : "Generate"}
           </button>
         </footer>
       </div>

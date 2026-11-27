@@ -2644,4 +2644,7 @@ export function templatePage(template: PageTemplate | "assessment", id: (prefix:
 }
 
 /** The documents AI drafting reads a course from (the file picker's accept list). */
+/** The working title of a course started from documents with no title yet: the AI outline proposes its real one. */
+export const UNTITLED_COURSE = "Untitled course";
+
 export const SOURCE_FILE_TYPES = ".pdf,.docx,.pptx,.txt,.md,.zip,application/pdf,text/plain,application/zip";

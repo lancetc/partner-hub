@@ -99,4 +99,19 @@ describe("news stories", () => {
     expect(b).toBe("our-new-gardening-partners-2");
     expect(stories.length).toBeGreaterThan(0);
   });
+
+  it("features as many stories as are ticked", () => {
+    const a = saveStory(db, u("jordan"), null, draft({ featured: true }), now).slug;
+    const b = saveStory(db, u("jordan"), null, draft({ title: "Christmas visits", featured: true }), now).slug;
+    expect(storyPreview(db, u("jordan"), a)?.featured).toBe(true);
+    expect(storyPreview(db, u("jordan"), b)?.featured).toBe(true);
+    expect(
+      adminStories(db, u("jordan"))
+        .stories.filter((s) => s.featured)
+        .map((s) => s.slug)
+        .sort(),
+    ).toEqual([a, b].sort());
+    // Saved without the tick, it isn't featured.
+    expect(validateStory(draft({ featured: "yes" as never })).featured).toBeUndefined();
+  });
 });

@@ -1,12 +1,13 @@
 import { stories } from "@/content/stories";
 import { NewsGrid } from "@/components/NewsGrid";
+import { NewsReveal } from "@/components/news/NewsReveal";
 import { HomeWorkspace } from "@/components/HomeWorkspace";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
 import { getDb } from "@/server/db";
 import { catalogueTopics } from "@/server/catalogue";
-import { canAuthor, currentUser, meantFor, type User } from "@/server/auth";
+import { canAuthor, currentUser, type User } from "@/server/auth";
 import { homeParts, type HomePart } from "@/lib/homeLayout";
 import { ChallengeBanner } from "@/components/ChallengePage";
 import { HomeCommunity } from "@/components/community/HomeCommunity";
@@ -20,6 +21,7 @@ import { HomeCourse } from "@/components/onboarding/HomeCourse";
 import { Icon } from "@/components/Icon";
 import { ActivityShowcase } from "@/components/home/ActivityShowcase";
 import { homeShowcase } from "@/server/activityCatalogue";
+import { newsEdition } from "@/server/newsEdition";
 import { now } from "@/server/clock";
 import type { Metadata } from "next";
 
@@ -91,10 +93,15 @@ export default function Home() {
       <Suspense>
         <Only part="news">
           <section aria-labelledby="latest" data-build-step style={step(6)} className="mt-16">
-            <Masthead id="latest" kicker="In this issue" title="The latest from Trilogy Care" />
-            <Suspense>
-              <Stories />
-            </Suspense>
+            {/* The newspaper reveals itself in about a second when it first comes into view (NewsReveal). */}
+            <NewsReveal>
+              <div data-reveal="masthead" data-cue="section:masthead">
+                <Masthead id="latest" kicker="In this issue" title="The latest from Trilogy Care" rule="ink2" />
+              </div>
+              <Suspense>
+                <Stories />
+              </Suspense>
+            </NewsReveal>
           </section>
         </Only>
       </Suspense>
@@ -127,9 +134,13 @@ async function Only({ part, children }: { part: HomePart; children: React.ReactN
 }
 
 /** A section's masthead, as in a magazine: a small kicker, a serif title, a strong rule, and where to see more. */
-function Masthead({ id, kicker, title, href, link }: { id: string; kicker: string; title: string; href?: string; link?: string }) {
+function Masthead({ id, kicker, title, href, link, rule }: { id: string; kicker: string; title: string; href?: string; link?: string; rule?: string }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b-2 border-ink pb-3">
+    <div
+      data-reveal-rule={rule}
+      style={rule ? ({ "--nr": "120ms" } as React.CSSProperties) : undefined}
+      className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b-2 border-ink pb-3"
+    >
       <div className="min-w-0">
         <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.18em] text-accent">{kicker}</p>
         <h2 id={id} className="mt-1 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -180,6 +191,8 @@ async function Showcase() {
 async function Stories() {
   await connection();
   const user = await currentUser(getDb());
-  const ordered = stories.filter((s) => meantFor(user, s.audience)).sort((a, b) => b.date.localeCompare(a.date));
-  return <NewsGrid stories={ordered} />;
+  // Newest first, with the featured story (the owner's choice) leading whatever its date.
+  // The news as a living edition for this person: what's new since their last visit, the feature chosen for them, News
+  // in Brief from across the Hub, the archive, the weekly question and the week's briefing (server/newsEdition).
+  return <NewsGrid edition={newsEdition(getDb(), user, stories, now(getDb()))} />;
 }

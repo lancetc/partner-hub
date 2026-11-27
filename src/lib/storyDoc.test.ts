@@ -56,3 +56,23 @@ describe("story documents", () => {
     expect(html.endsWith("<p><br></p>")).toBe(true);
   });
 });
+
+describe("story pictures", () => {
+  it("keeps 'open full size' through the editor, and shows the description as the caption when there's none", () => {
+    const html = storyToHtml([{ type: "image", src: "/api/uploads/a.webp", width: 800, height: 600, alt: "A roadmap slide", align: "full", lightbox: true }]);
+    expect(html).toContain('data-lightbox="1"');
+    expect(html).toContain("<figcaption>A roadmap slide</figcaption>");
+    const fig = el("FIGURE", [el("IMG")], {
+      "data-src": "/api/uploads/a.webp",
+      "data-width": "800",
+      "data-height": "600",
+      "data-alt": "A roadmap slide",
+      "data-align": "full",
+      "data-caption": "",
+      "data-lightbox": "1",
+    });
+    expect(storyFromDom(el("DIV", [fig]))).toEqual([
+      { type: "image", src: "/api/uploads/a.webp", width: 800, height: 600, alt: "A roadmap slide", align: "full", lightbox: true },
+    ]);
+  });
+});

@@ -268,7 +268,7 @@ function Form({ initial, isNew }: { initial: Webinar; isNew: boolean }) {
               </label>
               {w.video.provider === "upload" && w.video.src && <Badge tone="good">Uploaded video</Badge>}
             </div>
-            <p className="text-xs text-ink-muted">Uploads up to 80 MB. For long recordings, YouTube (unlisted is fine) streams better.</p>
+            <p className="text-xs text-ink-muted">Uploads up to 250 MB. For long recordings, YouTube (unlisted is fine) streams better.</p>
           </section>
 
           <section className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5">

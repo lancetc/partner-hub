@@ -3,7 +3,7 @@ import "server-only";
 import { audit, type Db } from "./db";
 import { HttpError, requireAuthor, type User } from "./auth";
 import { GENERATION_MODEL } from "./generate";
-import { MAX_BRIEF, readSource } from "./lessonDraft";
+import { MAX_BRIEF, sourceOf, type Source } from "./lessonDraft";
 import { askForJson, contentFor, keyCounts } from "./claudeJson";
 import { catalogueInfo } from "./learningPaths";
 
@@ -110,7 +110,7 @@ export async function generatePathDraft(
   db: Db,
   actor: User,
   req: { brief: string; audience: string },
-  file: File | null,
+  file: File | Source | null,
   now: Date,
   onProgress: (p: PathDraftProgress) => void = () => {},
 ): Promise<{ draft: PathDraft; source: string | null }> {
@@ -119,7 +119,7 @@ export async function generatePathDraft(
   if (brief.length < 10 && !file) throw new HttpError(400, "Write a short brief, or attach a document to work from.");
   if (brief.length > MAX_BRIEF) throw new HttpError(400, `Keep the brief under ${MAX_BRIEF} characters. Attach a document for anything longer.`);
   if (file) onProgress({ type: "phase", phase: "reading" });
-  const source = file ? await readSource(file) : undefined;
+  const source = await sourceOf(file);
   const catalogue = catalogueInfo(db).filter((t) => t.track !== "reinforcement");
   const known = new Set(catalogue.map((t) => t.slug));
 

@@ -41,7 +41,7 @@ type Stage = "setup" | "countdown" | "recording" | "paused" | "review" | "saving
 type Clip = { blob: Blob; url: string; seconds: number };
 type Device = { id: string; label: string };
 
-/** Aim for 30 seconds to 3 minutes; recording stops at 5, which keeps the file under the 80 MB upload limit. */
+/** Aim for 30 seconds to 3 minutes; recording stops at 5, which keeps the file well under the upload limit. */
 const AIM_SECONDS = 180;
 const MAX_SECONDS = 300;
 const TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];

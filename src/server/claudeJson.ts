@@ -81,12 +81,14 @@ export async function askForJson<T>(
   effort: Effort = "high",
 ): Promise<{ value: T; usage: unknown }> {
   const parse = (text: string) => {
+    let value: unknown;
     try {
-      const value = JSON.parse(text) as unknown;
-      return { value, issues: check(value) };
+      value = JSON.parse(text);
     } catch {
       return { value: null, issues: ["The reply wasn’t valid JSON."] };
     }
+    // Outside the try: a fault in a check is a real error, not a reply to send back as "not JSON".
+    return { value, issues: check(value) };
   };
   let { text, usage } = await ask(content, progress.onText, undefined, effort);
   progress.onPhase("checking");

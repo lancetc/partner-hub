@@ -1,6 +1,6 @@
 import { eventStream, handle } from "@/server/http";
 import { HttpError } from "@/server/auth";
-import { generateLessonDraft } from "@/server/lessonDraft";
+import { draftSourceFrom, generateLessonDraft } from "@/server/lessonDraft";
 import type { Lesson } from "@/content/lessons";
 
 /**
@@ -14,11 +14,11 @@ export async function POST(req: Request) {
     const form = await req.formData().catch(() => {
       throw new HttpError(400, "Expected a brief or a document.");
     });
-    const file = form.get("file");
     const audience = String(form.get("audience") ?? "partner");
     if (!["core", "partner", "coordinator", "briefing"].includes(audience)) throw new HttpError(400, "Unknown audience.");
     const request = { brief: String(form.get("brief") ?? ""), audience: audience as Lesson["track"], minutes: Number(form.get("minutes")) || 4 };
-    const source = file instanceof File && file.size > 0 ? file : null;
+    // A document's words, read in the browser, or a SCORM package to read here.
+    const source = draftSourceFrom(form);
     if (!streaming) return generateLessonDraft(db, user, request, source, now);
     return eventStream((send) => generateLessonDraft(db, user, request, source, now, send));
   });

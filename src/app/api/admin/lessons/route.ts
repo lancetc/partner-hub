@@ -17,7 +17,8 @@ export async function GET() {
       generator: {
         model: GENERATION_MODEL,
         maxInstructions: MAX_INSTRUCTIONS,
-        connected: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
+        // Claude, or the Hub's OpenAI connection, which drafting falls back to.
+        connected: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.OPENAI_API_KEY),
       },
     };
   });

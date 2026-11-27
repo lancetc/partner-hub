@@ -523,7 +523,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
             Start from a brief and Claude drafts the path: who it’s for, the outcomes, and chapters of topics, using your existing topics where they fit.
           </span>
           <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
-            <Icon name="spark" className="size-4" /> Generate with Claude
+            <Icon name="spark" className="size-4" /> Generate with AI
           </button>
         </div>
       )}
@@ -725,8 +725,8 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
             )}
             {generating && (
               <ClaudeDraftDialog<{ draft: PathDraftResult }>
-                title="Generate the path with Claude"
-                intro="Describe the path, and attach a policy or course outline if you have one. Claude plans it using your existing topics where they fit, and names any new ones to write. You review the outline before anything changes."
+                title="Generate the path with AI"
+                intro="Describe the path, or drop in a policy, course outline or slide deck, or both. AI plans it using your existing topics where they fit, and names any new ones to write. You review the outline before anything changes."
                 steps={PATH_STEPS}
                 endpoint="/api/admin/learning-paths/draft"
                 placeholder="For example: New care coordinators in their first month. They need to know who to contact, the rules that protect clients, and how to manage budgets and incidents."

@@ -4,6 +4,9 @@ import { lessons } from "@/content/lessons";
 import { resources } from "@/content/resources";
 import { plainText } from "@/lib/richText";
 import { textHash } from "@/lib/magazineNarration";
+import { draftStoryScript } from "@/lib/storyNarration";
+import { GLANCE_MAX, GLANCE_MIN, glanceScript, needsReview, PRACTICE_MAX, storyBasis, type StoryGlance } from "@/lib/storyGlance";
+import { embedLink, parseEmbedLink, type NarrationAudio } from "@/lib/magazine";
 import { audit, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
 import { originalStories, originalStory, refreshStories } from "./storyRegistry";
@@ -33,6 +36,9 @@ export type AdminStory = {
   /** A built-in story that's been changed here (it can be put back as it shipped). */
   edited: boolean;
   builtIn: boolean;
+  featured: boolean;
+  /** Where its At a glance summary stands: none yet, proposed by Claude, to check after the story changed, on, or off. */
+  glance: "none" | "proposed" | "check" | "on" | "off";
   photo: string | null;
   updatedAt: string | null;
 };
@@ -51,6 +57,16 @@ function summary(slug: string, story: Story, row: Row | undefined): AdminStory {
     status: row ? row.status : "published",
     edited: Boolean(row && originalStory(slug)),
     builtIn: Boolean(originalStory(slug)),
+    featured: story.featured === true,
+    glance: !story.glance
+      ? "none"
+      : story.glance.proposed
+        ? "proposed"
+        : needsReview(story.glance, story) || (story.practice?.enabled && needsReview(story.practice, story))
+          ? "check"
+          : story.glance.enabled
+            ? "on"
+            : "off",
     photo: story.visual.photo?.src ?? null,
     updatedAt: row?.updated_at ?? null,
   };
@@ -103,30 +119,100 @@ const text = (v: unknown, max: number) =>
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date.parse(v));
 const localPicture = (src: string) => /^\/api\/uploads\/[\w.-]+$/.test(src) || /^\/images\/[\w.-]+$/.test(src);
 
-/** Checks a story from the editor and puts it in the stored shape. */
+/** A recording uploaded to the Hub, in its stored shape. */
+function cleanAudio(a: NarrationAudio | undefined): NarrationAudio | undefined {
+  return a && typeof a.src === "string" && /^\/api\/uploads\/[\w.-]+\.mp3$/.test(a.src) && Number.isFinite(a.seconds) && typeof a.scriptHash === "string"
+    ? {
+        src: a.src,
+        seconds: Number(a.seconds),
+        words: Array.isArray(a.words) ? a.words : null,
+        scriptHash: a.scriptHash,
+        voice: String(a.voice ?? ""),
+        at: String(a.at ?? ""),
+        ...(a.provider ? { provider: String(a.provider) } : {}),
+        ...(a.profile ? { profile: String(a.profile) } : {}),
+        ...(a.model ? { model: String(a.model) } : {}),
+        ...(typeof a.cost === "number" ? { cost: a.cost } : {}),
+      }
+    : undefined;
+}
+
 /** A story's voiced introduction, as saved: its script, a recording uploaded to the Hub, and approval only for a recording of this script. */
 function cleanNarration(v: Story["narration"] | undefined): Story["narration"] | undefined {
   const script = text(v?.script, 1200);
   if (!script) return undefined;
-  const a = v?.audio;
-  const audio =
-    a && typeof a.src === "string" && /^\/api\/uploads\/[\w.-]+\.mp3$/.test(a.src) && Number.isFinite(a.seconds) && typeof a.scriptHash === "string"
-      ? {
-          src: a.src,
-          seconds: Number(a.seconds),
-          words: Array.isArray(a.words) ? a.words : null,
-          scriptHash: a.scriptHash,
-          voice: String(a.voice ?? ""),
-          at: String(a.at ?? ""),
-          ...(a.provider ? { provider: String(a.provider) } : {}),
-          ...(a.profile ? { profile: String(a.profile) } : {}),
-          ...(a.model ? { model: String(a.model) } : {}),
-          ...(typeof a.cost === "number" ? { cost: a.cost } : {}),
-        }
-      : undefined;
+  const audio = cleanAudio(v?.audio);
   return { script, ...(audio ? { audio } : {}), ...(audio && v?.approved === true && audio.scriptHash === textHash(script) ? { approved: true } : {}) };
 }
 
+/** "At a glance" as saved: three to five takeaways, the story they were checked against, and a recording only of these words. */
+function cleanGlance(v: Story["glance"] | undefined): Story["glance"] | undefined {
+  if (!v || !Array.isArray(v.points)) return undefined;
+  const points = v.points
+    .map((p) => ({ title: text(p?.title, 80), text: text(p?.text, 400), from: text(p?.from, 600) }))
+    .filter((p) => p.text)
+    .slice(0, GLANCE_MAX)
+    .map((p) => ({ ...(p.title ? { title: p.title } : {}), text: p.text, ...(p.from ? { from: p.from } : {}) }));
+  if (!points.length) return undefined;
+  if (v.enabled === true && points.length < GLANCE_MIN) throw new HttpError(400, `Give At a glance at least ${GLANCE_MIN} takeaways before turning it on.`);
+  const audio = cleanAudio(v.audio);
+  const g: StoryGlance = { enabled: v.enabled === true, points, basis: text(v.basis, 40) };
+  if (v.proposed === true) g.proposed = true;
+  if (audio) g.audio = audio;
+  if (audio && v.audioApproved === true && audio.scriptHash === textHash(glanceScript(points))) g.audioApproved = true;
+  return g;
+}
+
+/** A link from an action goes to a page on the Hub, never elsewhere. */
+const hubPath = (v: unknown) => {
+  const h = text(v, 300);
+  return /^\/(?!\/)[\w\-/.#?=&%]*$/.test(h) ? h : "";
+};
+
+/** "Put it into practice" as saved: up to five actions, each optionally linked to a Hub page. */
+function cleanPractice(v: Story["practice"] | undefined): Story["practice"] | undefined {
+  if (!v || !Array.isArray(v.items)) return undefined;
+  const seen = new Set<string>();
+  const items = v.items
+    .map((i, n) => {
+      let id = text(i?.id, 40).replace(/[^\w-]/g, "") || `a${n + 1}`;
+      while (seen.has(id)) id = `${id}x`;
+      seen.add(id);
+      const href = hubPath(i?.href);
+      const label = href ? text(i?.label, 120) : "";
+      return { id, text: text(i?.text, 400), ...(href ? { href } : {}), ...(label ? { label } : {}) };
+    })
+    .filter((i) => i.text)
+    .slice(0, PRACTICE_MAX);
+  if (!items.length) return undefined;
+  return { enabled: v.enabled === true, items, checklist: v.checklist === true, basis: text(v.basis, 40), ...(v.proposed === true ? { proposed: true } : {}) };
+}
+
+/** A story's video as saved: an uploaded video or a YouTube, Vimeo or Loom link, its captions, poster and transcript. */
+function cleanVideo(v: Story["video"] | undefined, storyTitle: string): Story["video"] | undefined {
+  if (!v) return undefined;
+  const src = text(v.src, 200);
+  const uploaded = /^\/api\/uploads\/[\w.-]+\.(mp4|webm|mov)$/.test(src) ? src : "";
+  // A link is checked by reading it back from its own address, so only a well-formed one survives.
+  const embed = !uploaded && v.embed ? (parseEmbedLink(embedLink(v.embed)) ?? undefined) : undefined;
+  if (!uploaded && !embed) return undefined;
+  const captions = text(v.captions, 200);
+  const poster = text(v.poster, 200);
+  if (poster && !localPicture(poster)) throw new HttpError(400, "Choose the video’s cover picture from the image library.");
+  const caption = text(v.caption, 300);
+  const transcript = typeof v.transcript === "string" ? v.transcript.trim().slice(0, 40000) : "";
+  return {
+    title: text(v.title, 200) || storyTitle,
+    ...(uploaded ? { src: uploaded } : { embed }),
+    ...(uploaded && /^\/api\/uploads\/[\w.-]+\.vtt$/.test(captions) ? { captions } : {}),
+    ...(poster ? { poster } : {}),
+    ...(caption ? { caption } : {}),
+    ...(transcript ? { transcript } : {}),
+    placement: v.placement === "top" || v.placement === "end" ? v.placement : "opening",
+  };
+}
+
+/** Checks a story from the editor and puts it in the stored shape. */
 export function validateStory(input: Partial<Story>): Story {
   const title = text(input.title, 160);
   if (!title) throw new HttpError(400, "Give the story a title.");
@@ -160,6 +246,7 @@ export function validateStory(input: Partial<Story>): Story {
         alt,
         align,
         ...(caption ? { caption } : {}),
+        ...(b.lightbox === true ? { lightbox: true } : {}),
       });
     } else if (b?.type === "quote") {
       const t = text(b.text, 1500);
@@ -236,6 +323,14 @@ export function validateStory(input: Partial<Story>): Story {
     audience,
     ...(seo.title || seo.description ? { seo } : {}),
     ...(cleanNarration(input.narration) ? { narration: cleanNarration(input.narration) } : {}),
+    ...(input.featured === true ? { featured: true } : {}),
+    ...(input.featured === true && typeof input.featuredUntil === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.featuredUntil)
+      ? { featuredUntil: input.featuredUntil }
+      : {}),
+    ...(input.priority === true ? { priority: true } : {}),
+    ...(cleanGlance(input.glance) ? { glance: cleanGlance(input.glance) } : {}),
+    ...(cleanPractice(input.practice) ? { practice: cleanPractice(input.practice) } : {}),
+    ...(cleanVideo(input.video, title) ? { video: cleanVideo(input.video, title) } : {}),
   };
 }
 
@@ -257,6 +352,12 @@ function newSlug(db: Db, title: string) {
 export function saveStory(db: Db, actor: User, slug: string | null, input: Partial<Story>, now: Date) {
   requireEditor(actor);
   const story = validateStory(input);
+  // Every story has a voiced introduction script (the owner, Nov 2026): drafted from the story when it has none yet, for the
+  // author to edit, record and approve in the editor. Nothing is recorded or played until they do.
+  if (!story.narration) story.narration = { script: draftStoryScript(story) };
+  // A summary or actions saved without a stamp (written outside the editor) are stamped with the story as saved.
+  if (story.glance && !story.glance.basis) story.glance.basis = storyBasis(story);
+  if (story.practice && !story.practice.basis) story.practice.basis = storyBasis(story);
   story.updated = now.toISOString();
   const at = now.toISOString();
   if (!slug) {

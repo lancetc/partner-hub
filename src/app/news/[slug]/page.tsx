@@ -2,7 +2,7 @@ import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { categoryLabel, policyStatusLabel, stories, storyBySlug, type Story, type StoryBlock } from "@/content/stories";
+import { categoryLabel, stories, storyBySlug, type Story, type StoryBlock } from "@/content/stories";
 import { lessonBySlug } from "@/content/lessons";
 import { resources } from "@/content/resources";
 import { StoryVisual } from "@/components/StoryVisual";
@@ -21,7 +21,15 @@ import { SaveSection } from "@/components/favourites/Highlighter";
 import { SavedMarkChips } from "@/components/favourites/SavedMarks";
 import { FavouriteBanner } from "@/components/favourites/FavouriteBanner";
 import { StoryIntro } from "@/components/news/StoryIntro";
+import { MarkStoryRead, WeeklyQuestionCard } from "@/components/news/EditionParts";
+import { weeklyQuestion } from "@/server/newsEdition";
+import { now } from "@/server/clock";
 import { textHash } from "@/lib/magazineNarration";
+import { glanceAudioPlayable, GLANCE_MIN } from "@/lib/storyGlance";
+import { AtAGlance, PutIntoPractice } from "@/components/news/StoryGlance";
+import { StoryVideo } from "@/components/news/StoryVideo";
+import { ZoomablePicture } from "@/components/news/ZoomablePicture";
+import { practiceTicks } from "@/server/storyGlance";
 
 export function generateStaticParams() {
   return stories.map((s) => ({ slug: s.slug }));
@@ -96,9 +104,21 @@ function Block({ block }: { block: StoryBlock }) {
                   : "clear-both"
           }
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={block.src} alt={block.alt} width={block.width} height={block.height} loading="lazy" className="h-auto w-full rounded-2xl" />
-          {block.caption && <figcaption className="mt-2 font-mulish text-sm text-ink-muted">{block.caption}</figcaption>}
+          {/* No caption: the description is shown under it instead, and not read twice (the figure takes it from the caption). */}
+          {block.lightbox ? (
+            <ZoomablePicture src={block.src} alt={block.alt} shownAlt={block.caption ? block.alt : ""} width={block.width} height={block.height} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={block.src}
+              alt={block.caption ? block.alt : ""}
+              width={block.width}
+              height={block.height}
+              loading="lazy"
+              className="h-auto w-full rounded-2xl"
+            />
+          )}
+          {(block.caption || block.alt) && <figcaption className="mt-2 font-mulish text-sm text-ink-muted">{block.caption || block.alt}</figcaption>}
         </figure>
       );
     case "h3":
@@ -159,6 +179,7 @@ async function StoryArticle({
   const related = resources.filter((r) => story.relatedResources?.includes(r.id) && meantFor(user, r.audience));
   const more = stories.filter((s) => s.slug !== story.slug && s.category === story.category && meantFor(user, s.audience)).slice(0, 2);
   const p = story.policy;
+  const question = draft ? null : weeklyQuestion(db, user, now(db));
   // Highlights (docs/job-aids.md): anchored to the story, the paragraph and this edition. Not in an author's preview.
   const edition = story.updated ?? story.date;
   const firstHeading = story.body.findIndex((b) => b.type === "h2");
@@ -166,9 +187,19 @@ async function StoryArticle({
   // The voiced introduction, once an author has approved a recording of this script.
   const n = story.narration;
   const intro = n?.approved && n.audio && n.audio.scriptHash === textHash(n.script.trim()) ? { script: n.script, audio: n.audio } : null;
+  // At a glance and Put it into practice (lib/storyGlance), once an author has checked them and turned them on.
+  const glance = story.glance?.enabled && story.glance.points.length >= GLANCE_MIN ? story.glance : null;
+  const practice = story.practice?.enabled && story.practice.items.length ? story.practice : null;
+  const ticked = practice?.checklist && !draft ? practiceTicks(db, user, story.slug) : [];
+  // The story's video, where the author placed it; "after the opening" falls to the end in a story with no subheadings.
+  const video = story.video;
+  const videoAt = !video ? null : video.placement === "opening" && firstHeading < 0 ? "end" : video.placement;
+  const videoEl = video ? <StoryVideo video={video} fallbackPoster={story.visual.photo?.src} /> : null;
 
   return (
     <article className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
+      {/* Opening it is reading it: the homepage stops featuring it to this person (server/newsEdition). */}
+      {!draft && <MarkStoryRead slug={story.slug} />}
       {/* JSON.stringify output can't close the script tag: "<" is escaped. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleData(story)).replace(/</g, "\\u003c") }} />
 
@@ -234,6 +265,9 @@ async function StoryArticle({
 
       <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:mt-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0">
+          {/* The takeaways, under the hero and before the story (the owner, Nov 2026). */}
+          {glance && <AtAGlance points={glance.points} audio={glanceAudioPlayable(glance) ? glance.audio : null} className="mb-9" />}
+          {videoAt === "top" && <div className="mb-9">{videoEl}</div>}
           {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
           <HighlightArea
             source="news"
@@ -242,18 +276,12 @@ async function StoryArticle({
             off={Boolean(draft)}
             className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
           >
-            {p && (
-              <div className="rounded-2xl border border-line bg-muted p-5 text-base">
-                <p className="flex items-center gap-2 font-semibold">
-                  <Icon name="info" className="size-5 text-accent" /> {policyStatusLabel[p.status]}
-                </p>
-                {p.correction && <p className="mt-2 text-danger">Correction: {p.correction}</p>}
-                <p className="mt-2 text-ink-muted">Reading this update is not an acknowledgement. If a briefing is assigned, complete it separately.</p>
-              </div>
-            )}
+            {/* A correction still shows; the status box and the reminder about acknowledgements went (the owner, Nov 2026). */}
+            {p?.correction && <p className="text-base font-semibold text-danger">Correction: {p.correction}</p>}
             {/* Each part of the story is a place a passage can be highlighted, and found again (#hl-p3 from Favourites). */}
             {story.body.map((b, i) => (
               <Fragment key={i}>
+                {videoAt === "opening" && i === firstHeading && <div className="!mt-9 mb-9">{videoEl}</div>}
                 <div data-hl={`p${i}`} id={`hl-p${i}`} className="scroll-mt-24">
                   {b.type === "h2" && !draft ? (
                     <div className="flex items-end justify-between gap-3">
@@ -270,6 +298,18 @@ async function StoryArticle({
               </Fragment>
             ))}
           </HighlightArea>
+          {videoAt === "end" && <div className="mt-10">{videoEl}</div>}
+          {practice && (
+            <PutIntoPractice
+              slug={story.slug}
+              items={practice.items}
+              checklist={practice.checklist}
+              initialTicked={ticked}
+              policy={story.category === "policy"}
+              preview={Boolean(draft)}
+              className="mt-12"
+            />
+          )}
           {/* Who wrote it, when, and how long it takes: at the end of the story. */}
           <p className="mt-10 border-t border-line pt-4 font-mulish text-sm text-ink-muted">
             {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
@@ -278,48 +318,27 @@ async function StoryArticle({
 
         <aside className="flex flex-col gap-5">
           {lesson && (
-            <div className="rounded-3xl bg-tealtint p-5">
-              <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
-                {lesson.track === "briefing" ? "Short briefing" : "Related topic"}
-              </p>
-              <p className="mt-2 font-serif text-xl font-semibold leading-snug">{lesson.title}</p>
-              <p className="mt-1 text-base text-ink-muted">{lesson.summary}</p>
-              <Link
-                href={`/topics/${lesson.slug}`}
-                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
-              >
-                {lesson.track === "briefing" ? "See what changed" : "Start topic"} · {lesson.minutes} min
-              </Link>
+            <div className="overflow-hidden rounded-3xl bg-tealtint">
+              {/* The topic's own poster, as on its Topics tile (the owner, Nov 2026). */}
+              <StoryVisual {...lesson.visual} alt="" className="aspect-[16/10]" iconSize="size-10" />
+              <div className="p-5">
+                <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
+                  {lesson.track === "briefing" ? "Short briefing" : "Related topic"}
+                </p>
+                <p className="mt-2 font-serif text-xl font-semibold leading-snug">{lesson.title}</p>
+                <p className="mt-1 text-base text-ink-muted">{lesson.summary}</p>
+                <Link
+                  href={`/topics/${lesson.slug}`}
+                  className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
+                >
+                  {lesson.track === "briefing" ? "See what changed" : "Start topic"} · {lesson.minutes} min
+                </Link>
+              </div>
             </div>
           )}
 
-          {p && (
-            <dl className="rounded-3xl border border-line p-5 text-base">
-              <h2 className="mb-3 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Source details</h2>
-              {[
-                ["Issued by", p.issuer],
-                ["Published", formatDate(p.published)],
-                ["Effective", p.effective ? formatDate(p.effective) : "Not set"],
-                ["Applies to", p.jurisdiction ?? "Not specified"],
-                ["Content owner", p.owner],
-                ["Next review", formatDate(p.reviewDate)],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4 border-t border-line py-2 first-of-type:border-t-0">
-                  <dt className="text-ink-muted">{k}</dt>
-                  <dd className="text-right font-medium">{v}</dd>
-                </div>
-              ))}
-              <a
-                href={p.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex min-h-11 items-center gap-2 font-semibold text-accent underline underline-offset-4"
-              >
-                {p.sourceTitle} <Icon name="external" className="size-4 shrink-0" />
-                <span className="sr-only">(opens in a new tab)</span>
-              </a>
-            </dl>
-          )}
+          {/* The weekly question, with how peers answered once you have (server/newsEdition), in place of the policy source details (the owner, Nov 2026). */}
+          {question && <WeeklyQuestionCard initial={question} />}
 
           {related.length > 0 && (
             <div className="rounded-3xl border border-line p-5">

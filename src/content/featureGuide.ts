@@ -548,6 +548,15 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
         doc: "magazine-audio-guide.md",
       },
       {
+        name: "News: At a glance and Put it into practice",
+        what: "Under a news story's hero, three to five takeaways shaped for the kind of story (a policy update says what's changing, who it affects, when and what to do), with an optional reading that never plays by itself. At the end, up to five optional ideas to try, which readers can tick off for themselves. AI drafts both from the story alone, quoting the words that support each takeaway; the author edits, reorders and turns them on, and is asked to check again whenever the story changes.",
+        who: "Readers of the news; authors in the News editor.",
+        problem:
+          "Busy coordinators and Care Partners need the point of a story in seconds, and a nudge from reading to doing, without making the news feel like a course.",
+        links: [{ label: "Admin: News", href: "/admin/news" }],
+        status: "live",
+      },
+      {
         name: "AI revise and AI review",
         what: "Ask the AI to revise a Magazine page with an instruction (shorter, plainer, more Australian), and see each change to accept or reject. When a course or Topic is submitted for review, an AI pre-review checks it against its sources and flags problems for the human reviewer.",
         who: "Authors and reviewers.",

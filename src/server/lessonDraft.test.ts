@@ -115,3 +115,19 @@ describe("the draft", () => {
     expect(l.owner).toMatch(/AI draft for review/);
   });
 });
+
+describe("a draft's source from the editor (read in the browser)", () => {
+  it("takes a document's words as they were read, or a file to read here, and neither when there's nothing", async () => {
+    const { draftSourceFrom, sourceOf } = await import("./lessonDraft");
+    const words = new FormData();
+    words.append("documentName", "Ops update.pptx");
+    words.append("documentText", "[Slide 1]\nVisit notes on the day.");
+    expect(draftSourceFrom(words)).toEqual({ kind: "text", name: "Ops update.pptx", text: "[Slide 1]\nVisit notes on the day." });
+    const file = new FormData();
+    file.append("file", new File(["Hello"], "notes.txt", { type: "text/plain" }));
+    const f = draftSourceFrom(file);
+    expect(f).toBeInstanceOf(File);
+    expect(await sourceOf(f)).toEqual({ kind: "text", name: "notes.txt", text: "Hello" });
+    expect(draftSourceFrom(new FormData())).toBeNull();
+  });
+});

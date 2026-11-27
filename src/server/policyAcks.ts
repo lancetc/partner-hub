@@ -169,6 +169,14 @@ export function createPolicyAck(db: Db, actor: User, input: Record<string, unkno
 }
 
 /** Someone who's joined, or changed role, since a request went out: they get the ones open now that apply to them. */
+/** The open policies this person is asked to acknowledge, for the homepage's News in Brief (the owner, Nov 2026). */
+export function openPolicyAcksFor(db: Db, user: User) {
+  ensure(db);
+  return (db.prepare("SELECT * FROM policy_acks WHERE status = 'active'").all() as Row[])
+    .filter((r) => appliesTo(r, user))
+    .map((r) => ({ id: r.id, title: r.title, summary: r.summary, href: r.href, dueOn: r.due_on, createdAt: r.created_at }));
+}
+
 export function syncPolicyAcks(db: Db, user: User, now: Date) {
   ensure(db);
   const open = db.prepare("SELECT * FROM policy_acks WHERE status = 'active'").all() as Row[];
