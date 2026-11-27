@@ -93,7 +93,7 @@ export function Composer({
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
           }}
           placeholder={placeholder}
-          className="w-full rounded-xl border border-line-strong bg-surface p-2.5 text-[0.98rem]"
+          className="w-full rounded-xl border border-line-strong bg-surface p-2.5 text-base"
         />
       </label>
       <div className="flex items-center justify-end gap-2">
@@ -129,7 +129,7 @@ function Bubble({ c, onDelete }: { c: ReviewComment; onDelete?: () => void }) {
           </a>
         )}
       </p>
-      <p className="mt-1 whitespace-pre-line text-[0.98rem]">{c.text}</p>
+      <p className="mt-1 whitespace-pre-line text-base">{c.text}</p>
       {onDelete && (
         <button type="button" onClick={onDelete} className="mt-1 text-xs font-semibold text-ink-muted hover:text-ink hover:underline">
           Delete

@@ -116,7 +116,7 @@ export function WorkloadLensLab({ block: b, ctx }: { block: WorkloadBlock; ctx: 
     <section aria-label={`Workload Lens: ${b.title}`} className="mx-auto w-full max-w-[72rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-7">
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="clock" className="size-5" /> Workload Lens
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">
           {mode === "story" ? `Fictional case · ${b.storyVersion}` : "Your team · private"}
         </span>
       </p>

@@ -22,7 +22,7 @@ function Kicker({ story, className }: { story: Story; className?: string }) {
   return (
     <p
       className={cx(
-        "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.16em]",
+        "font-mulish text-xs font-extrabold uppercase tracking-[0.16em]",
         story.category === "policy" || story.category === "case-study" ? "text-warm" : "text-accent",
         className,
       )}
@@ -63,7 +63,7 @@ function Headline({ story, className }: { story: Story; className: string }) {
 /** A band's label: small capitals with a hairline running to the edge. */
 function BandLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className={cx("flex items-center gap-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.2em] text-ink", className)}>
+    <h3 className={cx("flex items-center gap-3 font-mulish text-xs font-extrabold uppercase tracking-[0.2em] text-ink", className)}>
       {children}
       <span aria-hidden className="h-px flex-1 bg-line-strong" />
     </h3>
@@ -89,7 +89,7 @@ export function NewsGrid({ stories }: { stories: Story[] }) {
                 aria-pressed={active}
                 onClick={() => setFilter(c.id)}
                 className={cx(
-                  "relative inline-flex min-h-11 shrink-0 items-center px-4 font-mulish text-[0.72rem] font-extrabold uppercase tracking-[0.14em] transition-colors",
+                  "relative inline-flex min-h-11 shrink-0 items-center px-4 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] transition-colors",
                   i > 0 && "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-px before:-translate-y-1/2 before:bg-line-strong",
                   i === 0 && "pl-0",
                   active
@@ -223,7 +223,7 @@ function TextStory({ story }: { story: Story }) {
     <article className="tile group relative py-4 first:pt-1">
       <Kicker story={story} />
       <Headline story={story} className="mt-1 text-[1.2rem] leading-snug" />
-      <p className="mt-1.5 text-[0.92rem] leading-snug text-ink-muted">{story.dek}</p>
+      <p className="mt-1.5 text-base leading-snug text-ink-muted">{story.dek}</p>
       <div className="mt-2">
         <Byline story={story} withAuthor={false} />
       </div>
@@ -237,17 +237,17 @@ function PolicyNotice({ story, className }: { story: Story; className?: string }
   return (
     <div className={className}>
       <article className="tile group relative border-2 border-ink bg-surface">
-        <p className="flex items-center justify-between gap-2 bg-ink px-4 py-1.5 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-bg">
+        <p className="flex items-center justify-between gap-2 bg-ink px-4 py-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.18em] text-bg">
           Policy notice
           <Icon name="info" className="size-3.5" />
         </p>
         <StoryVisual {...story.visual} className="aspect-[16/9] border-b-2 border-ink" iconSize="size-8" />
         <div className="flex flex-col gap-2.5 p-4">
-          <p className="w-fit border border-ink px-2 py-0.5 font-mulish text-[0.68rem] font-bold uppercase tracking-[0.1em] text-ink">
+          <p className="w-fit border border-ink px-2 py-0.5 font-mulish text-xs font-bold uppercase tracking-[0.1em] text-ink">
             {policyStatusLabel[p.status]}
           </p>
           <Headline story={story} className="text-[1.35rem] leading-tight" />
-          <p className="text-[0.92rem] leading-snug text-ink-muted">{story.dek}</p>
+          <p className="text-base leading-snug text-ink-muted">{story.dek}</p>
           {p.effective && <p className="font-mulish text-xs font-bold text-ink">Effective {formatDate(p.effective)}</p>}
           {story.relatedLesson && (
             <Link
@@ -278,7 +278,7 @@ function ColumnStory({ story, className }: { story: Story; className?: string })
             <SaveButton id={saveId(story)} title={story.title} className="relative z-10 -mr-2 -mt-2" />
           </div>
           <Headline story={story} className="text-[1.15rem] leading-snug" />
-          <p className="mt-1.5 line-clamp-3 text-[0.9rem] leading-snug text-ink-muted">{story.dek}</p>
+          <p className="mt-1.5 line-clamp-3 text-base leading-snug text-ink-muted">{story.dek}</p>
           <div className="mt-auto pt-3">
             <Byline story={story} withAuthor={false} />
           </div>

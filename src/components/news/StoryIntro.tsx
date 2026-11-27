@@ -9,6 +9,7 @@ import type { NarrationAudio } from "@/lib/magazine";
   As on a Magazine page it starts by itself when the story opens, unless the learner has automatic audio off, and asks
   for a tap when the browser won't start sound on its own.
 */
-export function StoryIntro({ script, audio }: { script: string; audio: NarrationAudio }) {
-  return <IntroPlayer script={script} audio={audio} autoPlay onEvent={() => {}} />;
+export function StoryIntro({ script, audio, className }: { script: string; audio: NarrationAudio; className?: string }) {
+  // On the story's own picture, as a Magazine course plays its introduction on its cover.
+  return <IntroPlayer script={script} audio={audio} autoPlay onPicture className={className} onEvent={() => {}} />;
 }

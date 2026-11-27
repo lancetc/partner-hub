@@ -121,7 +121,7 @@ export function TopicChat({ slug, title, card, preview = false }: { slug: string
           </header>
 
           <div ref={list} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
-            <div className="rounded-2xl bg-muted p-3 text-[0.95rem]">
+            <div className="rounded-2xl bg-muted p-3 text-base">
               <p>Ask anything about this topic or how you work with Trilogy Care. Answers come from the Partner Hub’s topics, resources and news.</p>
               <p className="mt-2 flex gap-2 text-sm text-ink-muted">
                 <Icon name="lock" className="mt-0.5 size-4 shrink-0" /> Leave out client names and private details. Questions aren’t saved.
@@ -154,7 +154,7 @@ export function TopicChat({ slug, title, card, preview = false }: { slug: string
                         <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" /> {t.error}
                       </p>
                     ) : t.text ? (
-                      <RichText text={t.text} className="text-[0.95rem] leading-relaxed" />
+                      <RichText text={t.text} className="text-base leading-relaxed" />
                     ) : (
                       <p className="flex items-center gap-1 py-1 text-ink-muted" aria-label="Writing an answer">
                         {[0, 1, 2].map((d) => (
@@ -203,7 +203,7 @@ export function TopicChat({ slug, title, card, preview = false }: { slug: string
                   }
                 }}
                 placeholder="Type your question"
-                className="max-h-32 min-h-12 flex-1 resize-none rounded-2xl border border-line-strong bg-surface px-3 py-3 text-[0.98rem] leading-snug [field-sizing:content]"
+                className="max-h-32 min-h-12 flex-1 resize-none rounded-2xl border border-line-strong bg-surface px-3 py-3 text-base leading-snug [field-sizing:content]"
               />
               <button
                 type="submit"

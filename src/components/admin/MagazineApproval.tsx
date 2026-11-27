@@ -53,7 +53,7 @@ export type CourseApproval = {
 };
 
 const ROLE_LABEL = { sme: "Subject-matter expert", compliance: "Compliance", publisher: "Hub owner" } as const;
-const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
+const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed";
 type StepState = "done" | "current" | "next" | "skipped";
 
 /** The label on the editor's header button, by stage. */

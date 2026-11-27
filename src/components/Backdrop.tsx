@@ -32,7 +32,7 @@ export function Backdrop({ initial }: { initial: Background | null }) {
       {bg.kind === "pexels" && (
         // Pexels asks for the photographer to be credited: up the right-hand edge, beside the page, on screens wide enough to leave room.
         // Elsewhere the credit is in Profile and settings, where the photo is chosen.
-        <p className="fixed bottom-4 right-2 z-20 hidden rotate-180 rounded-full bg-black/45 px-1 py-3 text-[0.7rem] leading-none text-white backdrop-blur-md [writing-mode:vertical-rl] min-[1440px]:block">
+        <p className="fixed bottom-4 right-2 z-20 hidden rotate-180 rounded-full bg-black/45 px-1 py-3 text-xs leading-none text-white backdrop-blur-md [writing-mode:vertical-rl] min-[1440px]:block">
           Photo by{" "}
           <a href={bg.photographerUrl} className="font-semibold underline-offset-2 hover:underline">
             {bg.photographer}

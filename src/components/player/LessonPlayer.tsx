@@ -941,7 +941,7 @@ export function LessonPlayer({
               </h2>
               {node.figure && node.figure.placement === "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
               {node.body && node.type !== "wall" && (
-                <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? onColour.text : "text-ink")} />
+                <RichText text={node.body} className={cx("mt-3 text-lg leading-relaxed", onColour ? cx(onColour.text, "rich-on-colour") : "text-ink")} />
               )}
               {node.figure && node.figure.placement !== "above" && <CardFigure figure={node.figure} onColour={Boolean(onColour)} className="mt-4" />}
               {node.pdf && (
@@ -980,7 +980,7 @@ export function LessonPlayer({
                 </button>
               )}
               {node.detail && detailOpen && (
-                <div className="mt-1 rounded-2xl bg-muted p-4 text-[0.95rem]">
+                <div className="mt-1 rounded-2xl bg-muted p-4 text-base">
                   <p className="font-semibold">{node.detail.title}</p>
                   {node.detail.paragraphs.map((p) => (
                     <p key={p} className="mt-2 text-ink-muted">
@@ -1291,7 +1291,7 @@ function CardBody({
             );
           })}
           {stayFeedback && positive && (
-            <p id="stay-feedback" role="status" className="fx-rise mt-1 flex gap-2 rounded-2xl bg-[#DDE8D9] px-4 py-3 text-[0.95rem] dark:bg-tealtint">
+            <p id="stay-feedback" role="status" className="fx-rise mt-1 flex gap-2 rounded-2xl bg-[#DDE8D9] px-4 py-3 text-base dark:bg-tealtint">
               <Icon name="check" className="fx-tick mt-0.5 size-5 shrink-0 text-accent" />
               <span>
                 <RichInline text={stayFeedback} />
@@ -1315,7 +1315,7 @@ function CardBody({
               </span>
               <div className="flex min-w-0 flex-col gap-1">
                 <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#b33d17] dark:text-warm">Not quite</p>
-                <p className="text-[0.95rem] leading-snug">
+                <p className="text-base leading-snug">
                   <RichInline text={stayFeedback} />
                 </p>
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-[#b33d17] dark:text-warm">
@@ -1364,7 +1364,7 @@ function CardBody({
                   <li key={p} className="fx-stagger flex gap-3.5" style={{ ["--i" as string]: i }}>
                     <div className="flex w-8 shrink-0 flex-col items-center" aria-hidden>
                       {/* Fixed colours, so the number reads the same on any card and in dark mode. */}
-                      <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#4EC3C9] font-mulish text-[0.95rem] font-bold text-[#1C2B4A] [text-shadow:none]">
+                      <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#4EC3C9] font-mulish text-base font-bold text-[#1C2B4A] [text-shadow:none]">
                         {i + 1}
                       </span>
                       {!last && <span className="my-1 w-0.5 flex-1 rounded-full bg-current opacity-30" />}
@@ -1538,7 +1538,7 @@ function ResponseCard({
             <span className="text-xs text-ink-muted">Practice feedback from AI · not an assessment</span>
           </div>
           {feedback.fb.concern && (
-            <p className="flex items-start gap-2 rounded-xl border-2 border-warm/60 bg-orange/10 p-3 text-[0.95rem]">
+            <p className="flex items-start gap-2 rounded-xl border-2 border-warm/60 bg-orange/10 p-3 text-base">
               <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-warm" />
               <span>If someone may be at risk, tell your coordinator or manager today. Call 000 if anyone is in immediate danger.</span>
             </p>
@@ -1549,7 +1549,7 @@ function ResponseCard({
               <p className="text-sm font-semibold">What works</p>
               <ul className="mt-1 flex flex-col gap-1">
                 {feedback.fb.strengths.map((t) => (
-                  <li key={t} className="flex gap-2 text-[0.95rem]">
+                  <li key={t} className="flex gap-2 text-base">
                     <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" /> {t}
                   </li>
                 ))}
@@ -1561,7 +1561,7 @@ function ResponseCard({
               <p className="text-sm font-semibold">To make it stronger</p>
               <ul className="mt-1 flex flex-col gap-1">
                 {feedback.fb.improve.map((t) => (
-                  <li key={t} className="flex gap-2 text-[0.95rem]">
+                  <li key={t} className="flex gap-2 text-base">
                     <Icon name="arrow-right" className="mt-1 size-4 shrink-0 text-accent" /> {t}
                   </li>
                 ))}
@@ -1705,7 +1705,7 @@ function Intro({
         <h1 className="mt-2 font-serif text-[2.1rem] font-semibold leading-[1.1] tracking-tight">{lesson.title}</h1>
         <p className="mt-3 text-lg">{lesson.summary}</p>
       </div>
-      <ul className="flex flex-col gap-2 text-[0.95rem]">
+      <ul className="flex flex-col gap-2 text-base">
         <li className="flex gap-3">
           <Icon name="spark" className="mt-0.5 size-5 shrink-0 text-accent" />
           <span>
@@ -1812,14 +1812,14 @@ function Complete({
             <p className="flex items-center gap-2 font-semibold">
               <Icon name="route" className="size-5 text-accent" /> A quick follow up will help you practise this in a new situation.
             </p>
-            <p className="mt-1 text-[0.95rem]">
+            <p className="mt-1 text-base">
               {f.firstRelease ? `Expected ${formatWhen(f.firstRelease, f.timezone)}` : "Coming soon"} · {durationLabel(f.durationSec).toLowerCase()}. It’ll
               appear under Learning, and we’ll send a short reminder.
             </p>
           </div>
         ))}
       {!review && attempt.completedAt && (
-        <dl className="rounded-2xl border border-line p-4 text-[0.95rem]">
+        <dl className="rounded-2xl border border-line p-4 text-base">
           <div className="flex justify-between gap-3 py-1">
             <dt className="text-ink-muted">Completed</dt>
             <dd className="font-medium">{formatDate(attempt.completedAt)}</dd>
@@ -1929,7 +1929,7 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
                 <Icon name={p.icon} className="size-4" />
               </span>
             )}
-            <span className="text-[0.95rem] font-medium leading-snug">
+            <span className="text-base font-medium leading-snug">
               <RichInline text={p.text} />
             </span>
           </li>
@@ -1938,7 +1938,7 @@ function KeyPoints({ points, onColour = false }: { points: NonNullable<Card["key
       {points.tip && (
         <p
           className={cx(
-            "flex gap-2 rounded-2xl border-l-4 border-action pl-3 text-[0.95rem]",
+            "flex gap-2 rounded-2xl border-l-4 border-action pl-3 text-base",
             onColour ? "bg-white py-2 pr-3 text-[#102a43] [text-shadow:none]" : "bg-surface",
           )}
         >
@@ -1979,7 +1979,7 @@ function KeyPointSteps({ points, box, onColour }: { points: NonNullable<Card["ke
                   <RichInline text={p.title} />
                 </p>
               )}
-              <p className={cx("text-[0.95rem] leading-snug", p.title && (onColour ? "text-[#334e68]" : "text-ink-muted"))}>
+              <p className={cx("text-base leading-snug", p.title && (onColour ? "text-[#334e68]" : "text-ink-muted"))}>
                 <RichInline text={p.text} />
               </p>
             </div>
@@ -1987,7 +1987,7 @@ function KeyPointSteps({ points, box, onColour }: { points: NonNullable<Card["ke
         ))}
       </ol>
       {points.tip && (
-        <p className="mb-3 flex gap-2 rounded-2xl border-l-4 border-action bg-surface py-2 pl-3 pr-3 text-[0.95rem]">
+        <p className="mb-3 flex gap-2 rounded-2xl border-l-4 border-action bg-surface py-2 pl-3 pr-3 text-base">
           <span>
             <strong>In practice:</strong> {points.tip}
           </span>
@@ -2027,7 +2027,7 @@ function SpacedNote({ slug }: { slug: string }) {
   if (!stages?.length) return null;
   const days = cumulative(stages.map((s) => s.gap));
   return (
-    <div className="mt-4 rounded-2xl bg-muted p-3 text-[0.95rem]">
+    <div className="mt-4 rounded-2xl bg-muted p-3 text-base">
       <p className="flex items-center gap-2 font-semibold">
         <Icon name="route" className="size-4 text-accent" /> Includes spaced learning
       </p>

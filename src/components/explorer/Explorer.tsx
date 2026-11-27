@@ -631,7 +631,7 @@ export function Explorer() {
             ref={gateLabel}
             type="button"
             onClick={showGate}
-            className="invisible absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#1d2b4f]/90 px-2.5 py-1 text-[0.6rem] font-bold text-white shadow sm:text-sm"
+            className="invisible absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#1d2b4f]/90 px-2.5 py-1 text-xs font-bold text-white shadow sm:text-sm"
           >
             {unlocked ? "Next neighbourhood" : "🔒 Next neighbourhood"}
           </button>

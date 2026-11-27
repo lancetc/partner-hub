@@ -40,7 +40,7 @@ export function LivesOverview({ onTab }: { onTab: (tab: string) => void }) {
                   <Icon name={ICONS[p.key]} className="size-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">Part {i + 1} of 6</p>
+                  <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">Part {i + 1} of 6</p>
                   <h3 id={`part-${p.key}`} className="font-serif text-lg font-semibold leading-tight">
                     {p.heading}
                   </h3>
@@ -50,7 +50,7 @@ export function LivesOverview({ onTab }: { onTab: (tab: string) => void }) {
               <dl className="grid grid-cols-2 gap-2">
                 {p.stats.map((s) => (
                   <div key={s.label} className="rounded-xl bg-muted px-2.5 py-1.5">
-                    <dt className="text-[0.68rem] font-semibold leading-tight text-ink-muted">{s.label}</dt>
+                    <dt className="text-xs font-semibold leading-tight text-ink-muted">{s.label}</dt>
                     <dd className="font-serif text-xl font-semibold">{s.value}</dd>
                   </div>
                 ))}

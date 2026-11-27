@@ -562,7 +562,7 @@ function AtlasMap({
             >
               <span className="flex -space-x-3">
                 {c.pins.slice(0, 3).map((p) => (
-                  <Portrait key={p.id} name={p.name} src={p.portrait} className="size-8 text-[0.6rem]" />
+                  <Portrait key={p.id} name={p.name} src={p.portrait} className="size-8 text-xs" />
                 ))}
               </span>
               <span className="ml-1.5 font-mulish text-sm font-extrabold text-ink">{c.pins.length}</span>
@@ -646,7 +646,7 @@ function MapPin({ p, style, chosen, label, onClick }: { p: Pin; style: React.CSS
       </span>
       <span
         className={cx(
-          "mt-1 whitespace-nowrap rounded-full bg-surface/95 px-2 py-0.5 text-[0.7rem] font-semibold text-ink shadow-sm",
+          "mt-1 whitespace-nowrap rounded-full bg-surface/95 px-2 py-0.5 text-xs font-semibold text-ink shadow-sm",
           label || chosen ? "" : "sr-only group-hover:not-sr-only group-focus-visible:not-sr-only",
         )}
       >

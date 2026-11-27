@@ -522,7 +522,7 @@ export function TopicApproval({
   );
 }
 
-const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
+const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed";
 
 /** Step 7, for a live topic: what says it may need refreshing. */
 function Monitor({ a }: { a: Approval }) {

@@ -158,7 +158,7 @@ export function MemberChatAdmin() {
           <details className="rounded-2xl bg-muted p-4 text-sm">
             <summary className="cursor-pointer font-semibold">The house rules (fixed)</summary>
             <p className="mt-2 text-ink-muted">Every chat follows these, whatever the settings. Changing them is a code change, reviewed like any other.</p>
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-[0.85rem] leading-relaxed">{HOUSE_RULES}</pre>
+            <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed">{HOUSE_RULES}</pre>
           </details>
         </section>
 
@@ -208,7 +208,7 @@ export function MemberChatAdmin() {
             </select>
           </Field>
           {preview.data && (
-            <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 font-sans text-[0.85rem] leading-relaxed">
+            <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 font-sans text-sm leading-relaxed">
               {`${preview.data.rules}\n\n---\n\n${preview.data.context}`}
             </pre>
           )}

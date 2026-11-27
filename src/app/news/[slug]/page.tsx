@@ -216,6 +216,8 @@ async function StoryArticle({
               </div>
             </div>
             <p className="mt-4 text-lg text-white/85 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] sm:text-xl">{story.dek}</p>
+            {/* The voiced introduction plays on the picture, as a Magazine course's does on its cover. */}
+            {intro && <StoryIntro script={intro.script} audio={intro.audio} className="mt-6" />}
           </div>
         </div>
       </header>
@@ -240,7 +242,6 @@ async function StoryArticle({
             off={Boolean(draft)}
             className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
           >
-            {intro && <StoryIntro script={intro.script} audio={intro.audio} />}
             {p && (
               <div className="rounded-2xl border border-line bg-muted p-5 text-base">
                 <p className="flex items-center gap-2 font-semibold">
@@ -282,7 +283,7 @@ async function StoryArticle({
                 {lesson.track === "briefing" ? "Short briefing" : "Related topic"}
               </p>
               <p className="mt-2 font-serif text-xl font-semibold leading-snug">{lesson.title}</p>
-              <p className="mt-1 text-[0.95rem] text-ink-muted">{lesson.summary}</p>
+              <p className="mt-1 text-base text-ink-muted">{lesson.summary}</p>
               <Link
                 href={`/topics/${lesson.slug}`}
                 className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
@@ -293,7 +294,7 @@ async function StoryArticle({
           )}
 
           {p && (
-            <dl className="rounded-3xl border border-line p-5 text-[0.95rem]">
+            <dl className="rounded-3xl border border-line p-5 text-base">
               <h2 className="mb-3 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Source details</h2>
               {[
                 ["Issued by", p.issuer],

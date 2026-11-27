@@ -10,7 +10,7 @@ import { Icon, type IconName } from "./Icon";
 */
 
 const TAG =
-  "rounded-full bg-white/90 px-2.5 py-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.1em] text-[#102a43] shadow-sm backdrop-blur-sm";
+  "rounded-full bg-white/90 px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.1em] text-[#102a43] shadow-sm backdrop-blur-sm";
 
 /** The roles named, in the usual order; every role or none named means everyone, so an empty list. */
 function namedRoles(roles: readonly string[]) {

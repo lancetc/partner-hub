@@ -59,17 +59,17 @@ export function ResourceTileBody({ item, compact = false }: { item: Item; compac
         <span
           className={cx(
             "line-clamp-2 font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]",
-            compact && "text-[0.8rem]",
+            compact && "text-xs",
           )}
         >
           {item.title}
         </span>
-        <span className={cx("block truncate text-ink-muted", compact ? "text-[0.65rem]" : "text-xs")}>
+        <span className={cx("block truncate text-ink-muted", compact ? "text-xs" : "text-xs")}>
           {item.source || [kind.label, fileSize(item.bytes)].filter(Boolean).join(" · ")}
         </span>
-        {site && <span className={cx("block truncate font-semibold text-accent", compact ? "text-[0.65rem]" : "text-xs")}>{site}</span>}
+        {site && <span className={cx("block truncate font-semibold text-accent", compact ? "text-xs" : "text-xs")}>{site}</span>}
         {inside && item.source && fileSize(item.bytes) && (
-          <span className={cx("block text-ink-muted", compact ? "text-[0.65rem]" : "text-xs")}>PDF · {fileSize(item.bytes)}</span>
+          <span className={cx("block text-ink-muted", compact ? "text-xs" : "text-xs")}>PDF · {fileSize(item.bytes)}</span>
         )}
         {item.description && !compact && <span className="mt-1 line-clamp-2 block text-sm text-ink-muted">{item.description}</span>}
       </span>

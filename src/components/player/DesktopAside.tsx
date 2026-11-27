@@ -13,7 +13,7 @@ import { Icon } from "../Icon";
 */
 
 const panel = "rounded-[1.75rem] bg-surface p-5 shadow-sm ring-1 ring-line";
-const label = "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted";
+const label = "font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted";
 
 type Progress = { beat: number; done: boolean } | null;
 
@@ -139,7 +139,7 @@ function Notes({ slug }: { slug: string }) {
         }}
         placeholder="Your reflections, questions, or something to try on your next visit…"
         maxLength={4000}
-        className="mt-2 w-full resize-y rounded-2xl border border-line-strong bg-surface px-3 py-2.5 text-[0.95rem] leading-relaxed"
+        className="mt-2 w-full resize-y rounded-2xl border border-line-strong bg-surface px-3 py-2.5 text-base leading-relaxed"
       />
       <p className="mt-1 text-xs text-ink-muted" role="status">
         {saved ? "Saved on this device." : "Private to you. Saved on this device when you click away."}

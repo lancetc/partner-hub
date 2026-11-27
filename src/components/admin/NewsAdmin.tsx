@@ -38,7 +38,7 @@ type Summary = {
 };
 type Detail = Summary & { story: Story; deleted: boolean };
 
-const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
+const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed";
 
 export function NewsList() {
   const { data, error, reload } = useApi<{ stories: Summary[]; deleted: Summary[] }>("/api/admin/stories");

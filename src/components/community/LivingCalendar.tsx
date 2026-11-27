@@ -303,7 +303,7 @@ export function LivingCalendar() {
                             <span
                               key={e.id}
                               className={cx(
-                                "flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-[0.68rem] leading-tight",
+                                "flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-xs leading-tight",
                                 e.kind === "routine" ? "text-ink-muted" : "bg-bg",
                               )}
                             >
@@ -313,7 +313,7 @@ export function LivingCalendar() {
                               {e.unread && <span className="size-1.5 shrink-0 rounded-full bg-[#fab53d]" />}
                             </span>
                           ))}
-                          {list.length > 2 && <span className="px-1 text-[0.68rem] font-semibold text-ink-muted">+ {list.length - 2} more</span>}
+                          {list.length > 2 && <span className="px-1 text-xs font-semibold text-ink-muted">+ {list.length - 2} more</span>}
                         </span>
                       </button>
                     </div>

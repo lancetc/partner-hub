@@ -23,7 +23,7 @@ export function FavouritesHeaderLink() {
       aria-label="Favourites and Work Tools"
       onClick={(e) => openCompanion(e.currentTarget)}
       className={cx(
-        "hidden min-h-11 items-center gap-2 rounded-full border px-3 text-[0.95rem] font-semibold lg:inline-flex xl:px-4",
+        "hidden min-h-11 items-center gap-2 rounded-full border px-3 text-base font-semibold lg:inline-flex xl:px-4",
         active ? "border-action bg-tealtint text-ink" : "border-line-strong text-ink hover:bg-muted",
       )}
     >
@@ -48,7 +48,7 @@ export function FavouritesBottomLink() {
       <span className={cx("rounded-full px-3 py-1", active ? "bg-tealtint" : "bg-muted")}>
         <Icon name={active ? "bookmark-filled" : "bookmark"} className="size-5" />
       </span>
-      <span className="whitespace-nowrap text-center text-[0.66rem] leading-tight tracking-tight">Favourites</span>
+      <span className="whitespace-nowrap text-center text-xs leading-tight tracking-tight">Favourites</span>
     </button>
   );
 }

@@ -27,7 +27,33 @@ export type Feature = {
 export type FeatureGroup = { id: string; title: string; intro: string; features: Feature[] };
 
 /** The Magazine's practice blocks, in brief: the Block showcase courses have a page for each. */
-export type BlockFamily = { title: string; blocks: { name: string; what: string }[] };
+export type BlockFamily = { title: string; blocks: { name: string; type: string; what: string }[] };
+
+/**
+  Where each block can be tried: its page in the Block showcase courses (the owner, Nov 2026), one page per block, its id
+  "p-" and the block type. Showcase 1 has the care practice blocks; showcase 2 money, supply and business.
+*/
+const SHOWCASE_1 = "block-showcase-1-stories-conversations-and-judgement";
+const SHOWCASE_2 = "block-showcase-2-money-supply-and-running-a-business";
+const IN_SHOWCASE_2 = new Set([
+  "xray",
+  "auditor",
+  "sandbox",
+  "bridge",
+  "budgetlab",
+  "onedaymap",
+  "network",
+  "referralstudio",
+  "referral",
+  "coverage",
+  "intake",
+  "workload",
+  "reliability",
+  "hiring",
+  "cashbridge",
+  "shadowcoach",
+]);
+export const blockDemoHref = (type: string) => `/magazine/${IN_SHOWCASE_2.has(type) ? SHOWCASE_2 : SHOWCASE_1}/p-${type}`;
 
 export const FEATURE_GROUPS: FeatureGroup[] = [
   {
@@ -545,61 +571,61 @@ export const BLOCK_FAMILIES: BlockFamily[] = [
   {
     title: "Content and job aids",
     blocks: [
-      { name: "Ava video", what: "One of Ava's videos from the road, with her words highlighted." },
-      { name: "Hub diagram", what: "The client journey or a partner model's who-does-what, kept current." },
-      { name: "Job Aid", what: "An approved procedure placed by reference." },
-      { name: "Myth vs Reality tiles", what: "Common questions with approved answers." },
-      { name: "Notes to a Younger Me deck", what: "Experienced colleagues' advice as cards." },
+      { name: "Ava video", type: "ava", what: "One of Ava's videos from the road, with her words highlighted." },
+      { name: "Hub diagram", type: "hubvisual", what: "The client journey or a partner model's who-does-what, kept current." },
+      { name: "Job Aid", type: "playbook", what: "An approved procedure placed by reference." },
+      { name: "Myth vs Reality tiles", type: "myths", what: "Common questions with approved answers." },
+      { name: "Notes to a Younger Me deck", type: "mentor", what: "Experienced colleagues' advice as cards." },
     ],
   },
   {
     title: "Judgement and conversations",
     blocks: [
-      { name: "Peer benchmark poll", what: "Commit to a call, then see peers and a reviewed view." },
-      { name: "What Would You Do? case thread", what: "A first take, then a reviewed case note and peers." },
-      { name: "Where Is the Line?", what: "Request by request, inside or outside the role." },
-      { name: "Expectation Reset timeline", what: "Rewrite what to say when timing disappoints." },
-      { name: "Red Pen critique", what: "Mark up and rewrite a care plan goal or note." },
-      { name: "Tough Phone Call / Family Call", what: "A difficult call with a fictional caller and a debrief." },
+      { name: "Peer benchmark poll", type: "benchmark", what: "Commit to a call, then see peers and a reviewed view." },
+      { name: "What Would You Do? case thread", type: "casethread", what: "A first take, then a reviewed case note and peers." },
+      { name: "Where Is the Line?", type: "line", what: "Request by request, inside or outside the role." },
+      { name: "Expectation Reset timeline", type: "reset", what: "Rewrite what to say when timing disappoints." },
+      { name: "Red Pen critique", type: "redpen", what: "Mark up and rewrite a care plan goal or note." },
+      { name: "Tough Phone Call / Family Call", type: "phonecall", what: "A difficult call with a fictional caller and a debrief." },
     ],
   },
   {
     title: "Safety and care practice",
     blocks: [
-      { name: "Spot the Signal", what: "Find the concern hidden across routine updates." },
-      { name: "Spot the Hazard", what: "Scan a drawn room for risks and choose what to do." },
-      { name: "Dignity of Risk Balance Scale", what: "Weigh a choice against risk and agree a plan." },
-      { name: "Pass the Baton relay", what: "Hand a case from role to role, closing the loop." },
-      { name: "First 30 Days Mission Board", what: "Run a participant's first month in order." },
-      { name: "The SaH Journey", what: "One journey seen from four people's side." },
-      { name: "72-Hour Discharge Pivot", what: "Bring someone home from hospital safely." },
-      { name: "28-Day Trust Check", what: "Recover a service that's gone wrong, with the person." },
+      { name: "Spot the Signal", type: "signal", what: "Find the concern hidden across routine updates." },
+      { name: "Spot the Hazard", type: "hazardscan", what: "Scan a drawn room for risks and choose what to do." },
+      { name: "Dignity of Risk Balance Scale", type: "balance", what: "Weigh a choice against risk and agree a plan." },
+      { name: "Pass the Baton relay", type: "baton", what: "Hand a case from role to role, closing the loop." },
+      { name: "First 30 Days Mission Board", type: "mission", what: "Run a participant's first month in order." },
+      { name: "The SaH Journey", type: "journey", what: "One journey seen from four people's side." },
+      { name: "72-Hour Discharge Pivot", type: "discharge", what: "Bring someone home from hospital safely." },
+      { name: "28-Day Trust Check", type: "trustcheck", what: "Recover a service that's gone wrong, with the person." },
     ],
   },
   {
     title: "Money and budgets",
     blocks: [
-      { name: "Invoice X-Ray", what: "Read a quote or invoice line by line." },
-      { name: "Contractor Vetting Card / Document Auditor", what: "Check a contractor pack against records." },
-      { name: "Budget Sandbox", what: "Build a care plan and explain who pays what." },
-      { name: "While You Wait calculator", what: "Cost interim support while someone waits." },
-      { name: "Quarterly Budget Decision Lab", what: "Handle a sizeable balance at quarter end." },
+      { name: "Invoice X-Ray", type: "xray", what: "Read a quote or invoice line by line." },
+      { name: "Contractor Vetting Card / Document Auditor", type: "auditor", what: "Check a contractor pack against records." },
+      { name: "Budget Sandbox", type: "sandbox", what: "Build a care plan and explain who pays what." },
+      { name: "While You Wait calculator", type: "bridge", what: "Cost interim support while someone waits." },
+      { name: "Quarterly Budget Decision Lab", type: "budgetlab", what: "Handle a sizeable balance at quarter end." },
     ],
   },
   {
     title: "Running a Care Partner business",
     blocks: [
-      { name: "One Day, Five Perspectives", what: "A coordinator's day across five people's lanes." },
-      { name: "Build Your Local Bench", what: "Find real contractor cover behind a misleading count." },
-      { name: "Local Referral Studio", what: "Practise a truthful referral conversation." },
-      { name: "Referral Journey Calculator", what: "Which referrals become active clients." },
-      { name: "Local Coverage Comparison", what: "Is this suburb ready for growth." },
-      { name: "Growth readiness", what: "Can we take on the next 10 clients." },
-      { name: "Workload Lens", what: "Where a coordinator's week goes." },
-      { name: "Service Reliability Calculator", what: "What a missed service really costs." },
-      { name: "Hiring Runway Decision Lab", what: "When to hire, by capacity, result and cash." },
-      { name: "90-Day Cash Bridge", what: "Can the business fund the next 90 days." },
-      { name: "First 100 Days: Shadow & Coach", what: "Coach a new coordinator from real samples." },
+      { name: "One Day, Five Perspectives", type: "onedaymap", what: "A coordinator's day across five people's lanes." },
+      { name: "Build Your Local Bench", type: "network", what: "Find real contractor cover behind a misleading count." },
+      { name: "Local Referral Studio", type: "referralstudio", what: "Practise a truthful referral conversation." },
+      { name: "Referral Journey Calculator", type: "referral", what: "Which referrals become active clients." },
+      { name: "Local Coverage Comparison", type: "coverage", what: "Is this suburb ready for growth." },
+      { name: "Growth readiness", type: "intake", what: "Can we take on the next 10 clients." },
+      { name: "Workload Lens", type: "workload", what: "Where a coordinator's week goes." },
+      { name: "Service Reliability Calculator", type: "reliability", what: "What a missed service really costs." },
+      { name: "Hiring Runway Decision Lab", type: "hiring", what: "When to hire, by capacity, result and cash." },
+      { name: "90-Day Cash Bridge", type: "cashbridge", what: "Can the business fund the next 90 days." },
+      { name: "First 100 Days: Shadow & Coach", type: "shadowcoach", what: "Coach a new coordinator from real samples." },
     ],
   },
 ];
@@ -610,9 +636,9 @@ export const BLOCK_FAMILIES: BlockFamily[] = [
   drafted Topic is built in, so this can't drift from what the Hub makes.
 */
 export type FormatGuide = {
-  id: "magazine" | "topics" | "paths" | "community" | "resources" | "ai" | "people";
+  id: "magazine" | "topics" | "paths" | "community" | "resources" | "ai" | "people" | "blocks";
   /** The feature group it introduces. */
-  group: "magazine" | "learning" | "community" | "resources" | "ai" | "people";
+  group: "magazine" | "learning" | "community" | "resources" | "ai" | "people" | "blocks";
   title: string;
   what: string;
   why: string[];
@@ -624,6 +650,41 @@ export type FormatGuide = {
 };
 
 export const FORMAT_GUIDES: FormatGuide[] = [
+  {
+    id: "blocks",
+    group: "blocks",
+    title: "Why practice blocks",
+    what: "Interactive activities an author places on a Magazine page: simulators, roleplays, calculators and peer activities. Each one puts the learner in a realistic, fictional situation, asks them to make the calls the job asks for, and shows them what happens.",
+    why: [
+      "Reading about a rule rarely changes what people do on a busy afternoon. Practising the decision does.",
+      "Mistakes are safe: every case is fictional, so people can try, get it wrong, see the consequence and try again.",
+      "Each block targets a specific place where real work goes wrong: a missed signal, a weak note, an over-promise, a cash gap.",
+      "They show practice, not just completion: authors see how people chose, in totals, never as a ranking of individuals.",
+    ],
+    steps: [
+      { label: "Meet the case", purpose: "A short fictional situation with real-feeling people, documents and details." },
+      { label: "Decide", purpose: "Make the calls the job asks for: what matters, what to do first, what to say." },
+      { label: "See what happens", purpose: "Consequences and feedback on each choice, with a way to try again." },
+      { label: "Compare", purpose: "A reviewed perspective and, in some blocks, how colleagues chose." },
+      { label: "Take it back to work", purpose: "A debrief in your own words, and one thing to do differently." },
+    ],
+    also: [
+      {
+        label: "Choosing one",
+        text: "The Activity Catalogue and the Problem desk match a block to the barrier it addresses, and say when training isn't the fix.",
+      },
+      { label: "Sign-off", text: "Most are built from reviewed cases, and named reviewers sign them off before a course with one can be published." },
+      {
+        label: "What the AI may do",
+        text: "The AI can recommend many of these, but only a specialist sets up the ones that state rules, prices or procedures.",
+      },
+      { label: "For everyone", text: "Every choice and result is also in text, and each works with a keyboard and a screen reader." },
+    ],
+    links: [
+      { label: "Admin: Magazine (Block showcase 1 and 2)", href: "/admin/magazine" },
+      { label: "Admin: Activity Catalogue", href: "/admin/activities" },
+    ],
+  },
   {
     id: "people",
     group: "people",

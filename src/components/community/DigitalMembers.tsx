@@ -50,11 +50,11 @@ function MemberCard({ m, onClick }: { m: DigitalMemberCard; onClick: (e: React.M
         {m.story && (
           // Lives in Progress: their story carries on (docs/lives-in-progress.md).
           <span className="absolute left-3 top-3 flex items-center gap-1.5">
-            <span className="rounded-full bg-[#102a43]/85 px-2.5 py-1 font-mulish text-[0.62rem] font-extrabold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+            <span className="rounded-full bg-[#102a43]/85 px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
               Lives in Progress · Ep {String(m.story.number).padStart(2, "0")}
             </span>
             {m.story.isNew && (
-              <span className="rounded-full bg-[#fab53d] px-2 py-1 font-mulish text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-[#102a43]">New</span>
+              <span className="rounded-full bg-[#fab53d] px-2 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.1em] text-[#102a43]">New</span>
             )}
           </span>
         )}
@@ -65,7 +65,7 @@ function MemberCard({ m, onClick }: { m: DigitalMemberCard; onClick: (e: React.M
               <Icon name="spark" className="size-3.5" />
             </span>
           </p>
-          <p className="line-clamp-2 text-[0.95rem] leading-snug text-ink-muted">{m.role}</p>
+          <p className="line-clamp-2 text-base leading-snug text-ink-muted">{m.role}</p>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="flex items-center gap-3 whitespace-nowrap text-sm font-semibold text-ink">
               <span className="inline-flex items-center gap-1.5" title={`In ${m.courses} ${m.courses === 1 ? "course" : "courses"} you can open`}>

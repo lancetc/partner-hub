@@ -124,7 +124,7 @@ export function CardVisual({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={visual.video.poster} alt={visual.alt} className="absolute inset-0 size-full object-cover object-[center_15%]" />
         )}
-        <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
+        <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-xs font-bold text-white backdrop-blur-sm">
           AI video · Recorded · {visual.name}
         </span>
       </div>
@@ -372,9 +372,9 @@ function Orbit({ visual, className }: { visual: Extract<Visual, { kind: "orbit" 
         <span className="orbit-ring absolute inset-0 rounded-full bg-[#0e7c7b] [animation-delay:1.5s]" />
         <div className="relative flex size-full flex-col items-center justify-center rounded-full bg-[#0e7c7b] text-white shadow-[0_0_0_4px_#fff]">
           <Icon name="user" className="size-[22%]" />
-          <span className="mt-0.5 text-center font-serif text-[0.8rem] font-semibold leading-none min-[400px]:text-[0.95rem] sm:text-lg">{visual.centre}</span>
+          <span className="mt-0.5 text-center font-serif text-xs font-semibold leading-none min-[400px]:text-base sm:text-lg">{visual.centre}</span>
           {visual.centreNote && (
-            <span className="mt-1 hidden px-2 text-center text-[0.6rem] leading-tight opacity-90 min-[400px]:block sm:text-[0.65rem]">{visual.centreNote}</span>
+            <span className="mt-1 hidden px-2 text-center text-xs leading-tight opacity-90 min-[400px]:block sm:text-xs">{visual.centreNote}</span>
           )}
         </div>
       </div>
@@ -392,7 +392,7 @@ function Orbit({ visual, className }: { visual: Extract<Visual, { kind: "orbit" 
             style={{ animationDuration: `${cycle}s`, animationDelay: `${i * 1.6}s` }}
           >
             <Icon name={node.icon} className="size-4" />
-            <span className="text-[0.58rem] font-semibold leading-tight min-[400px]:text-[0.62rem]">{node.label}</span>
+            <span className="text-[0.58rem] font-semibold leading-tight min-[400px]:text-xs">{node.label}</span>
           </div>
         </div>
       ))}
@@ -589,7 +589,7 @@ function PortraitVideo({
       />
       {synthetic && (
         // The same identity as the Magazine's guide: what it is, in words, on every recording.
-        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/40 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white backdrop-blur-sm">
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/40 px-2.5 py-1 font-mulish text-xs font-bold text-white backdrop-blur-sm">
           AI video · Recorded
         </span>
       )}
@@ -700,7 +700,7 @@ export function PhotoCredit({ credit, className }: { credit: { name: string; url
       rel="noreferrer"
       onPointerDown={(e) => e.stopPropagation()}
       className={cx(
-        "max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[0.65rem] font-medium text-white/90 backdrop-blur-sm hover:bg-black/70",
+        "max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-xs font-medium text-white/90 backdrop-blur-sm hover:bg-black/70",
         className,
       )}
     >

@@ -113,7 +113,7 @@ const LENGTHS: { value: Length; label: string }[] = [
 ];
 
 /** The same fields as Topics and Discovery Paths. */
-const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
+const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-base font-normal";
 
 const STATE: Record<BrowseGuide["state"], { text: string; tone: string } | null> = {
   new: null,

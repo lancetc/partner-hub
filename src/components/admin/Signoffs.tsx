@@ -79,7 +79,7 @@ export function Signoffs() {
                       <p className="text-sm text-ink-muted">
                         {h.outcome === "confirmed" ? "Applying it at work" : "Needs support"} · {h.decidedBy}, {formatDate(h.decidedAt)}
                       </p>
-                      {h.note && <p className="mt-1 text-[0.95rem]">“{h.note}”</p>}
+                      {h.note && <p className="mt-1 text-base">“{h.note}”</p>}
                     </div>
                   </li>
                 ))}
@@ -147,7 +147,7 @@ function SignoffCard({ item, onDone }: { item: Item; onDone: () => void }) {
         </ol>
       </div>
 
-      <div className="rounded-2xl border-2 border-dashed border-line-strong p-3 text-[0.95rem]">
+      <div className="rounded-2xl border-2 border-dashed border-line-strong p-3 text-base">
         <p className="font-semibold">What to look for at work</p>
         <p className="mt-1">{item.lesson.action || item.lesson.outcome}</p>
         {struggled && <p className="mt-2 text-sm text-ink-muted">They needed a second go on at least one follow up, so it’s worth a quick chat about this.</p>}
@@ -163,7 +163,7 @@ function SignoffCard({ item, onDone }: { item: Item; onDone: () => void }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
-              className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+              className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base"
               placeholder={
                 mode === "confirmed"
                   ? "For example: saw them check with the coordinator before staying longer."

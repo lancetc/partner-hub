@@ -168,7 +168,7 @@ export function ImageGenerator({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="e.g. An older woman and her care coordinator chatting over a cup of tea at a sunny kitchen table"
-          className="rounded-xl border border-line-strong bg-surface p-2.5 text-[0.98rem] font-normal"
+          className="rounded-xl border border-line-strong bg-surface p-2.5 text-base font-normal"
         />
       </label>
 

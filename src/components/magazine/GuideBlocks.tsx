@@ -57,7 +57,7 @@ export function GuideBlock({ block: b, ctx }: { block: Block; ctx: BlockContext 
         <div className={column}>
           {b.heading &&
             (b.level === 3 ? <h4 className="mb-2 text-lg font-bold">{b.heading}</h4> : <h3 className="mb-3 font-serif text-2xl font-semibold">{b.heading}</h3>)}
-          <RichText text={b.body} className="text-[1.08rem] leading-relaxed" />
+          <RichText text={b.body} className="text-lg leading-relaxed" />
         </div>
       );
     case "accordion":
@@ -101,7 +101,7 @@ export function GuideBlock({ block: b, ctx }: { block: Block; ctx: BlockContext 
           {/* Text first in reading order; on a wide screen the picture can sit on either side. */}
           <div>
             {b.heading && <h3 className="mb-3 font-serif text-2xl font-semibold">{b.heading}</h3>}
-            <RichText text={b.body} className="text-[1.08rem] leading-relaxed" />
+            <RichText text={b.body} className="text-lg leading-relaxed" />
           </div>
           {vid ? (
             <Video block={vid} ctx={ctx} className={cx(b.layout === "media-left" && "md:order-first")} />

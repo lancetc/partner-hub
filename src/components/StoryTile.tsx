@@ -136,7 +136,7 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
             {story.title}
           </Link>
         </h3>
-        <p className="text-[0.95rem] leading-snug text-ink-muted">{story.dek}</p>
+        <p className="text-base leading-snug text-ink-muted">{story.dek}</p>
         <p className="font-mulish text-sm text-ink-muted">
           <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
         </p>

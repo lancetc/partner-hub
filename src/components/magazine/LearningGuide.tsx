@@ -375,7 +375,7 @@ export function GuidePlayer({ block: b, ctx }: { block: GuideBlock; ctx: Interac
         </button>
       )}
       {b.caseLabel && state === "idle" && (
-        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white">
+        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-xs font-bold text-white">
           {b.caseLabel}
         </span>
       )}

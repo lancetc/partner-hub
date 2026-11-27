@@ -117,7 +117,7 @@ export function ReviewButton({
         {count ? (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[#102a43] px-1 font-mulish text-[0.7rem] font-extrabold leading-5 text-white ring-2 ring-surface"
+            className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[#102a43] px-1 font-mulish text-xs font-extrabold leading-5 text-white ring-2 ring-surface"
           >
             {count}
           </span>

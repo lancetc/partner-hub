@@ -103,7 +103,7 @@ const SOCIAL: { label: string; href: string; path: React.ReactNode }[] = [
   },
 ];
 
-const linkClass = "text-[0.95rem] text-ink-muted underline-offset-4 hover:text-ink hover:underline";
+const linkClass = "text-base text-ink-muted underline-offset-4 hover:text-ink hover:underline";
 
 function FooterAnchor({ link }: { link: FooterLink }) {
   return link.href.startsWith("/") ? (
@@ -150,7 +150,7 @@ export function SiteFooter() {
               <img src="/brand/trilogy-logo-dark.svg" alt="Trilogy Care" width={1789} height={576} loading="lazy" decoding="async" className="hidden h-9 w-auto dark:block" />
             </Link>
             <h2 className="mt-6 font-serif text-lg font-semibold">Contact</h2>
-            <ul className="mt-3 flex flex-col gap-2.5 text-[0.95rem] text-ink-muted">
+            <ul className="mt-3 flex flex-col gap-2.5 text-base text-ink-muted">
               <ContactLine icon="pin">
                 Level 3, 2 King Street
                 <br />
@@ -227,7 +227,7 @@ export function SiteFooter() {
 
         <div className="mt-10 flex items-start gap-4 border-t border-line pt-6">
           <AboriginalFlag />
-          <p className="text-[0.95rem] text-ink-muted">
+          <p className="text-base text-ink-muted">
             Trilogy Care acknowledges the Traditional Owners of Country throughout Australia and recognises their continuing connection to the land, waters and
             communities where we live, learn and work. We pay our respects to Australia’s First Peoples and their Elders past and present.
           </p>

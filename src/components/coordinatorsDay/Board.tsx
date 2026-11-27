@@ -707,9 +707,9 @@ export function DayTrack({ board, square, names = false }: { board: Board; squar
             <span className="font-mulish text-base font-extrabold">{i + 1}</span>
             {names && <span className="mt-0.5 font-semibold">{board.squares[i]}</span>}
             {kindLabel[k] && (names || k === "start" || k === "handover") && (
-              <span className={cx("mt-auto pt-1 font-mulish text-[0.62rem] font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>
+              <span className={cx("mt-auto pt-1 font-mulish text-xs font-bold uppercase", i === square ? "text-white/85" : "text-ink-muted")}>{kindLabel[k]}</span>
             )}
-            {ladder && names && <span className={cx("text-[0.62rem] font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {board.squares[ladder.to]}</span>}
+            {ladder && names && <span className={cx("text-xs font-semibold", i === square ? "text-white" : "text-[#0f5b5b]")}>↑ {board.squares[ladder.to]}</span>}
             {i === square && <span className="sr-only">(you are here)</span>}
           </li>
         );

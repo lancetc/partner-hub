@@ -873,13 +873,13 @@ function Rail({
           onClick={onPick}
           aria-current={current ? "page" : undefined}
           className={cx(
-            "flex items-start gap-2.5 rounded-xl border-l-[3px] px-3 py-2 text-[0.95rem] leading-snug",
+            "flex items-start gap-2.5 rounded-xl border-l-[3px] px-3 py-2 text-base leading-snug",
             current ? "border-action bg-tealtint font-semibold" : "border-transparent text-ink-muted hover:bg-muted hover:text-ink",
           )}
         >
           <span
             className={cx(
-              "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full font-mulish text-[0.65rem] font-extrabold",
+              "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full font-mulish text-xs font-extrabold",
               done ? "bg-[#2f8f5b] text-white" : "border border-line-strong",
             )}
             aria-hidden

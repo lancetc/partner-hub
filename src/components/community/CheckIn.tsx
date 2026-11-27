@@ -191,7 +191,7 @@ function CatchUp({ card: c, memory, voice, status, onClose }: { card: Card; memo
             </li>
           ) : (
             <li key={i} className="flex justify-end">
-              <p className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-[#e2f2f1] px-3.5 py-2 text-[0.98rem] leading-snug dark:bg-[#1d4a4a]">
+              <p className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-[#e2f2f1] px-3.5 py-2 text-base leading-snug dark:bg-[#1d4a4a]">
                 <span className="sr-only">You: </span>
                 {t.text}
               </p>
@@ -241,7 +241,7 @@ function CatchUp({ card: c, memory, voice, status, onClose }: { card: Card; memo
             onChange={(e) => setDraft(e.target.value)}
             maxLength={600}
             placeholder={`Say something to ${c.first}…`}
-            className="min-h-10 flex-1 bg-transparent text-[0.98rem] outline-none placeholder:text-ink-muted"
+            className="min-h-10 flex-1 bg-transparent text-base outline-none placeholder:text-ink-muted"
           />
           <button
             type="submit"

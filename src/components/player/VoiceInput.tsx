@@ -211,7 +211,7 @@ export function VoiceInput({
           <>
             <p className={cx("text-sm", tinted ? "opacity-85" : "text-ink-muted")}>Tap stop when you’ve finished. You can check the words before sharing.</p>
             {value.trim() && (
-              <p className={cx("w-full rounded-2xl px-4 py-3 text-left text-[0.98rem] italic", tinted ? "bg-white/10" : "bg-muted text-ink")}>{value}</p>
+              <p className={cx("w-full rounded-2xl px-4 py-3 text-left text-base italic", tinted ? "bg-white/10" : "bg-muted text-ink")}>{value}</p>
             )}
           </>
         ) : (
@@ -279,7 +279,7 @@ export function VoiceInput({
         )}
       </p>
       {/* What's been heard so far, while recording. It becomes the answer when they stop. */}
-      {listening && value.trim() && <p className="w-full rounded-xl bg-muted px-3 py-2 text-[0.98rem] italic text-ink">{value}</p>}
+      {listening && value.trim() && <p className="w-full rounded-xl bg-muted px-3 py-2 text-base italic text-ink">{value}</p>}
       {problem && (
         <p role="alert" className="flex items-start gap-2 text-sm text-ink">
           <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-danger" /> {problem}

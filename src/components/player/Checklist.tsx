@@ -46,7 +46,7 @@ export function Checklist({ card, ticked, onChange }: { card: ChecklistCard; tic
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[1.02rem] font-medium">{item.text}</span>
-              {on && item.note && <span className="fx-rise mt-1 block text-[0.95rem] text-ink-muted">{item.note}</span>}
+              {on && item.note && <span className="fx-rise mt-1 block text-base text-ink-muted">{item.note}</span>}
             </span>
             {/* The item that completes the list gets a little celebration. */}
             {done && item.id === ticked[ticked.length - 1] && <Burst distance={40} />}

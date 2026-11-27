@@ -27,7 +27,7 @@ function Inlines({ c }: { c: Inline[] }) {
           </EditorialMark>
         ) : (
           // Same window, like documents: the lesson remembers the card for when they come back.
-          <a key={i} href={x.href} className="font-semibold underline decoration-2 underline-offset-2 hover:decoration-[3px]">
+          <a key={i} href={x.href} className="rich-link">
             <Inlines c={x.c} />
           </a>
         ),
@@ -63,10 +63,7 @@ export function RichText({ text, className }: { text: string; className?: string
             );
           })()
         ) : (
-          <div
-            key={i}
-            className="-mx-1 overflow-x-auto rounded-2xl bg-white text-[0.95rem] leading-snug text-[#102a43] shadow-sm ring-1 ring-[rgb(16_42_67/0.14)]"
-          >
+          <div key={i} className="-mx-1 overflow-x-auto rounded-2xl bg-white text-base leading-snug text-[#102a43] shadow-sm ring-1 ring-[rgb(16_42_67/0.14)]">
             <table className="w-full border-collapse text-left">
               {b.head && (
                 <thead className="bg-[#e8eef6]">

@@ -491,8 +491,8 @@ export function AvaTransmission({
         style={tallScreen ? { width: tallWidth(layout) } : undefined}
       >
         {/* Status bar: what it is, in words, always. */}
-        <figcaption className="flex items-center gap-2 px-1.5 pb-1.5 pt-0.5 font-mulish text-[0.7rem] font-bold tracking-wide text-[var(--ava-highlight)]">
-          <span className="rounded-[4px] bg-[var(--ava-cyan)] px-1 py-px text-[0.6rem] font-extrabold leading-none text-[var(--ava-navy)]">AI</span>
+        <figcaption className="flex items-center gap-2 px-1.5 pb-1.5 pt-0.5 font-mulish text-xs font-bold tracking-wide text-[var(--ava-highlight)]">
+          <span className="rounded-[4px] bg-[var(--ava-cyan)] px-1 py-px text-xs font-extrabold leading-none text-[var(--ava-navy)]">AI</span>
           {/* On a phone the status needs the room: "Ava · Recorded" beside the AI mark says the same, and screen readers hear it all. */}
           <span className="min-w-0 truncate">
             {name} · <span className={cx(narrow ? "sr-only" : layout === "card" && "max-sm:sr-only")}>AI video · </span>Recorded
@@ -596,7 +596,7 @@ export function AvaTransmission({
                     <span className="ava-ring ava-ring-late absolute inset-0 rounded-full border border-[var(--ava-cyan)]" />
                     <span className="ava-beacon size-2.5 rounded-full bg-[var(--ava-cyan)]" />
                   </span>
-                  <span className="ava-incoming whitespace-nowrap pl-[0.32em] font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.32em] text-[var(--ava-cyan)] sm:text-xs">
+                  <span className="ava-incoming whitespace-nowrap pl-[0.32em] font-mulish text-xs font-extrabold uppercase tracking-[0.32em] text-[var(--ava-cyan)] sm:text-xs">
                     Incoming transmission
                   </span>
                   <span className="ava-lock block h-[3px] w-28 overflow-hidden rounded-full bg-white/15 sm:w-36">
@@ -604,7 +604,7 @@ export function AvaTransmission({
                   </span>
                   <span
                     className={cx(
-                      "ava-locking font-mulish text-[0.6rem] font-bold uppercase tracking-[0.24em] text-white/60",
+                      "ava-locking font-mulish text-xs font-bold uppercase tracking-[0.24em] text-white/60",
                       layout === "card" && "max-sm:hidden",
                     )}
                   >
@@ -616,7 +616,7 @@ export function AvaTransmission({
           )}
 
           {caseLabel && showFeed && (
-            <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-[0.7rem] font-bold text-white">
+            <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 font-mulish text-xs font-bold text-white">
               {caseLabel}
             </span>
           )}
@@ -678,7 +678,7 @@ export function AvaTransmission({
               <span
                 aria-hidden
                 className={cx(
-                  "font-mulish text-[0.65rem] font-extrabold uppercase tracking-wide text-white/60",
+                  "font-mulish text-xs font-extrabold uppercase tracking-wide text-white/60",
                   narrow ? "hidden" : layout === "card" && "max-sm:hidden",
                 )}
               >

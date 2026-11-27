@@ -78,7 +78,7 @@ function MonthTargets({ n, onAt, labelFor }: { n: number; onAt: (m: number | nul
 
 function XAxis({ n }: { n: number }) {
   return (
-    <g className="fill-ink-muted text-[11px]">
+    <g className="fill-ink-muted text-xs">
       {Array.from({ length: n }, (_, i) => (
         <text key={i} x={xAt(i + 1, n)} y={H - 10} textAnchor="middle">
           M{i + 1}
@@ -130,13 +130,13 @@ export function CapacityChart({
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} className="stroke-line" strokeWidth={1} />
-            <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" className="fill-ink-muted text-[11px]">
+            <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" className="fill-ink-muted text-xs">
               {Math.round(t * 100)}%
             </text>
           </g>
         ))}
         <line x1={PAD.l} x2={W - PAD.r} y1={y(threshold)} y2={y(threshold)} className="stroke-ink" strokeWidth={1.5} strokeDasharray="2 4" />
-        <text x={W - PAD.r} y={y(threshold) - 6} textAnchor="end" className="fill-ink text-[11px] font-semibold">
+        <text x={W - PAD.r} y={y(threshold) - 6} textAnchor="end" className="fill-ink text-xs font-semibold">
           Threshold {Math.round(threshold * 100)}%
         </text>
         <path d={path(current)} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeLinecap="round" className="stroke-[#c0562c] dark:stroke-[#d4703d]" />
@@ -233,7 +233,7 @@ export function FinanceChart({ f, view, reserve }: { f: Forecast; view: "operati
             <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} className={t === 0 ? "stroke-ink-muted" : "stroke-line"} strokeWidth={1} />
             {/* The lowest label gives way when it would sit on the zero line's. */}
             {!(t < 0 && Math.abs(y(t) - y(0)) < 14) && (
-              <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" className="fill-ink-muted text-[11px]">
+              <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" className="fill-ink-muted text-xs">
                 {Math.abs(t) >= 1000 ? `${t < 0 ? "−" : ""}$${Math.round(Math.abs(t) / 1000)}k` : dollars(t)}
               </text>
             )}
@@ -258,7 +258,7 @@ export function FinanceChart({ f, view, reserve }: { f: Forecast; view: "operati
         {view === "cash" && (
           <>
             <line x1={PAD.l} x2={W - PAD.r} y1={y(reserve)} y2={y(reserve)} className="stroke-ink" strokeWidth={1.5} strokeDasharray="2 4" />
-            <text x={W - PAD.r} y={y(reserve) - 6} textAnchor="end" className="fill-ink text-[11px] font-semibold">
+            <text x={W - PAD.r} y={y(reserve) - 6} textAnchor="end" className="fill-ink text-xs font-semibold">
               Reserve {dollars(reserve)}
             </text>
             <path

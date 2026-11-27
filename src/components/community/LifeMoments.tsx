@@ -302,7 +302,7 @@ function FeaturedProfile({
           style={{ objectPosition: "50% 30%" }}
         />
         <span aria-hidden className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-[#06223a]/50 to-transparent" />
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-[#fab53d] px-2.5 py-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-wider text-[#102a43]">
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-[#fab53d] px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-wider text-[#102a43]">
           <Icon name="star" className="size-3" /> In the spotlight
         </span>
       </button>
@@ -311,12 +311,12 @@ function FeaturedProfile({
         {about && <p className="mt-0.5 text-sm text-ink-muted">{about}</p>}
         {person?.tagline && <p className="mt-2 line-clamp-2 text-sm leading-snug">{person.tagline}</p>}
         <div className="mt-3 rounded-xl bg-tealtint/70 p-3 dark:bg-white/5">
-          <p className="flex flex-wrap items-center gap-x-1.5 text-[0.68rem] font-bold uppercase tracking-wide text-ink-muted">
+          <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-bold uppercase tracking-wide text-ink-muted">
             <Icon name={c.icon as IconName} className="size-3" /> {c.categoryLabel}
             <span aria-hidden>·</span>
             <span className="font-semibold normal-case tracking-normal">{c.when}</span>
             {c.unread && (
-              <span className="rounded-full bg-[#fab53d] px-1.5 py-0.5 font-mulish text-[0.6rem] font-extrabold uppercase tracking-wider text-[#102a43]">
+              <span className="rounded-full bg-[#fab53d] px-1.5 py-0.5 font-mulish text-xs font-extrabold uppercase tracking-wider text-[#102a43]">
                 New
               </span>
             )}
@@ -399,13 +399,13 @@ export function LifeMomentCard({
   const quiet =
     "inline-flex min-h-10 items-center text-sm font-semibold text-[#007373] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] dark:text-[#3cb8b9]";
   const chip = (
-    <span className="absolute left-2.5 top-2.5 z-10 inline-flex max-w-[calc(100%-4rem)] items-center gap-1 truncate rounded-full bg-white/92 px-2 py-0.5 text-[0.68rem] font-bold text-[#102a43]">
+    <span className="absolute left-2.5 top-2.5 z-10 inline-flex max-w-[calc(100%-4rem)] items-center gap-1 truncate rounded-full bg-white/92 px-2 py-0.5 text-xs font-bold text-[#102a43]">
       <Icon name={c.icon as IconName} className="size-3 shrink-0" />
       <span className="truncate">{c.categoryLabel}</span>
     </span>
   );
   const fresh = c.unread && (
-    <span className="absolute right-2.5 top-2.5 z-10 rounded-full bg-[#fab53d] px-1.5 py-0.5 font-mulish text-[0.6rem] font-extrabold uppercase tracking-wider text-[#102a43]">
+    <span className="absolute right-2.5 top-2.5 z-10 rounded-full bg-[#fab53d] px-1.5 py-0.5 font-mulish text-xs font-extrabold uppercase tracking-wider text-[#102a43]">
       New
     </span>
   );
@@ -444,7 +444,7 @@ export function LifeMomentCard({
       <div className="flex flex-1 flex-col p-3.5">
         {c.audio && (
           // A voice card's category sits here, not over the picture.
-          <p className="mb-1.5 inline-flex items-center gap-1 text-[0.68rem] font-bold uppercase tracking-wide text-ink-muted">
+          <p className="mb-1.5 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-ink-muted">
             <Icon name={c.icon as IconName} className="size-3" /> {c.categoryLabel}
           </p>
         )}

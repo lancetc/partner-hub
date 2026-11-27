@@ -305,8 +305,8 @@ function Shell({ b, children, attemptNo }: { b: OneDayBlock; children: React.Rea
     <section aria-label={`Journey map: ${b.title}`} className="mx-auto w-full max-w-[80rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-7">
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="timeline" className="size-5" /> One day, five perspectives
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">Fictional simulation · {b.version}</span>
-        {attemptNo > 1 && <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">Attempt {attemptNo}</span>}
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">Fictional simulation · {b.version}</span>
+        {attemptNo > 1 && <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">Attempt {attemptNo}</span>}
       </p>
       <h3 className="font-serif text-2xl font-semibold">{b.title}</h3>
       {b.intro && <p className="mt-1 text-lg">{b.intro}</p>}
@@ -439,11 +439,11 @@ function EventCard({
         {compact && <span className="block text-xs font-semibold text-ink-muted">{clock(e.time)}</span>}
         <span className="block font-semibold leading-snug break-words hyphens-auto">{e.title}</span>
         {e.actor && <span className="block text-xs text-ink-muted">{nameOf(e.actor)}</span>}
-        <span className={cx("mt-1 inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-bold", isCurrent ? "bg-action text-on-action" : "bg-muted")}>
+        <span className={cx("mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold", isCurrent ? "bg-action text-on-action" : "bg-muted")}>
           {stateOf(e, day)}
         </span>
         {e.leilaNew.length > 0 && (
-          <span className="ml-1 inline-block rounded-full bg-tealtint px-2 py-0.5 text-[0.7rem] font-bold">+{e.leilaNew.length} new to know</span>
+          <span className="ml-1 inline-block rounded-full bg-tealtint px-2 py-0.5 text-xs font-bold">+{e.leilaNew.length} new to know</span>
         )}
       </span>
     </button>
@@ -501,7 +501,7 @@ function FactList({ facts, threads }: { facts: ViewFact[]; threads?: Threads }) 
       {facts.map((f) => (
         <li key={f.id} className="flex flex-col gap-0.5">
           <span>{f.text}</span>
-          <span className="flex flex-wrap gap-1 text-[0.7rem] font-bold text-ink-muted">
+          <span className="flex flex-wrap gap-1 text-xs font-bold text-ink-muted">
             <span className="rounded-full bg-muted px-2 py-0.5">{KIND_LABEL[f.kind]}</span>
             {threads && f.thread && <ThreadTag id={f.thread} threads={threads} />}
           </span>
@@ -797,7 +797,7 @@ function Commitments({ day, threads, nameOf }: { day: DayView; threads: Threads;
             <li key={c.id} className="rounded-xl bg-surface p-2.5 ring-1 ring-line">
               <p className="flex flex-wrap items-center gap-1.5">
                 <ThreadTag id={c.thread} threads={threads} />
-                <span className={cx("rounded-full px-2 py-0.5 text-[0.7rem] font-bold", c.status === "done" ? "bg-tealtint" : "bg-muted")}>
+                <span className={cx("rounded-full px-2 py-0.5 text-xs font-bold", c.status === "done" ? "bg-tealtint" : "bg-muted")}>
                   {COMMIT_STATUS[c.status]}
                 </span>
               </p>

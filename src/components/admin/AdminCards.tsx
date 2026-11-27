@@ -144,7 +144,7 @@ export function AdminCard({
         {badges && <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5 *:bg-surface! *:shadow-sm">{badges}</div>}
       </div>
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">{meta}</p>
+        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{meta}</p>
         {chips &&
           (chips.length > 0 ? (
             <ul aria-label="Audience" className="flex flex-wrap gap-1.5">

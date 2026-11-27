@@ -725,7 +725,7 @@ export function PathIntroductionManager() {
                             <Badge tone={NARRATION_STATES[r.state].tone}>{NARRATION_STATES[r.state].label}</Badge>
                           </div>
                         </div>
-                        {r.script && <p className="mt-1.5 line-clamp-2 font-serif text-[0.98rem] text-ink-muted">{r.script}</p>}
+                        {r.script && <p className="mt-1.5 line-clamp-2 font-serif text-base text-ink-muted">{r.script}</p>}
                         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-6">
                           <Fact label="Script" value={`${scriptLabel(r)}${r.words ? ` · ${r.words} words` : ""}`} />
                           <Fact

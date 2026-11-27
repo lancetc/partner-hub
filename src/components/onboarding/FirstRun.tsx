@@ -359,7 +359,7 @@ function ReadyStep({ data, headingRef, onBack }: StepProps & { onBack: () => voi
                   <Chip>About {course.minutes} minutes in all</Chip>
                   {course.due ? <Chip tone={course.due.overdue ? "warn" : "neutral"}>{course.due.text}</Chip> : <Chip>No due date</Chip>}
                 </p>
-                <ol className="mt-3 flex flex-col gap-2.5 text-[0.95rem]">
+                <ol className="mt-3 flex flex-col gap-2.5 text-base">
                   {course.steps.map((s, i) => (
                     <li key={s.id} className="flex items-center gap-3">
                       {s.poster ? (

@@ -199,7 +199,7 @@ export function AskTrilogy({ className }: { className?: string }) {
 
               {f.sources.length > 0 && (
                 <div>
-                  <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted">From approved Partner Hub content</p>
+                  <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">From approved Partner Hub content</p>
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {f.sources.map((s) => (
                       <li key={s.href}>

@@ -114,7 +114,7 @@ export function LocalCoverageLab({ block: b, ctx }: { block: CoverageBlock; ctx:
     >
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="pin" className="size-5" /> Local Coverage Comparison
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">
           {mode === "story" ? `Fictional case · ${b.storyVersion}` : "Your business · private"}
         </span>
       </p>

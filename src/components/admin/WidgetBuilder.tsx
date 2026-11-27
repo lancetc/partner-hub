@@ -10,7 +10,7 @@ import { btn, ErrorNote, Field, input } from "./ui";
 type WidgetCard = Extract<Card, { type: "widget" }>;
 type Set = (fn: (c: Card) => void) => void;
 
-const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
+const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed";
 
 /** Starting points, so it's clear what a widget can be. */
 const IDEAS = [

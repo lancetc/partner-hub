@@ -311,16 +311,16 @@ export function RichEditable({
                     <>
                       <span aria-hidden className="mx-0.5 h-5 w-px bg-line" />
                       <Tool label="Add a row below" onPress={() => table("row")}>
-                        <span className="text-[0.65rem] font-bold">+row</span>
+                        <span className="text-xs font-bold">+row</span>
                       </Tool>
                       <Tool label="Add a column to the right" onPress={() => table("col")}>
-                        <span className="text-[0.65rem] font-bold">+col</span>
+                        <span className="text-xs font-bold">+col</span>
                       </Tool>
                       <Tool label="Delete this row" onPress={() => table("delRow")}>
-                        <span className="text-[0.65rem] font-bold">−row</span>
+                        <span className="text-xs font-bold">−row</span>
                       </Tool>
                       <Tool label="Delete this column" onPress={() => table("delCol")}>
-                        <span className="text-[0.65rem] font-bold">−col</span>
+                        <span className="text-xs font-bold">−col</span>
                       </Tool>
                       <Tool label="Delete the table" onPress={() => table("delTable")}>
                         <Icon name="trash" className="size-4" />
@@ -382,7 +382,7 @@ export function RichEditable({
           className={cx(
             "min-h-[1.5em] cursor-text rounded-md outline-none transition-shadow hover:bg-ink/5 focus:bg-transparent focus:ring-2 focus:ring-action/60",
             "[&_a]:font-semibold [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-5 [&_p+*]:mt-2 [&_*+p]:mt-2 [&_strong]:font-bold [&_b]:font-bold [&_ul]:list-disc [&_ul]:pl-5",
-            "[&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:bg-white [&_table]:text-[0.8rem] [&_table]:leading-snug [&_table]:text-[#102a43] [&_table]:shadow-sm",
+            "[&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:bg-white [&_table]:text-xs [&_table]:leading-snug [&_table]:text-[#102a43] [&_table]:shadow-sm",
             "[&_td]:border [&_td]:border-[rgb(16_42_67/0.12)] [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:border [&_th]:border-[rgb(16_42_67/0.12)] [&_th]:bg-[#e8eef6] [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-bold [&_th]:text-[#2d4875]",
             className,
           )}

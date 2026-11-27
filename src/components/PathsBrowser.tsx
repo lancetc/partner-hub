@@ -84,7 +84,7 @@ const ROW = 4;
 const MORE = 12;
 
 /** The same fields as Learning and the admin Topics page. */
-const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem] font-normal";
+const field = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-base font-normal";
 
 const stateOf = (p: BrowsePath): Exclude<Status, "any"> => (p.done ? "completed" : p.started ? "in-progress" : "not-started");
 

@@ -485,7 +485,7 @@ export function Narration({
                       style={{ width: `${Math.min(100, progress * 100)}%` }}
                     />
                   </div>
-                  <span className="mt-0.5 block font-mulish text-[0.7rem] tabular-nums text-ink-muted">
+                  <span className="mt-0.5 block font-mulish text-xs tabular-nums text-ink-muted">
                     {fmt(elapsed)} / {fmt(length)}
                   </span>
                 </div>
@@ -513,7 +513,7 @@ export function Narration({
               {durationSec && !playable ? <span className="font-normal text-ink-muted">· about {durationSec} seconds</span> : null}
               <Icon name="chevron-down" className="ml-auto size-4 transition-transform group-open:rotate-180" />
             </summary>
-            <p data-follow-scroll className="mt-1 max-h-44 overflow-y-auto pr-1 text-[0.95rem] leading-relaxed">
+            <p data-follow-scroll className="mt-1 max-h-44 overflow-y-auto pr-1 text-base leading-relaxed">
               <SpokenText text={text} word={shownWord} scroll />
             </p>
           </details>

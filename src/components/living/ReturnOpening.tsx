@@ -150,7 +150,7 @@ export function ReturnOpeningPanel({ opening, noteId, className }: { opening: Op
       </dl>
       {opening.mine && (
         <p className="mt-4 rounded-2xl bg-tealtint p-4">
-          <span className="flex items-center gap-1.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em]">
+          <span className="flex items-center gap-1.5 font-mulish text-xs font-extrabold uppercase tracking-[0.12em]">
             <Icon name="lock" className="size-3.5" /> Only you can see this
           </span>
           <span className="mt-1 block text-lg">{opening.mine}</span>

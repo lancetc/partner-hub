@@ -458,7 +458,7 @@ function PictureDetails({ p, onCancel, onSaved }: { p: Item; onCancel: () => voi
           className="rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-sm font-normal"
         />
       </label>
-      {p.name && <p className="truncate text-[0.7rem] text-ink-muted">File: {p.name}</p>}
+      {p.name && <p className="truncate text-xs text-ink-muted">File: {p.name}</p>}
       {problem && <p className="text-xs font-semibold text-danger">{problem}</p>}
       <div className="flex gap-1">
         <button type="submit" className={cx(btn.primary, "min-h-8 px-3 text-xs")} disabled={saving}>

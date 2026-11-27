@@ -206,7 +206,7 @@ function TimelineView({ arcs, onOpen }: { arcs: AdminArc[]; onOpen: (id: string)
                     <span
                       key={e.id}
                       title={`${e.title}: ${EPISODE_STATES[e.status]}`}
-                      className={cx("truncate rounded px-1 text-[0.7rem] font-semibold text-white", dot(e.status))}
+                      className={cx("truncate rounded px-1 text-xs font-semibold text-white", dot(e.status))}
                     >
                       {e.number}. {e.title}
                     </span>

@@ -30,7 +30,7 @@ function Note({ n, act, busy }: { n: FieldNoteItem; act: (action: "dismiss" | "s
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-x-2 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+          <p className="flex flex-wrap items-center gap-x-2 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
             {n.reason}
             {n.state === "new" && <span className="rounded-full bg-action px-2 py-0.5 tracking-normal text-on-action">New</span>}
           </p>

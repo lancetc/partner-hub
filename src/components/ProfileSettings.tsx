@@ -51,7 +51,7 @@ export function ProfileSettings() {
           </div>
         )}
         {me ? (
-          <dl className="mt-3 grid gap-x-6 gap-y-2 text-[0.98rem] sm:grid-cols-[10rem_1fr]">
+          <dl className="mt-3 grid gap-x-6 gap-y-2 text-base sm:grid-cols-[10rem_1fr]">
             <dt className="text-ink-muted">Name</dt>
             <dd translate="no">{me.user.name}</dd>
             <dt className="text-ink-muted">Organisation</dt>
@@ -93,7 +93,7 @@ export function ProfileSettings() {
               value={language}
               onChange={(e) => setChoice(e.target.value)}
               disabled={!me || busy}
-              className="min-h-11 rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem]"
+              className="min-h-11 rounded-xl border border-line-strong bg-surface px-3 text-base"
               translate="no"
             >
               {LANGUAGES.map((l) => (

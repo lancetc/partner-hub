@@ -419,7 +419,7 @@ export function useSelfReview({ guide, pageId, base, preview }: { guide: ReaderG
             <span className="ml-auto text-xs font-semibold uppercase tracking-wide text-ink-muted">{q.kind === "spot" ? "Spot the issue" : "Scenario"}</span>
           </div>
           {q.example && (
-            <blockquote className="rounded-2xl border-l-4 border-gold bg-muted/60 px-4 py-3 text-[0.95rem] leading-relaxed">{q.example}</blockquote>
+            <blockquote className="rounded-2xl border-l-4 border-gold bg-muted/60 px-4 py-3 text-base leading-relaxed">{q.example}</blockquote>
           )}
           <fieldset disabled={Boolean(r) || busy} className="flex flex-col gap-2">
             <legend className="mb-2 font-serif text-xl font-semibold leading-snug">{q.prompt}</legend>

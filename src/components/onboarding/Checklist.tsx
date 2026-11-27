@@ -64,7 +64,7 @@ export function Checklist() {
 
         <aside className="flex flex-col gap-5">
           <ReviewerDemo />
-          <div className="rounded-3xl border border-line p-5 text-[0.95rem]">
+          <div className="rounded-3xl border border-line p-5 text-base">
             <p className="font-semibold">Need a hand?</p>
             <p className="mt-1 text-ink-muted">Contact the partner onboarding team (demo contact) if something isn’t clear or a document doesn’t fit.</p>
             <Link href="/resources#support-contacts" className="mt-2 inline-flex min-h-11 items-center gap-1 font-semibold text-accent">
@@ -168,7 +168,7 @@ function TaskRow({
               <span className="text-lg font-semibold leading-snug">{task.title}</span>
               <StatusPill task={task} status={status} />
             </span>
-            <span className="mt-1 block text-[0.95rem] text-ink-muted">{task.why}</span>
+            <span className="mt-1 block text-base text-ink-muted">{task.why}</span>
             <span className="mt-1 block font-mulish text-xs font-semibold text-ink-muted">
               {task.requiredForReadiness ? "Required" : "Optional"} · {ownerText[owner]}
               {owner === "you" && ` · ${task.responsible}`}

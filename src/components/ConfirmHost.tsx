@@ -38,7 +38,7 @@ export function ConfirmHost() {
           <h2 id="confirm-title" className="font-serif text-xl font-semibold">
             {req.opts.title ?? "Are you sure?"}
           </h2>
-          <p id="confirm-message" className="whitespace-pre-line text-[0.98rem] text-ink-muted">
+          <p id="confirm-message" className="whitespace-pre-line text-base text-ink-muted">
             {req.message}
           </p>
           <div className="mt-2 flex flex-wrap justify-end gap-2">

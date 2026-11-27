@@ -113,9 +113,9 @@ export function PeopleReferences({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={ph.src} alt="" className="size-full object-cover" />
-                    {on && <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-[0.6rem] font-bold text-on-action">Reference</span>}
+                    {on && <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-xs font-bold text-on-action">Reference</span>}
                   </button>
-                  <button type="button" className="text-[0.7rem] font-semibold text-accent hover:underline" onClick={() => onUse(ph, ph.alt)}>
+                  <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={() => onUse(ph, ph.alt)}>
                     Use this picture
                   </button>
                 </div>

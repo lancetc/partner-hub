@@ -189,7 +189,7 @@ export function AtlasRationale() {
                 </span>
                 <div>
                   <p
-                    className={cx("inline-block rounded-full px-2.5 py-0.5 text-[0.7rem] font-extrabold uppercase tracking-[0.12em]", STAGE_STYLE[idea.stage])}
+                    className={cx("inline-block rounded-full px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-[0.12em]", STAGE_STYLE[idea.stage])}
                   >
                     {idea.stage}
                   </p>

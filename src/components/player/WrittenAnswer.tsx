@@ -50,7 +50,7 @@ export function WrittenFeedback({
         <span className="text-xs text-ink-muted">Feedback from AI</span>
       </div>
       {result.concern && (
-        <p className="flex items-start gap-2 rounded-xl border-2 border-warm/60 bg-orange/10 p-3 text-[0.95rem]">
+        <p className="flex items-start gap-2 rounded-xl border-2 border-warm/60 bg-orange/10 p-3 text-base">
           <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-warm" />
           <span>If someone may be at risk, tell your coordinator or manager today. Call 000 if anyone is in immediate danger.</span>
         </p>
@@ -68,7 +68,7 @@ export function WrittenFeedback({
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{c?.text ?? r.id}</span>
-                <span className="block text-[0.95rem] text-ink-muted">{r.comment}</span>
+                <span className="block text-base text-ink-muted">{r.comment}</span>
               </span>
             </li>
           );

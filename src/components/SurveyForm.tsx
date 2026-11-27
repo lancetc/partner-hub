@@ -117,7 +117,7 @@ export function SurveyForm({
               <textarea
                 rows={3}
                 maxLength={1000}
-                className="w-full rounded-2xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                className="w-full rounded-2xl border border-line-strong bg-surface px-3 py-2 text-base"
                 value={(answers[q.id] as string) ?? ""}
                 onChange={(e) => set(q.id, e.target.value)}
                 aria-label={q.prompt}

@@ -29,7 +29,7 @@ export function useAct(reload: () => void) {
 }
 
 export const box = "rounded-2xl border border-line bg-surface p-4";
-export const area = "min-h-20 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]";
+export const area = "min-h-20 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base";
 export const riskTone = (r: Risk) => (r === "safety" ? "bad" : r === "elevated" ? "warn" : "neutral");
 export const statusTone = (s: ThemeStatus) => (s === "closed" || s === "addressed" ? "good" : s === "immediate" ? "bad" : s === "plan" ? "info" : "neutral");
 export const dateText = (d: string) =>

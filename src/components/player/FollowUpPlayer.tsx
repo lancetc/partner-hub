@@ -352,7 +352,7 @@ function Feedback({ option, best }: { option: FollowUpContent["question"]["optio
       className={cx("flex gap-3 rounded-2xl px-4 py-3", option.correct ? "bg-[#DDE8D9] dark:bg-tealtint" : "border-2 border-warm/60")}
     >
       <Icon name={option.correct ? "check" : "info"} className={cx("mt-0.5 size-5 shrink-0", option.correct ? "text-accent" : "text-warm")} />
-      <div className="text-[0.98rem]">
+      <div className="text-base">
         <p className="font-semibold">{option.correct ? "That’s the better choice." : "Here’s what would happen."}</p>
         <p className="mt-1">{option.feedback}</p>
         {!option.correct && <p className="mt-2 text-ink-muted">Have another go, or continue to see the explanation. A better choice: “{best.label}”.</p>}

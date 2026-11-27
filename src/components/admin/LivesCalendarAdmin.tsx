@@ -93,7 +93,7 @@ export function AdminMonth({ members, onOpen, onChanged }: { members: Member[]; 
                 )}
               >
                 <span className="flex items-center justify-between">
-                  <span className="text-[0.7rem] text-ink-muted">{Number(d.slice(8))}</span>
+                  <span className="text-xs text-ink-muted">{Number(d.slice(8))}</span>
                   <button
                     type="button"
                     aria-label={`Add a moment for ${name(newFor)} on ${d}`}
@@ -108,7 +108,7 @@ export function AdminMonth({ members, onOpen, onChanged }: { members: Member[]; 
                 {es.map((e) => (
                   <span
                     key={e.id}
-                    className="truncate rounded bg-[#102a43] px-1 text-[0.66rem] text-white"
+                    className="truncate rounded bg-[#102a43] px-1 text-xs text-white"
                     title={`${name(e.memberId)}: episode ${e.number}, ${e.title} (${EPISODE_STATES[e.status]})`}
                   >
                     Ep {e.number} · {name(e.memberId)}
@@ -123,7 +123,7 @@ export function AdminMonth({ members, onOpen, onChanged }: { members: Member[]; 
                     onClick={() => onOpen(m.id)}
                     title={`${name(m.memberId)}: ${m.headline} (${EPISODE_STATES[m.status]})${m.status === "published" ? "" : ". Drag to another day to move it."}`}
                     className={cx(
-                      "truncate rounded px-1 text-left text-[0.66rem] font-semibold",
+                      "truncate rounded px-1 text-left text-xs font-semibold",
                       m.status === "published" ? "bg-[#1f8a52]/15" : m.status === "scheduled" ? "cursor-grab bg-[#2f6fb0]/15" : "cursor-grab bg-muted",
                     )}
                   >
@@ -131,7 +131,7 @@ export function AdminMonth({ members, onOpen, onChanged }: { members: Member[]; 
                   </button>
                 ))}
                 {rs.map((r) => (
-                  <span key={r.id} className="truncate px-1 text-[0.62rem] italic text-ink-muted" title={`${name(r.memberId)}: ${r.when}`}>
+                  <span key={r.id} className="truncate px-1 text-xs italic text-ink-muted" title={`${name(r.memberId)}: ${r.when}`}>
                     {r.title}
                   </span>
                 ))}

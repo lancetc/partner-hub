@@ -199,6 +199,60 @@
   --font-sans: var(--font-roboto-flex), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-serif: var(--font-roboto-serif), ui-serif, Georgia, "Times New Roman", serif;
   --font-mulish: var(--font-mulish-face), var(--font-roboto-flex), ui-sans-serif, system-ui, sans-serif;
+
+  /*
+    The type scale (the owner, Nov 2026): comfortable sizes for older readers, people reading in a second language and
+    every level of digital confidence. 16px is the floor for interface text (descriptions, buttons, navigation, form
+    inputs: text-sm), 14px for supporting details (text-xs), 18px for reading (text-lg), and headings a step larger
+    than Tailwind's defaults (section 28px, page 40px). Uppercase labels stay small on purpose: see below.
+  */
+  --text-xs: 0.875rem;
+  --text-sm: 1rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+}
+
+@layer components {
+  /*
+    Links in written content (RichText: stories, Magazine text, Topic cards), the owner, Nov 2026: teal and semibold with no
+    underline, a soft teal wash on hover (as on the cards), and the usual focus outline. On a coloured card they keep the
+    card's text colour.
+  */
+  .rich-link {
+    color: #007f7e;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0.25rem;
+    padding: 0 0.125rem;
+    margin: 0 -0.125rem;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+  .rich-link:hover {
+    background: #e6f3f1;
+  }
+  [data-theme="dark"] .rich-link {
+    color: #7fd6d2;
+  }
+  [data-theme="dark"] .rich-link:hover {
+    background: rgb(60 184 185 / 0.14);
+  }
+  .rich-on-colour .rich-link {
+    color: inherit;
+  }
+  .rich-on-colour .rich-link:hover {
+    background: rgb(255 255 255 / 0.18);
+  }
+}
+
+@layer utilities {
+  /* Uppercase editorial labels (the small kickers above headings) read at 13px: capitals need less size to read. */
+  .uppercase.text-xs {
+    font-size: 0.8125rem;
+  }
+  .uppercase.text-sm {
+    font-size: 0.875rem;
+  }
 }
 
 /* Class names that mirror the public site's font selectors. */

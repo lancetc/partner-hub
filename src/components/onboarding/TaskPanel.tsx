@@ -29,7 +29,7 @@ const secondaryBtn = "inline-flex min-h-11 items-center justify-center gap-2 rou
 
 function SaveError({ text }: { text: string }) {
   return (
-    <p role="alert" className="flex gap-2 rounded-2xl border border-danger/60 p-3 text-[0.95rem]">
+    <p role="alert" className="flex gap-2 rounded-2xl border border-danger/60 p-3 text-base">
       <Icon name="alert" className="mt-0.5 size-5 shrink-0 text-danger" />
       {text}
     </p>
@@ -128,7 +128,7 @@ function AgreementForm({ task, status }: { task: OnboardingTask; status: DocStat
   }
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-48 overflow-y-auto rounded-2xl border border-line p-4 text-[0.95rem] text-ink-muted" tabIndex={0} aria-label="Agreement summary">
+      <div className="max-h-48 overflow-y-auto rounded-2xl border border-line p-4 text-base text-ink-muted" tabIndex={0} aria-label="Agreement summary">
         <p className="font-semibold text-ink">Care Partner agreement (demonstration summary)</p>
         <p className="mt-2">This placeholder stands in for the real agreement, which Trilogy’s legal and partnerships teams must provide.</p>
         <p className="mt-2">
@@ -242,7 +242,7 @@ function DocumentForm({ task, state, status }: { task: OnboardingTask; state?: T
 
       {canEdit ? (
         <>
-          <div className="flex flex-col gap-1 text-[0.95rem]">
+          <div className="flex flex-col gap-1 text-base">
             <p>
               <strong>Accepted:</strong> {task.acceptLabel}
             </p>
@@ -272,7 +272,7 @@ function DocumentForm({ task, state, status }: { task: OnboardingTask; state?: T
           {error && <SaveError text={error} />}
 
           {file && (
-            <p className="flex items-center gap-2 rounded-2xl border border-line p-3 text-[0.95rem]">
+            <p className="flex items-center gap-2 rounded-2xl border border-line p-3 text-base">
               <Icon name="file" className="size-5 shrink-0 text-accent" />
               <span className="flex-1 truncate">{file.name}</span>
               <span className="text-ink-muted">{formatBytes(file.size)}</span>

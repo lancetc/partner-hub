@@ -186,11 +186,11 @@ function Fan({ cards, selected, onPick }: { cards: DeckCard[]; selected: string 
                 )}
                 style={{ rotate: `${(i - mid) * 4}deg` }}
               >
-                <span className="text-[0.65rem] font-extrabold uppercase tracking-[0.12em] text-[#9fe3e0]">
+                <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#9fe3e0]">
                   No. {String(c.data.business?.number ?? 0).padStart(2, "0")}
                 </span>
                 <span className="mt-1 line-clamp-5 font-serif text-sm leading-snug">{c.data.hook}</span>
-                {c.data.illustrative && <span className="mt-auto text-[0.65rem] font-semibold text-[#ffd98a]">Fictional illustration</span>}
+                {c.data.illustrative && <span className="mt-auto text-xs font-semibold text-[#ffd98a]">Fictional illustration</span>}
               </button>
             </li>
           );

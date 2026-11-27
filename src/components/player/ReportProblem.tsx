@@ -77,7 +77,7 @@ export function ReportProblem({
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="For example: this rate changed last month"
-        className="rounded-xl border border-line-strong bg-surface p-2.5 text-[0.95rem]"
+        className="rounded-xl border border-line-strong bg-surface p-2.5 text-base"
       />
       {error && (
         <p role="alert" className="text-sm text-danger">

@@ -28,7 +28,7 @@ function Corner({ c, flip, onDark }: { c: CardView; flip?: boolean; onDark?: boo
   return (
     <span aria-hidden className={cx("flex flex-col items-center leading-none", onDark ? "text-[#9fe3e0]" : "text-accent", flip && "rotate-180")}>
       <span className="font-serif text-2xl font-semibold">{c.data.rank}</span>
-      <span className="mt-0.5 text-[0.65rem] font-extrabold tracking-[0.12em]">{c.data.badge}</span>
+      <span className="mt-0.5 text-xs font-extrabold tracking-[0.12em]">{c.data.badge}</span>
     </span>
   );
 }

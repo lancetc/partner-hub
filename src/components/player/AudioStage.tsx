@@ -106,7 +106,7 @@ export function ListenCard({
           {transcript ? "Hide transcript" : "Read the transcript"}
         </button>
         {transcript && (
-          <p data-follow-scroll className="max-h-60 w-full overflow-y-auto rounded-2xl bg-white/90 p-4 text-left text-[0.98rem] leading-relaxed text-ink">
+          <p data-follow-scroll className="max-h-60 w-full overflow-y-auto rounded-2xl bg-white/90 p-4 text-left text-base leading-relaxed text-ink">
             <SpokenText text={script} word={n?.text === script ? (n?.word ?? null) : null} scroll />
           </p>
         )}

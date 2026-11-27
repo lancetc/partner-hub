@@ -208,7 +208,7 @@ function Hero({
             className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,31,51,0)_62%,#0b1f33_100%)] sm:bg-[linear-gradient(90deg,#0b1f33_0%,rgba(11,31,51,0.55)_14%,rgba(11,31,51,0)_36%)]"
           />
           {e?.hero.placeholder && (
-            <p className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-[0.7rem] font-semibold">
+            <p className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold">
               Placeholder picture: replace in Admin → Lives in Progress
             </p>
           )}
@@ -226,12 +226,12 @@ function Hero({
           <div className="mt-5 max-w-xl">
             <p className="flex flex-wrap items-center gap-2 text-sm">
               {data.isNew && !data.historical && (
-                <span className="rounded-full bg-[#fab53d] px-2.5 py-0.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-wider text-[#102a43]">
+                <span className="rounded-full bg-[#fab53d] px-2.5 py-0.5 font-mulish text-xs font-extrabold uppercase tracking-wider text-[#102a43]">
                   New episode
                 </span>
               )}
               {data.historical && (
-                <span className="rounded-full bg-white/15 px-2.5 py-0.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-wider">
+                <span className="rounded-full bg-white/15 px-2.5 py-0.5 font-mulish text-xs font-extrabold uppercase tracking-wider">
                   An earlier chapter
                 </span>
               )}
@@ -322,7 +322,7 @@ function Tabs({ tab, setTab, labels, talks, modal }: { tab: Tab; setTab: (t: Tab
             refs.current[order.indexOf(next)]?.focus();
           }}
           className={cx(
-            "min-h-12 shrink-0 whitespace-nowrap border-b-[3px] px-3 text-[0.95rem] font-semibold transition-colors",
+            "min-h-12 shrink-0 whitespace-nowrap border-b-[3px] px-3 text-base font-semibold transition-colors",
             tab === t ? "border-[#008282] text-ink" : "border-transparent text-ink-muted hover:text-ink",
           )}
         >
@@ -568,7 +568,7 @@ function Decide({
       </div>
       {pick && (
         <div role="status" className="mt-4 rounded-2xl bg-muted p-4">
-          <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted">What if · How {first} might react</p>
+          <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">What if · How {first} might react</p>
           <blockquote className="mt-2 font-serif text-lg italic leading-snug">“{pick.response}”</blockquote>
           <p className="mt-3 text-xs text-ink-muted">A what-if you explored, not what happened. {cap(possessive)} story carries on the same for everyone.</p>
         </div>
@@ -765,7 +765,7 @@ function Conversations({ data, first, onChange, chat }: { data: LivesStoryView; 
       <div className="rounded-2xl bg-tealtint p-5">
         <h3 className="font-serif text-xl font-semibold">What {first} remembers</h3>
         {data.memory.enabled ? (
-          <p className="mt-2 text-[0.98rem]">
+          <p className="mt-2 text-base">
             When you chat, {first} remembers the topics you talked about and a few of your questions, so next time feels like picking up where you left off.
             Never the whole conversation, and never anything that looks like a phone number or someone’s details. Only you can see this. It’s kept for{" "}
             {data.memory.retentionDays} days.

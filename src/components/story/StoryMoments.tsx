@@ -110,7 +110,7 @@ function Speaker({ m, label }: { m: PlacedMoment; label: string }) {
     <div className="flex items-center gap-3">
       <CharacterPortrait name={m.speaker.name} size="sm" />
       <div className="min-w-0">
-        <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-accent">{label}</p>
+        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">{label}</p>
         <p className="font-semibold leading-tight">{m.speaker.name}</p>
       </div>
     </div>
@@ -258,7 +258,7 @@ export function CheckIn({ m }: { m: PlacedMoment }) {
             </div>
 
             <section aria-label="Update" className="rounded-2xl bg-tealtint p-4">
-              {m.whenLabel && <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-accent">{m.whenLabel}</p>}
+              {m.whenLabel && <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-accent">{m.whenLabel}</p>}
               <p className="mt-1 whitespace-pre-line text-[1.02rem] leading-relaxed">{m.script}</p>
               {m.audio.script && (
                 <div className="mt-2">

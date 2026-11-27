@@ -185,7 +185,7 @@ export function LearnSheet({ buttonClassName, iconClassName }: { buttonClassName
         <span className={iconClassName(active)}>
           <Icon name="bulb" className="size-5" />
         </span>
-        <span className="whitespace-nowrap text-center text-[0.66rem] leading-tight tracking-tight">Learn</span>
+        <span className="whitespace-nowrap text-center text-xs leading-tight tracking-tight">Learn</span>
       </button>
       <dialog
         ref={dialog}

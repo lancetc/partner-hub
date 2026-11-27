@@ -255,8 +255,8 @@ function Shell({ b, children, stage, attemptNo = 0 }: { b: HiringBlock; children
     >
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="people" className="size-5" /> Decision lab
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">Fictional case · {b.storyVersion}</span>
-        {attemptNo > 1 && <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">Attempt {attemptNo}</span>}
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">Fictional case · {b.storyVersion}</span>
+        {attemptNo > 1 && <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">Attempt {attemptNo}</span>}
       </p>
       <h3 className="font-serif text-2xl font-semibold">{b.title}</h3>
       {b.intro && <p className="mt-1 text-lg">{b.intro}</p>}
@@ -642,7 +642,7 @@ function CapacityChart({
           .map((t) => (
             <g key={t}>
               <line x1={PAD.l} x2={W - PAD.r} y1={yAt(t)} y2={yAt(t)} className="stroke-line" strokeWidth={1} />
-              <text x={PAD.l - 6} y={yAt(t) + 4} textAnchor="end" className="fill-ink-muted text-[11px]">
+              <text x={PAD.l - 6} y={yAt(t) + 4} textAnchor="end" className="fill-ink-muted text-xs">
                 {Math.round(t * 100)}%
               </text>
             </g>
@@ -657,13 +657,13 @@ function CapacityChart({
           strokeWidth={1.5}
           className="text-[#a12d31]"
         />
-        <text x={W - PAD.r} y={yAt(threshold) - 5} textAnchor="end" className="fill-[#a12d31] text-[11px] font-semibold">
+        <text x={W - PAD.r} y={yAt(threshold) - 5} textAnchor="end" className="fill-[#a12d31] text-xs font-semibold">
           Threshold {Math.round(threshold * 100)}%
         </text>
         <path d={path(none)} fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="2 4" className="text-ink-muted" />
         <path d={path(selected.f)} fill="none" stroke="currentColor" strokeWidth={2.5} className="text-accent" />
         {none.months.map((m) => (
-          <text key={m.month} x={xAt(m.month)} y={H - 8} textAnchor="middle" className="fill-ink-muted text-[11px]">
+          <text key={m.month} x={xAt(m.month)} y={H - 8} textAnchor="middle" className="fill-ink-muted text-xs">
             {m.month}
           </text>
         ))}
@@ -733,7 +733,7 @@ function MoneyChart({
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full" role="img" aria-labelledby={id}>
         <line x1={PAD.l} x2={W - PAD.r} y1={yAt(0)} y2={yAt(0)} className="stroke-line-strong" strokeWidth={1} />
-        <text x={PAD.l - 6} y={yAt(0) + 4} textAnchor="end" className="fill-ink-muted text-[11px]">
+        <text x={PAD.l - 6} y={yAt(0) + 4} textAnchor="end" className="fill-ink-muted text-xs">
           $0
         </text>
         {money === "cash" ? (
@@ -748,7 +748,7 @@ function MoneyChart({
               strokeWidth={1.5}
               className="text-[#8a5a00]"
             />
-            <text x={W - PAD.r} y={yAt(reserve) - 5} textAnchor="end" className="fill-[#8a5a00] text-[11px] font-semibold">
+            <text x={W - PAD.r} y={yAt(reserve) - 5} textAnchor="end" className="fill-[#8a5a00] text-xs font-semibold">
               Reserve {dollars(reserve)}
             </text>
             <path
@@ -777,7 +777,7 @@ function MoneyChart({
           })
         )}
         {f.months.map((m) => (
-          <text key={m.month} x={xAt(m.month)} y={H - 8} textAnchor="middle" className="fill-ink-muted text-[11px]">
+          <text key={m.month} x={xAt(m.month)} y={H - 8} textAnchor="middle" className="fill-ink-muted text-xs">
             {m.month}
           </text>
         ))}

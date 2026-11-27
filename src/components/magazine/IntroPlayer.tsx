@@ -81,6 +81,7 @@ export function IntroPlayer({
   poster,
   posterControls = "overlay",
   posterTall = false,
+  onPicture = false,
   className,
 }: {
   script: string;
@@ -99,6 +100,11 @@ export function IntroPlayer({
   posterControls?: "overlay" | "below" | "only";
   /** A fifth taller than the standard poster (a Magazine cover or page picture). */
   posterTall?: boolean;
+  /**
+    The poster's controls on a picture that's already shown, large, behind them (a news story's hero, the owner, Nov 2026):
+    the white Play, label, time, live caption and progress line, with no picture or background of their own.
+  */
+  onPicture?: boolean;
   className?: string;
 }) {
   useOnePlayer();
@@ -316,6 +322,55 @@ export function IntroPlayer({
         {state === "broken" && (
           <p className="px-3 pt-2 text-sm font-semibold text-danger">This recording can’t be played here. The transcript has the same words.</p>
         )}
+        {audioEl}
+      </section>
+    );
+
+  // On a picture shown elsewhere: the poster's controls, caption and progress line, on whatever is behind them.
+  if (onPicture)
+    return (
+      <section data-player aria-label={label} className={cx("w-full text-white", className ?? "mt-6")}>
+        <div className="flex w-full flex-col gap-3">
+          <div className="flex w-full items-center gap-3">
+            <button
+              type="button"
+              onClick={toggle}
+              disabled={state === "broken"}
+              aria-label={playLabel}
+              className={cx(
+                "grid size-12 shrink-0 place-items-center rounded-full bg-white/95 text-[#0b2230] shadow-lg transition hover:scale-105 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50",
+                blocked && state !== "playing" && "ring-4 ring-white/40 motion-safe:animate-pulse",
+              )}
+            >
+              <Icon
+                name={state === "playing" ? "pause" : state === "ended" ? "refresh" : "play"}
+                className={cx("size-5", state !== "playing" && state !== "ended" && "ml-0.5")}
+              />
+            </button>
+            <div className="min-w-0 [text-shadow:0_1px_8px_rgb(0_0_0/0.4)]">
+              <p className="font-semibold leading-tight">{blocked && state !== "playing" ? "Tap to listen" : label}</p>
+              <p className="text-sm tabular-nums text-white/80">
+                {state === "playing" || state === "paused" ? `${formatSeconds(at)} / ${formatSeconds(total)}` : formatSeconds(total)}
+                <span className="sr-only">. </span>
+                <span aria-hidden> · </span>
+                {rec.provider === "upload" ? "Recorded" : "AI voice"}
+              </p>
+            </div>
+          </div>
+          {/* Under the Play button: the sentence being said, its word highlighted. */}
+          {sentence && (
+            <p aria-live="polite" className="max-w-[40rem] font-serif text-[1.1rem] italic leading-snug [text-shadow:0_1px_8px_rgb(0_0_0/0.55)]">
+              <span className="sr-only">{script.slice(sentence.from, sentence.to)}</span>
+              <span aria-hidden>
+                <SpokenText text={script} range={sentence} word={follow ? nowWord : null} markClassName="bg-[#fab53d] text-[#102a43] [text-shadow:none]" />
+              </span>
+            </p>
+          )}
+          <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-white/20">
+            <div className="h-full bg-[#7fe0e4]" style={{ width: `${progress * 100}%` }} />
+          </div>
+        </div>
+        {state === "broken" && <p className="mt-2 text-sm font-semibold text-white">This recording can’t be played here. Here are its words: {script}</p>}
         {audioEl}
       </section>
     );

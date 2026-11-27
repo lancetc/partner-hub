@@ -29,7 +29,7 @@ export function Logo({ className = "h-8 w-auto" }: { className?: string }) {
 /** A main menu item: the current section and hover are solid white over the glass header; dark mode keeps its own shades, so the light text stays readable. */
 const navItemClass = (active: boolean) =>
   cx(
-    "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium transition-colors lg:max-xl:px-2 xl:px-4",
+    "relative inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-base font-medium transition-colors lg:max-xl:px-2 xl:px-4",
     active ? "bg-white text-ink dark:bg-tealtint" : "text-ink-muted hover:bg-white hover:text-ink dark:hover:bg-muted",
   );
 
@@ -91,7 +91,7 @@ export function Header() {
               href="/admin"
               aria-current={inAdmin ? "page" : undefined}
               className={cx(
-                "mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border px-3 text-[0.95rem] font-semibold sm:px-4 lg:max-xl:px-3",
+                "mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border px-3 text-base font-semibold sm:px-4 lg:max-xl:px-3",
                 inAdmin ? "border-action bg-tealtint text-ink" : "border-line-strong text-ink hover:bg-muted",
               )}
             >

@@ -145,7 +145,7 @@ export function AccountMenu() {
                   await api("/api/demo/session", { body: { userId: next } });
                   window.location.reload();
                 }}
-                className="min-h-11 rounded-lg border border-line-strong bg-surface px-2 text-[0.95rem]"
+                className="min-h-11 rounded-lg border border-line-strong bg-surface px-2 text-base"
               >
                 {me.demoUsers.map((u) => (
                   <option key={u.id} value={u.id}>

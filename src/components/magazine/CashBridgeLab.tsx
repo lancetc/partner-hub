@@ -121,7 +121,7 @@ export function CashBridgeLab({ block: b, ctx }: { block: CashBridgeBlock; ctx: 
     <section aria-label={`90-Day Cash Bridge: ${b.title}`} className="mx-auto w-full max-w-[72rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-7">
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="money" className="size-5" /> 90-Day Cash Bridge
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">
           {mode === "story" ? `Fictional 90 days · ${b.storyVersion}` : "Your business · private"}
         </span>
       </p>

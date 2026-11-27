@@ -278,12 +278,12 @@ function Perspectives({ block: b, ctx }: { block: PerspectivesBlock; ctx: Intera
                 <p className="font-serif text-lg font-semibold leading-snug">{v.title}</p>
                 <div>
                   <p className="text-sm font-bold">The reasoning</p>
-                  <RichText text={v.reasoning} className="text-[0.95rem]" />
+                  <RichText text={v.reasoning} className="text-base" />
                 </div>
                 {v.misses && (
                   <div>
                     <p className="text-sm font-bold">What it might miss</p>
-                    <RichText text={v.misses} className="text-[0.95rem]" />
+                    <RichText text={v.misses} className="text-base" />
                   </div>
                 )}
               </li>

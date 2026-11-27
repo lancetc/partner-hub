@@ -913,7 +913,7 @@ function MemoryTab({ admin, reload }: { admin: Admin; reload: () => void }) {
           </select>
         </div>
         {brief.data && (
-          <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 font-sans text-[0.85rem] leading-relaxed">{`${brief.data.rules}\n\n---\n\n${brief.data.context}`}</pre>
+          <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 font-sans text-sm leading-relaxed">{`${brief.data.rules}\n\n---\n\n${brief.data.context}`}</pre>
         )}
         {brief.error && <ErrorNote text={brief.error} />}
       </section>
@@ -1067,13 +1067,13 @@ function PreviewTab({ admin }: { admin: Admin }) {
             {/* eslint-disable-next-line @next/next/no-img-element -- library pictures are served as they are */}
             <img src={m.portrait} alt="" className="absolute inset-0 size-full object-cover object-[50%_25%]" />
             <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#06223a] via-[#06223a]/75 to-transparent" />
-            <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mulish text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
+            <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
               Lives in Progress
             </span>
             <span className="absolute inset-x-0 bottom-0 p-3.5">
               <span className="block font-serif text-xl font-semibold">{m.name}</span>
-              <span className="mt-1 line-clamp-3 block font-serif text-[0.82rem] italic">“{e.quote || e.title}”</span>
-              <span className="mt-1.5 block text-[0.68rem] text-white/80">
+              <span className="mt-1 line-clamp-3 block font-serif text-sm italic">“{e.quote || e.title}”</span>
+              <span className="mt-1.5 block text-xs text-white/80">
                 {e.hearable && e.audio ? `New voice message · ${Math.round(e.audio.seconds)} seconds` : `Episode ${String(e.number).padStart(2, "0")}`}
               </span>
             </span>

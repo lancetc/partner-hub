@@ -222,7 +222,7 @@ export function OutreachKit({ home, initial, onSaved }: { home: Home; initial?: 
             {kit.onePager.sections.map((s) => (
               <section key={s.id} className="mt-3">
                 <h4 className="font-semibold">{s.heading}</h4>
-                <p className="text-[15px] leading-relaxed">
+                <p className="text-base leading-relaxed">
                   <Lines lines={s.lines} />
                 </p>
               </section>
@@ -233,7 +233,7 @@ export function OutreachKit({ home, initial, onSaved }: { home: Home; initial?: 
                 <Lines lines={kit.onePager.cta} />
               </p>
               {kit.onePager.handoff.length > 0 && (
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-[15px]">
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-base">
                   {kit.onePager.handoff.map((h) => (
                     <li key={h}>{h}</li>
                   ))}
@@ -352,7 +352,7 @@ export function OutreachKit({ home, initial, onSaved }: { home: Home; initial?: 
                 <p className="mt-1">
                   <span className="font-semibold">Subject:</span> {e.subject}
                 </p>
-                <p className="mt-2 whitespace-pre-line break-words text-[15px]">
+                <p className="mt-2 whitespace-pre-line break-words text-base">
                   <Lines lines={e.body} />
                 </p>
                 <button

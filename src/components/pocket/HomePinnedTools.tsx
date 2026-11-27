@@ -59,7 +59,7 @@ export function HomePinnedTools() {
                 <Icon name={icon(it)} className="size-5" />
               </span>
               <span className="min-w-0">
-                <span className="block font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+                <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
                   {it.label}
                   {NOTE[it.state] && ` · ${NOTE[it.state]}`}
                 </span>

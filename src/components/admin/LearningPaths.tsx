@@ -550,7 +550,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               >
                 <textarea
                   rows={3}
-                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base"
                   value={description}
                   onChange={(e) => change(() => setDescription(e.target.value))}
                   maxLength={500}
@@ -559,7 +559,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <Field label="Who it’s for" hint="A sentence for the learner, for example: New care coordinators in their first month with Trilogy Care.">
                 <textarea
                   rows={2}
-                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base"
                   value={whoFor}
                   onChange={(e) => change(() => setWhoFor(e.target.value))}
                   maxLength={300}
@@ -569,7 +569,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
               <Field label="What you’ll be able to do" hint="One outcome per line, up to 8. Start each with a verb: Know…, Run…, Recognise…">
                 <textarea
                   rows={5}
-                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem]"
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base"
                   value={outcomes}
                   onChange={(e) => change(() => setOutcomes(e.target.value))}
                 />
@@ -1017,7 +1017,7 @@ function WhoPhotoField({ value, onChange }: { value: string; onChange: (src: str
           <span className="relative h-16 w-24 overflow-hidden rounded-xl ring-1 ring-line">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={DEFAULT_WHO_PHOTO} alt="" className="size-full object-cover" />
-            <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[0.65rem] font-semibold text-white">Default</span>
+            <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-xs font-semibold text-white">Default</span>
           </span>
         )}
         <button type="button" className={btn.secondary} onClick={() => setOpen((o) => !o)} aria-expanded={open}>

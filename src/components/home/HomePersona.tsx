@@ -90,35 +90,35 @@ export function HomePersona() {
           // Their latest episode instead of the introduction: the same card, the same size.
           <>
             <span className="absolute left-3 top-3 flex items-center gap-1.5">
-              <span className="rounded-full bg-white/90 px-2.5 py-1 font-mulish text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
+              <span className="rounded-full bg-white/90 px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
                 Lives in Progress
               </span>
               {s.isNew && (
-                <span className="rounded-full bg-[#fab53d] px-2 py-1 font-mulish text-[0.6rem] font-extrabold uppercase tracking-[0.1em] text-[#102a43]">New</span>
+                <span className="rounded-full bg-[#fab53d] px-2 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.1em] text-[#102a43]">New</span>
               )}
             </span>
             <span className="absolute inset-x-0 bottom-0 p-3.5">
               <span className="block font-serif text-xl font-semibold leading-tight [text-shadow:0_1px_8px_rgb(0_0_0/0.4)]">{m.name}</span>
-              <span className="mt-1 line-clamp-3 block font-serif text-[0.82rem] italic leading-snug text-white/95">“{s.quote || s.title}”</span>
-              <span className="mt-1.5 flex items-center gap-1 text-[0.68rem] text-white/80">
+              <span className="mt-1 line-clamp-3 block font-serif text-sm italic leading-snug text-white/95">“{s.quote || s.title}”</span>
+              <span className="mt-1.5 flex items-center gap-1 text-xs text-white/80">
                 <Icon name={s.audioSeconds ? "volume" : "doc"} className="size-3" />
                 {s.audioSeconds ? `${s.isNew ? "New voice message" : "Voice message"} · ${s.audioSeconds} seconds` : `Episode ${String(s.number).padStart(2, "0")} · ${s.title}`}
               </span>
-              <span className="mt-1.5 inline-flex items-center gap-1 text-[0.8rem] font-semibold text-[#7fd4d4] group-hover:underline">
+              <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-[#7fd4d4] group-hover:underline">
                 {s.isNew ? `Continue ${possessive(m.name)} story` : `Catch up with ${firstName(m.name)}`} <span aria-hidden>→</span>
               </span>
             </span>
           </>
         ) : (
           <>
-            <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mulish text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
+            <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-[#006b6b]">
               Digital member
             </span>
             <span className="absolute inset-x-0 bottom-0 p-3.5">
               <span className="block font-serif text-xl font-semibold leading-tight [text-shadow:0_1px_8px_rgb(0_0_0/0.4)]">{m.name}</span>
-              <span className="mt-0.5 block text-[0.7rem] text-white/80">{m.role}</span>
-              <span className="mt-1.5 line-clamp-2 block font-serif text-[0.8rem] italic leading-snug text-white/95">“{m.hello}”</span>
-              <span className="mt-1.5 inline-flex items-center gap-1 text-[0.8rem] font-semibold text-[#7fd4d4] group-hover:underline">
+              <span className="mt-0.5 block text-xs text-white/80">{m.role}</span>
+              <span className="mt-1.5 line-clamp-2 block font-serif text-xs italic leading-snug text-white/95">“{m.hello}”</span>
+              <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-[#7fd4d4] group-hover:underline">
                 Get to know {firstName(m.name)} <span aria-hidden>→</span>
               </span>
             </span>

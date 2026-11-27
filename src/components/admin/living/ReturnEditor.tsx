@@ -891,7 +891,7 @@ export function ReturnEditor({ id }: { id: string }) {
           <div className="flex flex-col gap-3">
             <p className="font-semibold">What a learner gets</p>
             <div className="rounded-2xl bg-muted p-4 ring-1 ring-line">
-              <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+              <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
                 {reasonText(note.reason, d.character?.name ?? "")}
               </p>
               <p className="mt-1 font-serif text-lg font-semibold">{d.course?.title ?? form.title}</p>

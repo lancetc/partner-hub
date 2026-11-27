@@ -189,7 +189,7 @@ export function Community() {
 type Person = Pick<Member, "id" | "name"> & { online?: boolean; level?: number; photo?: string | null };
 
 function Avatar({ person, size = "md", ring, level }: { person: Person; size?: "xs" | "sm" | "md" | "lg"; ring?: string; level?: number }) {
-  const sizes = { xs: "size-7 text-[0.65rem]", sm: "size-9 text-xs", md: "size-11 text-sm", lg: "size-16 text-lg" };
+  const sizes = { xs: "size-7 text-xs", sm: "size-9 text-xs", md: "size-11 text-sm", lg: "size-16 text-lg" };
   return (
     <span className="relative inline-flex shrink-0">
       {person.photo ? (
@@ -212,7 +212,7 @@ function Avatar({ person, size = "md", ring, level }: { person: Person; size?: "
       )}
       {level !== undefined && (
         <span
-          className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-[#fab53d] font-mulish text-[0.65rem] font-extrabold text-[#102a43] ring-2 ring-surface"
+          className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-[#fab53d] font-mulish text-xs font-extrabold text-[#102a43] ring-2 ring-surface"
           title={`Level ${level}`}
         >
           {level}
@@ -623,7 +623,7 @@ function PostCard({
           <p className="flex flex-wrap items-center gap-x-2 text-sm">
             <span className="font-semibold">{author.name}</span>
             {!post.mine && memberById(post.authorId)?.host && (
-              <span className="rounded-full bg-[#c7393e] px-2 py-0.5 text-[0.7rem] font-bold text-white">Host</span>
+              <span className="rounded-full bg-[#c7393e] px-2 py-0.5 text-xs font-bold text-white">Host</span>
             )}
           </p>
           <p className="text-xs text-ink-muted">
@@ -700,7 +700,7 @@ function PostCard({
                     <p className="text-sm font-semibold">
                       {by.name} <span className="font-normal text-ink-muted">· {by.role}</span>
                     </p>
-                    <p className="text-[0.95rem]">{c.body}</p>
+                    <p className="text-base">{c.body}</p>
                   </div>
                   <div className="mt-1 flex items-center gap-3 pl-3 text-xs text-ink-muted">
                     <span>{ago(c.hoursAgo)}</span>
@@ -825,7 +825,7 @@ function DateBlock({ event, hydrated, small }: { event: CommunityEvent; hydrated
       )}
       aria-hidden
     >
-      <span className={cx("font-extrabold uppercase", small ? "text-[0.6rem]" : "text-xs")}>{d?.toLocaleDateString("en-AU", { month: "short" })}</span>
+      <span className={cx("font-extrabold uppercase", small ? "text-xs" : "text-xs")}>{d?.toLocaleDateString("en-AU", { month: "short" })}</span>
       <span className={cx("font-extrabold leading-none", small ? "text-lg" : "text-2xl")}>{d?.getDate()}</span>
     </span>
   );
@@ -1016,7 +1016,7 @@ function MemberPortrait({ m }: { m: Member }) {
               </span>
             )}
           </h3>
-          <p className="line-clamp-1 text-[0.95rem] leading-snug text-ink-muted">{m.role}</p>
+          <p className="line-clamp-1 text-base leading-snug text-ink-muted">{m.role}</p>
           <p className="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
             <Icon name="pin" className="size-3.5 shrink-0" />
             <span className="truncate">
@@ -1042,7 +1042,7 @@ function MemberPortrait({ m }: { m: Member }) {
         >
           <p className="font-semibold">{m.name}</p>
           <p className="mt-1 text-sm">{m.bio}</p>
-          <p className="mt-3 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ask me about</p>
+          <p className="mt-3 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">Ask me about</p>
           <ul className="mt-1.5 flex flex-wrap gap-1.5">
             {m.askMeAbout.map((t) => (
               <li key={t} className="rounded-full bg-tealtint px-2.5 py-1 text-xs font-medium">
@@ -1176,7 +1176,7 @@ function WeekCard() {
   return (
     <Link href="/play/conversations" className="group block overflow-hidden rounded-2xl ring-1 ring-line hover:ring-[#008282]">
       <span className="block p-4" style={{ background: theme.colour, color: theme.ink }}>
-        <span className="block font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] opacity-90">
+        <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.14em] opacity-90">
           Card of the week · {theme.emoji} {theme.name}
         </span>
         <span className="mt-2 block font-serif text-lg font-semibold leading-snug">{card.question}</span>

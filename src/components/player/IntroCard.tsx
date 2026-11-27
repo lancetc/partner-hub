@@ -323,7 +323,7 @@ export function IntroCard({
           )}
           {video?.captionsVtt && (
             <button type="button" aria-pressed={captions} onClick={toggleCaptions} className={pill}>
-              <span aria-hidden className="rounded border border-current px-1 text-[0.65rem] font-extrabold leading-4">
+              <span aria-hidden className="rounded border border-current px-1 text-xs font-extrabold leading-4">
                 CC
               </span>{" "}
               {captions ? "Captions on" : "Captions off"}

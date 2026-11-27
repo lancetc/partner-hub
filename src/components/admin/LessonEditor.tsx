@@ -451,7 +451,7 @@ export function PexelsPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: 
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.thumb} alt="" loading="lazy" className="size-full object-cover transition-transform group-hover:scale-105" />
-              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-left text-[0.65rem] font-semibold text-white">
+              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-left text-xs font-semibold text-white">
                 {p.credit.name}
               </span>
               {picking === p.id && <span className="absolute inset-0 grid place-items-center bg-black/45 text-xs font-semibold text-white">Adding…</span>}
@@ -464,7 +464,7 @@ export function PexelsPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: 
           {loading ? "Loading…" : "More photos"}
         </button>
       )}
-      <p className="text-[0.7rem] text-ink-muted">
+      <p className="text-xs text-ink-muted">
         Photos from{" "}
         <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">
           Pexels
@@ -577,7 +577,7 @@ function GiphyPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) 
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={still ? g.still : g.thumb} alt="" loading="lazy" className="size-full object-cover transition-transform group-hover:scale-105" />
-              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-left text-[0.65rem] font-semibold text-white">
+              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-left text-xs font-semibold text-white">
                 {g.credit.name}
               </span>
               {picking === g.id && <span className="absolute inset-0 grid place-items-center bg-black/45 text-xs font-semibold text-white">Adding…</span>}
@@ -590,7 +590,7 @@ function GiphyPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) 
           {loading ? "Loading…" : "More GIFs"}
         </button>
       )}
-      <p className="text-[0.7rem] font-semibold text-ink-muted">
+      <p className="text-xs font-semibold text-ink-muted">
         Powered by{" "}
         <a href="https://giphy.com" target="_blank" rel="noreferrer" className="underline">
           GIPHY
@@ -604,7 +604,7 @@ function GiphyPicker({ onPicked, onClose }: { onPicked: (p: Photo, alt: string) 
 const TONES: Tone[] = ["teal", "navy", "warm", "gold", "sky"];
 const VARIANTS: VisualVariant[] = ["petals", "rings", "grid", "wave", "dots", "arc"];
 
-const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed";
+const textarea = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed";
 const words = (s = "") => s.trim().split(/\s+/).filter(Boolean).length;
 // Audio and Listen cards keep their words in `script`, which the player reads; other cards use `narration`.
 const scriptOf = (c: Card) => (c.type === "presenter" ? c.transcript : c.type === "audio" || c.type === "listen" ? c.script : c.narration) ?? "";
@@ -1396,7 +1396,7 @@ function TypeTag({ card: c }: { card: Card }) {
   return (
     <span
       className={cx(
-        "pointer-events-none absolute -top-2.5 right-4 z-20 inline-flex h-6 items-center gap-1 rounded-full px-2.5 font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.08em] shadow-md ring-2 ring-muted",
+        "pointer-events-none absolute -top-2.5 right-4 z-20 inline-flex h-6 items-center gap-1 rounded-full px-2.5 font-mulish text-xs font-extrabold uppercase tracking-[0.08em] shadow-md ring-2 ring-muted",
         tone,
       )}
     >
@@ -1986,11 +1986,11 @@ function Cards({
             className="pointer-events-none fixed z-50 w-44 -translate-x-1/2 -translate-y-6 rotate-3 rounded-2xl bg-surface p-3 shadow-2xl ring-2 ring-action"
             style={{ left: drag.x, top: drag.y }}
           >
-            <p className="flex items-center gap-1 font-mulish text-[0.65rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+            <p className="flex items-center gap-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
               <Icon name={typeInfo(l.nodes[drag.id].type).icon} className="size-3" /> {typeInfo(l.nodes[drag.id].type).label}
             </p>
             <p className="mt-1 line-clamp-2 font-serif text-sm font-semibold">{l.nodes[drag.id].heading || "Untitled card"}</p>
-            <p className="mt-1 text-[0.7rem] text-ink-muted">{drag.slot === null ? "Drag to a gap between cards" : "Let go to drop it here"}</p>
+            <p className="mt-1 text-xs text-ink-muted">{drag.slot === null ? "Drag to a gap between cards" : "Let go to drop it here"}</p>
           </div>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -2008,7 +2008,7 @@ function Cards({
         <div className="flex gap-1.5 overflow-x-auto rounded-3xl bg-gold p-2 text-[#102a43] shadow-sm ring-1 ring-[#e0a12e] lg:sticky lg:top-24 lg:w-64 lg:flex-col lg:gap-3 lg:p-3">
           {PALETTE_GROUPS.map((g) => (
             <div key={g.title} role="group" aria-label={g.title} className="flex shrink-0 gap-1.5 lg:flex-col lg:gap-1">
-              <p className="hidden px-1 font-mulish text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-[#102a43]/75 lg:block">{g.title}</p>
+              <p className="hidden px-1 font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#102a43]/75 lg:block">{g.title}</p>
               <div className="flex gap-1.5 lg:grid lg:grid-cols-2 lg:gap-1">
                 {g.keys
                   .flatMap((k) => PALETTE.filter((p) => p.key === k))
@@ -2277,7 +2277,7 @@ function CanvasCard({
           >
             <span
               className={cx(
-                "inline-flex size-5 items-center justify-center rounded-full font-serif text-[0.8rem]",
+                "inline-flex size-5 items-center justify-center rounded-full font-serif text-xs",
                 tone === "dark" ? "bg-white text-[#0a1a2e] ring-1 ring-[#0a1a2e]/30" : "bg-[#0a1a2e] text-white",
               )}
             >
@@ -2330,7 +2330,7 @@ function CanvasCard({
                 <button
                   type="button"
                   onClick={onPick}
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2.5 py-0.5 text-[0.7rem] font-semibold text-[#102a43] shadow"
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#102a43] shadow"
                 >
                   Edit
                 </button>
@@ -2343,7 +2343,7 @@ function CanvasCard({
               onChange={(t) => set((x) => void (x.label = t))}
               placeholder="Label"
               className={cx(
-                "font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em]",
+                "font-mulish text-xs font-extrabold uppercase tracking-[0.14em]",
                 surf ? (gradient?.accent ?? surf.soft) : c.emphasis === "consequence" ? "text-warm" : "text-accent",
                 speaking && "text-center",
               )}
@@ -2362,7 +2362,7 @@ function CanvasCard({
                 value={c.body}
                 onChange={(t) => set((x) => void (x.body = t))}
                 placeholder="Add some text"
-                className="text-[0.95rem] leading-relaxed"
+                className="text-base leading-relaxed"
                 placeholderClass={ph}
               />
             ) : (
@@ -2371,7 +2371,7 @@ function CanvasCard({
                   value={c.body}
                   onChange={(t) => set((x) => void (x.body = t))}
                   placeholder="Add some text"
-                  className={cx("text-[0.95rem] leading-relaxed", speaking && "text-center")}
+                  className={cx("text-base leading-relaxed", speaking && "text-center")}
                   multiline
                   placeholderClass={ph}
                 />
@@ -2387,7 +2387,7 @@ function CanvasCard({
               >
                 <Icon name="file" className="size-5 shrink-0 text-accent" />
                 <span className="min-w-0 flex-1 truncate font-semibold">{c.pdf.title || "Untitled document"}</span>
-                {c.pdf.required && <span className="shrink-0 rounded-full bg-gold/40 px-1.5 py-0.5 text-[0.6rem] font-bold">Required</span>}
+                {c.pdf.required && <span className="shrink-0 rounded-full bg-gold/40 px-1.5 py-0.5 text-xs font-bold">Required</span>}
               </button>
             )}
             {(c.keyPoints?.style === "steps" || c.keyPoints?.style === "chips") && (
@@ -2395,7 +2395,7 @@ function CanvasCard({
               <ol className={cx("flex flex-col gap-2 rounded-xl p-2.5 text-xs", surf ? "bg-white text-[#102a43] shadow-sm" : "bg-muted text-ink")}>
                 {c.keyPoints.items.map((k, i) => (
                   <li key={i} className="grid grid-cols-[1.25rem_1fr] gap-x-2">
-                    <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#0e7c7b] text-[0.65rem] font-bold text-white">
+                    <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#0e7c7b] text-xs font-bold text-white">
                       {i + 1}
                     </span>
                     <div className="flex flex-col gap-0.5">
@@ -2502,12 +2502,12 @@ function MicPreview({ onColour, chips }: { onColour: boolean; chips: string[] })
       <p className="text-xs font-semibold">Tap and say it out loud</p>
       <div className="flex flex-wrap justify-center gap-1">
         {chips.map((t) => (
-          <span key={t} className={cx("rounded-full px-2 py-0.5 text-[0.65rem]", onColour ? "bg-white/15" : "bg-tealtint text-ink")}>
+          <span key={t} className={cx("rounded-full px-2 py-0.5 text-xs", onColour ? "bg-white/15" : "bg-tealtint text-ink")}>
             {t}
           </span>
         ))}
       </div>
-      <p className={cx("text-[0.65rem] font-semibold underline underline-offset-2", onColour ? "" : "text-accent")}>Can’t talk right now? Type it instead</p>
+      <p className={cx("text-xs font-semibold underline underline-offset-2", onColour ? "" : "text-accent")}>Can’t talk right now? Type it instead</p>
     </div>
   );
 }
@@ -2734,7 +2734,7 @@ function InlineBody({
               </button>
             </div>
             <select
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-1.5 py-1 text-[0.7rem] text-ink-muted hover:border-line-strong"
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-1.5 py-1 text-xs text-ink-muted hover:border-line-strong"
               value={o.stay ? "__stay" : (o.next ?? "")}
               onChange={(e) =>
                 set((x) => {
@@ -2791,7 +2791,7 @@ function InlineBody({
           + Point
         </button>
         <div className="rounded-xl bg-[#DCECE5] p-2.5 text-sm text-[#102a43] [text-shadow:none]">
-          <p className="text-[0.7rem] font-bold uppercase tracking-wider text-[#0e7c7b]">Take it to work</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#0e7c7b]">Take it to work</p>
           <RichEditable
             inline
             value={c.action}
@@ -2953,7 +2953,7 @@ function InlineBody({
                 key={s.id}
                 aria-hidden
                 className={cx(
-                  "absolute grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[0.6rem] font-bold shadow ring-2 ring-white",
+                  "absolute grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-xs font-bold shadow ring-2 ring-white",
                   c.mode === "find" ? "bg-gold text-[#0a1a2e]" : "bg-action text-on-action",
                 )}
                 style={{ left: `${s.x}%`, top: `${s.y}%` }}
@@ -2993,13 +2993,13 @@ function InlineBody({
         />
         <MicPreview onColour={onColour} chips={["Your own words", "AI feedback", "Re-record anytime"]} />
         <div className="rounded-xl bg-muted p-2 text-ink [text-shadow:none]">
-          <p className="flex items-center gap-1 text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">
+          <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-ink-muted">
             <Icon name="spark" className="size-3" /> A good answer covers
           </p>
           <ol className="mt-1 flex flex-col gap-1">
             {c.criteria.map((cr, i) => (
               <li key={cr.id} className="flex items-start gap-1.5">
-                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-action text-[0.6rem] font-bold text-on-action">{i + 1}</span>
+                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-action text-xs font-bold text-on-action">{i + 1}</span>
                 <Editable
                   value={cr.text}
                   onChange={(t) => set((x) => x.type === "written" && void (x.criteria[i].text = t))}
@@ -3055,7 +3055,7 @@ function InlineBody({
         />
         <MicPreview onColour={onColour} chips={["No wrong answers", "AI feedback", "Re-record anytime"]} />
         <div className="rounded-xl bg-muted p-2 text-ink [text-shadow:none]">
-          <p className="text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">Example answer</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">Example answer</p>
           <Editable
             value={c.modelResponse}
             onChange={(t) => set((x) => x.type === "response" && void (x.modelResponse = t))}
@@ -3073,7 +3073,7 @@ function InlineBody({
           <Icon name="volume" className="size-6" />
         </span>
         <div className="w-full rounded-xl bg-white/80 p-2.5 text-left text-sm text-ink">
-          <p className="text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">What the voice says</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">What the voice says</p>
           <Editable value={c.script} onChange={(t) => set((x) => x.type === "listen" && void (x.script = t))} placeholder="Write the audio script" multiline />
         </div>
         <span className="rounded-xl bg-[#102a43] px-4 py-2 text-xs font-semibold text-white" aria-hidden>
@@ -3086,7 +3086,7 @@ function InlineBody({
   if (c.type === "audio")
     return (
       <div className="rounded-xl bg-muted p-2.5 text-sm text-ink">
-        <p className="text-[0.7rem] font-bold uppercase tracking-wider text-ink-muted">Read aloud</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">Read aloud</p>
         <Editable value={c.script} onChange={(t) => set((x) => x.type === "audio" && void (x.script = t))} placeholder="What the voice says" multiline />
       </div>
     );
@@ -3223,7 +3223,7 @@ function ReplaceableTile({ photo, update, onReplaced, children }: { photo: Photo
         disabled={busy}
         title="Replace this picture everywhere it’s used (or drop a file on it)"
         aria-label="Replace this picture with a new one, everywhere it’s used"
-        className="absolute inset-x-1 bottom-1 inline-flex min-h-7 items-center justify-center gap-1 rounded-full bg-white/95 text-[0.7rem] font-bold text-[#102a43] opacity-0 shadow ring-1 ring-black/10 transition-opacity hover:bg-white focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        className="absolute inset-x-1 bottom-1 inline-flex min-h-7 items-center justify-center gap-1 rounded-full bg-white/95 text-xs font-bold text-[#102a43] opacity-0 shadow ring-1 ring-black/10 transition-opacity hover:bg-white focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Icon name="refresh" className="size-3" /> {busy ? "Replacing…" : "Replace"}
       </button>
@@ -3241,7 +3241,7 @@ function ReplaceableTile({ photo, update, onReplaced, children }: { photo: Photo
         }}
       />
       {error && (
-        <p role="alert" className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg bg-surface p-1.5 text-[0.7rem] text-danger shadow">
+        <p role="alert" className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg bg-surface p-1.5 text-xs text-danger shadow">
           {error}
         </p>
       )}
@@ -3496,7 +3496,7 @@ function BackgroundField({ card: c, set }: { card: Card; set: (fn: (x: Card) => 
           aria-pressed={!current}
           onClick={() => set((x) => void delete x.background)}
           className={cx(
-            "flex h-16 w-14 flex-col items-center justify-end rounded-xl border-2 bg-surface pb-1 text-[0.65rem] font-semibold",
+            "flex h-16 w-14 flex-col items-center justify-end rounded-xl border-2 bg-surface pb-1 text-xs font-semibold",
             !current ? "border-action" : "border-line-strong",
           )}
         >
@@ -3510,7 +3510,7 @@ function BackgroundField({ card: c, set }: { card: Card; set: (fn: (x: Card) => 
             onClick={() => set((x) => void (x.background = { gradient: g }))}
             style={{ backgroundImage: GRADIENTS[g].css }}
             className={cx(
-              "flex h-16 w-14 flex-col items-center justify-end rounded-xl border-2 pb-1 text-[0.65rem] font-semibold",
+              "flex h-16 w-14 flex-col items-center justify-end rounded-xl border-2 pb-1 text-xs font-semibold",
               GRADIENTS[g].text === "light" ? "text-white" : "text-[#0a1a2e]",
               current === g ? "border-action ring-2 ring-action/40" : "border-transparent",
             )}
@@ -4805,8 +4805,8 @@ function CanvasFigure({ figure: f, onEdit }: { figure: Figure; onEdit?: () => vo
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={f.src} alt="" className={cx("size-full", f.fit === "fill" ? "object-cover" : "object-contain")} />
-      {!f.alt && <span className="absolute left-1.5 top-1.5 rounded-full bg-orange px-2 py-0.5 text-[0.65rem] font-bold text-[#102a43]">Needs alt</span>}
-      {f.animated && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[0.65rem] font-bold text-white">GIF</span>}
+      {!f.alt && <span className="absolute left-1.5 top-1.5 rounded-full bg-orange px-2 py-0.5 text-xs font-bold text-[#102a43]">Needs alt</span>}
+      {f.animated && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-2 py-0.5 text-xs font-bold text-white">GIF</span>}
     </button>
   );
 }
@@ -5499,14 +5499,14 @@ function VisualField({ card: c, set, lesson, update }: { card: Card; set: (fn: (
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={ph.src} alt="" className="size-full object-cover" />
                                 {on && (
-                                  <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-[0.6rem] font-bold text-on-action">
+                                  <span className="absolute left-1 top-1 rounded-full bg-action px-1.5 py-0.5 text-xs font-bold text-on-action">
                                     Reference
                                   </span>
                                 )}
                               </button>
                               <button
                                 type="button"
-                                className="text-[0.7rem] font-semibold text-accent hover:underline"
+                                className="text-xs font-semibold text-accent hover:underline"
                                 onClick={() => {
                                   applyPhoto(ph, ph.alt);
                                   setGenerate(false);
@@ -5995,7 +5995,7 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             disabled={busy}
-            className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed"
+            className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed"
             placeholder="For example: Care Partners need to know what to do when a client seems confused or unwell during a visit. Use a cleaning visit as the scenario, and make sure they know to tell the coordinator the same day."
           />
         </Field>

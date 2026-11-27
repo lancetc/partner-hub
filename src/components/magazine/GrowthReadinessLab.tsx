@@ -79,7 +79,7 @@ export function GrowthReadinessLab({ block: b, ctx }: { block: IntakeBlock; ctx:
     <section aria-label={`Growth readiness: ${b.title}`} className="mx-auto w-full max-w-[72rem] rounded-3xl border border-line-strong bg-surface p-5 sm:p-7">
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="gauge" className="size-5" /> Growth readiness
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">
           {mode === "story" ? `Fictional case · ${b.storyVersion}` : "Your business · private"}
         </span>
       </p>
@@ -1148,7 +1148,7 @@ function InputsEditor({
     fn(x);
     onEdit(x);
   };
-  const tag = <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-ink-muted">{source}</span>;
+  const tag = <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ink-muted">{source}</span>;
   const group = "mt-4 flex flex-col gap-2";
   return (
     <div className="mt-2">

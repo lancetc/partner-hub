@@ -274,7 +274,7 @@ export function HomeFavourites() {
           {d.items.map((i) => (
             <li key={i.id}>
               <Link href={i.href} className="flex h-full min-h-16 flex-col justify-center rounded-2xl bg-muted px-4 py-3 hover:ring-1 hover:ring-action">
-                <span className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+                <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
                   {i.label}
                   {STATE[i.state] && ` · ${STATE[i.state]}`}
                 </span>

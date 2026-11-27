@@ -36,7 +36,7 @@ export function Quiz({
     <div className="flex flex-col gap-6">
       {assessment && !checked && (
         // Soft gold, like the app's other notices: it sits on the quiz's warm cream panel, where the cool grey clashed.
-        <p className="rounded-2xl bg-gold/15 px-4 py-3 text-[0.95rem] ring-1 ring-gold/60 [text-shadow:none]">
+        <p className="rounded-2xl bg-gold/15 px-4 py-3 text-base ring-1 ring-gold/60 [text-shadow:none]">
           <strong>Assessment.</strong> Answer every question, then submit. It’s marked all at once, and you need {assessment.passMark}% to pass.
         </p>
       )}
@@ -52,7 +52,7 @@ export function Quiz({
           <span className="font-serif text-3xl font-semibold">
             {score.right} of {score.total} · {score.percent}%
           </span>
-          <span className="text-[0.95rem]">
+          <span className="text-base">
             {score.passed
               ? "Well done. Read the feedback on each question below, then continue."
               : `You need ${assessment!.passMark}% to pass. Retake the assessment: ${assessment!.draw ? "you’ll get a new set of questions" : "the questions and answers will be in a new order"}.`}
@@ -105,7 +105,7 @@ export function Quiz({
               <p
                 role="status"
                 className={cx(
-                  "fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-[0.95rem]",
+                  "fx-rise mt-1 flex gap-2 rounded-2xl px-4 py-3 text-base",
                   right ? "bg-[#DDE8D9] dark:bg-tealtint" : "border border-danger/60 bg-surface",
                 )}
               >

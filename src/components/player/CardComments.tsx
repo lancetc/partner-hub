@@ -110,7 +110,7 @@ export function CardComments({
         <Icon name="chat" className="size-4" />
         {count ? `${count} ${count === 1 ? "comment" : "comments"}` : "Comments"}
         {thread?.comments.some((c) => c.pinned) && !open && (
-          <span className="rounded-full bg-gold px-1.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-[#0a1a2e]">Tip</span>
+          <span className="rounded-full bg-gold px-1.5 text-xs font-extrabold uppercase tracking-wide text-[#0a1a2e]">Tip</span>
         )}
         {!quiet && <Icon name="chevron-down" className={cx("size-4 transition-transform", open && "rotate-180")} />}
       </button>
@@ -146,7 +146,7 @@ export function CardComments({
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Something others should know, from your experience"
-                  className="rounded-xl border border-line-strong bg-surface p-2.5 text-[0.98rem]"
+                  className="rounded-xl border border-line-strong bg-surface p-2.5 text-base"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-ink-muted">Everyone taking this topic can see it. Leave out client names and details.</span>
@@ -175,7 +175,7 @@ export function CardComments({
                   <li key={c.id} className={cx("rounded-xl p-3", c.pinned ? "bg-gold/15 ring-1 ring-gold/60" : "bg-muted")}>
                     <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
                       {c.pinned && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gold px-2 text-[0.65rem] font-extrabold uppercase tracking-wide text-[#0a1a2e]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gold px-2 text-xs font-extrabold uppercase tracking-wide text-[#0a1a2e]">
                           <Icon name="star" className="size-3" /> Pinned tip
                         </span>
                       )}
@@ -185,7 +185,7 @@ export function CardComments({
                       </span>
                       <span className="text-xs text-ink-muted">· {ago(c.at)}</span>
                     </p>
-                    <p className="mt-1 whitespace-pre-line text-[0.98rem]">{c.text}</p>
+                    <p className="mt-1 whitespace-pre-line text-base">{c.text}</p>
                     {(c.mine || c.canHide || c.canPin) && !readOnly && (
                       <div className="mt-1.5 flex flex-wrap gap-3 text-xs font-semibold">
                         {c.canPin && (

@@ -134,7 +134,7 @@ export function ServiceReliabilityLab({ block: b, ctx }: { block: ReliabilityBlo
     >
       <p className={cx(kicker, "mb-2 flex flex-wrap items-center gap-2 text-sm")}>
         <Icon name="calendar" className="size-5" /> Service Reliability Calculator
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[0.7rem] text-ink">
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-ink">
           {mode === "story" ? `Fictional month · ${b.storyVersion}` : "Your business · private"}
         </span>
       </p>
@@ -982,7 +982,7 @@ function Timeline({
                       >
                         <span
                           aria-hidden="true"
-                          className="inline-flex size-5 items-center justify-center rounded-full text-[0.7rem] text-white"
+                          className="inline-flex size-5 items-center justify-center rounded-full text-xs text-white"
                           style={LOOK[o.outcome].style}
                         >
                           {LOOK[o.outcome].mark}

@@ -18,7 +18,7 @@ export const btn = {
   danger: "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-danger/60 px-4 font-medium hover:bg-danger/10",
 };
 
-export const input = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem]";
+export const input = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-base";
 
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
@@ -174,7 +174,7 @@ function NavLinks({ pathname, me, onPick }: { pathname: string; me?: Me | null; 
               aria-controls={id}
               onClick={() => toggle(g.title)}
               disabled={Boolean(q)}
-              className="flex min-h-9 w-full items-center gap-2 rounded-xl px-3 text-left font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-ink-muted hover:bg-muted hover:text-ink disabled:hover:bg-transparent"
+              className="flex min-h-9 w-full items-center gap-2 rounded-xl px-3 text-left font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted hover:bg-muted hover:text-ink disabled:hover:bg-transparent"
             >
               <span className="flex-1">{g.title}</span>
               {!q && <Icon name="chevron-down" className={cx("size-3.5 transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />}
@@ -274,7 +274,7 @@ export function AdminShell({ title, children, back }: { title: string; children:
 
 export function ErrorNote({ text }: { text: string }) {
   return (
-    <div role="alert" className="flex gap-2 whitespace-pre-line rounded-2xl border border-danger/60 p-3 text-[0.95rem]">
+    <div role="alert" className="flex gap-2 whitespace-pre-line rounded-2xl border border-danger/60 p-3 text-base">
       <Icon name="alert" className="mt-0.5 size-5 shrink-0 text-danger" />
       <span>{text}</span>
     </div>

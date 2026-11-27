@@ -41,7 +41,7 @@ export function InboxButton() {
         <span
           aria-hidden
           className={cx(
-            "absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full px-1 font-mulish text-[0.68rem] font-extrabold leading-5 ring-2 ring-bg",
+            "absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full px-1 font-mulish text-xs font-extrabold leading-5 ring-2 ring-bg",
             actions ? "bg-[#c7393e] text-white" : "bg-[#3cb8b9] text-[#102a43]",
           )}
         >

@@ -5,6 +5,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import {
   BLOCK_FAMILIES,
+  blockDemoHref,
   FEATURE_GROUPS,
   FEATURE_STATUS,
   FORMAT_GUIDES,
@@ -48,7 +49,7 @@ export function FeatureGuideButton() {
           setOpen(true);
           dialog.current?.showModal();
         }}
-        className="mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-line-strong px-3 text-[0.95rem] font-semibold text-ink hover:bg-muted sm:px-4 lg:max-xl:px-3"
+        className="mr-1 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-line-strong px-3 text-base font-semibold text-ink hover:bg-muted sm:px-4 lg:max-xl:px-3"
       >
         <Icon name="spark" className="size-4" />
         <span className="hidden sm:inline lg:max-xl:hidden">Features</span>
@@ -178,8 +179,8 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
               Magazine practice blocks <span className="text-base font-normal text-ink-muted">({blockCount})</span>
             </h3>
             <p className="mt-1 max-w-3xl text-ink-muted">
-              Simulators, roleplays and calculators an author adds to a course page. Each one starts from a fictional case and needs its reviewers’ sign-off
-              before it’s published. The Block showcase courses have a page for each, with the block to try.
+              Simulators, roleplays and calculators an author adds to a course page. Select a block’s name to try it. Each one starts from a fictional case and
+              needs its reviewers’ sign-off before it’s published. The Block showcase courses have a page for each, with the block to try.
             </p>
             <Link
               href="/admin/magazine"
@@ -188,6 +189,13 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
             >
               Open the Block showcase courses in Admin <Icon name="arrow-right" className="size-4" />
             </Link>
+            {/* Why practice blocks, and how one runs: as the other areas are introduced. */}
+            {!q &&
+              FORMAT_GUIDES.filter((f) => f.group === "blocks").map((f) => (
+                <div key={f.id} className="mt-4">
+                  <FormatPanel f={f} onNavigate={onClose} />
+                </div>
+              ))}
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {families.map((fam) => (
                 <div key={fam.title} className="rounded-2xl border border-line bg-surface p-4">
@@ -195,7 +203,15 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
                   <ul className="mt-2 flex flex-col gap-2">
                     {fam.blocks.map((b) => (
                       <li key={b.name}>
-                        <span className="font-semibold">{b.name}</span> <span className="text-ink-muted">· {b.what}</span>
+                        {/* Each block's name opens its page in the Block showcase, with the block to try. */}
+                        <Link
+                          href={blockDemoHref(b.type)}
+                          onClick={onClose}
+                          className="font-semibold text-[#007f7e] transition-colors hover:bg-[#e6f3f1] dark:text-[#7fd6d2] dark:hover:bg-[#3cb8b9]/15"
+                        >
+                          {b.name}
+                        </Link>{" "}
+                        <span className="text-ink-muted">· {b.what}</span>
                       </li>
                     ))}
                   </ul>

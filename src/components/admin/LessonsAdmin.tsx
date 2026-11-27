@@ -389,7 +389,7 @@ function LessonCard({
         </div>
       </div>
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="font-mulish text-[0.7rem] font-extrabold uppercase tracking-[0.12em] text-accent">
+        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
           {TRACK_LABEL[l.track] ?? l.track} · {l.minutes} min · {l.cards} cards
         </p>
         {/* Who it's written for. */}
@@ -679,7 +679,7 @@ function Compose({
           maxLength={generator.maxInstructions}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.98rem] leading-relaxed"
+          className="mt-1 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed"
           placeholder="For example: make the Apply scenario about a client’s son asking for an extra visit, and keep the language simple."
           autoFocus
         />

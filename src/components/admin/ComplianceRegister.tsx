@@ -461,7 +461,7 @@ function SettingsForm({ data, reload }: { data: TopicData; reload: () => void })
     setDirty(true);
     setNotice(null);
   };
-  const select = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.98rem]";
+  const select = "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-base";
 
   async function save() {
     setBusy(true);

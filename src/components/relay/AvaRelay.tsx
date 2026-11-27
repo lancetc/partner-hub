@@ -588,7 +588,7 @@ function RelayWave() {
 }
 
 const Divider = ({ children }: { children: React.ReactNode }) => (
-  <p className="relay-mono flex items-center gap-2 text-[0.68rem] font-bold uppercase text-[var(--relay-dim)]">
+  <p className="relay-mono flex items-center gap-2 text-xs font-bold uppercase text-[var(--relay-dim)]">
     <span aria-hidden className="h-px flex-1 bg-[var(--relay-line)]" />
     {children}
     <span aria-hidden className="h-px flex-1 bg-[var(--relay-line)]" />
@@ -611,7 +611,7 @@ function AvaBubble({ name, label, live, children }: { name: string; label?: stri
       aria-live={live ? "polite" : undefined}
       aria-busy={live || undefined}
     >
-      <p className="relay-mono text-[0.68rem] font-bold uppercase text-[var(--relay-glow)]">
+      <p className="relay-mono text-xs font-bold uppercase text-[var(--relay-glow)]">
         {name}
         {label && <span className="text-[var(--relay-dim)]"> · {label}</span>}
       </p>
@@ -629,7 +629,7 @@ function AnswerText({ text, names = {} }: { text: string; names?: Record<string,
         "text" in p ? (
           <span key={i}>{p.text.replace(/\*\*/g, "")}</span>
         ) : (
-          <sup key={i} className="relay-mono ml-0.5 rounded border border-[var(--relay-line)] px-1 text-[0.62rem] font-bold text-[var(--relay-glow)]">
+          <sup key={i} className="relay-mono ml-0.5 rounded border border-[var(--relay-line)] px-1 text-xs font-bold text-[var(--relay-glow)]">
             {names[p.ref] ?? `${TAG_WORD[p.ref[0] as keyof typeof TAG_WORD]} ${p.ref.slice(1)}`}
           </sup>
         ),

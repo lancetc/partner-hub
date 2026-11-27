@@ -37,7 +37,7 @@ export function BottomNav() {
                 <span className={iconClass(active)}>
                   <Icon name={item.icon} className="size-5" />
                 </span>
-                <span className="whitespace-nowrap text-center text-[0.66rem] leading-tight tracking-tight">{item.short ?? item.label}</span>
+                <span className="whitespace-nowrap text-center text-xs leading-tight tracking-tight">{item.short ?? item.label}</span>
                 <NavPending className="inset-x-3 top-0" />
               </Link>
             </li>
