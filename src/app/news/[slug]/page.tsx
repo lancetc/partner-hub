@@ -10,7 +10,7 @@ import { SaveButton } from "@/components/SaveButton";
 import { StoryTile } from "@/components/StoryTile";
 import { Icon } from "@/components/Icon";
 import { RichInline, RichText } from "@/components/RichText";
-import { formatDate } from "@/lib/format";
+import { cx, formatDate } from "@/lib/format";
 import { connection } from "next/server";
 import { getDb } from "@/server/db";
 import { currentUser, meantFor } from "@/server/auth";
@@ -90,17 +90,19 @@ function articleData(story: Story) {
 function Block({ block }: { block: StoryBlock }) {
   switch (block.type) {
     case "p":
-      return <RichText text={block.text} />;
+      // flow: the words wrap around a picture set to the left or right.
+      return <RichText text={block.text} flow />;
     case "image":
       return (
         <figure
+          style={block.scale && block.align !== "full" ? ({ "--pw": `${block.scale}%` } as React.CSSProperties) : undefined}
           className={
             block.align === "left"
-              ? "sm:float-left sm:mb-3 sm:mr-6 sm:w-[45%]"
+              ? cx("sm:float-left sm:mb-3 sm:mr-6", block.scale ? "sm:w-[var(--pw)]" : "sm:w-[45%]")
               : block.align === "right"
-                ? "sm:float-right sm:mb-3 sm:ml-6 sm:w-[45%]"
+                ? cx("sm:float-right sm:mb-3 sm:ml-6", block.scale ? "sm:w-[var(--pw)]" : "sm:w-[45%]")
                 : block.align === "center"
-                  ? "mx-auto max-w-md"
+                  ? cx("mx-auto", block.scale ? "sm:w-[var(--pw)]" : "max-w-md")
                   : "clear-both"
           }
         >
@@ -127,13 +129,14 @@ function Block({ block }: { block: StoryBlock }) {
       return <h2 className="pt-4 font-serif text-2xl font-semibold text-ink">{block.text}</h2>;
     case "list":
       return (
-        <ul className="flex flex-col gap-2 pl-1">
+        // Plain blocks with the tick inline and a hanging indent (not flex), so a list wraps around a picture beside it too.
+        <ul className="space-y-2 pl-1">
           {block.items.map((i) => (
-            <li key={i} className="flex gap-3">
-              <Icon name="check" className="mt-1 size-5 shrink-0 text-accent" />
-              <span>
-                <RichInline text={i} />
+            <li key={i} className="pl-8 -indent-8">
+              <span className="inline-block w-8 indent-0 align-[-0.2em]">
+                <Icon name="check" className="size-5 text-accent" />
               </span>
+              <RichInline text={i} />
             </li>
           ))}
         </ul>

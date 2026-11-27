@@ -19,7 +19,7 @@ const wrap = (nodes: DomLike[]): DomLike => ({ nodeType: 1, nodeName: "DIV", tex
 
 /** One picture as the editor shows it. */
 export function figureHtml(b: Extract<StoryBlock, { type: "image" }>) {
-  const data = `data-src="${escapeHtml(b.src)}" data-width="${b.width}" data-height="${b.height}" data-alt="${escapeHtml(b.alt)}" data-align="${b.align}" data-caption="${escapeHtml(b.caption ?? "")}"${b.lightbox ? ` data-lightbox="1"` : ""}`;
+  const data = `data-src="${escapeHtml(b.src)}" data-width="${b.width}" data-height="${b.height}" data-alt="${escapeHtml(b.alt)}" data-align="${b.align}" data-caption="${escapeHtml(b.caption ?? "")}"${b.lightbox ? ` data-lightbox="1"` : ""}${b.scale ? ` data-scale="${b.scale}" style="width:${b.scale}%"` : ""}`;
   // The caption under it is the caption, or else the description (the owner, Nov 2026). It's shown only: the story keeps
   // each in its own data attribute.
   const shown = b.caption || b.alt;
@@ -116,6 +116,7 @@ export function storyFromDom(root: DomLike): StoryBlock[] {
           align: (["left", "right", "center", "full"] as const).find((a) => a === align) ?? "full",
           ...(attr(n, "data-caption") ? { caption: attr(n, "data-caption") } : {}),
           ...(attr(n, "data-lightbox") === "1" ? { lightbox: true } : {}),
+          ...(Number(attr(n, "data-scale")) >= 15 && attr(n, "data-align") !== "full" ? { scale: Math.round(Number(attr(n, "data-scale"))) } : {}),
         });
     } else run.push(n);
   }

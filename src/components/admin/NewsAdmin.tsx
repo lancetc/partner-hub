@@ -20,7 +20,9 @@ import { draftStoryScript } from "@/lib/storyNarration";
 import type { NarrationAudio } from "@/lib/magazine";
 import { StoryDocEditor } from "./StoryDocEditor";
 import { NewsEditionAdmin } from "./NewsEditionAdmin";
-import { readDocumentText, type DocumentText } from "@/lib/documentText";
+import type { DraftSource } from "@/lib/documentText";
+import { AiWriterBox } from "./AiWriterBox";
+import { DocumentDrop } from "./DocumentDrop";
 import { GlanceField, PracticeField } from "./StoryGlanceAdmin";
 import { StoryPictures, type PictureIdeas } from "./StoryPictures";
 import { StoryVideoField } from "./StoryVideoField";
@@ -724,14 +726,10 @@ function SeoFields({ story: s, slug, onChange }: { story: Story; slug?: string; 
   );
 }
 
-/** At the top of a new story: a brief in, a complete news item out, every field filled in to check. */
-const DOC_TYPES =
-  ".docx,.pptx,.pdf,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain";
-const DOC_OK = /\.(docx|pptx|pdf|txt|md)$/i;
-
 /**
   "Write it with AI" on a new story: drop in a document (Word, PowerPoint, PDF or text) and/or type a brief, and AI
-  fills in every field below from it (server/storyDraft). Nothing is saved until the author saves.
+  fills in every field below from it (server/storyDraft). The document is read here in the browser: only its words are
+  sent. Nothing is saved until the author saves. The same box as Topics, Discovery Paths and the Magazine (AiWriterBox).
 */
 type Written = { story: Story; imageIdea: string; imageAlt: string; pictures: PictureIdeas["pictures"] };
 
@@ -739,38 +737,12 @@ function StoryWriter({ onDraft }: { onDraft: (r: Written, makePoster: boolean) =
   // Make the poster with AI as soon as the story is written (the owner, Nov 2026): on unless the author unticks it.
   const [poster, setPoster] = useState(true);
   const [brief, setBrief] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  // The document's words, read here in the browser: the file itself is never uploaded.
-  const [doc, setDoc] = useState<DocumentText | null>(null);
-  const [reading, setReading] = useState(false);
-  const [over, setOver] = useState(false);
+  const [source, setSource] = useState<DraftSource | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const doc = source?.kind === "text" ? source.doc : null;
   const words = brief.trim().split(/\s+/).filter(Boolean).length;
-  function choose(f: File | undefined) {
-    if (!f) return;
-    setError(null);
-    if (/\.(doc|ppt)$/i.test(f.name))
-      return setError(`That’s an older Office file. Save it as .${/\.ppt$/i.test(f.name) ? "pptx" : "docx"} or PDF and try again.`);
-    if (!DOC_OK.test(f.name)) return setError("Drop a Word (.docx), PowerPoint (.pptx), PDF or text file.");
-    setFile(f);
-    setDoc(null);
-    setReading(true);
-    readDocumentText(f)
-      .then((d) => {
-        if (d.text.split(/\s+/).filter(Boolean).length < 20)
-          throw new Error(
-            "Almost no text could be read from it. If it’s a scan or all pictures, export it as a PDF with text, or paste the key part into the brief.",
-          );
-        setDoc(d);
-      })
-      .catch((e: Error) => {
-        setFile(null);
-        setError(e.message || "That document couldn’t be read.");
-      })
-      .finally(() => setReading(false));
-  }
   async function write() {
     setBusy(true);
     setError(null);
@@ -787,102 +759,45 @@ function StoryWriter({ onDraft }: { onDraft: (r: Written, makePoster: boolean) =
     }
   }
   return (
-    <section aria-labelledby="writer-heading" className="mt-5 rounded-3xl border-2 border-action/30 bg-surface p-5">
-      <h2 id="writer-heading" className="flex items-center gap-2 font-serif text-xl font-semibold">
-        <Icon name="spark" className="size-5 text-accent" /> Write it with AI
-      </h2>
-      <p className="mt-1 max-w-3xl text-ink-muted">
-        Drop in a document, or type a brief, or both. AI writes the story from it and fills in every field below: headline, standfirst, the story, category,
-        audience, At a glance, actions to try, related learning, search details and the introduction script. It uses only what’s in your document and brief, so
-        check the facts before you save.
-      </p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setOver(true);
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setOver(false);
-            choose(e.dataTransfer.files[0]);
-          }}
-          className={cx(
-            "flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-5 text-center transition-colors",
-            over ? "border-[#007f7e] bg-[#e6f3f1]" : "border-line-strong",
-          )}
-        >
-          {file ? (
-            <>
-              <Icon name="file" className="size-6 text-accent" />
-              <p className="max-w-full break-words font-semibold">{file.name}</p>
-              <p className="text-sm text-ink-muted" aria-live="polite">
-                {reading
-                  ? "Reading it…"
-                  : doc
-                    ? `${doc.kind === "PowerPoint" ? `${doc.parts} ${doc.parts === 1 ? "slide" : "slides"}` : doc.kind === "PDF" ? `${doc.parts} ${doc.parts === 1 ? "page" : "pages"}` : doc.kind} read · ${doc.text.split(/\s+/).filter(Boolean).length.toLocaleString()} words`
-                    : ""}
-              </p>
-              <button
-                type="button"
-                className={btn.quiet}
-                disabled={busy}
-                onClick={() => {
-                  setFile(null);
-                  setDoc(null);
-                }}
-              >
-                <Icon name="close" className="size-4" /> Remove
-              </button>
-            </>
-          ) : (
-            <>
-              <Icon name="upload" className="size-6 text-accent" />
-              <p className="font-semibold">Drop a document here</p>
-              <p className="text-sm text-ink-muted">Word, PowerPoint, PDF or text</p>
-              <label className={cx(btn.secondary, "cursor-pointer")}>
-                Choose a file
-                <input type="file" accept={DOC_TYPES} className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
-              </label>
-            </>
-          )}
-        </div>
-        <div className="flex flex-col">
-          <label htmlFor="story-brief" className="text-sm font-semibold">
-            {file ? "Anything to add? (optional)" : "Or write a brief"}
-          </label>
-          <textarea
-            id="story-brief"
-            rows={6}
-            value={brief}
-            maxLength={4000}
-            onChange={(e) => setBrief(e.target.value)}
-            placeholder={
-              file
-                ? "For example: write it for coordinators, and lead with what changes for them."
-                : "For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all Care Partners. Source: Trilogy Care operations update, 20 November."
-            }
-            className={cx(textarea, "mt-1 flex-1")}
-          />
-        </div>
-      </div>
-      {error && (
-        <div className="mt-3">
-          <ErrorNote text={error} />
-        </div>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" className={btn.primary} disabled={busy || reading || (file ? !doc : words < 8)} onClick={write}>
-          <Icon name="spark" className="size-4" />{" "}
-          {busy ? "Writing the story…" : done ? "Write it again" : file ? "Write the story from this document" : "Write the story"}
-        </button>
+    <AiWriterBox
+      className="mt-5"
+      intro={
+        <>
+          Drop in a document, or write a brief, or both. AI writes the story from it and fills in every field below: headline, standfirst, the story, category,
+          audience, At a glance, actions to try, related learning, search details and the introduction script. It uses only what’s in your document and brief,
+          so check the facts before you save.
+        </>
+      }
+      drop={<DocumentDrop value={source} onChange={setSource} disabled={busy} scorm={false} />}
+      brief={{
+        value: brief,
+        onChange: setBrief,
+        hasDocument: Boolean(doc),
+        disabled: busy,
+        placeholder: doc
+          ? "For example: write it for coordinators, and lead with what changes for them."
+          : "For example: From 1 December partners must log visit notes in the Trilogy Care Portal on the day of the visit, not at the end of the week. Applies to all Care Partners. Source: Trilogy Care operations update, 20 November.",
+      }}
+      settings={
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" className="size-5 accent-[var(--action)]" checked={poster} onChange={(e) => setPoster(e.target.checked)} />
           Make a poster picture as well
         </label>
-        {busy && <span className="text-sm text-ink-muted">This usually takes under a minute{file ? ", longer for a big document" : ""}.</span>}
-      </div>
-    </section>
+      }
+      action={{
+        label: done ? "Write it again" : doc ? "Write the story from this document" : "Write the story with AI",
+        busyLabel: "Writing the story…",
+        busy,
+        disabled: doc ? false : words < 8,
+        onClick: write,
+      }}
+      note={
+        <span className="text-sm text-ink-muted">
+          {busy ? `This usually takes under a minute${doc ? ", longer for a big document" : ""}.` : "Nothing is published until you save it."}
+        </span>
+      }
+    >
+      {error && <ErrorNote text={error} />}
+    </AiWriterBox>
   );
 }

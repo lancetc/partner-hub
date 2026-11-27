@@ -1022,8 +1022,9 @@ export function MagazineEditor({ id }: { id: string }) {
   const { data, error } = useApi<{ guide: AuthorGuide; paths: PathOption[] }>(`/api/admin/magazine/${id}`);
   const params = useSearchParams();
   const startView: View | null = params.get("view") === "outline" ? { kind: "outline" } : params.get("page") ? { kind: "page", id: params.get("page")! } : null;
-  // ?ai=1: straight into Draft with AI (from New Magazine).
-  const startAi = params.get("ai") === "1";
+  // ?ai=1: straight into Draft with AI (from New Magazine); ?ai=auto: and write it all now (Write it with AI, Nov 2026).
+  const startAi = params.get("ai") === "1" || params.get("ai") === "auto";
+  const autoAi = params.get("ai") === "auto";
   if (error)
     return (
       <AdminShell title="Edit guide" back={{ href: "/admin/magazine", label: "Magazine" }}>
@@ -1036,13 +1037,37 @@ export function MagazineEditor({ id }: { id: string }) {
         <p className="text-ink-muted">Loading…</p>
       </AdminShell>
     );
-  return <Editor key={data.guide.id} initial={data.guide} paths={data.paths} startView={startAi ? { kind: "outline" } : startView} startAi={startAi} />;
+  return (
+    <Editor
+      key={data.guide.id}
+      initial={data.guide}
+      paths={data.paths}
+      startView={startAi ? { kind: "outline" } : startView}
+      startAi={startAi}
+      autoAi={autoAi}
+    />
+  );
 }
 
 type View = { kind: "outline" } | { kind: "page"; id: string };
 
-function Editor({ initial, paths, startView, startAi = false }: { initial: AuthorGuide; paths: PathOption[]; startView: View | null; startAi?: boolean }) {
+function Editor({
+  initial,
+  paths,
+  startView,
+  startAi = false,
+  autoAi = false,
+}: {
+  initial: AuthorGuide;
+  paths: PathOption[];
+  startView: View | null;
+  startAi?: boolean;
+  /** Write the course now: the outline, then every page (from New Magazine's Write it with AI). */
+  autoAi?: boolean;
+}) {
   const id = initial.id;
+  // Kept from when the editor opened: it soon rewrites its address for the view it shows, which drops ?ai=auto.
+  const [autoOnce] = useState(autoAi);
   // What the server last told us about the guide: status, checks, editions.
   const [server, setServer] = useState(initial);
   // Changes kept in this browser that never reached the server (a closed tab, a lost connection).
@@ -1647,6 +1672,7 @@ function Editor({ initial, paths, startView, startAi = false }: { initial: Autho
                     })
                   }
                   startOpen={startAi || isStarter(initial.doc)}
+                  auto={autoOnce}
                 />
                 {canRevise && (
                   <MagazineRevise guideId={id} doc={draft.doc} scope="course" onApply={applyRevision} onShow={(pid) => open({ kind: "page", id: pid })} />

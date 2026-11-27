@@ -38,6 +38,8 @@ export type StoryBlock =
       caption?: string;
       /** Readers can open it full size, and zoom in on it (a slide, a chart, a document). */
       lightbox?: boolean;
+      /** Beside the text or centred: its width as a percentage of the column (dragged in the editor). The usual width when not set. */
+      scale?: number;
     };
 
 export type PolicyMeta = {

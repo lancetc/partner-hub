@@ -247,6 +247,7 @@ export function validateStory(input: Partial<Story>): Story {
         align,
         ...(caption ? { caption } : {}),
         ...(b.lightbox === true ? { lightbox: true } : {}),
+        ...(align !== "full" && Number.isFinite(b.scale) && Number(b.scale) >= 15 && Number(b.scale) <= 100 ? { scale: Math.round(Number(b.scale)) } : {}),
       });
     } else if (b?.type === "quote") {
       const t = text(b.text, 1500);

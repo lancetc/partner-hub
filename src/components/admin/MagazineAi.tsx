@@ -103,7 +103,10 @@ export function MagazineAi({
   onAddPage,
   onCourseDetails,
   startOpen,
+  auto = false,
 }: {
+  /** Propose the outline and write every page straight away (New Magazine's Write it with AI). */
+  auto?: boolean;
   guideId: string;
   onAddPage: (page: Page) => void;
   /** The course's title and standfirst as the outline proposes them, for the editor to fill in where they're blank. */
@@ -124,7 +127,7 @@ export function MagazineAi({
       <div className="border-t border-line px-4 py-5 sm:px-5">
         {error && <ErrorNote text={error} />}
         {!data && !error && <p className="text-ink-muted">Loading…</p>}
-        {data && <Drafter guideId={guideId} initial={data} onAddPage={onAddPage} onCourseDetails={onCourseDetails} />}
+        {data && <Drafter guideId={guideId} initial={data} onAddPage={onAddPage} onCourseDetails={onCourseDetails} auto={auto} />}
       </div>
     </details>
   );
@@ -135,7 +138,9 @@ function Drafter({
   initial,
   onAddPage,
   onCourseDetails,
+  auto = false,
 }: {
+  auto?: boolean;
   guideId: string;
   initial: Plan;
   onAddPage: (page: Page) => void;
@@ -223,8 +228,10 @@ function Drafter({
       if (out.course) onCourseDetails?.(out.course);
       setJobs({});
       setOutlineJob({ state: "done" });
+      return out.outline;
     } catch (e) {
       setOutlineJob({ state: "failed", error: e instanceof Error ? e.message : "That didn’t work." });
+      return null;
     }
   };
 
@@ -245,13 +252,28 @@ function Drafter({
       return false;
     }
   };
-  const generateAll = async () => {
-    if (!outline) return;
+  const generateAll = async (list: OutlinePage[] | null = outline) => {
+    if (!list) return;
     setRunning(true);
     // One page at a time, in order; a page that fails is left to retry, and the rest carry on.
-    for (let i = 0; i < outline.length; i++) if (jobs[i]?.state !== "done") await generate(i);
+    for (let i = 0; i < list.length; i++) if (jobs[i]?.state !== "done") await generate(i);
     setRunning(false);
   };
+  // Write it with AI: the outline, then every page, once, as soon as the panel opens. The address loses ?ai=auto
+  // first, so reloading the page mid-way never starts it again.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!auto || autoRan.current) return;
+    autoRan.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.set("ai", "1");
+    window.history.replaceState(window.history.state, "", url);
+    void (async () => {
+      const list = outline ?? (await propose());
+      if (list?.length) await generateAll(list);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
 
   const editPage = (i: number, patch: Partial<OutlinePage>) => setOutline((o) => o && o.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   const movePage = (i: number, dir: -1 | 1) =>

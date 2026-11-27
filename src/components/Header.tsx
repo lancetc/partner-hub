@@ -82,8 +82,9 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          {/* The feature guide, for the owner only (the superadmin): everything added from the PRDs, at a glance. */}
-          {me?.isSuperadmin && <FeatureGuideButton />}
+          {/* The feature guide, for everyone (the owner, Nov 2026): what the Hub does, at a glance. Its links into Admin
+              show only to people who can author. */}
+          {me && <FeatureGuideButton admin={me.canAuthor} />}
           {/* Only for people who can use admin: authors and administrators, and an organisation's reports. Everyone else
               sees the Hub without it, as they would with real sign-in (the owner, Nov 2026); switch profile to reach admin. */}
           {me?.canReport && (

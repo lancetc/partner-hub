@@ -16,6 +16,7 @@ import { SUBJECTS } from "@/lib/subjects";
 import { cx, formatBytes } from "@/lib/format";
 import { appendDraftSource, type DraftSource } from "@/lib/documentText";
 import { DocumentDrop } from "./DocumentDrop";
+import { AiWriterBox } from "./AiWriterBox";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon, type IconName } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
@@ -5899,7 +5900,7 @@ type DraftEvent =
   | { type: "error"; error: string };
 
 /*
-  Claude drafts the cards. The author writes a brief and can attach the source document; the
+  AI drafts the cards, in the shared Write it with AI box (AiWriterBox). The author writes a brief and/or drops in the source document; the
   document is the only source of facts. The build is shown stage by stage as Claude writes, and the
   result lands on the canvas to be edited.
 */
@@ -5956,91 +5957,75 @@ function DraftPanel({ lesson: l, onDraft, onClose }: { lesson: Lesson; onDraft: 
   }
 
   return (
-    <section aria-labelledby="draft-title" className="mb-6 rounded-3xl border-2 border-action/30 bg-surface p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="draft-title" className="flex items-center gap-2 font-serif text-2xl font-semibold">
-            <Icon name="spark" className="size-5 text-accent" /> Generate the cards with AI
-          </h2>
-          <p className="mt-1 max-w-2xl text-ink-muted">
-            Describe the topic, or drop in a policy, procedure, guide or slide deck, or both. AI builds the cards in seven stages, in order: Hook, Show,
-            Explain, Choose, Feedback, Apply and Recap. You see each stage as it’s written, then edit everything on the canvas.
-          </p>
-        </div>
+    <AiWriterBox
+      className="mb-6"
+      intro={
+        <>
+          Drop in a policy, procedure, guide or slide deck, or write a brief, or both. AI builds the cards in seven stages, in order: Hook, Show, Explain,
+          Choose, Feedback, Apply and Recap. You see each stage as it’s written, then edit everything on the canvas.
+        </>
+      }
+      aside={
         <button type="button" className={btn.quiet} onClick={onClose} disabled={busy}>
           Start from blank cards
         </button>
-      </div>
-
+      }
+      drop={<DocumentDrop value={source} onChange={setSource} disabled={busy} />}
+      brief={{
+        value: brief,
+        onChange: setBrief,
+        hasDocument: Boolean(source),
+        disabled: busy,
+        placeholder: source
+          ? "For example: write it for Care Partners, and use a cleaning visit as the scenario."
+          : "For example: Care Partners need to know what to do when a client seems confused or unwell during a visit. Use a cleaning visit as the scenario, and make sure they know to tell the coordinator the same day.",
+      }}
+      settings={
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Track">
+            <select className={input} value={audience} onChange={(e) => setAudience(e.target.value as Lesson["track"])} disabled={busy}>
+              {TRACKS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Length">
+            <select className={input} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} disabled={busy}>
+              {[3, 4, 5, 6].map((m) => (
+                <option key={m} value={m}>
+                  About {m} min
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      }
+      action={{
+        label: source ? "Write the cards from this document" : "Write the cards with AI",
+        busyLabel: "Writing the cards…",
+        busy,
+        disabled: !ready,
+        onClick: generate,
+      }}
+      note={
+        <span className="text-sm text-ink-muted">
+          {busy
+            ? `This usually takes a minute or two${source ? " with a document" : ""}. Each stage ticks off as it’s written.`
+            : "AI only uses facts from your document. Nothing is published until you review it."}
+        </span>
+      }
+    >
       {generator && !generator.connected && (
-        <p className="mt-4 rounded-2xl border-2 border-dashed border-gold p-3 text-sm">
+        <p className="rounded-2xl border-2 border-dashed border-gold bg-surface p-3 text-sm">
           <strong>Writing with AI isn’t set up yet.</strong> Add <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> to <code>.env.local</code> and
           restart the server, then generate.
         </p>
       )}
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Field label="Brief" hint="What should people be able to do afterwards? Who is it for? Any scenario to use?">
-          <textarea
-            rows={7}
-            maxLength={4000}
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            disabled={busy}
-            className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base leading-relaxed"
-            placeholder="For example: Care Partners need to know what to do when a client seems confused or unwell during a visit. Use a cleaning visit as the scenario, and make sure they know to tell the coordinator the same day."
-          />
-        </Field>
-        <div className="flex flex-col gap-4">
-          <div>
-            <span className="text-sm font-semibold">Source document (optional)</span>
-            <DocumentDrop value={source} onChange={setSource} disabled={busy} className="mt-1" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Track">
-              <select className={input} value={audience} onChange={(e) => setAudience(e.target.value as Lesson["track"])} disabled={busy}>
-                {TRACKS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Length">
-              <select className={input} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} disabled={busy}>
-                {[3, 4, 5, 6].map((m) => (
-                  <option key={m} value={m}>
-                    About {m} min
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <BuildProgress steps={BUILD_STAGES} phase={phase} counts={counts} issues={issues} title="How AI builds the cards" />
-      </div>
-
-      {error && (
-        <div className="mt-4">
-          <ErrorNote text={error} />
-        </div>
-      )}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button type="button" className={btn.primary} disabled={busy || !ready} onClick={generate}>
-          <Icon name="spark" className="size-4" /> {busy ? "Writing the cards…" : "Generate cards"}
-        </button>
-        {busy ? (
-          <span className="text-sm text-ink-muted">
-            This usually takes a minute or two{source ? " with a document" : ""}. Each stage ticks off as it’s written.
-          </span>
-        ) : (
-          <span className="text-sm text-ink-muted">AI only uses facts from your document. Nothing is published until you review it.</span>
-        )}
-      </div>
-    </section>
+      <BuildProgress steps={BUILD_STAGES} phase={phase} counts={counts} issues={issues} title="How AI builds the cards" />
+      {error && <ErrorNote text={error} />}
+    </AiWriterBox>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useId, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import {
   BLOCK_FAMILIES,
@@ -18,9 +18,10 @@ import { BUILD_STAGES } from "@/lib/buildSequence";
 import { Icon } from "./Icon";
 
 /*
-  The feature guide (the owner, Nov 2026): a button beside Admin, for the owner only, that opens a window listing every
+  The feature guide (the owner, Nov 2026): a button in the header, for everyone, that opens a window listing every
   feature added from the PRDs at a high level, grouped by where it lives, with what it is, who it's for and the problem
-  it solves. The Magazine's practice blocks are listed in brief, with the Block showcase courses for the detail.
+  it solves. The Magazine's practice blocks are listed in brief, with the Block showcase courses for the detail. Links
+  into Admin, and the block demos (in staff-only showcase courses), show only to people who can author.
 */
 
 const STATUS_TONE: Record<FeatureStatus, string> = {
@@ -38,7 +39,11 @@ function matches(f: Feature, q: string) {
   return [f.name, f.what, f.who, f.problem].join(" ").toLowerCase().includes(q);
 }
 
-export function FeatureGuideButton() {
+/** Whether this person can use Admin: its links, and the Block showcase demos (staff-only courses), show only then. */
+const CanAdmin = createContext(false);
+const reachable = (href: string, admin: boolean) => admin || !href.startsWith("/admin");
+
+export function FeatureGuideButton({ admin = false }: { admin?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   return (
@@ -55,20 +60,23 @@ export function FeatureGuideButton() {
         <span className="hidden sm:inline lg:max-xl:hidden">Features</span>
         <span className="sr-only sm:hidden lg:max-xl:inline">Features</span>
       </button>
-      <dialog
-        ref={dialog}
-        aria-labelledby="feature-guide-title"
-        onClose={() => setOpen(false)}
-        onClick={(e) => e.target === e.currentTarget && dialog.current?.close()}
-        className="m-auto h-[min(52rem,calc(100dvh-2rem))] w-[min(64rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-3xl bg-bg p-0 text-left text-ink shadow-2xl backdrop:bg-[#0b1626]/70"
-      >
-        {open && <FeatureGuide onClose={() => dialog.current?.close()} />}
-      </dialog>
+      <CanAdmin.Provider value={admin}>
+        <dialog
+          ref={dialog}
+          aria-labelledby="feature-guide-title"
+          onClose={() => setOpen(false)}
+          onClick={(e) => e.target === e.currentTarget && dialog.current?.close()}
+          className="m-auto h-[min(52rem,calc(100dvh-2rem))] w-[min(64rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-3xl bg-bg p-0 text-left text-ink shadow-2xl backdrop:bg-[#0b1626]/70"
+        >
+          {open && <FeatureGuide onClose={() => dialog.current?.close()} />}
+        </dialog>
+      </CanAdmin.Provider>
     </>
   );
 }
 
 function FeatureGuide({ onClose }: { onClose: () => void }) {
+  const admin = useContext(CanAdmin);
   const [group, setGroup] = useState<string>(ALL);
   const [query, setQuery] = useState("");
   const searchId = useId();
@@ -108,8 +116,8 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
               The Hub’s features at a glance
             </h2>
             <p className="mt-1 max-w-2xl text-ink-muted">
-              {total} features from the PRDs and {blockCount} Magazine practice blocks, grouped by where they live. Each says what it is, who it’s for and the
-              problem it solves.
+              {total} features{admin && " from the PRDs"} and {blockCount} Magazine practice blocks, grouped by where they live. Each says what it is, who it’s
+              for and the problem it solves.
             </p>
           </div>
           <button
@@ -179,16 +187,18 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
               Magazine practice blocks <span className="text-base font-normal text-ink-muted">({blockCount})</span>
             </h3>
             <p className="mt-1 max-w-3xl text-ink-muted">
-              Simulators, roleplays and calculators an author adds to a course page. Select a block’s name to try it. Each one starts from a fictional case and
-              needs its reviewers’ sign-off before it’s published. The Block showcase courses have a page for each, with the block to try.
+              Simulators, roleplays and calculators an author adds to a course page.{admin && " Select a block’s name to try it."} Each one starts from a
+              fictional case and needs its reviewers’ sign-off before it’s published. The Block showcase courses have a page for each, with the block to try.
             </p>
-            <Link
-              href="/admin/magazine"
-              onClick={onClose}
-              className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent transition-colors hover:text-[#007f7e]"
-            >
-              Open the Block showcase courses in Admin <Icon name="arrow-right" className="size-4" />
-            </Link>
+            {admin && (
+              <Link
+                href="/admin/magazine"
+                onClick={onClose}
+                className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-accent transition-colors hover:text-[#007f7e]"
+              >
+                Open the Block showcase courses in Admin <Icon name="arrow-right" className="size-4" />
+              </Link>
+            )}
             {/* Why practice blocks, and how one runs: as the other areas are introduced. */}
             {!q &&
               FORMAT_GUIDES.filter((f) => f.group === "blocks").map((f) => (
@@ -204,13 +214,17 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
                     {fam.blocks.map((b) => (
                       <li key={b.name}>
                         {/* Each block's name opens its page in the Block showcase, with the block to try. */}
-                        <Link
-                          href={blockDemoHref(b.type)}
-                          onClick={onClose}
-                          className="font-semibold text-[#007f7e] transition-colors hover:bg-[#e6f3f1] dark:text-[#7fd6d2] dark:hover:bg-[#3cb8b9]/15"
-                        >
-                          {b.name}
-                        </Link>{" "}
+                        {admin ? (
+                          <Link
+                            href={blockDemoHref(b.type)}
+                            onClick={onClose}
+                            className="font-semibold text-[#007f7e] transition-colors hover:bg-[#e6f3f1] dark:text-[#7fd6d2] dark:hover:bg-[#3cb8b9]/15"
+                          >
+                            {b.name}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold">{b.name}</span>
+                        )}{" "}
                         <span className="text-ink-muted">· {b.what}</span>
                       </li>
                     ))}
@@ -227,6 +241,7 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
 
 /** One format, explained: what it is, why it's built that way, and how it runs, step by step. */
 function FormatPanel({ f, onNavigate }: { f: FormatGuide; onNavigate: () => void }) {
+  const admin = useContext(CanAdmin);
   const steps =
     f.id === "topics"
       ? BUILD_STAGES.map((st) => ({ label: st.label, sub: st.makes, purpose: st.purpose }))
@@ -277,22 +292,25 @@ function FormatPanel({ f, onNavigate }: { f: FormatGuide; onNavigate: () => void
         ))}
       </dl>
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
-        {f.links.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            onClick={onNavigate}
-            className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
-          >
-            {l.label} <Icon name="arrow-right" className="size-3.5" />
-          </Link>
-        ))}
+        {f.links
+          .filter((l) => reachable(l.href, admin))
+          .map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={onNavigate}
+              className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
+            >
+              {l.label} <Icon name="arrow-right" className="size-3.5" />
+            </Link>
+          ))}
       </div>
     </article>
   );
 }
 
 function FeatureCard({ f, onNavigate }: { f: Feature; onNavigate: () => void }) {
+  const admin = useContext(CanAdmin);
   return (
     <li className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -311,16 +329,18 @@ function FeatureCard({ f, onNavigate }: { f: Feature; onNavigate: () => void }) 
         </div>
       </dl>
       <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-1">
-        {f.links.map((l) => (
-          <Link
-            key={l.href + l.label}
-            href={l.href}
-            onClick={onNavigate}
-            className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
-          >
-            {l.label} <Icon name="arrow-right" className="size-3.5" />
-          </Link>
-        ))}
+        {f.links
+          .filter((l) => reachable(l.href, admin))
+          .map((l) => (
+            <Link
+              key={l.href + l.label}
+              href={l.href}
+              onClick={onNavigate}
+              className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
+            >
+              {l.label} <Icon name="arrow-right" className="size-3.5" />
+            </Link>
+          ))}
       </div>
     </li>
   );

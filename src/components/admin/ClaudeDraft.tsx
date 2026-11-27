@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { btn, ErrorNote, input } from "./ui";
@@ -31,7 +31,15 @@ export function ClaudeDraftDialog<R>({
   addFields,
   onDone,
   onClose,
+  initialBrief = "",
+  initialSource = null,
+  autoStart = false,
 }: {
+  /** What the author already gave, outside the dialog (a "Write it with AI" box). */
+  initialBrief?: string;
+  initialSource?: DraftSource | null;
+  /** Start writing as soon as the dialog opens. */
+  autoStart?: boolean;
   title: string;
   intro: React.ReactNode;
   steps: readonly BuildStep[];
@@ -44,8 +52,8 @@ export function ClaudeDraftDialog<R>({
   onDone: (result: R) => void;
   onClose: () => void;
 }) {
-  const [brief, setBrief] = useState("");
-  const [source, setSource] = useState<DraftSource | null>(null);
+  const [brief, setBrief] = useState(initialBrief);
+  const [source, setSource] = useState<DraftSource | null>(initialSource);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<BuildPhase>("idle");
@@ -91,6 +99,15 @@ export function ClaudeDraftDialog<R>({
       setBusy(false);
     }
   }
+
+  // Started from a "Write it with AI" box: write straight away, once.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!autoStart || started.current || !ready) return;
+    started.current = true;
+    void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   return createPortal(
     <div

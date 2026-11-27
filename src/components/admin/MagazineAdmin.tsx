@@ -6,8 +6,10 @@ import { useState } from "react";
 import { api, useApi } from "@/lib/api";
 import { cx } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
-import { COMPLETION_MODES, GUIDE_AUDIENCES, SOURCE_FILE_TYPES, UNTITLED_COURSE, type CompletionMode, type GuideAudience } from "@/lib/magazine";
-import { describeSource, readDraftSource, wordsAsFile, type DraftSource } from "@/lib/documentText";
+import { COMPLETION_MODES, GUIDE_AUDIENCES, UNTITLED_COURSE, type CompletionMode, type GuideAudience } from "@/lib/magazine";
+import { wordsAsFile } from "@/lib/documentText";
+import { AiWriterBox } from "./AiWriterBox";
+import { DocumentsDrop, type DroppedDocument } from "./DocumentDrop";
 import { TemplatePicker, type TemplateChoice } from "./MagazineTemplates";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { AdminCard, AdminEmpty, AdminGrid, AdminListHeader, AdminToolbar, DeletedList, PlainCover, cardLink, deletedOn } from "./AdminCards";
@@ -258,40 +260,28 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
   const [standfirst, setStandfirst] = useState("");
   const [format, setFormat] = useState<"single" | "course">("single");
   const [template, setTemplate] = useState<TemplateChoice>("decide");
-  const [withAi, setWithAi] = useState(false);
+  // Write it with AI: a brief and a length for the AI, beside the documents. With either, the course is written by AI.
+  const [aiBrief, setAiBrief] = useState("");
+  const [aiMinutes, setAiMinutes] = useState(20);
   // The source documents, read here in the browser (only their words go up, however large the file) and added to the
   // new course's AI drafting once it exists. A SCORM package goes up as it is.
-  const [docs, setDocs] = useState<{ key: string; name: string; read: DraftSource }[]>([]);
+  const [docs, setDocs] = useState<DroppedDocument[]>([]);
   const [reading, setReading] = useState(0);
-  const [docProblem, setDocProblem] = useState<string | null>(null);
-  const [over, setOver] = useState(false);
-  const addDocs = (list: FileList | null | undefined) => {
-    // Copied now: the input is cleared straight after, which empties its live FileList.
-    const files = Array.from(list ?? []).filter((f) => !docs.some((x) => x.key === f.name + f.size));
-    setDocProblem(null);
-    for (const f of files) {
-      setReading((n) => n + 1);
-      readDraftSource(f)
-        .then((read) => setDocs((d) => (d.some((x) => x.key === f.name + f.size) ? d : [...d, { key: f.name + f.size, name: f.name, read }])))
-        .catch((e: Error) => setDocProblem(`${f.name}: ${e.message}`))
-        .finally(() => setReading((n) => n - 1));
-    }
-  };
   const [audience, setAudience] = useState<GuideAudience[]>(["coordinator"]);
   const [completion, setCompletion] = useState<CompletionMode>("confirm");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const withAi = docs.length > 0 || aiBrief.trim().length >= 10;
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const create = async (ai: boolean) => {
     setBusy(true);
     setProblem(null);
     try {
       // Drafted from documents with no title yet: a working title, which the AI outline replaces with its own.
-      const named = title.trim() || (withAi && docs.length ? UNTITLED_COURSE : title);
+      const named = title.trim() || (ai ? UNTITLED_COURSE : title);
       const g = await api<{ id: string }>("/api/admin/magazine", { body: { title: named, standfirst, template, audience, completion } });
       // The documents go to its AI drafting before the editor opens on it, so the outline can be proposed straight away.
-      if (withAi && docs.length) {
+      if (ai && docs.length) {
         const failed: string[] = [];
         for (const d of docs) {
           const form = new FormData();
@@ -301,8 +291,9 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
         }
         if (failed.length) window.alert(`The course was made, but these didn’t upload: ${failed.join(", ")}. Add them again in its AI drafting panel.`);
       }
+      if (ai) await api(`/api/admin/magazine/${g.id}/ai`, { method: "PUT", body: { brief: aiBrief.trim(), minutes: aiMinutes, outline: null } });
       // A course opens on its outline, to plan the pages; a guide opens on its page.
-      router.push(`/admin/magazine/${g.id}${withAi ? "?ai=1" : format === "course" ? "?view=outline" : ""}`);
+      router.push(`/admin/magazine/${g.id}${ai ? "?ai=auto" : format === "course" ? "?view=outline" : ""}`);
     } catch (err) {
       setProblem(err instanceof Error ? err.message : "That didn’t work.");
       setBusy(false);
@@ -310,22 +301,71 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
   };
 
   return (
-    <form onSubmit={create} className="mt-6 flex flex-col gap-5 rounded-3xl border border-line bg-surface p-5 sm:p-6">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void create(withAi);
+      }}
+      className="mt-6 flex flex-col gap-5 rounded-3xl border border-line bg-surface p-5 sm:p-6"
+    >
       <h2 className="font-serif text-2xl font-semibold">New Magazine</h2>
+      {/* Write it with AI (the owner, Nov 2026): as on New story, drop documents and/or write a brief, and one button makes
+          the course, proposes its outline (with its title and summary) and writes every page, for you to review. */}
+      <AiWriterBox
+        heading="h3"
+        intro={
+          <>
+            Drop in the source documents, or write a brief, or both. AI proposes the title, what learners will be able to do and an outline, then writes every
+            page. Nothing is published: you review it all in the editor.
+          </>
+        }
+        drop={<DocumentsDrop value={docs} onChange={setDocs} onReadingChange={setReading} disabled={busy} />}
+        brief={{
+          value: aiBrief,
+          onChange: setAiBrief,
+          hasDocument: docs.length > 0,
+          disabled: busy,
+          placeholder:
+            "For example: Teach new coordinators to inspect a supplier invoice and decide what to clarify before approval. Don’t invent rates or approval rules.",
+        }}
+        settings={
+          <div role="group" aria-label="How long the whole course should take" className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">Length</span>
+            {[10, 20, 30, 45, 60].map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={aiMinutes === t}
+                onClick={() => setAiMinutes(t)}
+                className={cx(
+                  "min-h-10 rounded-full px-4 text-sm font-semibold",
+                  aiMinutes === t ? "bg-action text-on-action" : "border border-line-strong bg-surface hover:bg-muted",
+                )}
+              >
+                {t} min
+              </button>
+            ))}
+          </div>
+        }
+        action={{
+          label: docs.length ? `Write the course from ${docs.length === 1 ? "this document" : "these documents"}` : "Write the course with AI",
+          busyLabel: "Starting the course…",
+          busy,
+          disabled: reading > 0 || !withAi,
+          onClick: () => void create(true),
+        }}
+        note={<span className="text-sm text-ink-muted">The editor opens and writes the outline, then every page.</span>}
+      />
       <Field
         label="Title"
-        hint={
-          withAi && docs.length
-            ? "Optional when drafting from documents: the AI proposes one with the outline."
-            : "A working title is fine; you can change it on the page."
-        }
+        hint={withAi ? "Optional when writing it with AI: it proposes one with the outline." : "A working title is fine; you can change it on the page."}
       >
         <input
           className={input}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={140}
-          required={!(withAi && docs.length)}
+          required={!withAi}
           autoFocus
           placeholder="When an invoice doesn’t match the service"
         />
@@ -364,64 +404,6 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
           ))}
         </div>
       </fieldset>
-      <label className="flex items-start gap-3 rounded-2xl border border-action/40 bg-tealtint p-4">
-        <input type="checkbox" className="mt-1 size-4 accent-[var(--color-action)]" checked={withAi} onChange={(e) => setWithAi(e.target.checked)} />
-        <span>
-          <span className="flex items-center gap-1.5 font-semibold">
-            <Icon name="spark" className="size-4 text-accent" /> Draft it with AI from documents
-          </span>
-          <span className="block text-sm text-ink-muted">
-            Drop in the source documents, say how long it should take, and AI proposes the title, what learners will be able to do and an outline for you to
-            review before any page is written.
-          </span>
-        </span>
-      </label>
-      {withAi && (
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setOver(true);
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setOver(false);
-            addDocs(e.dataTransfer.files);
-          }}
-          className={cx("flex flex-col gap-3 rounded-2xl border-2 border-dashed p-4", over ? "border-action bg-tealtint" : "border-line-strong")}
-        >
-          <label className="flex cursor-pointer flex-col items-center gap-1 py-3 text-center">
-            <Icon name="doc" className="size-7 text-accent" />
-            <span className="font-semibold">Drop the source documents here</span>
-            <span className="text-sm text-ink-muted">
-              or click to choose them: Word, PowerPoint, PDF, text or Markdown, any size (read on your computer: only the words are sent), or a SCORM package
-              (.zip) from an existing eLearning course. You can add more later.
-            </span>
-            <input type="file" multiple accept={SOURCE_FILE_TYPES} className="sr-only" onChange={(e) => (addDocs(e.target.files), (e.target.value = ""))} />
-          </label>
-          {docs.length > 0 && (
-            <ul className="flex flex-col gap-1.5">
-              {docs.map((f) => (
-                <li key={f.key} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm">
-                  <Icon name="doc" className="size-4 shrink-0 text-ink-muted" />
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  <span className="shrink-0 text-xs text-ink-muted">{describeSource(f.read)}</span>
-                  <button type="button" className="shrink-0 font-semibold text-danger hover:underline" onClick={() => setDocs((d) => d.filter((x) => x !== f))}>
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {reading > 0 && (
-            <p className="text-sm text-ink-muted" role="status">
-              Reading {reading === 1 ? "a document" : `${reading} documents`}…
-            </p>
-          )}
-          {docProblem && <p className="text-sm font-semibold text-danger">{docProblem}</p>}
-          <p className="text-xs text-ink-muted">How long it should take, and the outline, come next, on the course&rsquo;s AI drafting panel.</p>
-        </div>
-      )}
       <div hidden={withAi}>
         {format === "course" && <p className="mb-2 text-sm text-ink-muted">The first page; add the others from the course outline.</p>}
         <TemplatePicker value={template} onChange={setTemplate} name="new-template" />
@@ -456,8 +438,9 @@ function NewGuide({ onCancel }: { onCancel: () => void }) {
       </div>
       {problem && <ErrorNote text={problem} />}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={btn.primary} disabled={busy || reading > 0 || (title.trim().length < 2 && !(withAi && docs.length))}>
-          {busy ? "Creating…" : "Create and edit"}
+        <button type="submit" className={withAi ? btn.secondary : btn.primary} disabled={busy || reading > 0 || (title.trim().length < 2 && !withAi)}>
+          {withAi ? <Icon name="spark" className="size-4" /> : null}
+          {busy ? "Creating…" : withAi ? "Write the course with AI" : "Create and edit"}
         </button>
         <button type="button" className={btn.secondary} onClick={onCancel} disabled={busy}>
           Cancel

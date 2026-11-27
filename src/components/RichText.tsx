@@ -40,10 +40,19 @@ function Inlines({ c }: { c: Inline[] }) {
   A card's body text with its formatting (see lib/richText). Tables sit on white so they stay
   readable on any card colour or photo, and scroll sideways on a narrow phone rather than squash.
 */
-export function RichText({ text, className }: { text: string; className?: string }) {
+export function RichText({
+  text,
+  className,
+  flow = false,
+}: {
+  text: string;
+  className?: string;
+  /** Plain blocks with margins instead of a flex column, so the text wraps around a picture floated beside it (a news story). */
+  flow?: boolean;
+}) {
   const blocks = parseRich(text);
   return (
-    <div className={cx("flex flex-col gap-3", className)}>
+    <div className={cx(flow ? "[&>*+*]:mt-3" : "flex flex-col gap-3", className)}>
       {blocks.map((b, i) =>
         b.t === "p" ? (
           <p key={i}>
@@ -53,7 +62,7 @@ export function RichText({ text, className }: { text: string; className?: string
           (() => {
             const List = b.t;
             return (
-              <List key={i} className={cx("flex flex-col gap-1 pl-6", b.t === "ul" ? "list-disc" : "list-decimal")}>
+              <List key={i} className={cx(flow ? "space-y-1 pl-6" : "flex flex-col gap-1 pl-6", b.t === "ul" ? "list-disc" : "list-decimal")}>
                 {b.items.map((it, j) => (
                   <li key={j}>
                     <Inlines c={it} />

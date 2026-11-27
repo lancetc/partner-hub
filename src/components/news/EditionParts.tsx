@@ -135,7 +135,7 @@ export function FromTheArchive({ story }: { story: Story }) {
 }
 
 /**
-  The weekly question (the owner's design, Nov 2026): a tinted card under a dark rule, "The weekly question" with a
+  The weekly question (the owner's design, Nov 2026): a warm sand card (not teal: At a glance has that) under a dark rule, "The weekly question" with a
   small chart mark, the question, then one tap to answer. Once you have, how the community answered, most popular
   first, the leading answer in teal; the number of responses, and the way into the Community conversation.
 */
@@ -162,7 +162,7 @@ export function WeeklyQuestionCard({ initial, className }: { initial: WeeklyQues
     : [];
   const lead = counted[0]?.count ? counted[0].id : null;
   return (
-    <section aria-labelledby={`wq-${q.id}`} className={cx("rounded-xl bg-tealtint px-5 pb-4 pt-0", className)}>
+    <section aria-labelledby={`wq-${q.id}`} className={cx("rounded-xl bg-[#fbf2e1] px-5 pb-4 pt-0 dark:bg-[#3a3122]", className)}>
       <span aria-hidden className="-mx-5 block h-[3px] rounded-t-xl bg-ink" />
       <div className="mt-4 flex items-center justify-between gap-3">
         <h2 className="font-mulish text-xs font-extrabold uppercase tracking-[0.14em] text-ink-muted">The weekly question</h2>

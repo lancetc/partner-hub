@@ -76,3 +76,22 @@ describe("story pictures", () => {
     ]);
   });
 });
+
+describe("story picture sizes", () => {
+  it("keeps a picture's width (dragged in the editor) through the editor", () => {
+    const html = storyToHtml([{ type: "image", src: "/api/uploads/b.webp", width: 600, height: 800, alt: "A portrait", align: "right", scale: 28 }]);
+    expect(html).toContain('data-scale="28" style="width:28%"');
+    const fig = el("FIGURE", [el("IMG")], {
+      "data-src": "/api/uploads/b.webp",
+      "data-width": "600",
+      "data-height": "800",
+      "data-alt": "A portrait",
+      "data-align": "right",
+      "data-caption": "",
+      "data-scale": "28",
+    });
+    expect(storyFromDom(el("DIV", [fig]))).toEqual([
+      { type: "image", src: "/api/uploads/b.webp", width: 600, height: 800, alt: "A portrait", align: "right", scale: 28 },
+    ]);
+  });
+});

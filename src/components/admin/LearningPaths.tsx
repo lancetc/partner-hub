@@ -17,6 +17,9 @@ import { QrShare } from "./QrShare";
 import { LessonPicker, OrderedLessons } from "./PathLessons";
 import { ChapterBuilder, newChapterId, OutlineImport, type ChapterDraft, type OutlinePlan } from "./PathChapters";
 import { ClaudeDraftDialog } from "./ClaudeDraft";
+import { DocumentDrop } from "./DocumentDrop";
+import { AiWriterBox } from "./AiWriterBox";
+import type { DraftSource } from "@/lib/documentText";
 import { PATH_STEPS } from "@/lib/buildSequence";
 import { AssignDialog, AssignedList, type AssignedPerson } from "./PathPeople";
 import { QUIZ_DEFAULTS, type PathQuizSettings } from "@/lib/pathQuizSettings";
@@ -427,6 +430,10 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   const [importing, setImporting] = useState(false);
   // Generate with Claude: the brief dialog, then Claude's outline to review (with its overview).
   const [generating, setGenerating] = useState(false);
+  // Write it with AI, on the page: the document and brief to start the draft with.
+  const [aiSource, setAiSource] = useState<DraftSource | null>(null);
+  const [aiBrief, setAiBrief] = useState("");
+  const [aiStart, setAiStart] = useState(false);
   const [claudeOutline, setClaudeOutline] = useState<{ plan: OutlinePlan[]; draft: PathDraftResult } | null>(null);
   const [genAudience, setGenAudience] = useState("core");
   // Draft lessons created here, so they show before the catalogue reloads.
@@ -517,15 +524,46 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
   return (
     <AdminShell title={isNew ? "New Discovery Path" : name || "Discovery Path"} back={{ href: "/admin/learning-paths", label: "Discovery Paths" }}>
       {me?.canAuthor && canEdit && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-tealtint px-4 py-3 text-sm">
-          <Icon name="spark" className="size-4 text-accent" />
-          <span className="min-w-0 flex-1">
-            Start from a brief and Claude drafts the path: who it’s for, the outcomes, and chapters of topics, using your existing topics where they fit.
-          </span>
-          <button type="button" className={btn.primary} onClick={() => setGenerating(true)}>
-            <Icon name="spark" className="size-4" /> Generate with AI
-          </button>
-        </div>
+        // Write it with AI (the owner, Nov 2026): the same box as New story, Topics and New Magazine (AiWriterBox). Drop a document and/or write a brief,
+        // and AI drafts the path (who it's for, the outcomes and chapters of topics, reusing existing topics) to review.
+        <AiWriterBox
+          className="mb-6"
+          intro={
+            <>
+              Drop in a policy, course outline or slide deck, or write a brief, or both. AI drafts the path: who it’s for, the outcomes, and chapters of topics,
+              using your existing topics where they fit and naming any new ones to write. You review the outline before anything changes.
+            </>
+          }
+          drop={<DocumentDrop value={aiSource} onChange={setAiSource} />}
+          brief={{
+            value: aiBrief,
+            onChange: setAiBrief,
+            hasDocument: Boolean(aiSource),
+            placeholder: aiSource
+              ? "For example: it’s for new care coordinators in their first month."
+              : "For example: New care coordinators in their first month. They need to know who to contact, the rules that protect clients, and how to manage budgets and incidents.",
+          }}
+          settings={
+            <Field label="Who it’s for">
+              <select className={input} value={genAudience} onChange={(e) => setGenAudience(e.target.value)}>
+                <option value="core">Everyone</option>
+                <option value="partner">Care Partners</option>
+                <option value="coordinator">Care coordinators</option>
+              </select>
+            </Field>
+          }
+          action={{
+            label: aiSource ? "Write the path from this document" : "Write the path with AI",
+            busyLabel: "Writing the path…",
+            busy: generating,
+            disabled: !aiSource && aiBrief.trim().length < 10,
+            onClick: () => {
+              setAiStart(true);
+              setGenerating(true);
+            },
+          }}
+          note={<span className="text-sm text-ink-muted">Nothing changes until you accept the outline.</span>}
+        />
       )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-6">
@@ -741,9 +779,16 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                   </label>
                 }
                 addFields={(form) => form.append("audience", genAudience)}
-                onClose={() => setGenerating(false)}
+                initialBrief={aiStart ? aiBrief : ""}
+                initialSource={aiStart ? aiSource : null}
+                autoStart={aiStart}
+                onClose={() => {
+                  setGenerating(false);
+                  setAiStart(false);
+                }}
                 onDone={({ draft }) => {
                   setGenerating(false);
+                  setAiStart(false);
                   setClaudeOutline({
                     draft,
                     plan: draft.chapters.map((c, i) => ({
@@ -765,11 +810,11 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                 replacing={picked.length > 0}
                 createDrafts={createDrafts}
                 initialPlan={claudeOutline.plan}
-                heading="Claude’s outline"
+                heading="The AI’s outline"
                 blurb={
                   <>
                     <strong>{claudeOutline.draft.name}</strong>. Check each topic: change any link, or make it a new draft. Applying also fills in any empty
-                    overview fields (name, description, who it’s for and outcomes) with Claude’s wording.
+                    overview fields (name, description, who it’s for and outcomes) with its wording.
                   </>
                 }
                 onClose={() => setClaudeOutline(null)}
@@ -784,7 +829,7 @@ function PathForm({ id, catalogue, detail, reload }: { id?: string; catalogue: L
                     if (!outcomes.trim()) setOutcomes(d.outcomes.join("\n"));
                   });
                   setChaptered(next);
-                  setNotice("Claude’s outline is in. Check the topics and the overview, then save.");
+                  setNotice("The outline is in. Check the topics and the overview, then save.");
                 }}
               />
             )}

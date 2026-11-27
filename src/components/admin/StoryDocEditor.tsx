@@ -16,7 +16,15 @@ import { DescribeButton, ImageLibraryDialog, type PickedPicture } from "./ImageP
 */
 
 /** The open picture's details (the element itself is kept in a ref). */
-type Figure = { alt: string; caption: string; align: Extract<StoryBlock, { type: "image" }>["align"]; lightbox?: boolean };
+type Figure = { alt: string; caption: string; align: Extract<StoryBlock, { type: "image" }>["align"]; lightbox?: boolean; scale?: number };
+/** Quick widths, as a percentage of the column; dragging the corner sets any width between. */
+const SIZES = [
+  { value: 30, label: "Small" },
+  { value: 45, label: "Medium" },
+  { value: 60, label: "Large" },
+];
+/** A picture's usual width when none is set: beside the text, or centred. */
+const usualScale = (align: Figure["align"]) => (align === "center" ? 50 : align === "full" ? 100 : 45);
 
 const exec = (cmd: string, value?: string) => document.execCommand(cmd, false, value);
 const STYLES = [
@@ -145,6 +153,7 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
   const wrapEl = useRef<HTMLDivElement>(null);
   const panelEl = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [corner, setCorner] = useState<{ x: number; y: number } | null>(null);
   useLayoutEffect(() => {
     const fig = figureEl.current;
     const w = wrapEl.current;
@@ -159,6 +168,10 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
       const left = Math.round(Math.min(Math.max(8, fr.left - wr.left), wr.width - width - 8));
       const top = Math.round(fr.bottom - wr.top + 8);
       setPlace((p) => (p && p.top === top && p.left === left && p.width === width ? p : { top, left, width }));
+      const ir = fig.querySelector("img")?.getBoundingClientRect() ?? fr;
+      const x = Math.round((fig.dataset.align === "right" ? ir.left : ir.right) - wr.left);
+      const y = Math.round(ir.bottom - wr.top);
+      setCorner((c) => (c && c.x === x && c.y === y ? c : { x, y }));
       fig.style.marginBottom = `${(panelEl.current?.offsetHeight ?? 0) + 16}px`;
     };
     measure();
@@ -171,6 +184,36 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
       fig.style.marginBottom = "";
     };
   }, [figure]);
+
+  /** The width the pointer is asking for, as a percentage of the column, from where it is now. */
+  function scaleAt(clientX: number) {
+    const fig = figureEl.current;
+    const col = ref.current;
+    if (!fig || !col) return null;
+    const cs = getComputedStyle(col);
+    const content = col.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const ir = (fig.querySelector("img") ?? fig).getBoundingClientRect();
+    const align = fig.dataset.align;
+    const px = align === "right" ? ir.right - clientX : align === "center" ? 2 * (clientX - (ir.left + ir.right) / 2) : clientX - ir.left;
+    return Math.max(15, Math.min(100, Math.round((px / content) * 100)));
+  }
+  const dragging = useRef(false);
+  function dragTo(clientX: number) {
+    const fig = figureEl.current;
+    const pct = scaleAt(clientX);
+    if (!fig || pct === null) return;
+    // A full-width picture made smaller sits in the centre at that width.
+    if (fig.dataset.align === "full" && pct < 98) fig.dataset.align = "center";
+    fig.style.width = `${pct}%`;
+    fig.dataset.scale = String(pct);
+  }
+  function dragEnd() {
+    const fig = figureEl.current;
+    if (!dragging.current || !fig || !figure) return;
+    dragging.current = false;
+    const pct = Number(fig.dataset.scale) || undefined;
+    updateFigure({ align: (fig.dataset.align as Figure["align"]) || figure.align, scale: pct && pct < 98 ? pct : undefined });
+  }
 
   /** The picture whose details are open, outlined in the document. */
   function select(el: HTMLElement | null, f: Figure | null) {
@@ -189,6 +232,15 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
     el.dataset.align = next.align;
     if (next.lightbox) el.dataset.lightbox = "1";
     else delete el.dataset.lightbox;
+    // Full width is always the whole column; otherwise a width set by dragging (or a preset) shows on the figure.
+    const scale = next.align === "full" ? undefined : next.scale;
+    if (scale) {
+      el.dataset.scale = String(scale);
+      el.style.width = `${scale}%`;
+    } else {
+      delete el.dataset.scale;
+      el.style.width = "";
+    }
     el.querySelector("img")?.setAttribute("alt", next.alt);
     // Under the picture: its caption, or else its description, as readers will see it.
     const shown = next.caption || next.alt;
@@ -327,6 +379,7 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
                   caption: el.dataset.caption ?? "",
                   align: (el.dataset.align as Figure["align"]) || "full",
                   lightbox: el.dataset.lightbox === "1",
+                  scale: Number(el.dataset.scale) >= 15 ? Number(el.dataset.scale) : undefined,
                 });
               }
             }}
@@ -361,6 +414,38 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
             )}
             dangerouslySetInnerHTML={{ __html: initial }}
           />
+          {figure && corner && (
+            <button
+              type="button"
+              aria-label={`Resize the picture: ${figure.scale ?? usualScale(figure.align)}% of the column. Drag, or use the left and right arrow keys.`}
+              title="Drag to resize"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                dragging.current = true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => dragging.current && dragTo(e.clientX)}
+              onPointerUp={dragEnd}
+              onPointerCancel={dragEnd}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                e.preventDefault();
+                const growRight = figure.align !== "right";
+                const step = (e.key === "ArrowRight") === growRight ? 5 : -5;
+                const next = Math.max(15, Math.min(100, (figure.scale ?? usualScale(figure.align)) + step));
+                updateFigure({ align: figure.align === "full" && next < 98 ? "center" : figure.align, scale: next < 98 ? next : undefined });
+              }}
+              style={{ left: corner.x, top: corner.y }}
+              className={cx(
+                "absolute z-30 grid size-7 -translate-x-1/2 -translate-y-1/2 touch-none place-items-center rounded-full border-2 border-white bg-[#007f7e] text-white shadow-md",
+                figure.align === "right" ? "cursor-nesw-resize" : "cursor-nwse-resize",
+              )}
+            >
+              <svg aria-hidden viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+                <path d={figure.align === "right" ? "M9 3 3 9M3 5v4h4" : "M3 3l6 6M9 5v4H5"} />
+              </svg>
+            </button>
+          )}
           {figure && (
             <div
               ref={panelEl}
@@ -438,6 +523,27 @@ export function StoryDocEditor({ value, onChange }: { value: StoryBlock[]; onCha
                   Done
                 </button>
               </div>
+              {figure.align !== "full" && (
+                <div role="group" aria-label="How big the picture is" className="flex flex-wrap items-center gap-1">
+                  {/* Or drag the handle on the picture's corner. */}
+                  <span className="mr-1 font-semibold">Size</span>
+                  <span className="mr-1 tabular-nums text-ink-muted">{figure.scale ?? usualScale(figure.align)}%</span>
+                  {SIZES.map((z) => (
+                    <button
+                      key={z.label}
+                      type="button"
+                      aria-pressed={(figure.scale ?? usualScale(figure.align)) === z.value}
+                      onClick={() => updateFigure({ scale: z.value })}
+                      className={cx(
+                        "min-h-9 rounded-full border px-3",
+                        (figure.scale ?? usualScale(figure.align)) === z.value ? "border-action bg-tealtint font-semibold" : "border-line-strong",
+                      )}
+                    >
+                      {z.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
