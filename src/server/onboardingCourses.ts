@@ -1382,7 +1382,7 @@ export function myCourses(db: Db, user: User, now: Date) {
 }
 export type MyCourses = ReturnType<typeof myCourses>;
 
-/** One of the person's own enrolments, in full. Anyone else's is "not found": no title, no steps. */
+/** One of the person's own enrolments, in full, with their Get to know you answers. Anyone else's is "not found": no title, no steps. */
 export function myEnrolment(db: Db, user: User, id: unknown, now: Date) {
   ensureCourses(db, now);
   const e =

@@ -9,6 +9,10 @@ import { Icon } from "../Icon";
 import { Chip, dbtn, Problem } from "../discovery/parts";
 import { DemoNote, Progress, StepList } from "./CourseParts";
 import { GetToKnowYou } from "./GetToKnowYou";
+import type { About } from "@/lib/onboardingCourses";
+
+/** No answers yet: Get to know you opens empty if a reply comes without them (a server still running older code). */
+const NO_ANSWERS: About = { years: null, before: "", languages: "", interests: [], learn: [], note: "", updatedAt: null };
 
 /*
   One starting course (docs/onboarding.md, "Starting courses"): what you'll gain, how long it takes, where you're
@@ -87,7 +91,7 @@ export function CourseView({ id }: { id: string }) {
       )}
 
       {/* Get to know you comes before the steps (the owner, Nov 2026): who they are, then what to do. */}
-      <GetToKnowYou about={data.about} />
+      <GetToKnowYou about={data.about ?? NO_ANSWERS} />
 
       <section aria-labelledby="steps" className="mt-6">
         <h2 id="steps" className="font-serif text-2xl font-semibold">

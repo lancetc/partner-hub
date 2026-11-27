@@ -5,7 +5,8 @@ import { askForHelp, chooseRole, myCourses, saveAbout, myEnrolment, savePrefs, s
 
 /**
   Your starting courses (docs/onboarding.md, "Starting courses"): only ever the signed-in person's own. Reading it
-  brings their assignments up to date first, which is safe to repeat: it never adds a duplicate.
+  brings their assignments up to date first, which is safe to repeat: it never adds a duplicate. One enrolment
+  (?enrolment=) comes with their Get to know you answers.
 */
 export async function GET(req: Request) {
   const enrolment = new URL(req.url).searchParams.get("enrolment");
