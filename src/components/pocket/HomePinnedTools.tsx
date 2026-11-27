@@ -96,7 +96,9 @@ export function PocketToolCards() {
                   {it.label}
                   {NOTE[it.state] && ` · ${NOTE[it.state]}`}
                 </span>
-                <span className="mt-0.5 block font-serif text-lg font-semibold leading-snug group-hover:underline">{it.title}</span>
+                <span className="mt-0.5 block font-serif text-lg font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+                  {it.title}
+                </span>
                 <span className="mt-1 block text-sm text-white/85">{it.task}</span>
                 {it.pinned && (
                   <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold">

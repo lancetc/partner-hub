@@ -39,7 +39,7 @@ export default function NotFound() {
                   <Icon name={p.icon} className="size-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-semibold group-hover:underline">{p.label}</span>
+                  <span className="block font-semibold transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">{p.label}</span>
                   <span className="block text-sm text-ink-muted">{p.note}</span>
                 </span>
               </Link>

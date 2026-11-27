@@ -109,7 +109,10 @@ export function WebinarIndex() {
               )}
             </p>
             <h2 className="font-serif text-xl font-semibold leading-snug">
-              <Link href={`/webinars/${w.id}`} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+              <Link
+                href={`/webinars/${w.id}`}
+                className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+              >
                 {w.title}
               </Link>
             </h2>

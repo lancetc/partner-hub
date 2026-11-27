@@ -173,7 +173,10 @@ export function StoryLibraryAdmin() {
                   </span>
                 )}
                 <div className="min-w-0">
-                  <Link href={`/admin/characters/${c.id}`} className="font-serif text-xl font-semibold underline-offset-2 hover:underline">
+                  <Link
+                    href={`/admin/characters/${c.id}`}
+                    className="font-serif text-xl font-semibold transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
+                  >
                     {c.name}
                   </Link>
                   <p className="text-sm text-ink-muted">{c.narrativeRole || "No role in stories written yet"}</p>
@@ -245,7 +248,7 @@ export function StoryLibraryAdmin() {
               <li key={p.id} className={cx(box, "flex flex-wrap items-center gap-3")}>
                 <Link
                   href={`/admin/characters/plans/${p.id}`}
-                  className="min-w-0 flex-1 basis-72 font-serif text-lg font-semibold underline-offset-2 hover:underline"
+                  className="min-w-0 flex-1 basis-72 font-serif text-lg font-semibold transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
                 >
                   {p.title}
                 </Link>

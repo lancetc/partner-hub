@@ -291,7 +291,10 @@ export function ProblemDesk() {
                   {!t.verified && <Badge tone="warn">Candidate: not yet verified</Badge>}
                   {t.sample && <Badge>Sample</Badge>}
                 </div>
-                <Link href={`/admin/problems/${t.id}`} className="mt-2 block font-serif text-lg font-semibold underline-offset-2 hover:underline">
+                <Link
+                  href={`/admin/problems/${t.id}`}
+                  className="mt-2 block font-serif text-lg font-semibold transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
+                >
                   {t.title}
                 </Link>
                 <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-4">

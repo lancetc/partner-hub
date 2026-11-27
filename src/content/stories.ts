@@ -3,6 +3,8 @@
   policy details are real Trilogy announcements; each is labelled as demo in the UI.
 */
 
+import type { NarrationAudio } from "@/lib/magazine";
+
 export type CategoryId = "trilogy" | "policy" | "spotlight" | "case-study" | "learning" | "industry";
 
 export const categories: { id: CategoryId; label: string }[] = [
@@ -65,9 +67,16 @@ export type Story = {
   audience: ("partner" | "coordinator")[];
   /** How the story appears in search results and when shared; the title and standfirst are used when these are empty. */
   seo?: { title?: string; description?: string };
+  /**
+    A voiced introduction (the owner, Nov 2026), as on Magazine pages: a short script read in the Magazine Editorial Voice
+    (OpenAI's Alloy). Learners hear it only once an author approves the recording, and only while it matches the script.
+  */
+  narration?: StoryNarration;
   /** When it was last edited in admin (for search engines' "updated" date). */
   updated?: string;
 };
+
+export type StoryNarration = { script: string; audio?: NarrationAudio; approved?: boolean };
 
 export type IconName = "clock" | "shield" | "heart" | "leaf" | "chat" | "home" | "spark" | "doc" | "people" | "sun" | "route" | "book";
 
@@ -76,10 +85,10 @@ export const stories: Story[] = [
     slug: "partners-shaping-the-hub",
     category: "trilogy",
     title: "Partners and coordinators are shaping the new Partner Hub",
-    dek: "Short lessons, clearer onboarding and news that explains what changes in practice. Here is what the pilot is testing, and how to tell us what works.",
+    dek: "The Partner Hub has grown a lot since the pilot began, shaped by Care Partners and coordinators. Here’s what’s new, and how to tell us what works.",
     byline: "Trilogy Care team",
     date: "2026-10-21T22:00:00Z",
-    readMinutes: 4,
+    readMinutes: 2,
     visual: {
       variant: "petals",
       tone: "navy",
@@ -93,27 +102,64 @@ export const stories: Story[] = [
     body: [
       {
         type: "p",
-        text: "The Partner Hub brings news, practical learning and onboarding into one place. It is built for the people who deliver and coordinate support every day: physiotherapists, nurses, gardeners, cleaners, and internal and external care coordinators.",
+        text: "The Partner Hub brings news, practical learning, tools and onboarding into one place. It’s built for the people who deliver and coordinate support every day: physiotherapists, nurses, gardeners, cleaners, Care Partners, and internal and external care coordinators. Your feedback in the pilot has shaped what came next.",
       },
-      { type: "h2", text: "What the pilot is testing" },
+      { type: "h2", text: "What’s new" },
+      { type: "h3", text: "Learning that fits the day" },
       {
         type: "list",
         items: [
-          "Lessons of two to five minutes that you can finish between visits",
-          "Scenarios where your choice changes what happens next",
-          "An onboarding checklist that shows what you need to do and what we are still checking",
-          "Short policy briefings that start with what changes for you",
+          "**Topics** of about ten minutes, each built around a realistic situation and a decision, with your place saved and a download for offline.",
+          "**Discovery Paths** for each role, with a voiced introduction, a quiz and a certificate, and **My Discovery** to build your own.",
+          "**Magazine courses** for when you have longer: story-led, with simulations, roleplays and calculators built in.",
+          "**Ava**, a care coordinator out on the road, who checks in on how you’re going.",
+        ],
+      },
+      { type: "h3", text: "Help at the point of work" },
+      {
+        type: "list",
+        items: [
+          "**Work Tools** with short, approved Job Aids for the task in front of you.",
+          "**Favourites** for the lines and tools you use most, and a **Companion Drawer** with golden scripts and a co-contribution quick-calc for live calls.",
+          "**Myth vs Reality**: approved answers to the questions clients ask most.",
+        ],
+      },
+      { type: "h3", text: "Learning from each other" },
+      {
+        type: "list",
+        items: [
+          "**Community** case threads, where experienced coordinators share how they’d handle a dilemma.",
+          "**Digital Members**: the fictional people in your training, whose lives carry on between courses.",
+          "**Business Field Notes**, where Care Partner principals share honest business decisions with each other.",
+        ],
+      },
+      { type: "h3", text: "For Care Partner businesses" },
+      {
+        type: "list",
+        items: [
+          "Planning labs for when to hire, whether you can take on the next ten clients, what a missed service really costs and whether you can fund the next 90 days.",
+          "A **Local Referral Studio** to practise a truthful conversation with a GP practice or hospital social worker.",
+          "A private **Caseload-to-Margin** calculator for your own planning.",
+        ],
+      },
+      { type: "h3", text: "Onboarding and requirements" },
+      {
+        type: "list",
+        items: [
+          "**Your setup** shows what you need to do and what we’re still checking.",
+          "Onboarding courses chosen for your role.",
+          "**Required training** and policy acknowledgements, each with a due date, in one place.",
         ],
       },
       {
         type: "p",
-        text: "Everything you see in this prototype is demonstration content. It helps us check the experience before real requirements and policy are connected.",
+        text: "Much of what you see is still demonstration content. It helps us check the experience before real requirements and policy are connected, and every practice case uses fictional people.",
       },
       { type: "quote", text: "If a lesson helps you decide what to do on your next visit, it has done its job.", cite: "Pilot learning lead (demo)" },
       { type: "h2", text: "Tell us what works" },
       {
         type: "p",
-        text: "Use the feedback link on any lesson, or talk with your coordinator. We are especially keen to hear where something was unclear or took longer than it should.",
+        text: "Use the feedback link on any Topic, or talk with your coordinator. We’re especially keen to hear where something was unclear, took longer than it should, or didn’t match how the work really happens.",
       },
     ],
   },
@@ -227,19 +273,62 @@ export const stories: Story[] = [
     slug: "three-minute-lessons",
     category: "learning",
     title: "Learning that fits between visits",
-    dek: "Why the new lessons are short, visual and built around a single decision.",
+    dek: "Why Topics are short, built around one decision, and easy to pick up and put down, and how a Topic works, card by card.",
     byline: "Learning team (demo)",
     date: "2026-10-16T22:00:00Z",
-    readMinutes: 3,
+    readMinutes: 2,
     visual: { variant: "grid", tone: "teal", icon: "book", alt: "Tiled teal squares like a set of cards" },
     audience: ["partner", "coordinator"],
     relatedLesson: "a-little-extra-time",
     body: [
       {
         type: "p",
-        text: "Each lesson focuses on one useful outcome. You will see one card at a time, with a short explanation and one clear action. Audio and video are optional: everything essential is available to read.",
+        text: "Care work doesn’t leave much time at a desk. Between one visit and the next there might be ten minutes in the car, or a quiet half hour at the end of the day. Topics are built for those gaps.",
       },
-      { type: "p", text: "Your place is saved as you go, so you can leave and resume later." },
+      { type: "h2", text: "One idea, about ten minutes" },
+      {
+        type: "p",
+        text: "Each Topic focuses on one useful outcome, the kind of thing you’ll use on your next visit or call. You see one card at a time, with short text on screen and the explaining in narration you can listen to. Audio and video are optional: everything essential is there to read.",
+      },
+      { type: "h2", text: "How a Topic runs" },
+      { type: "p", text: "Every Topic follows the same seven steps, so you always know where you are:" },
+      {
+        type: "list",
+        items: [
+          "**Hook.** A presenter opens with a moment from a working day, and why it matters.",
+          "**Show.** A realistic, fictional situation you can picture, which the rest of the Topic comes back to.",
+          "**Explain.** The key ideas, two or three cards, short and to the point.",
+          "**Choose.** You make the call in the situation.",
+          "**Feedback.** What happens after each choice, with a way to try again, and what good looked like.",
+          "**Apply.** A quick check on the key ideas, then a short “Your turn” about your own work, with an example answer to compare.",
+          "**Recap.** Two to four points to remember, and one thing to do on the job.",
+        ],
+      },
+      { type: "h2", text: "Practice, not just reading" },
+      {
+        type: "p",
+        text: "The heart of every Topic is a decision. Reading about a rule is one thing; deciding what to do when a client asks you to stay longer, or a family member wants their mum’s budget details, is another. Seeing what happens after a poorer choice, then trying again, is how judgement builds.",
+      },
+      { type: "h2", text: "Made for a working day" },
+      {
+        type: "list",
+        items: [
+          "**Your place is saved** as you go, so you can leave mid-Topic and pick it up later.",
+          "**Download for offline** keeps a Topic, or a whole path, on your device for when reception drops.",
+          "**Listen instead of reading** when you’re between appointments: each card has narration.",
+          "**Save what helps.** Highlight a line or save a Topic to Favourites to find it again in a hurry.",
+        ],
+      },
+      { type: "h2", text: "From Topics to paths" },
+      {
+        type: "p",
+        text: "Topics stand on their own, but they add up. A **Discovery Path** puts them in order for a role or a goal, with a voiced introduction, a quiz and a certificate. Your manager might assign one, or you can build your own in **My Discovery** by saying what you want to get better at.",
+      },
+      { type: "h2", text: "When you’ve got longer" },
+      {
+        type: "p",
+        text: "For deeper, story-led learning there’s the **Magazine**: longer courses with practice built in, for when you have time at a desk. Topics and Magazine courses work together: a Topic to get the idea, a course to practise it properly.",
+      },
     ],
   },
   {
@@ -323,18 +412,67 @@ export const stories: Story[] = [
     slug: "physio-spotlight",
     category: "spotlight",
     title: "Small goals, steady progress: a physiotherapy partner’s approach",
-    dek: "Setting goals clients care about, and explaining them in plain words.",
+    dek: "How one physiotherapy partner sets goals clients care about, builds progress into everyday routines, and keeps families and coordinators in the loop.",
     byline: "Partner stories (demo)",
     date: "2026-10-12T01:00:00Z",
-    readMinutes: 5,
-    visual: { variant: "arc", tone: "teal", icon: "heart", alt: "Teal arcs with a heart motif" },
+    readMinutes: 2,
+    visual: { variant: "arc", tone: "teal", icon: "heart", alt: "A physiotherapist working with an older client at home" },
     audience: ["partner"],
     body: [
       {
         type: "p",
-        text: "Our demo physiotherapy partner, Priya, starts each program by asking what the client wants to be able to do again. It might be reaching the letterbox or getting into the garden.",
+        text: "Our demo physiotherapy partner, Priya, starts every program with the same question: *what do you want to be able to do again?* It might be reaching the letterbox, getting into the garden, or walking to the bus stop for the Tuesday social group.",
       },
-      { type: "p", text: "Goals expressed in the client’s own words make it easier to explain progress to families and coordinators." },
+      { type: "h2", text: "Goals in the client’s own words" },
+      {
+        type: "p",
+        text: "Priya writes each goal the way the client says it, then breaks it into steps she can measure. “I want to get to the letterbox” becomes standing from a chair without using her hands, then walking to the front door, then to the gate, and finally the letterbox and back without a rest.",
+      },
+      {
+        type: "quote",
+        text: "People don’t come to physio to do exercises. They come to get a piece of their life back. I start there.",
+        cite: "Priya, physiotherapy partner (demo)",
+      },
+      { type: "h2", text: "Progress built into the day" },
+      {
+        type: "p",
+        text: "Home programs work best when they fit what the person already does. Priya links exercises to daily routines: sit-to-stands before morning tea, heel raises while the kettle boils, a lap of the hallway after lunch. Short, regular practice beats a long list nobody keeps up.",
+      },
+      {
+        type: "list",
+        items: [
+          "Three or four exercises at most, each tied to something they do every day.",
+          "A large-print sheet on the fridge, with a picture of each one.",
+          "A simple tick-box for the week, so progress is something they can see.",
+        ],
+      },
+      { type: "h2", text: "Plain words for families and coordinators" },
+      {
+        type: "p",
+        text: "Because each goal is in the client’s own words, progress is easy to explain. Instead of a list of measurements, Priya’s notes say what’s changed in their life: “Mrs Hall walked to her letterbox and back this week with her stick, without stopping.” Families understand it straight away, and so does the coordinator planning the next quarter.",
+      },
+      { type: "h2", text: "Working with the coordinator" },
+      {
+        type: "p",
+        text: "Priya keeps the coordinator close, especially when things change. A fall, a new walking aid, a hospital stay or a goal that’s been reached are all reasons to call. Physio often stops after a hospital admission and doesn’t restart, and a quick message to the coordinator is how it gets back into the plan.",
+      },
+      {
+        type: "list",
+        items: [
+          "**Report changes early**, especially falls, new pain or a drop in confidence.",
+          "**Agree the plan and its cost** before adding sessions, so it fits the person’s budget and they understand their contribution.",
+          "**Respect the person’s choices.** If they want to keep gardening on uneven ground, work out how to do it more safely together, rather than telling them to stop.",
+        ],
+      },
+      { type: "h2", text: "What coordinators can take from it" },
+      {
+        type: "p",
+        text: "Start with what matters to the person, and the rest of the plan follows. Goals in their own words make it easier to choose services, to explain the budget, and to see whether the support is working. If a client’s physio has quietly stopped, it’s worth asking why.",
+      },
+      {
+        type: "p",
+        text: "On the Hub, *Look before you help: spot the hazard* and the Dignity of Risk practice in the Magazine are good next steps for thinking about safety and choice at home.",
+      },
     ],
   },
   {
@@ -364,17 +502,107 @@ export const stories: Story[] = [
     slug: "coordinator-learning-path",
     category: "learning",
     title: "A new learning path for coordinators",
-    dek: "Scenario practice for judgement, communication and escalation.",
+    dek: "Your guide to the Partner Hub as a Care Coordinator: where to start, the paths and courses that build your practice, and the tools you’ll reach for between visits.",
     byline: "Learning team (demo)",
     date: "2026-10-08T22:00:00Z",
-    readMinutes: 2,
+    readMinutes: 5,
     visual: { variant: "dots", tone: "teal", icon: "route", alt: "Teal dots forming a path" },
     audience: ["coordinator"],
     relatedLesson: "noticing-a-change",
     body: [
       {
         type: "p",
-        text: "The coordinator path starts with a scenario about noticing a change in a client’s needs. More scenarios will follow after the pilot.",
+        text: "Care Coordinators are at the centre of everything Trilogy Care does, and the Partner Hub has grown up around your work. This is a short tour: where to start, what to do next, and where to find help in the middle of a busy day.",
+      },
+      { type: "h2", text: "Start with your setup" },
+      {
+        type: "p",
+        text: "**Your setup**, in the account menu, shows what you need to do before you start and what Trilogy Care is still checking. Once you’re active it becomes **Your profile and requirements**. Your onboarding courses are chosen for your role, and they start with a short *Get to know you* step so the Hub can point you to the right things.",
+      },
+      {
+        type: "p",
+        text: "Anything you’re required to complete, like a policy to read and acknowledge or a path you’ve been assigned, shows in **Required training** with its due date.",
+      },
+      { type: "h2", text: "Your Discovery Paths" },
+      {
+        type: "p",
+        text: "A Discovery Path is a route through short Topics in order, grouped into chapters, with a voiced introduction, a quiz and a certificate at the end. Two are written for you:",
+      },
+      { type: "h3", text: "Care Coordination" },
+      {
+        type: "p",
+        text: "Everything you need to start coordinating care with Trilogy Care: meet your team, learn the rules that protect older people, then practise the everyday work of case notes, budgets, weekly checks and incident reporting. It’s for new coordinators in the weeks before their first clients, and a handy refresher for everyone else.",
+      },
+      { type: "h3", text: "Support at Home in Practice" },
+      {
+        type: "p",
+        text: "The second stage, for your first six months: the money conversations, working with your Care Partner and the Trilogy Care Portal, managing budgets through real quarters, AT–HM requests, and responding well when things go wrong. Each Topic stands on its own, so start with whatever comes up first with your clients.",
+      },
+      {
+        type: "p",
+        text: "Alongside them: **Aged Care in a Nutshell**, a 30-minute orientation to the whole system; **Getting Invoices Paid**, for working with suppliers; and the three **SIRS** paths on incident management. Your manager may assign a path with a due date, and you can build your own in **My Discovery** from what you want to get better at.",
+      },
+      { type: "h2", text: "Topics: ten minutes between visits" },
+      {
+        type: "p",
+        text: "Topics are the Hub’s microlearning. Each one takes about ten minutes, one card at a time, and keeps your place so you can stop and pick it up later. Every Topic follows the same shape: a hook, a realistic situation, the key ideas, a decision, what happens next, a quick check and a summary to take away. There’s more on how they work in [Learning that fits between visits](/news/three-minute-lessons).",
+      },
+      { type: "h2", text: "Magazine courses: when you have longer" },
+      {
+        type: "p",
+        text: "The Magazine holds longer, story-led courses for a desk and a coffee. Each page has a voiced introduction you can listen to, and most have practice built in. For coordinators, start with:",
+      },
+      {
+        type: "list",
+        items: [
+          "**Dot at quarter end: what’s really left?** Reading a sizeable balance late in the quarter, and planning with Dot, not around her.",
+          "**Dot comes home: the 72-hour discharge pivot.** Bringing someone home from hospital safely when the handover has gaps.",
+          "**Mrs Patel’s Week 8.** Recovering a service that’s gone wrong, and hearing what she wants.",
+          "**Can this be funded? A quote and an invoice, line by line.** Telling “could be funded” from “approved for this person”.",
+          "**Fiona calls: when the gardener doesn’t come.** A difficult family call, practised with a fictional caller.",
+          "**What would you do? Two conversations about choice.** Real dilemmas, and how experienced coordinators handled them.",
+        ],
+      },
+      { type: "h2", text: "Practice that feels like the job" },
+      {
+        type: "p",
+        text: "Many courses include practice blocks: simulations and roleplays built on fictional cases, so you can make a call, see what happens and try again without anyone getting hurt. A few you’ll meet:",
+      },
+      {
+        type: "list",
+        items: [
+          "**Tough Phone Call:** take a hard call from a fictional client or family member, and get a debrief in your own words.",
+          "**Spot the Signal:** find the concern hidden across a few ordinary updates.",
+          "**Where Is the Line?** Decide, request by request, what’s within your role.",
+          "**Red Pen:** mark up a weak case note or care plan goal, then rewrite it.",
+          "**Invoice X-Ray:** read a quote or invoice line by line before it’s approved.",
+          "**Pass the Baton:** hand a case on so nothing falls between roles.",
+        ],
+      },
+      { type: "h2", text: "Help in the middle of the day" },
+      {
+        type: "list",
+        items: [
+          "**Work Tools** hold short, approved Job Aids for the task in front of you, always the current version, with a route to urgent help.",
+          "**Favourites**, in the header, keep the lines you’ve highlighted and the tools you use most. It also opens the Companion Drawer, with golden scripts, a co-contribution quick-calc and incident first steps for use on a live call.",
+          "**Myth vs Reality** gives a 30-second, approved answer to the questions clients ask most, with an email reply to copy.",
+          "The **Glossary** explains Support at Home terms in plain words, and the **client journey map** shows all ten stages from enquiry to exit.",
+        ],
+      },
+      { type: "h2", text: "Learning from each other" },
+      {
+        type: "p",
+        text: "The **Community** is where coordinators compare notes. In *What Would You Do?* case threads you write your own first take on a fictional dilemma before reading a reviewed case note and how others responded. You’ll also meet the **Digital Members**, the fictional people who turn up across your training, and follow their lives as they carry on. And Ava, a care coordinator out on the road, checks in from time to time to see how you’re going.",
+      },
+      { type: "h2", text: "Seeing your progress" },
+      {
+        type: "p",
+        text: "**Your learning** on the Topics page shows what’s required, what’s in progress and what you’ve finished, with certificates for each path. **My Capabilities** brings together the evidence of what you can do, so it’s about capability, not just completions.",
+      },
+      { type: "h2", text: "Tell us what’s missing" },
+      {
+        type: "p",
+        text: "The Hub keeps changing with your feedback. Use the feedback link on any Topic, or tell your team leader what would help. If there’s a situation you keep meeting that isn’t covered yet, ask for it in My Discovery: the learning team sees every request.",
       },
     ],
   },

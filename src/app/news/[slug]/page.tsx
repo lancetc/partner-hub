@@ -20,6 +20,8 @@ import { HighlightArea } from "@/components/favourites/HighlightArea";
 import { SaveSection } from "@/components/favourites/Highlighter";
 import { SavedMarkChips } from "@/components/favourites/SavedMarks";
 import { FavouriteBanner } from "@/components/favourites/FavouriteBanner";
+import { StoryIntro } from "@/components/news/StoryIntro";
+import { textHash } from "@/lib/magazineNarration";
 
 export function generateStaticParams() {
   return stories.map((s) => ({ slug: s.slug }));
@@ -161,45 +163,76 @@ async function StoryArticle({
   const edition = story.updated ?? story.date;
   const firstHeading = story.body.findIndex((b) => b.type === "h2");
   const hasOpening = (firstHeading < 0 ? story.body : story.body.slice(0, firstHeading)).some((b) => b.type === "p" || b.type === "list" || b.type === "quote");
+  // The voiced introduction, once an author has approved a recording of this script.
+  const n = story.narration;
+  const intro = n?.approved && n.audio && n.audio.scriptHash === textHash(n.script.trim()) ? { script: n.script, audio: n.audio } : null;
 
   return (
-    <article className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
+    <article className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:pt-8">
       {/* JSON.stringify output can't close the script tag: "<" is escaped. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleData(story)).replace(/</g, "\\u003c") }} />
-      {draft && (
-        <p className="mb-3 rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
-          <strong>Author preview.</strong> This is the saved version from the News editor. Learners see it only once it’s published.
-        </p>
-      )}
-      <Link href="/" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink">
-        <Icon name="arrow-left" className="size-4" /> All news
-      </Link>
 
-      <div className="mx-auto mt-4 max-w-3xl">
-        {/* Opened from Favourites: the saved passage, where it stands against this edition, and the way back. */}
-        {!draft && <FavouriteBanner className="mb-6" />}
-        <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{categoryLabel(story.category)}</p>
-        <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">{story.title}</h1>
-        <p className="mt-4 text-xl text-ink-muted">{story.dek}</p>
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-y border-line py-3">
-          <p className="font-mulish text-sm text-ink-muted">
-            {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
-          </p>
-          <div className="flex items-center gap-2">
-            {/* Save the opening without selecting anything; each subheading has its own. */}
-            {!draft && hasOpening && (
-              <span className="print:hidden">
-                <SaveSection source="news" id={story.slug} revisionId={edition} sectionId="s0" label="Save the opening" />
-              </span>
-            )}
-            <SaveButton id={`story:${story.slug}`} title={story.title} withLabel />
+      {/*
+        The cinematic hero (the owner, Nov 2026): the story's own picture edge to edge across the page's sheet, as on the
+        homepage, with the category, headline, standfirst and details on a navy wash at its lower left. On a phone the
+        picture sits above the words instead, so nothing is read over a busy photo. A story with no picture shows its
+        patterned artwork behind the same words.
+      */}
+      <header className="hub-hero-bleed relative isolate overflow-hidden bg-[#0b2340] text-white">
+        <div className="relative aspect-[16/10] sm:absolute sm:inset-0 sm:aspect-auto">
+          <StoryVisual {...story.visual} className="size-full" iconSize="size-16" priority />
+          <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#0b2340] to-transparent sm:hidden" />
+          <span
+            aria-hidden
+            className="absolute inset-0 hidden bg-[linear-gradient(90deg,rgb(11_35_64/0.94)_0%,rgb(11_35_64/0.78)_36%,rgb(11_35_64/0.3)_68%,rgb(11_35_64/0)_100%)] sm:block"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 hidden bg-[linear-gradient(0deg,rgb(11_35_64/0.85)_0%,rgb(11_35_64/0.4)_42%,rgb(11_35_64/0)_72%)] sm:block"
+          />
+        </div>
+        <Link
+          href="/"
+          className="absolute left-4 top-4 z-10 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#0b2340]/55 px-4 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-[#0b2340]/80 sm:left-8 sm:top-6 lg:left-12"
+        >
+          <Icon name="arrow-left" className="size-4" /> All news
+        </Link>
+        <div className="relative mx-auto flex max-w-7xl flex-col justify-end px-5 pb-7 pt-1 sm:min-h-[29rem] sm:px-8 sm:pb-10 sm:pt-24 lg:min-h-[31rem] lg:px-12 lg:pb-12">
+          <div className="max-w-[47rem]">
+            <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.16em] text-[#bdeeee]">{categoryLabel(story.category)}</p>
+            <h1 className="mt-3 text-balance font-serif text-[2.1rem] font-semibold leading-[1.08] tracking-tight [text-shadow:0_2px_18px_rgb(0_0_0/0.3)] sm:text-5xl lg:text-[3.4rem] lg:leading-[1.04]">
+              {story.title}
+            </h1>
+            <p className="mt-4 text-lg text-white/85 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] sm:text-xl">{story.dek}</p>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/20 pt-4">
+              <p className="font-mulish text-sm text-white/80">
+                {story.byline} · <time dateTime={story.date}>{formatDate(story.date)}</time> · {story.readMinutes} min read
+              </p>
+              <div className="flex items-center gap-2">
+                {/* Save the opening without selecting anything; each subheading has its own. */}
+                {!draft && hasOpening && (
+                  <span className="print:hidden">
+                    <SaveSection source="news" id={story.slug} revisionId={edition} sectionId="s0" label="Save the opening" onColour />
+                  </span>
+                )}
+                <SaveButton id={`story:${story.slug}`} title={story.title} withLabel onDark />
+              </div>
+            </div>
           </div>
         </div>
+      </header>
+
+      <div className="mx-auto mt-8 max-w-5xl empty:hidden">
+        {draft && (
+          <p className="rounded-2xl border-2 border-dashed border-gold px-3 py-2 text-sm">
+            <strong>Author preview.</strong> This is the saved version from the News editor. Learners see it only once it’s published.
+          </p>
+        )}
+        {/* Opened from Favourites: the saved passage, where it stands against this edition, and the way back. */}
+        {!draft && <FavouriteBanner />}
       </div>
 
-      <StoryVisual {...story.visual} className="mx-auto mt-8 aspect-[21/9] max-w-5xl rounded-3xl" iconSize="size-14" priority />
-
-      <div className="mx-auto mt-10 grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:mt-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
         {/* flow-root, not flex: pictures set to the left or right let the text wrap around them. */}
         <HighlightArea
           source="news"
@@ -208,6 +241,7 @@ async function StoryArticle({
           off={Boolean(draft)}
           className="flow-root text-lg leading-relaxed text-ink [&>*+*]:mt-5"
         >
+          {intro && <StoryIntro script={intro.script} audio={intro.audio} />}
           {p && (
             <div className="rounded-2xl border border-line bg-muted p-5 text-base">
               <p className="flex items-center gap-2 font-semibold">

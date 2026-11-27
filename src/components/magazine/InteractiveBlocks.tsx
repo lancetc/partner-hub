@@ -1184,17 +1184,46 @@ function Budget({ block: b, ctx }: { block: BudgetBlock; ctx: InteractiveContext
   const spent = b.services.reduce((n, s) => n + quarter(s.id), 0);
   const left = b.budget - spent;
   const used = b.budget ? Math.min(100, (spent / b.budget) * 100) : 0;
+  // As a utilisation calculator: the share of the budget the plan uses, and what happens to what's left.
+  const unspent = Math.max(0, left);
+  const carries = b.carryover ? Math.min(unspent, b.carryover) : 0;
+  const lost = b.carryover ? unspent - carries : 0;
   return (
     <div className={cx(column, "rounded-3xl border border-line-strong bg-surface p-5 sm:p-7")}>
       <p className={kicker}>
-        <Icon name="money" className="size-5" /> Budget simulator
+        <Icon name="money" className="size-5" /> {b.utilisation ? "Utilisation calculator" : "Budget simulator"}
       </p>
       {b.title && <p className="font-serif text-2xl font-semibold">{b.title}</p>}
       <p className="mt-1 text-sm text-ink-muted">
-        A {b.weeks}-week budget of {formatMoney(b.budget)}. Change how often each service happens and what it costs, and watch the balance. The figures are made
-        up for practice.
+        {b.utilisation
+          ? `A ${b.weeks}-week budget of ${formatMoney(b.budget)}. Change which services happen, how often and what they cost, and see how much of the budget the plan uses and what would be left. The figures are made up for practice.`
+          : `A ${b.weeks}-week budget of ${formatMoney(b.budget)}. Change how often each service happens and what it costs, and watch the balance. The figures are made up for practice.`}
       </p>
-      <div className="mt-4 rounded-2xl bg-muted p-4" role="status" aria-live="polite">
+      {b.utilisation && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-3" role="status" aria-live="polite">
+          <p className="rounded-2xl bg-tealtint p-4">
+            <span className="block text-sm text-ink-muted">Budget used</span>
+            <span className="font-mulish text-3xl font-extrabold tabular-nums">{b.budget ? Math.round((spent / b.budget) * 100) : 0}%</span>
+          </p>
+          <p className="rounded-2xl bg-muted p-4">
+            <span className="block text-sm text-ink-muted">{b.carryover ? "Unspent, carries over" : "Left unspent"}</span>
+            <span className="font-mulish text-2xl font-extrabold tabular-nums">{formatMoney(b.carryover ? carries : unspent)}</span>
+          </p>
+          {b.carryover ? (
+            <p className={cx("rounded-2xl p-4", lost > 0 ? "bg-[#fff1d6] text-[#4a2e00] dark:bg-[#4a3a1a] dark:text-[#f5d9a0]" : "bg-muted")}>
+              <span className={cx("block text-sm", lost > 0 ? "" : "text-ink-muted")}>Unspent, doesn’t carry over</span>
+              <span className="font-mulish text-2xl font-extrabold tabular-nums">{formatMoney(lost)}</span>
+            </p>
+          ) : null}
+          {b.carryover ? (
+            <p className="text-sm text-ink-muted sm:col-span-3">
+              Up to {formatMoney(b.carryover)} of what’s unspent carries over to next quarter. Anything above that is no longer available for this person’s
+              care.
+            </p>
+          ) : null}
+        </div>
+      )}
+      <div className="mt-4 rounded-2xl bg-muted p-4" role={b.utilisation ? undefined : "status"} aria-live={b.utilisation ? undefined : "polite"}>
         <div className="flex flex-wrap items-end justify-between gap-2">
           <p>
             <span className="block text-sm text-ink-muted">Planned</span>

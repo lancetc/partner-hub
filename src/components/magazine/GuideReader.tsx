@@ -266,38 +266,68 @@ export function CourseOverview({ guide, base, preview = false }: { guide: Reader
         </div>
         {(() => {
           // A course in chapters lists its pages under chapter headings (h3), each page then an h4; otherwise one list as before.
-          const listClass = "flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface";
+          // Each page as a card with its picture (the owner, Nov 2026): the page's own top picture, else its first picture, else the course cover.
+          const listClass = "flex flex-col gap-3";
+          const pictureOf = (p: Page) => {
+            if (p.hero?.src) return p.hero;
+            for (const sec of p.sections)
+              for (const bl of sec.blocks) {
+                const m = bl.type === "image" || bl.type === "textMedia" ? bl.media : undefined;
+                if (m?.src) return m;
+              }
+            return guide.cover ? { src: guide.cover, position: undefined } : null;
+          };
+          const chip = "rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-ink-muted";
           const item = (p: Page, i: number, Heading: "h3" | "h4") => {
-            const state = finished.has(p.id) ? "Finished" : guide.progress.lastPage === p.id ? "In progress" : "Not started";
+            const done = finished.has(p.id);
+            const state = done ? "Finished" : guide.progress.lastPage === p.id ? "In progress" : "Not started";
+            const pic = pictureOf(p);
             return (
-              <li key={p.id} className="group relative flex items-start gap-4 p-4 sm:p-5">
-                <span
-                  className={cx(
-                    "grid size-10 shrink-0 place-items-center rounded-full font-mulish text-sm font-extrabold",
-                    finished.has(p.id) ? "bg-[#2f8f5b] text-white" : "bg-tealtint text-ink",
+              <li key={p.id} className="tile tile-card group flex items-stretch">
+                <div className="relative min-h-28 w-28 shrink-0 bg-gradient-to-br from-[#3cb8b9]/40 to-[#fab53d]/30 sm:w-44">
+                  {pic && (
+                    // eslint-disable-next-line @next/next/no-img-element -- a course picture, sized by its card
+                    <img src={pic.src} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" style={{ objectPosition: pic.position }} />
                   )}
-                  aria-hidden
-                >
-                  {finished.has(p.id) ? <Icon name="check" className="size-5" /> : i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <Heading className="font-serif text-xl font-semibold leading-snug">
-                    <Link
-                      href={`${base}/${p.id}`}
-                      className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4"
-                    >
-                      {pageTitle(guide.doc, p, guide.title)}
-                    </Link>
-                  </Heading>
-                  {p.purpose && <p className="mt-1 text-ink-muted">{p.purpose}</p>}
-                  <p className="mt-2 flex flex-wrap gap-x-3 text-sm text-ink-muted">
-                    <span>{guide.pageMinutes[p.id]} min</span>
-                    {p.kind === "assessment" && <span>Quiz</span>}
-                    {!p.required && <span>Optional</span>}
-                    {!preview && <span className={cx(state === "Finished" && "font-semibold text-[#0f5b3a] dark:text-[#8fe0b5]")}>{state}</span>}
-                  </p>
+                  <span
+                    className={cx(
+                      "absolute left-2.5 top-2.5 grid size-9 place-items-center rounded-full font-mulish text-sm font-extrabold shadow-sm",
+                      done ? "bg-[#2f8f5b] text-white" : "bg-white/90 text-[#102a43]",
+                    )}
+                    aria-hidden
+                  >
+                    {done ? <Icon name="check" className="size-5" /> : i + 1}
+                  </span>
                 </div>
-                <Icon name="arrow-right" className="mt-3 size-4 shrink-0 text-accent" />
+                <div className="flex min-w-0 flex-1 items-center gap-3 p-4 sm:p-5">
+                  <div className="min-w-0 flex-1">
+                    <Heading className="font-serif text-xl font-semibold leading-snug">
+                      <Link href={`${base}/${p.id}`} className="tile-link">
+                        {pageTitle(guide.doc, p, guide.title)}
+                      </Link>
+                    </Heading>
+                    {p.purpose && <p className="mt-1 text-ink-muted">{p.purpose}</p>}
+                    <p className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      <span className={cx(chip, "inline-flex items-center gap-1")}>
+                        <Icon name="clock" className="size-3.5" /> {guide.pageMinutes[p.id]} min
+                      </span>
+                      {p.kind === "assessment" && <span className={chip}>Quiz</span>}
+                      {!p.required && <span className={chip}>Optional</span>}
+                      {!preview && (
+                        <span
+                          className={cx(
+                            chip,
+                            state === "Finished" && "bg-[#e3f5ee] text-[#155c3b] dark:bg-[#1f4a3a] dark:text-[#bdeed6]",
+                            state === "In progress" && "bg-[#fff1d6] text-[#6b4a12] dark:bg-[#4a3a1a] dark:text-[#f5d9a0]",
+                          )}
+                        >
+                          {state}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <Icon name="arrow-right" className="size-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+                </div>
               </li>
             );
           };
@@ -1128,7 +1158,7 @@ function PageLink({ href, dir, label, title, locked }: { href: string; dir: "bac
       <span className={cx("inline-flex items-center gap-1 text-sm", next ? "text-on-action/85" : "text-accent", dir === "on" && "justify-end")}>
         {dir === "back" && <Icon name="arrow-left" className="size-4" />} {label} {dir === "on" && <Icon name="arrow-right" className="size-4" />}
       </span>
-      <span className="font-semibold group-hover:underline">{title}</span>
+      <span className="font-semibold transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">{title}</span>
     </Link>
   );
 }

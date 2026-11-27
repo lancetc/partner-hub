@@ -355,7 +355,9 @@ function Choose({ home, onStart, reload }: { home: Home; onStart: (k: "example" 
           className="group flex flex-col items-start gap-2 rounded-3xl bg-muted p-6 text-left ring-1 ring-line hover:ring-action"
         >
           <span className={eyebrow}>Learn</span>
-          <span className="font-serif text-2xl font-semibold group-hover:underline">Explore a fictional example</span>
+          <span className="font-serif text-2xl font-semibold transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+            Explore a fictional example
+          </span>
           <span className="text-ink-muted">
             A made-up business with 35 participants and one coordinator. Change any assumption and see why the answer moves. Nothing is saved.
           </span>
@@ -367,7 +369,7 @@ function Choose({ home, onStart, reload }: { home: Home; onStart: (k: "example" 
           className="group flex flex-col items-start gap-2 rounded-3xl bg-[#102a43] p-6 text-left text-white ring-1 ring-line hover:ring-action disabled:cursor-not-allowed disabled:opacity-80"
         >
           <span className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">Private to your business</span>
-          <span className="font-serif text-2xl font-semibold group-enabled:group-hover:underline">Plan my business</span>
+          <span className="font-serif text-2xl font-semibold transition-colors group-enabled:group-hover:text-[#007f7e]">Plan my business</span>
           <span className="text-white/85">
             {home.access
               ? `Enter ${home.access.orgName}’s own aggregate figures. Starts blank: no example income is carried over. Saved only if you choose to.`

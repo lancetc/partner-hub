@@ -54,9 +54,7 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
             </Link>
           </h3>
           <p className="text-on-hero/85">{story.dek}</p>
-          {story.policy.effective && (
-            <p className="font-mulish text-sm text-on-hero/80">Effective {formatDate(story.policy.effective)}</p>
-          )}
+          {story.policy.effective && <p className="font-mulish text-sm text-on-hero/80">Effective {formatDate(story.policy.effective)}</p>}
           <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
             {story.relatedLesson && (
               <Link
@@ -83,7 +81,10 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
             <SaveButton id={saveId} title={story.title} className="-mr-2 -mt-3" />
           </div>
           <h3 className="font-serif text-3xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-4xl lg:text-[2.35rem]">
-            <Link href={href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4">
+            <Link
+              href={href}
+              className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+            >
               {story.title}
             </Link>
           </h3>
@@ -104,7 +105,10 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
             <SaveButton id={saveId} title={story.title} className="-mr-2 -mt-3" />
           </div>
           <h3 className="font-serif text-2xl font-semibold leading-tight text-ink">
-            <Link href={href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+            <Link
+              href={href}
+              className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+            >
               {story.title}
             </Link>
           </h3>
@@ -125,7 +129,10 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
           <SaveButton id={saveId} title={story.title} className="-mr-2 -mt-3" />
         </div>
         <h3 className="-mt-3 font-serif text-[1.3rem] font-semibold leading-snug text-ink">
-          <Link href={href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+          <Link
+            href={href}
+            className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+          >
             {story.title}
           </Link>
         </h3>
@@ -144,7 +151,10 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Category story={story} />
           <h3 className="font-serif text-lg font-semibold leading-snug text-ink">
-            <Link href={href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+            <Link
+              href={href}
+              className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+            >
               {story.title}
             </Link>
           </h3>
@@ -165,7 +175,10 @@ export function StoryTile({ story, size = "standard", className }: { story: Stor
         <SaveButton id={saveId} title={story.title} className="-mr-2 -mt-3" />
       </div>
       <h3 className="font-serif text-xl font-semibold leading-snug text-ink">
-        <Link href={href} className="after:absolute after:inset-0 after:content-[''] group-hover:underline group-hover:underline-offset-4">
+        <Link
+          href={href}
+          className="after:absolute after:inset-0 after:content-[''] transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]"
+        >
           {story.title}
         </Link>
       </h3>

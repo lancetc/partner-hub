@@ -90,17 +90,14 @@ export function Workspace({ slug, beats, progress }: { slug: string; beats: numb
         </p>
       </section>
       <Notes slug={slug} />
-      <Link
-        href="/community"
-        target="_blank"
-        rel="noopener"
-        className={cx(panel, "group flex items-start gap-3 hover:ring-[#008282]")}
-      >
+      <Link href="/community" target="_blank" rel="noopener" className={cx(panel, "group flex items-start gap-3 hover:ring-[#008282]")}>
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-tealtint text-accent">
           <Icon name="chat" className="size-5" />
         </span>
         <span className="min-w-0">
-          <span className="block font-semibold group-hover:underline">Discuss this topic with peers</span>
+          <span className="block font-semibold transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+            Discuss this topic with peers
+          </span>
           <span className="block text-sm text-ink-muted">Ask a question or share how you handle it, in the Community. Opens in a new tab.</span>
         </span>
       </Link>

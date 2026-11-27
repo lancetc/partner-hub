@@ -12,7 +12,11 @@ import { resources } from "@/content/resources";
 import { AdminShell, Badge, btn, ErrorNote, Field, input } from "./ui";
 import { Icon } from "../Icon";
 import { StoryVisual } from "../StoryVisual";
-import { ImageDropZone } from "./ImagePicker";
+import { ImageDropZone, type PictureContext } from "./ImagePicker";
+import { namesIn } from "./PeopleReferences";
+import { plainText } from "@/lib/richText";
+import { textHash } from "@/lib/magazineNarration";
+import type { NarrationAudio } from "@/lib/magazine";
 import { StoryDocEditor } from "./StoryDocEditor";
 
 /*
@@ -268,7 +272,8 @@ function Form({ initial }: { initial: Detail | null }) {
         </div>
 
         <aside className="flex flex-col gap-5">
-          <PosterField visual={s.visual} onChange={(visual) => set({ visual })} />
+          <PosterField visual={s.visual} onChange={(visual) => set({ visual })} context={storyPictureContext(s)} />
+          <NarrationField slug={initial?.slug ?? null} narration={s.narration} onChange={(narration) => set({ narration })} />
           <div className="grid gap-4 rounded-2xl border border-line p-4">
             <Field label="Category">
               <select className={input} value={s.category} onChange={(e) => set({ category: e.target.value as Story["category"] })}>
@@ -385,14 +390,105 @@ const POSITIONS = [
 ];
 
 /** The poster image: a drop zone, the image library, a description, and which part shows when it's cropped. */
-function PosterField({ visual: v, onChange }: { visual: Story["visual"]; onChange: (v: Story["visual"]) => void }) {
+/**
+  The story's voiced introduction (the owner, Nov 2026), as on a Magazine page: write a short script, record it in the
+  Magazine Editorial Voice (Alloy), listen, and approve it for learners. Editing the script after recording needs a new
+  recording before it can be approved again. Saved with the story.
+*/
+function NarrationField({ slug, narration, onChange }: { slug: string | null; narration: Story["narration"]; onChange: (n: Story["narration"]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const script = narration?.script ?? "";
+  const audio = narration?.audio;
+  const matches = Boolean(audio && audio.scriptHash === textHash(script.trim()));
+  const words = script.trim() ? script.trim().split(/\s+/).length : 0;
+  async function record() {
+    if (!slug) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { audio: rec } = await api<{ audio: NarrationAudio }>(`/api/admin/stories/${encodeURIComponent(slug)}/narration`, { body: { script } });
+      onChange({ script, audio: rec });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section aria-label="Voiced introduction" className="flex flex-col gap-3 rounded-2xl border border-line p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <Icon name="volume" className="size-4 text-accent" /> Voiced introduction
+      </h2>
+      <Field label="Script" hint={`Read in the Magazine Editorial Voice (Alloy). About 70 to 130 words works well${words ? `: this is ${words}` : ""}.`}>
+        <textarea
+          rows={6}
+          className={textarea}
+          value={script}
+          onChange={(e) => onChange(e.target.value.trim() ? { ...narration, script: e.target.value, approved: false } : undefined)}
+        />
+      </Field>
+      <button type="button" className={btn.secondary} disabled={busy || !slug || !script.trim()} onClick={() => void record()}>
+        <Icon name="mic" className="size-4" /> {busy ? "Recording…" : audio ? "Record again" : "Record it"}
+      </button>
+      {!slug && <p className="text-sm text-ink-muted">Save the story first, then record its introduction.</p>}
+      {error && <ErrorNote text={error} />}
+      {audio && (
+        <>
+          <audio controls src={audio.src} className="w-full" preload="none" />
+          {matches ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[var(--color-action)]"
+                checked={Boolean(narration?.approved)}
+                onChange={(e) => onChange({ script, audio, approved: e.target.checked })}
+              />
+              <span>
+                <span className="font-semibold">Approved for learners</span>
+                <span className="block text-ink-muted">They see “Listen to the introduction” at the top of the story once it’s saved.</span>
+              </span>
+            </label>
+          ) : (
+            <p className="text-sm font-semibold text-[#7a4b00] dark:text-gold">
+              The script has changed since this was recorded. Record it again to approve it.
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** "Start from this story": a description for the poster from the story's headline, standfirst and opening, and the people it names (the owner, Nov 2026). */
+function storyPictureContext(s: Story): PictureContext {
+  const texts = s.body.flatMap((b) => (b.type === "p" ? [b.text] : []));
+  const opening = plainText(texts[0] ?? "")
+    .split(/(?<=[.!?])\s+/)
+    .slice(0, 2)
+    .join(" ")
+    .slice(0, 320);
+  const about = plainText(s.dek ?? "").trim();
+  const prompt = [
+    `A poster photo for a news story called “${s.title.trim() || "an untitled story"}”${about ? `, about ${about[0].toLowerCase()}${about.slice(1).replace(/\.$/, "")}` : ""}`,
+    opening ? `The scene: ${opening}` : "",
+  ]
+    .filter(Boolean)
+    .join(". ")
+    .replace(/[.\s]*$/, ".");
+  return { label: "Start from this story", prompt, names: namesIn(s.dek ?? "", ...texts.slice(0, 3)), noun: "story" };
+}
+
+function PosterField({ visual: v, onChange, context }: { visual: Story["visual"]; onChange: (v: Story["visual"]) => void; context?: PictureContext }) {
   return (
     <section aria-label="Poster image" className="flex flex-col gap-3 rounded-2xl border border-line p-4">
       <h2 className="text-sm font-semibold">Poster image</h2>
       <ImageDropZone
         picture={v.photo}
         label="Drag the poster image here"
-        onChange={(p) => onChange({ ...v, photo: p ? { ...p, position: v.photo?.position } : undefined })}
+        // A picture from the library or Pexels brings its description with it.
+        onChange={(p, _how, alt) => onChange({ ...v, ...(p && alt ? { alt } : {}), photo: p ? { ...p, position: v.photo?.position } : undefined })}
+        context={context}
         preview={<StoryVisual variant={v.variant} tone={v.tone} icon={v.icon} alt={v.alt || "Poster image"} photo={v.photo} className="size-full" />}
       />
       {v.photo && (

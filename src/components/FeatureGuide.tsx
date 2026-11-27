@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useId, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/format";
-import { BLOCK_FAMILIES, FEATURE_GROUPS, FEATURE_STATUS, type Feature, type FeatureStatus } from "@/content/featureGuide";
+import {
+  BLOCK_FAMILIES,
+  FEATURE_GROUPS,
+  FEATURE_STATUS,
+  FORMAT_GUIDES,
+  PATH_FLOW,
+  type Feature,
+  type FeatureStatus,
+  type FormatGuide,
+} from "@/content/featureGuide";
+import { BUILD_STAGES } from "@/lib/buildSequence";
 import { Icon } from "./Icon";
 
 /*
@@ -147,6 +157,14 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
               {g.title} <span className="text-base font-normal text-ink-muted">({g.features.length})</span>
             </h3>
             <p className="mt-1 max-w-3xl text-ink-muted">{g.intro}</p>
+            {/* What Topics and Discovery Paths are, why, and how they run: the formats, above the features around them. */}
+            {FORMAT_GUIDES.some((f) => f.group === g.id) && !q && (
+              <div className="mt-4 flex flex-col gap-4">
+                {FORMAT_GUIDES.filter((f) => f.group === g.id).map((f) => (
+                  <FormatPanel key={f.id} f={f} onNavigate={onClose} />
+                ))}
+              </div>
+            )}
             <ul className="mt-4 grid gap-3 lg:grid-cols-2">
               {g.features.map((f) => (
                 <FeatureCard key={f.name} f={f} onNavigate={onClose} />
@@ -188,6 +206,73 @@ function FeatureGuide({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** One format, explained: what it is, why it's built that way, and how it runs, step by step. */
+function FormatPanel({ f, onNavigate }: { f: FormatGuide; onNavigate: () => void }) {
+  const steps =
+    f.id === "topics"
+      ? BUILD_STAGES.map((st) => ({ label: st.label, sub: st.makes, purpose: st.purpose }))
+      : (f.steps ?? PATH_FLOW).map((st) => ({ label: st.label, sub: "", purpose: st.purpose }));
+  const label = "font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent";
+  return (
+    <article className="rounded-3xl border border-line bg-gradient-to-br from-[#3cb8b9]/10 via-surface to-[#fab53d]/10 p-5 sm:p-6">
+      <h4 className="font-serif text-2xl font-semibold">{f.title}</h4>
+      <div className="mt-3 grid gap-5 lg:grid-cols-2">
+        <div>
+          <p className={label}>What it is</p>
+          <p className="mt-1">{f.what}</p>
+        </div>
+        <div>
+          <p className={label}>Why it’s built this way</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {f.why.map((w) => (
+              <li key={w} className="flex gap-2">
+                <Icon name="check" className="mt-1 size-4 shrink-0 text-accent" /> <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <p className={cx(label, "mt-5")}>How it runs</p>
+      <ol className={cx("mt-2 grid gap-2", f.id === "topics" ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-4")}>
+        {steps.map((st, i) => (
+          <li key={st.label} className="flex flex-col gap-1 rounded-2xl bg-surface p-3.5 ring-1 ring-line">
+            <span className="flex items-center gap-2">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#007f7e] font-mulish text-xs font-extrabold text-white" aria-hidden>
+                {i + 1}
+              </span>
+              <span className="font-semibold leading-snug">
+                {st.label}
+                {st.sub && <span className="block text-xs font-normal text-ink-muted">{st.sub}</span>}
+              </span>
+            </span>
+            <span className="text-sm text-ink-muted">{st.purpose}</span>
+          </li>
+        ))}
+      </ol>
+      <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+        {f.also.map((a) => (
+          <div key={a.label}>
+            <dt className="font-semibold">{a.label}</dt>
+            <dd className="text-ink-muted">{a.text}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
+        {f.links.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            onClick={onNavigate}
+            className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-[#007f7e]"
+          >
+            {l.label} <Icon name="arrow-right" className="size-3.5" />
+          </Link>
+        ))}
+      </div>
+    </article>
   );
 }
 

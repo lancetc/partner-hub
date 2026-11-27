@@ -90,7 +90,9 @@ export function WorkTools() {
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">
               Business planning · {planner?.access ? `private to ${planner.access.orgName}` : "fictional example"}
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Caseload-to-Margin & Hiring Capacity</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+              Caseload-to-Margin & Hiring Capacity
+            </span>
             <span className="mt-1 block">
               <span className="font-semibold">Use when:</span> deciding when to plan recruitment, and what growth could do to workload, margin and cash.
             </span>
@@ -114,7 +116,9 @@ export function WorkTools() {
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">
               Business planning · demo data only · private to {bench?.access?.orgName}
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Contractor Network Builder</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+              Contractor Network Builder
+            </span>
             <span className="mt-1 block">
               <span className="font-semibold">Use when:</span> planned services can’t yet be reliably covered, and you’re building local contractor capacity.
             </span>
@@ -133,7 +137,9 @@ export function WorkTools() {
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">
               Business growth · training mode · private to {planner?.access?.orgName}
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">Local Referral Studio</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+              Local Referral Studio
+            </span>
             <span className="mt-1 block">
               <span className="font-semibold">Use when:</span> you’re about to meet a GP practice or hospital team. Practise a conversation, then create an
               approved one-pager.
@@ -153,7 +159,9 @@ export function WorkTools() {
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">
               Service recovery · demo data only · private to {planner?.access?.orgName}
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">28-Day Trust Check</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+              28-Day Trust Check
+            </span>
             <span className="mt-1 block">
               <span className="font-semibold">Use when:</span> a missed visit, a statement query or an unanswered call needs following up with the person, an
               owner and a check that it helped.
@@ -173,7 +181,9 @@ export function WorkTools() {
             <span className="block font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-[#7fd4d4]">
               Your team · demo data only · private to {planner?.access?.orgName}
             </span>
-            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">First 100 Days</span>
+            <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+              First 100 Days
+            </span>
             <span className="mt-1 block">
               <span className="font-semibold">Use when:</span> you’ve hired a coordinator and want to plan observations, approved learning and a scoped
               readiness conversation, never an HR record.
@@ -205,7 +215,9 @@ export function WorkTools() {
                     {AID_TEMPLATES[r.template].label}
                     {r.minutes > 0 && ` · about ${r.minutes} min`}
                   </span>
-                  <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug group-hover:underline">{r.title}</span>
+                  <span className="mt-0.5 block font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+                    {r.title}
+                  </span>
                   {r.trigger && (
                     <span className="mt-1 block">
                       <span className="font-semibold">Use when:</span> {r.trigger}

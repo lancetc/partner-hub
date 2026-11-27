@@ -3,6 +3,7 @@ import { categories, type PolicyMeta, type Story, type StoryBlock } from "@/cont
 import { lessons } from "@/content/lessons";
 import { resources } from "@/content/resources";
 import { plainText } from "@/lib/richText";
+import { textHash } from "@/lib/magazineNarration";
 import { audit, type Db } from "./db";
 import { canAuthor, HttpError, type User } from "./auth";
 import { originalStories, originalStory, refreshStories } from "./storyRegistry";
@@ -103,6 +104,29 @@ const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date
 const localPicture = (src: string) => /^\/api\/uploads\/[\w.-]+$/.test(src) || /^\/images\/[\w.-]+$/.test(src);
 
 /** Checks a story from the editor and puts it in the stored shape. */
+/** A story's voiced introduction, as saved: its script, a recording uploaded to the Hub, and approval only for a recording of this script. */
+function cleanNarration(v: Story["narration"] | undefined): Story["narration"] | undefined {
+  const script = text(v?.script, 1200);
+  if (!script) return undefined;
+  const a = v?.audio;
+  const audio =
+    a && typeof a.src === "string" && /^\/api\/uploads\/[\w.-]+\.mp3$/.test(a.src) && Number.isFinite(a.seconds) && typeof a.scriptHash === "string"
+      ? {
+          src: a.src,
+          seconds: Number(a.seconds),
+          words: Array.isArray(a.words) ? a.words : null,
+          scriptHash: a.scriptHash,
+          voice: String(a.voice ?? ""),
+          at: String(a.at ?? ""),
+          ...(a.provider ? { provider: String(a.provider) } : {}),
+          ...(a.profile ? { profile: String(a.profile) } : {}),
+          ...(a.model ? { model: String(a.model) } : {}),
+          ...(typeof a.cost === "number" ? { cost: a.cost } : {}),
+        }
+      : undefined;
+  return { script, ...(audio ? { audio } : {}), ...(audio && v?.approved === true && audio.scriptHash === textHash(script) ? { approved: true } : {}) };
+}
+
 export function validateStory(input: Partial<Story>): Story {
   const title = text(input.title, 160);
   if (!title) throw new HttpError(400, "Give the story a title.");
@@ -211,6 +235,7 @@ export function validateStory(input: Partial<Story>): Story {
     ...(relatedResources.length ? { relatedResources } : {}),
     audience,
     ...(seo.title || seo.description ? { seo } : {}),
+    ...(cleanNarration(input.narration) ? { narration: cleanNarration(input.narration) } : {}),
   };
 }
 

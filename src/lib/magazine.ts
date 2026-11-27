@@ -505,7 +505,20 @@ export type PollBlock = Base & { type: "poll"; question: string; options: { id: 
 export type WallBlock = Base & { type: "wall"; prompt: string; placeholder?: string; anonymous?: boolean } & WithPhoto;
 /** A fictional care budget: learners change services' frequency and cost and watch the balance. */
 export type BudgetService = { id: string; name: string; unit: string; cost: number; perWeek: number; max: number };
-export type BudgetBlock = Base & { type: "budget"; title: string; budget: number; weeks: number; services: BudgetService[] };
+/**
+  With `utilisation` it reads as a utilisation calculator (the owner, Nov 2026): how much of the budget the plan uses, what
+  would be left unspent, and, with `carryover`, how much of that carries over to the next quarter and how much wouldn't.
+*/
+export type BudgetBlock = Base & {
+  type: "budget";
+  title: string;
+  budget: number;
+  weeks: number;
+  services: BudgetService[];
+  utilisation?: boolean;
+  /** Dollars of unspent budget that carry over (Support at Home: up to $1,000 or 10% of the quarterly budget, whichever is greater). */
+  carryover?: number;
+};
 
 /*
   Reflect and apply (docs/magazine-reflect-apply.md): four unscored blocks. A learner's entries are private
@@ -2039,11 +2052,13 @@ export function readGuideDoc(value: unknown, { draft = false }: { draft?: boolea
         const money = (v: unknown, max: number) => Math.min(max, Math.max(0, Math.round(Number(v) * 100) / 100 || 0));
         const budget = money(o.budget, 10_000_000);
         if (!budget) unfinished(`${where} needs a budget.`);
+        const carryover = money(o.carryover, 10_000_000);
         return {
           ...base,
           type: "budget",
           title: str(o.title, `${where} title`, { max: 160 }) ?? "",
           budget,
+          ...(o.utilisation === true && { utilisation: true, ...(carryover > 0 && { carryover }) }),
           weeks: Math.min(52, Math.max(1, Math.round(Number(o.weeks) || 13))),
           services: raw.map((sv, i) => {
             const max = Math.min(100, Math.max(1, Number(sv?.max) || 7));

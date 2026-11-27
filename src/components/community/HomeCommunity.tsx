@@ -128,7 +128,9 @@ export function HomeCommunity() {
                       )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-semibold leading-snug group-hover:underline">{p.title}</span>
+                      <span className="block font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+                        {p.title}
+                      </span>
                       <span className="mt-0.5 block truncate text-sm text-ink-muted">
                         {author.name} · {author.role} · {space.emoji} {space.name}
                       </span>

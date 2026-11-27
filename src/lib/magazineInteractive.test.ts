@@ -168,6 +168,19 @@ describe("confidence, reflection and the budget", () => {
     expect(b.services[0].perWeek).toBe(10);
     expect(() => first({ type: "budget", title: "", budget: 0, weeks: 13, services: [] })).toThrow(GuideDocError);
   });
+
+  it("reads as a utilisation calculator, with a carryover only when it's on", () => {
+    const services = [{ id: "v1", name: "Personal care", unit: "hour", cost: 75, perWeek: 2, max: 10 }];
+    const on = first({ type: "budget", title: "", budget: 7200, weeks: 13, utilisation: true, carryover: 1000, services }) as Extract<
+      Block,
+      { type: "budget" }
+    >;
+    expect(on).toMatchObject({ utilisation: true, carryover: 1000 });
+    // No carryover without utilisation, and no utilisation unless it's switched on.
+    const off = first({ type: "budget", title: "", budget: 7200, weeks: 13, carryover: 1000, services }) as Extract<Block, { type: "budget" }>;
+    expect(off.utilisation).toBeUndefined();
+    expect(off.carryover).toBeUndefined();
+  });
 });
 
 describe("hotspots, sorting, sequencing, matching and fill in the blank", () => {

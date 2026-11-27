@@ -118,7 +118,9 @@ export function ActivityDirectory({ items, audience }: { items: DirectoryItem[];
                       {ACTIVITY_KINDS[i.kind as ActivityKind]} · {i.practice}
                       {i.minutes ? ` · about ${i.minutes} min` : ""}
                     </p>
-                    <h2 className="font-serif text-xl font-semibold leading-snug group-hover:underline">{i.title}</h2>
+                    <h2 className="font-serif text-xl font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]">
+                      {i.title}
+                    </h2>
                     {i.text && <p className="text-sm text-ink-muted">{i.text}</p>}
                     {i.title !== i.name && <p className="text-sm">Activity: {i.name}</p>}
                     {i.also.length > 0 && <p className="text-xs text-ink-muted">Also: {i.also.join(", ")}</p>}

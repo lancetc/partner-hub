@@ -103,7 +103,7 @@ export function PocketDeck() {
                     <button
                       type="button"
                       aria-expanded={open === n.id}
-                      className="min-h-11 flex-1 text-left font-serif text-lg font-semibold hover:underline"
+                      className="min-h-11 flex-1 text-left font-serif text-lg font-semibold transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
                       onClick={() => {
                         setOpen(open === n.id ? null : n.id);
                         setFlipped(true);

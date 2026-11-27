@@ -35,7 +35,10 @@ export function SavedList() {
             <li key={r.id} className="relative flex items-center gap-4 py-4">
               <div className="min-w-0 flex-1">
                 <p className="font-mulish text-xs font-extrabold uppercase tracking-[0.12em] text-accent">{r.meta}</p>
-                <Link href={r.href} className="font-serif text-xl font-semibold leading-snug after:absolute after:inset-0 after:content-[''] hover:underline">
+                <Link
+                  href={r.href}
+                  className="font-serif text-xl font-semibold leading-snug after:absolute after:inset-0 after:content-[''] transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
+                >
                   {r.title}
                 </Link>
               </div>

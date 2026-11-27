@@ -36,17 +36,6 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     intro: "The Magazine is where long-form courses and guides are written. These are the tools for building them and the features readers get.",
     features: [
       {
-        name: "Magazine courses and the editor",
-        what: "Multi-page courses and one-page guides built from blocks, with Draft with AI, AI revise, image tools, versions and a sign-off process before publishing.",
-        who: "Learning authors.",
-        problem: "Long-form learning needed a home that authors can build without developers, with a reviewed path to publishing.",
-        links: [
-          { label: "Magazine", href: "/magazine" },
-          { label: "Admin: Magazine", href: "/admin/magazine" },
-        ],
-        status: "live",
-      },
-      {
         name: "Block showcase",
         what: "Two draft courses with a page for each of the 35 newer block types: who it's for, what it's for, the problem it solves, then the block to try.",
         who: "You and other authors choosing blocks.",
@@ -363,29 +352,6 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     intro: "Short-form learning and the routes through it.",
     features: [
       {
-        name: "Topics",
-        what: "Short-form learning: a Topic is a set of cards (an introduction, explanations, decisions and questions) to finish in about ten minutes between visits, with your place saved and spaced follow-ups afterwards.",
-        who: "Everyone.",
-        problem: "Care work leaves little time at a desk; short Topics fit the gaps in a working day and come back to check it stuck.",
-        links: [
-          { label: "Topics", href: "/topics" },
-          { label: "Admin: Topics", href: "/admin/lessons" },
-        ],
-        status: "live",
-      },
-      {
-        name: "Discovery Paths",
-        what: "Routes through Topics in order, chosen or assigned, each with a voiced introduction, a path quiz and a certificate at the end.",
-        who: "Everyone; managers and administrators assign them.",
-        problem: "Single Topics don't add up to a capability on their own; a path gives a clear order and a finish line.",
-        links: [
-          { label: "Discovery Paths", href: "/paths" },
-          { label: "Admin: Discovery Paths", href: "/admin/learning-paths" },
-        ],
-        status: "live",
-        doc: "discovery-exciter.md",
-      },
-      {
         name: "My Discovery (learner-made paths)",
         what: "A learner says what they want to get better at and the Hub suggests a route of Topics; they can build their own and ask for missing topics.",
         who: "Everyone.",
@@ -518,6 +484,61 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       },
     ],
   },
+  {
+    id: "ai",
+    title: "AI content generation",
+    intro:
+      "How the Hub uses AI to make learning faster, and the checks that keep it accurate. A person reviews and approves everything before learners see it.",
+    features: [
+      {
+        name: "Draft with AI: courses, Topics, Discovery Paths and challenges",
+        what: "An author uploads the approved source (a procedure, a policy, a guide or an old eLearning course) and says who it's for and what they should be able to do. Claude drafts it: a Magazine course outline first, then each page; a Topic card by card through its seven steps; a Discovery Path from existing Topics; a challenge's week of missions. It's checked against the schema, and the author reviews and approves everything before it's published.",
+        who: "Learning authors.",
+        problem:
+          "Writing a course by hand takes days or weeks. A first draft in minutes, from the source itself, means authors spend their time reviewing and improving rather than writing from scratch: learning ships faster and costs far less in people's time, with a person still accountable for every word.",
+        links: [
+          { label: "Admin: Magazine", href: "/admin/magazine" },
+          { label: "Admin: Topics", href: "/admin/lessons" },
+          { label: "Admin: Discovery Paths", href: "/admin/learning-paths" },
+        ],
+        status: "live",
+        doc: "learning-designer.md",
+      },
+      {
+        name: "Pictures with AI",
+        what: "Generate with AI on any picture: a course cover, a page, a news poster or a card. The description starts from the page itself (“Start from this course”, “Start from this story”), the Hub's house style is applied, and named characters keep their faces. Every picture lands in the image library.",
+        who: "Authors.",
+        problem: "Finding or commissioning the right picture slowed every course down, and stock photos rarely show home care in Australia.",
+        links: [{ label: "Admin: Image library", href: "/admin/images" }],
+        status: "live",
+      },
+      {
+        name: "Voiced introduction scripts",
+        what: "Claude drafts each course, page, Topic and Discovery Path introduction from the content, at the length chosen. The author edits and approves the script, it's recorded in the Alloy voice, and the recording is approved again before learners hear it.",
+        who: "Authors.",
+        problem: "Writing and recording dozens of introductions by hand isn't practical; this makes them consistent and quick, with two human checks.",
+        links: [{ label: "Admin: Magazine", href: "/admin/magazine" }],
+        status: "live",
+        doc: "magazine-audio-guide.md",
+      },
+      {
+        name: "AI revise and AI review",
+        what: "Ask the AI to revise a Magazine page with an instruction (shorter, plainer, more Australian), and see each change to accept or reject. When a course or Topic is submitted for review, an AI pre-review checks it against its sources and flags problems for the human reviewer.",
+        who: "Authors and reviewers.",
+        problem: "Editing for plain language and checking against the source take time; the AI does the first pass, and a person decides.",
+        links: [{ label: "Admin: Magazine", href: "/admin/magazine" }],
+        status: "live",
+      },
+      {
+        name: "Describe with AI",
+        what: "Suggests a description of any picture for people who can't see it, from the picture and where it sits, ready to read and edit.",
+        who: "Authors.",
+        problem: "Pictures went up without descriptions; this makes accessibility the easy path.",
+        links: [{ label: "Admin: Image library", href: "/admin/images" }],
+        status: "live",
+      },
+    ],
+  },
 ];
 
 export const BLOCK_FAMILIES: BlockFamily[] = [
@@ -582,3 +603,292 @@ export const BLOCK_FAMILIES: BlockFamily[] = [
     ],
   },
 ];
+
+/*
+  How Topics and Discovery Paths work (the owner, Nov 2026): the formats themselves, not every one of them. What each is,
+  why it's built that way, and how it runs. A Topic's stages come from lib/buildSequence (BUILD_STAGES), the order every
+  drafted Topic is built in, so this can't drift from what the Hub makes.
+*/
+export type FormatGuide = {
+  id: "magazine" | "topics" | "paths" | "community" | "resources" | "ai" | "people";
+  /** The feature group it introduces. */
+  group: "magazine" | "learning" | "community" | "resources" | "ai" | "people";
+  title: string;
+  what: string;
+  why: string[];
+  /** How it runs, step by step (Topics take theirs from BUILD_STAGES). */
+  steps?: { label: string; purpose: string }[];
+  /** What else sits around the steps: other cards, follow-ups, ways in. */
+  also: { label: string; text: string }[];
+  links: { label: string; href: string }[];
+};
+
+export const FORMAT_GUIDES: FormatGuide[] = [
+  {
+    id: "people",
+    group: "people",
+    title: "People, onboarding and governance",
+    what: "Everything that gets people ready and keeps the Hub's learning trustworthy: onboarding for each role, required training and policy acknowledgements with due dates, a record of what people can do rather than just what they've finished, and the governance behind every piece of content.",
+    why: [
+      "New starters know what to do first, and what Trilogy Care is still checking, so nobody starts work unprepared.",
+      "Requirements are tracked with dates and versions, so there's a record of who read which policy, and when.",
+      "Capability, not attendance: evidence of what people can do, and where a team needs support.",
+      "Governance keeps content honest: problems from the field are diagnosed before training is written, every block's use is decided and recorded, and reviewers sign off what learners see.",
+    ],
+    steps: [
+      {
+        label: "Join",
+        purpose: "Your setup: a returnable checklist of what you do and what we check, reviewed by People and Culture, Partner Operations and Quality.",
+      },
+      { label: "Get started", purpose: "Onboarding courses chosen for your role, opening with a short Get to know you." },
+      { label: "Stay current", purpose: "Required training and policy acknowledgements, each with a due date, in the Inbox and on Topics." },
+      { label: "Show capability", purpose: "Paths, practice and sign-offs build each person's capability profile, and managers see their team's." },
+      { label: "Keep improving", purpose: "Signals from the field go to the Signal Room and the Problem desk, which decide whether training is even the fix." },
+    ],
+    also: [
+      {
+        label: "For managers",
+        text: "Assign a Discovery Path with a due date, and see completions and the compliance register for the people you look after.",
+      },
+      {
+        label: "A clear record",
+        text: "A policy confirmation records the version and the date. Withdrawing a policy closes what's still waiting; confirmations already given stay on record.",
+      },
+      {
+        label: "Quality behind the content",
+        text: "The Activity Catalogue records what each activity is for and what the AI may do with it; the Question Pool keeps every quiz question checked and sourced.",
+      },
+      { label: "Privacy", text: "Team capability shows as an aggregate heatmap, and learners' reflections and journals stay private to them." },
+    ],
+    links: [
+      { label: "Your setup", href: "/onboarding" },
+      { label: "Admin: Onboarding", href: "/admin/onboarding" },
+      { label: "Admin: Policies", href: "/admin/policies" },
+      { label: "My Capabilities", href: "/capabilities" },
+    ],
+  },
+  {
+    id: "ai",
+    group: "ai",
+    title: "AI content generation",
+    what: "Claude drafts Magazine courses, Topics, Discovery Paths, challenges, voiced introduction scripts and pictures from the approved source material, in the Hub's own patterns. People review, correct and sign off everything before it's published.",
+    why: [
+      "Speed: a first draft in minutes rather than weeks, so authors spend their time improving content, not writing it from scratch. Learning reaches people sooner and costs far less in staff time.",
+      "Accuracy: the source is the truth. The AI is told not to add any policy, number or process the source doesn't contain, and anything it can't confirm is flagged for a person to check.",
+      "Consistency: every draft follows the Hub's patterns (a Topic's seven steps, a course's teaching patterns) and can only use blocks the Hub has.",
+      "Accountability: a named person reviews and signs off. The AI never publishes anything.",
+    ],
+    steps: [
+      {
+        label: "Source and draft",
+        purpose: "The author uploads the approved documents; Claude drafts from them only (a course outline first, then each page).",
+      },
+      { label: "Author edits", purpose: "The author reads and rewrites, with automatic checks on structure, reading time, pictures, descriptions and flags." },
+      { label: "Submit for review", purpose: "The author names a subject-matter expert or reviewer, and says whether it's compliance-sensitive." },
+      {
+        label: "AI pre-review",
+        purpose:
+          "Claude checks the submitted draft against its sources and flags claims with no source, outdated details and weak quiz answers. It never approves or changes anything.",
+      },
+      {
+        label: "Human review",
+        purpose: "The reviewer signs off each statement flagged to verify, saying what they confirmed, then approves or asks for changes.",
+      },
+      { label: "Compliance", purpose: "Compliance-sensitive content also needs Compliance to approve." },
+      { label: "Publish and monitor", purpose: "The Hub owner publishes the approved draft as a new edition, and progress and drop-off show in the editor." },
+    ],
+    also: [
+      { label: "Exactly what was approved", text: "An approval is for the exact draft submitted: edit it afterwards and it goes back for review." },
+      {
+        label: "Flags",
+        text: "“Verify” marks a statement a reviewer must confirm against the source; “Illustrative” marks made-up figures. Reviewed practice blocks always need their named sign-off before publishing.",
+      },
+      {
+        label: "What the AI may build",
+        text: "The Activity Catalogue records, for every block, whether the AI may configure it, may only recommend it, or must leave it to a specialist, and why.",
+      },
+      {
+        label: "Voices and pictures",
+        text: "Scripts are approved before they're recorded, and recordings again before learners hear them. AI-made media is labelled as AI.",
+      },
+      {
+        label: "While review is optional",
+        text: "On this demo Hub an author can publish without review, and “Publish anyway” can pass open verify flags. The history records it. Switching review to required closes that door.",
+      },
+      { label: "Cost and control", text: "Generation only runs when an author asks; recordings are logged with their cost and capped each hour." },
+    ],
+    links: [
+      { label: "Admin: Activity Catalogue", href: "/admin/activities" },
+      { label: "Admin: Sign-offs", href: "/admin/signoffs" },
+      { label: "Admin: Approvals", href: "/admin/approvals" },
+    ],
+  },
+  {
+    id: "resources",
+    group: "resources",
+    title: "Resources and Work Tools",
+    what: "The Hub's reference shelf and toolbox for the working day: approved Job Aids, scripts and quick calculators for live calls, answers to the questions clients ask, the glossary, the client journey map, recorded webinars and the business planning tools. Things you use while you work, not courses you complete.",
+    why: [
+      "Most questions come up mid-task: on a call, in a client's kitchen, at the end of a visit. The answer needs to be a tap away, not inside a course.",
+      "Job Aids always show the current approved procedure, so what people do at work matches the policy.",
+      "Saving and highlighting means the line that helped once is easy to find again.",
+      "Learning and doing connect: a course points to the Job Aid, and a Job Aid back to the course that explains it.",
+    ],
+    steps: [
+      { label: "Find it", purpose: "Resources on a phone, Work Tools on a computer, or search. Everything is shown for your role." },
+      { label: "Use it live", purpose: "Open a Job Aid, golden script or quick-calc from the Favourites drawer without leaving the page you're on." },
+      { label: "Save it", purpose: "Save a tool or highlight a line, and it's in Favourites next time." },
+      { label: "Trust it", purpose: "Every Job Aid and answer names its source and approved release, with a route to urgent help." },
+      { label: "Go deeper", purpose: "Linked Topics and Magazine courses explain the why when there's time." },
+    ],
+    also: [
+      { label: "Approved and current", text: "A Job Aid shows only its approved release; when the procedure changes, every place that uses it changes too." },
+      {
+        label: "For business owners",
+        text: "Private planning tools for Care Partner principals: caseload and hiring, the Contractor Network Builder, the Local Referral Studio and First 100 Days.",
+      },
+      { label: "Live-call tools", text: "Some are pilots on demo data, and the While You Wait live tool stays off until it's released with its approvals." },
+      { label: "Nothing is sent", text: "Tools help people prepare and explain; they never send a message, book a service or change a record by themselves." },
+    ],
+    links: [
+      { label: "Resources", href: "/resources" },
+      { label: "Work Tools", href: "/tools" },
+      { label: "Favourites", href: "/favourites" },
+    ],
+  },
+  {
+    id: "community",
+    group: "community",
+    title: "Why a Community",
+    what: "The Hub's shared space, and the centre of its learning: case threads where coordinators compare how they'd handle a dilemma, the Digital Members whose lives carry on between courses, moments and events on the homepage, and Business Field Notes for Care Partner principals.",
+    why: [
+      "People learn most from each other. Seeing how an experienced coordinator handled the same dilemma builds judgement no single course can.",
+      "It gives people a reason to come back. Characters' lives move on, new threads and moments appear, so learning becomes a habit rather than an event.",
+      "Much of this work is done alone, on the road. The Community turns that into a network: ask a question, share a win, find someone who's been there.",
+      "What people discuss shows the learning team what's hard in practice, and feeds the next course.",
+    ],
+    steps: [
+      { label: "Meet", purpose: "Digital Members introduce themselves in their own words before they turn up in training." },
+      { label: "Follow", purpose: "Their lives carry on: episodes, audio diaries and moments on the homepage, on a schedule." },
+      { label: "Think first", purpose: "In a case thread, write your own private first take before you see anyone else's." },
+      { label: "Compare", purpose: "Read a Quality-reviewed case note and how experienced coordinators responded, and mark what helped." },
+      { label: "Share", purpose: "Post your own response, ask a question or join an event. Everything shared is moderated." },
+      { label: "Return", purpose: "Ava's Field Notes revisit people later, and what's discussed comes back in new courses." },
+    ],
+    also: [
+      { label: "In courses too", text: "The same case threads and peer polls sit inside Magazine courses, so practice and discussion meet in one place." },
+      { label: "Safe by design", text: "Every case and character is fictional, never a real client's story, and posts are moderated before they're shared." },
+      { label: "For principals", text: "Business Field Notes: honest business decisions from verified Care Partner principals, with a discussion on each." },
+      { label: "Engagement", text: "Characters, moments and threads bring people back between courses, and every return is another chance to learn." },
+    ],
+    links: [
+      { label: "Community", href: "/community" },
+      { label: "Admin: Lives in Progress", href: "/admin/lives" },
+      { label: "Admin: Case threads", href: "/admin/case-threads" },
+    ],
+  },
+  {
+    id: "magazine",
+    group: "magazine",
+    title: "Magazine courses",
+    what: "Long-form, story-led courses and one-page guides for when there's time at a desk: from a single page to an hour or more, built from blocks, with practice built in.",
+    why: [
+      "Some things need more than ten minutes: a whole case, a process from start to finish, or a skill that needs real practice.",
+      "Stories with recurring characters make learning feel like the job, and stick.",
+      "Practice blocks (simulators, roleplays and calculators) let people make real decisions safely, on fictional cases, with feedback.",
+      "Anything that states a rule, price or procedure is signed off by named reviewers before learners see it.",
+    ],
+    steps: [
+      { label: "Cover", purpose: "Title, summary and picture, with a voiced introduction or a video from Ava." },
+      { label: "Pages", purpose: "Each with a purpose, a picture and its own voiced introduction, grouped into chapters in a long course." },
+      { label: "Read and explore", purpose: "Text, pictures, tabs, timelines and diagrams, with the key phrases emphasised." },
+      { label: "Practise", purpose: "Decisions, roleplays, simulators and calculators on fictional cases, with feedback." },
+      { label: "Reflect and apply", purpose: "A private journal, other perspectives, and an action to take back to work." },
+      { label: "Check", purpose: "Test myself on any page, and a quiz page where the course has one." },
+      { label: "Finish", purpose: "Completed by reading, confirming, making a decision or passing an assessment, as the author sets." },
+    ],
+    also: [
+      {
+        label: "Teaching patterns",
+        text: "Each page can start from a pattern: story and decision, field guide, worked example, change briefing or conversation practice.",
+      },
+      {
+        label: "Building one",
+        text: "Draft with AI from the source documents (an outline first, then each page), or build by hand. The Block showcase courses show every practice block.",
+      },
+      { label: "Ava", text: "Ava, the care coordinator on the road, can check in on the cover, on pages and in Field Notes." },
+      { label: "Publishing", text: "Versions are kept, readers stay on the version they started, and reviewed blocks need their sign-off first." },
+    ],
+    links: [
+      { label: "Magazine", href: "/magazine" },
+      { label: "Admin: Magazine", href: "/admin/magazine" },
+    ],
+  },
+  {
+    id: "topics",
+    group: "learning",
+    title: "Topics",
+    what: "Short-form microlearning: about ten minutes of cards, one idea at a time, on a phone between visits or at a desk. Your place is saved, so you can stop and pick it up later.",
+    why: [
+      "Care work leaves little time for long courses. A Topic fits the gaps in a working day.",
+      "Every Topic is built around a realistic situation and a decision, so it practises judgement, not just facts.",
+      "Short on screen (15 to 40 words a card), with the explaining in narration you can listen to, so it works for different readers.",
+      "Small and self-contained, so a Topic is quick to update when a rule changes.",
+    ],
+    also: [
+      { label: "Introduction card", text: "Every Topic opens with a presenter, its title and “Let’s get started”." },
+      {
+        label: "Other cards authors can add",
+        text: "Checklists, polls, insight walls, hotspots, calculators, audio, resources, written answers and acknowledgements.",
+      },
+      {
+        label: "Roleplay",
+        text: "Topics practise with a decision and a written “Your turn”. Full roleplays live in the Magazine (Tough Phone Call, the conversation simulator) and in Play’s Care Conversations.",
+      },
+      {
+        label: "Finishing",
+        text: "A Topic is complete when its quick check is answered. With spaced learning on, short follow-ups come back days later to check it stuck.",
+      },
+      {
+        label: "Building one",
+        text: "Draft with AI from a brief and a source document: Claude writes the cards through the seven steps, checks them, and the author reviews and approves.",
+      },
+    ],
+    links: [
+      { label: "Topics", href: "/topics" },
+      { label: "Admin: Topics", href: "/admin/lessons" },
+    ],
+  },
+  {
+    id: "paths",
+    group: "learning",
+    title: "Discovery Paths",
+    what: "A route through Topics in order, grouped into chapters, for a role or a goal. Each says who it's for and what learners will be able to do by the end.",
+    why: [
+      "Single Topics don't add up to a capability on their own. A path gives them an order, a reason and a finish line.",
+      "Managers and administrators can assign a path with a due date, and see who's finished.",
+      "The quiz and certificate at the end show it's done, not just opened.",
+      "Learners can also build their own in My Discovery, from what they want to get better at.",
+    ],
+    also: [
+      { label: "Order", text: "Most paths let people take the topics in any order; a few ask for them in sequence." },
+      {
+        label: "Building one",
+        text: "Draft with AI works through who it’s for, its outcomes, then chapters and topics, using existing Topics first and naming any that need writing.",
+      },
+    ],
+    links: [
+      { label: "Discovery Paths", href: "/paths" },
+      { label: "My Discovery", href: "/discovery" },
+      { label: "Admin: Discovery Paths", href: "/admin/learning-paths" },
+    ],
+  },
+];
+
+/** A path's steps, as a learner meets them. */
+export const PATH_FLOW = [
+  { label: "Introduction", purpose: "A short voiced introduction: why this path matters to you." },
+  { label: "Topics, in chapters", purpose: "Each Topic in turn, grouped into chapters, with your progress kept." },
+  { label: "Path quiz", purpose: "Where the path has one: questions across the whole path, to check it’s come together." },
+  { label: "Certificate", purpose: "A certificate once the topics (and any quiz) are done." },
+] as const;

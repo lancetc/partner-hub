@@ -1754,7 +1754,49 @@ export function InteractiveSettings({ block: b, update, doc }: { block: Block; u
         </p>
       );
     case "budget":
-      return <p className="text-sm text-ink-muted">The figures are for practice. Flag the block Illustrative below so reviewers know they’re made up.</p>;
+      return (
+        <div className="flex flex-col gap-3">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-[var(--color-action)]"
+              checked={Boolean(b.utilisation)}
+              onChange={(e) =>
+                update<typeof b>(b.id, (x) => {
+                  x.utilisation = e.target.checked || undefined;
+                  if (!e.target.checked) delete x.carryover;
+                })
+              }
+            />
+            <span>
+              <span className="font-semibold">Show utilisation</span>
+              <span className="block text-ink-muted">How much of the budget the plan uses, and what would be left unspent.</span>
+            </span>
+          </label>
+          {b.utilisation && (
+            <Field
+              label="Carries over (dollars)"
+              hint="Support at Home: up to $1,000 or 10% of the quarterly budget, whichever is greater. Leave empty to leave it out."
+            >
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className={input}
+                value={b.carryover ?? ""}
+                onChange={(e) =>
+                  update<typeof b>(b.id, (x) => {
+                    const n = Math.max(0, Number(e.target.value) || 0);
+                    if (n) x.carryover = n;
+                    else delete x.carryover;
+                  })
+                }
+              />
+            </Field>
+          )}
+          <p className="text-sm text-ink-muted">The figures are for practice. Flag the block Illustrative below so reviewers know they’re made up.</p>
+        </div>
+      );
     case "journal":
     case "perspectives":
     case "pulse":

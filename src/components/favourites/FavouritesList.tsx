@@ -144,7 +144,7 @@ export function FavouritesList() {
                   if (i.kind === "passage" && i.state !== "unavailable")
                     aidEvent({ event: "current_source_opened", sourceKind: "passage", place: "favourites" });
                 }}
-                className="mt-1 block min-h-11 font-serif text-xl font-semibold leading-snug hover:underline"
+                className="mt-1 block min-h-11 font-serif text-xl font-semibold leading-snug transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
               >
                 {i.title}
               </Link>

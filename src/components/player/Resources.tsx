@@ -52,14 +52,18 @@ export function ResourceTileBody({ item, compact = false }: { item: Item; compac
   const inside = ownPdf(item);
   return (
     <>
-      <span
-        aria-hidden
-        className={cx("grid shrink-0 place-items-center bg-tealtint text-accent", compact ? "size-8 rounded-lg" : "size-11 rounded-xl")}
-      >
+      <span aria-hidden className={cx("grid shrink-0 place-items-center bg-tealtint text-accent", compact ? "size-8 rounded-lg" : "size-11 rounded-xl")}>
         <Icon name={official ? "landmark" : kind.icon} className={compact ? "size-4" : "size-5"} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cx("line-clamp-2 font-semibold leading-snug group-hover:underline", compact && "text-[0.8rem]")}>{item.title}</span>
+        <span
+          className={cx(
+            "line-clamp-2 font-semibold leading-snug transition-colors group-hover:text-[#007f7e] dark:group-hover:text-[#7fd6d2]",
+            compact && "text-[0.8rem]",
+          )}
+        >
+          {item.title}
+        </span>
         <span className={cx("block truncate text-ink-muted", compact ? "text-[0.65rem]" : "text-xs")}>
           {item.source || [kind.label, fileSize(item.bytes)].filter(Boolean).join(" · ")}
         </span>

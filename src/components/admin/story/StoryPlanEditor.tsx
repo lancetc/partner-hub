@@ -227,7 +227,10 @@ function Editor({
               <div className={cx(box, "mb-3")}>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="good">Chosen</Badge>
-                  <Link href={`/admin/characters/${d.anchor.id}`} className="font-serif text-lg font-semibold underline-offset-2 hover:underline">
+                  <Link
+                    href={`/admin/characters/${d.anchor.id}`}
+                    className="font-serif text-lg font-semibold transition-colors hover:text-[#007f7e] dark:hover:text-[#7fd6d2]"
+                  >
                     {d.anchor.name}
                   </Link>
                 </div>
